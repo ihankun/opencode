@@ -1,8 +1,6 @@
 import { app, utilityProcess, protocol, ipcMain, BrowserWindow } from "electron";
 import { join, dirname } from "node:path";
 import { mkdirSync, appendFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
-import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -35,9 +33,8 @@ const SIDECAR_SERVICE_NAME = "custom opencode server";
 const SIDECAR_READY_TIMEOUT = 6e4;
 const SIDECAR_STOP_TIMEOUT = 6e3;
 async function spawnServer(userDataPath, cors) {
-  const port = await getRandomPort();
+  const port = 4096;
   writeLog("server", "spawning opencode sidecar", { cors, port });
-  const password = randomBytes(24).toString("base64url");
   const child = utilityProcess.fork(join(dirname(fileURLToPath(import.meta.url)), "sidecar.js"), [], {
     cwd: process.cwd(),
     env: createEnv(),
@@ -94,7 +91,6 @@ async function spawnServer(userDataPath, cors) {
       type: "start",
       hostname: "127.0.0.1",
       port,
-      password,
       userDataPath,
       cors
     });
@@ -107,7 +103,7 @@ async function spawnServer(userDataPath, cors) {
     state: {
       url,
       username: "opencode",
-      password
+      password: ""
     },
     stop() {
       if (stopping) return stopping;
@@ -134,22 +130,6 @@ function createEnv() {
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-function getRandomPort() {
-  return new Promise((resolve, reject) => {
-    const server2 = createServer();
-    server2.once("error", reject);
-    server2.listen(0, "127.0.0.1", () => {
-      const address = server2.address();
-      server2.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port);
-          return;
-        }
-        reject(new Error("Failed to allocate a random local port"));
-      });
-    });
-  });
-}
 function defer() {
   let resolve;
   let reject;
@@ -170,6 +150,7 @@ async function createWindow() {
   const url = rendererUrl();
   writeLog("main", "creating window", { url });
   mainWindow = new BrowserWindow({
+    title: "",
     width: 1180,
     height: 760,
     minWidth: 900,
@@ -183,6 +164,10 @@ async function createWindow() {
       nodeIntegration: false,
       sandbox: false
     }
+  });
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow?.setTitle("");
   });
   mainWindow.once("ready-to-show", () => {
     writeLog("main", "window ready-to-show");

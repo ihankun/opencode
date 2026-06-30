@@ -149,16 +149,32 @@ async function initializeElectronService() {
   const applyServer = (state: Awaited<ReturnType<typeof window.customOpenCode.server>>) => {
     if (state.status !== 'online') return
     serverStore.updateServer('local', {
-      auth: {
-        username: state.server.username,
-        password: state.server.password,
-      },
+      auth: state.server.password
+        ? {
+            username: state.server.username,
+            password: state.server.password,
+          }
+        : undefined,
     })
     applyLocalServiceUrl(state.server.url)
+    serverStore.setActiveServer('local')
   }
 
-  applyServer(await window.customOpenCode.server())
+  applyServer(await waitForElectronServer())
   window.customOpenCode.onServerUpdated(applyServer)
+}
+
+async function waitForElectronServer() {
+  const state = await window.customOpenCode.server()
+  if (state.status === 'online') return state
+
+  return new Promise<Awaited<ReturnType<typeof window.customOpenCode.server>>>((resolve) => {
+    const unsubscribe = window.customOpenCode.onServerUpdated((nextState) => {
+      if (nextState.status !== 'online') return
+      unsubscribe()
+      resolve(nextState)
+    })
+  })
 }
 
 configureNativeShell()

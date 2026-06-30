@@ -135,7 +135,7 @@ export function DesktopTitlebar() {
 
   return (
     <header
-      className="desktop-titlebar relative grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center bg-bg-100"
+      className="desktop-titlebar window-drag-region relative grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center bg-bg-100"
       style={{ height: DESKTOP_TITLEBAR_HEIGHT, zIndex: DESKTOP_TITLEBAR_Z_INDEX }}
     >
       {/* ---- 左侧：平台占位 + 导航 + 分隔 + 功能按钮 ---- */}
@@ -213,7 +213,7 @@ export function DesktopTitlebar() {
       {platform === 'windows' ? (
         <WindowsControlsHost />
       ) : (
-        <div data-tauri-drag-region className="h-full w-3 shrink-0" />
+        <div className="h-full w-3 shrink-0" />
       )}
     </header>
   )

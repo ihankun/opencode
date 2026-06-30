@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto"
-import { createServer } from "node:net"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, utilityProcess } from "electron"
@@ -27,9 +25,8 @@ const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
 export async function spawnServer(userDataPath: string, cors: string[]): Promise<SidecarHandle> {
-  const port = await getRandomPort()
+  const port = 4096
   writeLog("server", "spawning opencode sidecar", { cors, port })
-  const password = randomBytes(24).toString("base64url")
   const child = utilityProcess.fork(join(dirname(fileURLToPath(import.meta.url)), "sidecar.js"), [], {
     cwd: process.cwd(),
     env: createEnv(),
@@ -91,7 +88,6 @@ export async function spawnServer(userDataPath: string, cors: string[]): Promise
       type: "start",
       hostname: "127.0.0.1",
       port,
-      password,
       userDataPath,
       cors,
     })
@@ -105,7 +101,7 @@ export async function spawnServer(userDataPath: string, cors: string[]): Promise
     state: {
       url,
       username: "opencode",
-      password,
+      password: "",
     },
     stop() {
       if (stopping) return stopping
@@ -133,23 +129,6 @@ function createEnv() {
 
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
-}
-
-function getRandomPort() {
-  return new Promise<number>((resolve, reject) => {
-    const server = createServer()
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-      server.close(() => {
-        if (address && typeof address === "object") {
-          resolve(address.port)
-          return
-        }
-        reject(new Error("Failed to allocate a random local port"))
-      })
-    })
-  })
 }
 
 function defer<T>() {

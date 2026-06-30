@@ -4,7 +4,7 @@ type StartCommand = {
   type: "start"
   hostname: string
   port: number
-  password: string
+  password?: string
   userDataPath: string
   cors: string[]
 }
@@ -49,9 +49,8 @@ async function start(command: StartCommand) {
     listener = await Server.listen({
       hostname: command.hostname,
       port: command.port,
-      username: "opencode",
-      password: command.password,
       cors: command.cors,
+      ...(command.password ? { username: "opencode", password: command.password } : {}),
     })
     parentPort.postMessage({ type: "ready", url: listener.url.toString() })
   } catch (error) {
@@ -75,10 +74,17 @@ function prepareEnv(command: StartCommand) {
     OPENCODE_CLIENT: "custom-electron",
     OPENCODE_DISABLE_EMBEDDED_WEB_UI: "true",
     OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-    OPENCODE_SERVER_USERNAME: "opencode",
-    OPENCODE_SERVER_PASSWORD: command.password,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? command.userDataPath,
   })
+
+  if (command.password) {
+    process.env.OPENCODE_SERVER_USERNAME = "opencode"
+    process.env.OPENCODE_SERVER_PASSWORD = command.password
+    return
+  }
+
+  delete process.env.OPENCODE_SERVER_USERNAME
+  delete process.env.OPENCODE_SERVER_PASSWORD
 }
 
 function useSystemCertificates() {
@@ -96,7 +102,7 @@ function parseCommand(value: unknown): SidecarCommand | undefined {
   if (command.type !== "start") return
   if (typeof command.hostname !== "string") return
   if (typeof command.port !== "number") return
-  if (typeof command.password !== "string") return
+  if (command.password !== undefined && typeof command.password !== "string") return
   if (typeof command.userDataPath !== "string") return
   if (!Array.isArray(command.cors) || !command.cors.every((item) => typeof item === "string")) return
   return {

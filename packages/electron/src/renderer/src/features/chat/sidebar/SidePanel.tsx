@@ -873,23 +873,7 @@ export function SidePanel({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ===== Header ===== */}
-      <div className="mobile-safe-topbar-14 shrink-0 flex items-center">
-        {/* Logo 区域 - 展开时显示 */}
-        <div
-          className="overflow-hidden transition-all duration-300 ease-out"
-          style={{
-            width: showLabels ? 'auto' : 0,
-            paddingLeft: showLabels ? 16 : 0,
-            opacity: showLabels ? 1 : 0,
-          }}
-        >
-          <a href="/" className="flex items-center whitespace-nowrap">
-            <span className="text-[length:var(--fs-heading-3)] font-semibold text-text-100 tracking-tight">
-              {t('header.openCode')}
-            </span>
-          </a>
-        </div>
-
+      <div className="mobile-safe-topbar-14 window-drag-region shrink-0 flex items-center">
         {!isMobile && (
           <div
             className="flex-1 flex items-center transition-all duration-300 ease-out"

@@ -18,6 +18,7 @@ async function createWindow() {
   writeLog("main", "creating window", { url })
 
   mainWindow = new BrowserWindow({
+    title: "",
     width: 1180,
     height: 760,
     minWidth: 900,
@@ -33,6 +34,10 @@ async function createWindow() {
     },
   })
 
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault()
+    mainWindow?.setTitle("")
+  })
   mainWindow.once("ready-to-show", () => {
     writeLog("main", "window ready-to-show")
     mainWindow?.show()

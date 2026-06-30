@@ -14,13 +14,12 @@ async function start(command) {
   try {
     prepareEnv(command);
     useSystemCertificates();
-    const { Server } = await import("./chunks/node-Dc_W7plh.js");
+    const { Server } = await import("./chunks/node-BnZjr0WC.js");
     listener = await Server.listen({
       hostname: command.hostname,
       port: command.port,
-      username: "opencode",
-      password: command.password,
-      cors: command.cors
+      cors: command.cors,
+      ...command.password ? { username: "opencode", password: command.password } : {}
     });
     parentPort.postMessage({ type: "ready", url: listener.url.toString() });
   } catch (error) {
@@ -42,10 +41,15 @@ function prepareEnv(command) {
     OPENCODE_CLIENT: "custom-electron",
     OPENCODE_DISABLE_EMBEDDED_WEB_UI: "true",
     OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-    OPENCODE_SERVER_USERNAME: "opencode",
-    OPENCODE_SERVER_PASSWORD: command.password,
     XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? command.userDataPath
   });
+  if (command.password) {
+    process.env.OPENCODE_SERVER_USERNAME = "opencode";
+    process.env.OPENCODE_SERVER_PASSWORD = command.password;
+    return;
+  }
+  delete process.env.OPENCODE_SERVER_USERNAME;
+  delete process.env.OPENCODE_SERVER_PASSWORD;
 }
 function useSystemCertificates() {
   try {
@@ -61,7 +65,7 @@ function parseCommand(value) {
   if (command.type !== "start") return;
   if (typeof command.hostname !== "string") return;
   if (typeof command.port !== "number") return;
-  if (typeof command.password !== "string") return;
+  if (command.password !== void 0 && typeof command.password !== "string") return;
   if (typeof command.userDataPath !== "string") return;
   if (!Array.isArray(command.cors) || !command.cors.every((item) => typeof item === "string")) return;
   return {
