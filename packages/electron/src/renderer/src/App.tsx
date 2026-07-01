@@ -101,7 +101,7 @@ function App() {
     navigateHome: navigateRouteHome,
     replaceSession,
   } = router
-  const { currentDirectory, savedDirectories, sidebarExpanded, setSidebarExpanded } = useDirectory()
+  const { currentDirectory, savedDirectories, sidebarExpanded, setSidebarExpanded, pathInfo } = useDirectory()
   const { rightPanelOpen, rightPanelWidth, wakeLock } = useLayoutStore()
   const { surfaceRef, value: chatViewport } = useChatViewportController({
     sidebarExpanded,
@@ -201,27 +201,36 @@ function App() {
   )
 
   const navigatePaneHome = useCallback(
-    (paneId: string) => {
+    (paneId: string, directory?: string | null) => {
       paneLayoutStore.focusPane(paneId)
       paneLayoutStore.setPaneSession(paneId, null)
-      navigateRouteHome()
+      navigateRouteHome(directory)
     },
     [navigateRouteHome],
+  )
+
+  const routeDirectoryForSession = useCallback(
+    (directory: string | undefined) => {
+      if (!directory) return ''
+      if (!currentDirectory && pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
+      return directory
+    },
+    [currentDirectory, pathInfo?.directory],
   )
 
   const handleSelectSession = useCallback(
     (session: { id: string; directory?: string }) => {
       const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
       if (!paneId) return
-      navigatePaneToSession(paneId, session.id, session.directory)
+      navigatePaneToSession(paneId, session.id, routeDirectoryForSession(session.directory))
     },
-    [paneLayout.focusedPaneId, navigatePaneToSession],
+    [paneLayout.focusedPaneId, navigatePaneToSession, routeDirectoryForSession],
   )
 
   const handleNewSession = useCallback(() => {
     const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
     if (!paneId) return
-    navigatePaneHome(paneId)
+    navigatePaneHome(paneId, null)
   }, [paneLayout.focusedPaneId, navigatePaneHome])
 
   const handleEnterSplitMode = useCallback(() => {

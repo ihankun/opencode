@@ -18,6 +18,7 @@ import {
   CheckIcon,
   CloseIcon,
   SpinnerIcon,
+  ChevronRightIcon,
 } from '../../../components/Icons'
 import { useDirectory, useSessionStats, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
@@ -30,6 +31,7 @@ import {
   updateSession,
   deleteSession as apiDeleteSession,
   getSession,
+  getSessions,
   subscribeToConnectionState,
   type ApiSession,
   type ConnectionInfo,
@@ -115,6 +117,7 @@ export function SidePanel({
     addDirectory,
     reorderDirectories,
     recentProjects,
+    pathInfo,
   } = useDirectory()
   const catalogDirectories = useMemo(
     () =>
@@ -142,6 +145,7 @@ export function SidePanel({
   })
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
+  const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
   const [searchExpanded, setSearchExpanded] = useState(false)
 
   // ---- 编辑模式状态 ----
@@ -272,12 +276,22 @@ export function SidePanel({
   )
   // 缓存通过 API 拉取的 session 数据（sessions 列表中不存在的）
   const [fetchedSessions, setFetchedSessions] = useState<Record<string, ApiSession>>({})
+  const [defaultSessions, setDefaultSessions] = useState<{ sessions: ApiSession[]; isLoading: boolean }>({
+    sessions: [],
+    isLoading: false,
+  })
+  const [projectSessions, setProjectSessions] = useState<
+    Record<string, { sessions: ApiSession[]; isLoading: boolean }>
+  >({})
   const [unavailablePinnedSessionIds, setUnavailablePinnedSessionIds] = useState<Set<string>>(() => new Set())
 
   // 为 active sessions 构建 sessionId -> ApiSession 的查找表
   const sessionLookup = useMemo(() => {
     const map = new Map<string, ApiSession>()
     for (const s of sessions) {
+      map.set(s.id, s)
+    }
+    for (const s of defaultSessions.sessions) {
       map.set(s.id, s)
     }
     // fetchedSessions 作为补充（其他项目的 session）
@@ -287,7 +301,7 @@ export function SidePanel({
       }
     }
     return map
-  }, [sessions, fetchedSessions])
+  }, [sessions, defaultSessions.sessions, fetchedSessions])
 
   const orderedSessions = useMemo(() => {
     const pinnedSet = new Set(pinnedEntries.map(e => e.sessionId))
@@ -329,7 +343,7 @@ export function SidePanel({
       ...pinnedEntries.map(e => ({ sessionId: e.sessionId, directory: e.directory, pinned: true })),
     ]
     if (selectedSessionId && !sessionLookup.has(selectedSessionId)) {
-      allNeeded.push({ sessionId: selectedSessionId, directory: currentDirectory || '' })
+      allNeeded.push({ sessionId: selectedSessionId, directory: currentDirectory || pathInfo?.directory || '' })
     }
 
     setUnavailablePinnedSessionIds(prev => {
@@ -385,7 +399,7 @@ export function SidePanel({
     return () => {
       cancelled = true
     }
-  }, [busySessions, notifications, pinnedEntries, sessionLookup, selectedSessionId, currentDirectory])
+  }, [busySessions, notifications, pinnedEntries, sessionLookup, selectedSessionId, currentDirectory, pathInfo?.directory])
 
   // ---- 子 session 展示数据 ----
   const rootSessionIds = useMemo(() => new Set(sessions.map(s => s.id)), [sessions])
@@ -529,8 +543,8 @@ export function SidePanel({
   )
 
   const projects = useMemo<ProjectItem[]>(() => {
-    return [globalProject, ...selectorProjectGroups]
-  }, [globalProject, selectorProjectGroups])
+    return selectorProjectGroups
+  }, [selectorProjectGroups])
 
   const currentProject = useMemo<ProjectItem>(() => {
     if (!currentDirectory) return globalProject
@@ -553,6 +567,11 @@ export function SidePanel({
     }
   }, [currentDirectory, folderProjectGroups, gitWorkspaceCatalog, globalProject, normalizedCurrentDirectory])
 
+  useEffect(() => {
+    if (currentProject.id === 'global') return
+    setExpandedProjectIds(prev => (prev.includes(currentProject.id) ? prev : [...prev, currentProject.id]))
+  }, [currentProject.id])
+
   const currentProjectLabel = useMemo(() => {
     const baseLabel = currentProject?.name || t('sidebar.global')
     if (!currentDirectory || currentProject?.id === 'global') return baseLabel
@@ -567,6 +586,132 @@ export function SidePanel({
     isCurrentDirectoryVcsLoading,
     t,
   ])
+
+  const displayedProjects = useMemo(() => {
+    if (currentProject.id === 'global') return projects
+    if (projects.some(project => isSameDirectory(project.id, currentProject.id))) return projects
+    return [...projects, { ...currentProject, canReorder: false }]
+  }, [currentProject, projects])
+
+  const expandedProjects = useMemo(
+    () =>
+      displayedProjects.filter(project => project.id !== 'global' && expandedProjectIds.includes(project.id)),
+    [displayedProjects, expandedProjectIds],
+  )
+
+  useEffect(() => {
+    if (currentProject.id !== 'global') return
+    setDefaultSessions({ sessions: orderedSessions, isLoading: false })
+  }, [currentProject.id, orderedSessions])
+
+  useEffect(() => {
+    if (currentProject.id === 'global' || !pathInfo?.directory) return
+
+    let cancelled = false
+    setDefaultSessions(prev => ({ ...prev, isLoading: true }))
+
+    getSessions({
+      roots: true,
+      limit: 30,
+      directory: normalizeToForwardSlash(pathInfo.directory) || pathInfo.directory,
+      search: search || undefined,
+    })
+      .then(data => {
+        if (cancelled) return
+        setDefaultSessions({ sessions: data, isLoading: false })
+        setFetchedSessions(prev => ({
+          ...prev,
+          ...Object.fromEntries(data.map(session => [session.id, session])),
+        }))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setDefaultSessions(prev => ({ ...prev, isLoading: false }))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentProject.id, pathInfo?.directory, search])
+
+  useEffect(() => {
+    if (expandedProjects.length === 0) return
+
+    let cancelled = false
+    const loadingProjects = expandedProjects.filter(project => {
+      if (currentDirectory && isSameDirectory(currentDirectory, project.worktree)) return false
+      return true
+    })
+
+    if (loadingProjects.length === 0) return
+
+    setProjectSessions(prev => ({
+      ...prev,
+      ...Object.fromEntries(
+        loadingProjects.map(project => [
+          project.id,
+          {
+            sessions: prev[project.id]?.sessions ?? [],
+            isLoading: true,
+          },
+        ]),
+      ),
+    }))
+
+    Promise.allSettled(
+      loadingProjects.map(async project => ({
+        project,
+        sessions: await getSessions({
+          roots: true,
+          limit: 30,
+          directory: normalizeToForwardSlash(project.worktree) || project.worktree,
+          search: search || undefined,
+        }),
+      })),
+    ).then(results => {
+      if (cancelled) return
+
+      setProjectSessions(prev => ({
+        ...prev,
+        ...Object.fromEntries(
+          results.map((result, index) => {
+            const project = loadingProjects[index]
+            if (result.status === 'fulfilled') {
+              return [
+                result.value.project.id,
+                {
+                  sessions: result.value.sessions,
+                  isLoading: false,
+                },
+              ]
+            }
+
+            return [
+              project.id,
+              {
+                sessions: prev[project.id]?.sessions ?? [],
+                isLoading: false,
+              },
+            ]
+          }),
+        ),
+      }))
+
+      setFetchedSessions(prev => ({
+        ...prev,
+        ...Object.fromEntries(
+          results.flatMap(result => {
+            if (result.status !== 'fulfilled') return []
+            return result.value.sessions.map(session => [session.id, session])
+          }),
+        ),
+      }))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentDirectory, expandedProjects, search])
 
   const folderProjects = useMemo<ProjectItem[]>(() => {
     const list = [...folderProjectGroups]
@@ -657,6 +802,12 @@ export function SidePanel({
     [setCurrentDirectory],
   )
 
+  const handleToggleProject = useCallback((projectId: string) => {
+    setExpandedProjectIds(prev =>
+      prev.includes(projectId) ? prev.filter(item => item !== projectId) : [...prev, projectId],
+    )
+  }, [])
+
   const handleRemoveProject = useCallback(
     (projectId: string) => {
       getProjectDirectoriesToRemove(projectId).forEach(directory => removeDirectory(directory))
@@ -678,8 +829,10 @@ export function SidePanel({
 
   const handleSelect = useCallback(
     (session: ApiSession) => {
-      // Global 模式下，点击 session 自动切换到该 session 的工作目录并添加到项目列表
-      if (!currentDirectory && session.directory) {
+      const isDefaultDirectorySession =
+        pathInfo?.directory && session.directory && isSameDirectory(pathInfo.directory, session.directory)
+
+      if (!currentDirectory && session.directory && !isDefaultDirectorySession) {
         addDirectory(session.directory)
       }
       onSelectSession(session)
@@ -687,7 +840,7 @@ export function SidePanel({
         onCloseMobile()
       }
     },
-    [currentDirectory, addDirectory, onSelectSession, onCloseMobile],
+    [currentDirectory, pathInfo?.directory, addDirectory, onSelectSession, onCloseMobile],
   )
 
   // Active tab 专用：跨目录的 session 需要确保目录在项目列表中
@@ -727,14 +880,14 @@ export function SidePanel({
   const handleRename = useCallback(
     async (sessionId: string, newTitle: string) => {
       try {
-        await updateSession(sessionId, { title: newTitle }, currentDirectory)
+        await updateSession(sessionId, { title: newTitle }, currentDirectory || pathInfo?.directory)
         pinnedSessionsStore.update(sessionId, { title: newTitle })
         refresh()
       } catch (e) {
         uiErrorHandler('rename session', e)
       }
     },
-    [currentDirectory, refresh],
+    [currentDirectory, pathInfo?.directory, refresh],
   )
 
   const handleDeleteSession = useCallback(
@@ -746,6 +899,70 @@ export function SidePanel({
       }
     },
     [deleteSession, onNewSession, selectedSessionId],
+  )
+
+  const handleRenameListedSession = useCallback(
+    async (sessionId: string, newTitle: string) => {
+      const session = sessionLookup.get(sessionId)
+      try {
+        await updateSession(sessionId, { title: newTitle }, session?.directory || currentDirectory || pathInfo?.directory)
+        pinnedSessionsStore.update(sessionId, { title: newTitle })
+        setProjectSessions(prev =>
+          Object.fromEntries(
+            Object.entries(prev).map(([projectId, value]) => [
+              projectId,
+              {
+                ...value,
+                sessions: value.sessions.map(item => (item.id === sessionId ? { ...item, title: newTitle } : item)),
+              },
+            ]),
+          ),
+        )
+        setDefaultSessions(prev => ({
+          ...prev,
+          sessions: prev.sessions.map(item => (item.id === sessionId ? { ...item, title: newTitle } : item)),
+        }))
+        await refresh()
+      } catch (e) {
+        uiErrorHandler('rename session', e)
+      }
+    },
+    [currentDirectory, pathInfo?.directory, refresh, sessionLookup],
+  )
+
+  const handleDeleteListedSession = useCallback(
+    async (sessionId: string) => {
+      const session = sessionLookup.get(sessionId)
+      if (!session) {
+        await handleDeleteSession(sessionId)
+        return
+      }
+
+      await apiDeleteSession(sessionId, session.directory)
+      pinnedSessionsStore.unpin(sessionId)
+      clearSessionRuntimeState(sessionId)
+      setProjectSessions(prev =>
+        Object.fromEntries(
+          Object.entries(prev).map(([projectId, value]) => [
+            projectId,
+            {
+              ...value,
+              sessions: value.sessions.filter(item => item.id !== sessionId),
+            },
+          ]),
+        ),
+      )
+      setDefaultSessions(prev => ({
+        ...prev,
+        sessions: prev.sessions.filter(item => item.id !== sessionId),
+      }))
+      await refresh()
+
+      if (selectedSessionId === sessionId) {
+        onNewSession()
+      }
+    },
+    [handleDeleteSession, onNewSession, refresh, selectedSessionId, sessionLookup],
   )
 
   const handleRenameFolderSession = useCallback(
@@ -796,7 +1013,7 @@ export function SidePanel({
           if (s) {
             await apiDeleteSession(id, s.directory)
           } else {
-            await apiDeleteSession(id, currentDirectory)
+            await apiDeleteSession(id, currentDirectory || pathInfo?.directory)
           }
           pinnedSessionsStore.unpin(id)
         } catch (e) {
@@ -814,7 +1031,7 @@ export function SidePanel({
     if (needSwitchSession) {
       onNewSession()
     }
-  }, [selectedSessionIds, selectedSessionId, sessionLookup, currentDirectory, refresh, onNewSession])
+  }, [selectedSessionIds, selectedSessionId, sessionLookup, currentDirectory, pathInfo?.directory, refresh, onNewSession])
 
   // ---- 批量移除项目 ----
   const handleBatchRemoveProjects = useCallback(() => {
@@ -845,6 +1062,23 @@ export function SidePanel({
     onToggleSessionSelection: toggleSessionSelection,
     onToggleProjectSelection: toggleProjectSelection,
   }
+
+  const defaultConversationSource =
+    currentProject.id === 'global'
+      ? {
+          sessions: orderedSessions,
+          isLoading: isLoading || shouldWaitForWorkspaceResolution,
+          isLoadingMore,
+          hasMore,
+          onLoadMore: loadMore,
+        }
+      : {
+          sessions: defaultSessions.sessions,
+          isLoading: defaultSessions.isLoading,
+          isLoadingMore: false,
+          hasMore: false,
+          onLoadMore: () => {},
+        }
 
   // 统一的结构，通过 CSS 控制显示/隐藏
   return (
@@ -898,53 +1132,129 @@ export function SidePanel({
                 <PlusIcon size={13} />
               </button>
             </div>
-            <div ref={projectsDropdownRef} className="max-h-36 overflow-y-auto custom-scrollbar">
-              {projects.map(project => {
+            <div ref={projectsDropdownRef} className="overflow-y-auto custom-scrollbar">
+              {displayedProjects.map(project => {
                 const isGlobal = project.id === 'global'
                 const isActive = currentProject?.id === project.id
+                const isExpanded = expandedProjectIds.includes(project.id)
+                const usesActiveSessionSource = Boolean(
+                  isActive && currentDirectory && isSameDirectory(currentProject.worktree, project.worktree),
+                )
+                const projectSessionSource = usesActiveSessionSource
+                  ? {
+                      sessions: orderedSessions,
+                      isLoading: isLoading || shouldWaitForWorkspaceResolution,
+                      isLoadingMore,
+                      hasMore,
+                      onLoadMore: loadMore,
+                    }
+                  : {
+                      sessions: projectSessions[project.id]?.sessions ?? [],
+                      isLoading: projectSessions[project.id]?.isLoading ?? false,
+                      isLoadingMore: false,
+                      hasMore: false,
+                      onLoadMore: () => {},
+                    }
                 const itemLabel =
                   isActive && !isGlobal
                     ? currentProjectLabel
                     : project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (
-                  <div
-                    key={project.id}
-                    onClick={() => handleSelectProject(project.id)}
-                    className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors ${
-                      isActive
-                        ? 'sidebar-selected-row text-text-100'
-                        : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation()
-                        handleSelectProject(project.id)
-                      }}
-                      aria-current={isActive ? 'true' : undefined}
-                      className="min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0"
-                      title={project.worktree}
+                  <div key={project.id}>
+                    <div
+                      onClick={() => handleSelectProject(project.id)}
+                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors ${
+                        isActive
+                          ? 'sidebar-selected-row text-text-100'
+                          : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
+                      }`}
                     >
-                      <span className="flex size-5 shrink-0 items-center justify-center">
-                        {isGlobal ? <GlobeIcon size={14} className="text-accent-main-100" /> : <FolderIcon size={14} />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
-                    </button>
-                    {!isGlobal && (
                       <button
                         type="button"
                         onClick={e => {
                           e.stopPropagation()
-                          setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
+                          handleSelectProject(project.id)
                         }}
-                        aria-label={t('sidebar.removeProject')}
-                        className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
-                        title={t('common:remove')}
+                        aria-current={isActive ? 'true' : undefined}
+                        className="min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0"
+                        title={project.worktree}
                       >
-                        <TrashIcon size={12} />
+                        <span className="flex size-5 shrink-0 items-center justify-center">
+                          {isGlobal ? (
+                            <GlobeIcon size={14} className="text-accent-main-100" />
+                          ) : (
+                            <FolderIcon size={14} />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
                       </button>
-                    )}
+                      {!isGlobal && (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            handleToggleProject(project.id)
+                          }}
+                          aria-label={isExpanded ? '折叠项目' : '展开项目'}
+                          aria-expanded={isExpanded}
+                          className="flex size-6 shrink-0 items-center justify-center rounded text-text-500 transition-colors hover:bg-bg-200/70 hover:text-text-200"
+                          title={isExpanded ? '折叠项目' : '展开项目'}
+                        >
+                          <ChevronRightIcon
+                            size={14}
+                            className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                          />
+                        </button>
+                      )}
+                      {!isGlobal && (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
+                          }}
+                          aria-label={t('sidebar.removeProject')}
+                          className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
+                          title={t('common:remove')}
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      )}
+                    </div>
+                    {!isGlobal &&
+                      isExpanded &&
+                      sidebarTab === 'recents' &&
+                      (projectSessionSource.sessions.length > 0 || projectSessionSource.isLoading || search) && (
+                        <div className="ml-7 mt-0.5 mb-1">
+                          <SessionList
+                            sessions={projectSessionSource.sessions}
+                            selectedId={selectedSessionId}
+                            isLoading={projectSessionSource.isLoading}
+                            isLoadingMore={projectSessionSource.isLoadingMore}
+                            hasMore={projectSessionSource.hasMore}
+                            search={search}
+                            onSearchChange={setSearch}
+                            onSelect={handleSelect}
+                            onDelete={handleDeleteListedSession}
+                            onRename={handleRenameListedSession}
+                            onLoadMore={projectSessionSource.onLoadMore}
+                            onNewChat={onNewSession}
+                            showHeader={false}
+                            grouped={false}
+                            density="minimal"
+                            showStats={false}
+                            showDirectory={false}
+                            expandedChildSessionIds={expandedChildSessionIds}
+                            inlineChildSessions={inlineChildSessions}
+                            onSelectChildSession={handleSelectActive}
+                            pinnedDividerAfterIds={pinnedDividerAfterIds}
+                            embedded
+                            isEditMode={isEditMode}
+                            selectedSessionIds={selectedSessionIds}
+                            onToggleSessionSelection={toggleSessionSelection}
+                          />
+                        </div>
+                      )}
                   </div>
                 )
               })}
@@ -963,7 +1273,7 @@ export function SidePanel({
       >
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="mx-2 flex shrink-0 items-center gap-1">
-            <div className="pl-[6px] pr-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-500">
+            <div className="pl-[6px] py-1.5 text-left text-[length:var(--fs-sm)] text-text-500">
               {t('sidebar.conversations')}
             </div>
             {attentionCount > 0 && (
@@ -981,7 +1291,7 @@ export function SidePanel({
             <button
               type="button"
               onClick={() => setSearchExpanded(value => !value)}
-              className={`ml-auto rounded-md p-1 transition-colors duration-150 ${
+              className={`ml-1 rounded-md p-1 transition-colors duration-150 ${
                 searchExpanded
                   ? 'text-text-200 bg-bg-200/60'
                   : 'text-text-500 hover:text-text-300 hover:bg-bg-200/50'
@@ -1079,17 +1389,17 @@ export function SidePanel({
           {sidebarTab === 'recents' && (
             <div ref={recentsSelectionRootRef} className="flex-1 overflow-hidden">
               <SessionList
-                sessions={orderedSessions}
+                sessions={defaultConversationSource.sessions}
                 selectedId={selectedSessionId}
-                isLoading={isLoading || shouldWaitForWorkspaceResolution}
-                isLoadingMore={isLoadingMore}
-                hasMore={hasMore}
+                isLoading={defaultConversationSource.isLoading}
+                isLoadingMore={defaultConversationSource.isLoadingMore}
+                hasMore={defaultConversationSource.hasMore}
                 search={search}
                 onSearchChange={setSearch}
                 onSelect={handleSelect}
-                onDelete={handleDeleteSession}
-                onRename={handleRename}
-                onLoadMore={loadMore}
+                onDelete={handleDeleteListedSession}
+                onRename={handleRenameListedSession}
+                onLoadMore={defaultConversationSource.onLoadMore}
                 onNewChat={onNewSession}
                 showHeader={false}
                 grouped={false}

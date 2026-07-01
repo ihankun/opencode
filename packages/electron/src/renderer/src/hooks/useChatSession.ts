@@ -43,7 +43,7 @@ import {
   type ModelInfo,
 } from '../api'
 import { getMessageText, isUserMessage, type AssistantMessageInfo, type Message as UIMessage } from '../types/message'
-import { clipboardErrorHandler, copyTextToClipboard, createErrorHandler } from '../utils'
+import { clipboardErrorHandler, copyTextToClipboard, createErrorHandler, isSameDirectory } from '../utils'
 import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
 import { serverStorage } from '../utils/perServerStorage'
 import { STORAGE_KEY_SELECTED_AGENT } from '../constants'
@@ -84,7 +84,7 @@ interface UseChatSessionOptions {
   refetchModels: () => Promise<void>
   sessionId: string | null
   navigateToSession: (sessionId: string, directory?: string) => void
-  navigateHome: () => void
+  navigateHome: (directory?: string | null) => void
 }
 
 interface LiveRetryStatus {
@@ -123,7 +123,7 @@ export function useChatSession({
 
   // Hooks
   const { resetPermissions } = usePermissions()
-  const { currentDirectory } = useDirectory()
+  const { currentDirectory, pathInfo } = useDirectory()
   const { createSession, sessions } = useSessionContext()
   const { sendNotification } = useNotification()
 
@@ -202,7 +202,7 @@ export function useChatSession({
   // Session Manager
   const { loadSession, loadMoreHistory, handleUndo, handleRedo, handleRedoAll, clearRevert } = useSessionManager({
     sessionId: routeSessionId,
-    directory: currentDirectory,
+    directory: currentDirectory || pathInfo?.directory,
     onSessionMissing: handleMissingRouteSession,
   })
 
@@ -228,7 +228,15 @@ export function useChatSession({
   const { registerMessage, registerInputBox, animateUndo, animateRedo } = useMessageAnimation()
 
   // Effective directory (used in multiple places)
-  const effectiveDirectory = sessionDirectory || currentDirectory
+  const effectiveDirectory = sessionDirectory || currentDirectory || pathInfo?.directory
+  const routeDirectoryForSession = useCallback(
+    (directory: string | undefined) => {
+      if (!directory) return ''
+      if (!currentDirectory && pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
+      return directory
+    },
+    [currentDirectory, pathInfo?.directory],
+  )
 
   const fullAutoMode = useSyncExternalStore(
     cb => autoApproveStore.onFullAutoChange(cb),
@@ -652,7 +660,7 @@ export function useChatSession({
           if (!input.allowCreateSession) return false
           const newSession = await createSession()
           sessionId = newSession.id
-          navigateToSession(sessionId, newSession.directory)
+          navigateToSession(sessionId, routeDirectoryForSession(newSession.directory))
         }
 
         if (rollbackSnapshot) {
@@ -719,7 +727,7 @@ export function useChatSession({
         return false
       }
     },
-    [routeSessionId, navigateToSession, createSession],
+    [routeSessionId, navigateToSession, createSession, routeDirectoryForSession],
   )
 
   // Send message handler
@@ -900,7 +908,7 @@ export function useChatSession({
           }
           const forkedSession = await forkSession(assistantInfo.sessionID, forkAtMessageId, effectiveDirectory)
           setRestoredContent(null)
-          navigateToSession(forkedSession.id, forkedSession.directory)
+          navigateToSession(forkedSession.id, routeDirectoryForSession(forkedSession.directory))
           return
         }
 
@@ -924,12 +932,12 @@ export function useChatSession({
           },
         })
 
-        navigateToSession(forkedSession.id, forkedSession.directory)
+        navigateToSession(forkedSession.id, routeDirectoryForSession(forkedSession.directory))
       } catch (error) {
         handleError('fork session', error)
       }
     },
-    [effectiveDirectory, navigateToSession],
+    [effectiveDirectory, navigateToSession, routeDirectoryForSession],
   )
 
   // Abort handler
@@ -977,7 +985,7 @@ export function useChatSession({
         if (!sessionId) {
           const newSession = await createSession()
           sessionId = newSession.id
-          navigateToSession(sessionId, newSession.directory)
+          navigateToSession(sessionId, routeDirectoryForSession(newSession.directory))
         }
 
         if (command === 'compact') {
@@ -1011,7 +1019,16 @@ export function useChatSession({
         return false
       }
     },
-    [routeSessionId, effectiveDirectory, createSession, navigateToSession, currentModel, navigateHome, handleNewChat],
+    [
+      routeSessionId,
+      effectiveDirectory,
+      createSession,
+      navigateToSession,
+      routeDirectoryForSession,
+      currentModel,
+      navigateHome,
+      handleNewChat,
+    ],
   )
 
   // Undo with animation
@@ -1038,14 +1055,14 @@ export function useChatSession({
   // Session selection
   const handleSelectSession = useCallback(
     (session: ApiSession) => {
-      navigateToSession(session.id, session.directory)
+      navigateToSession(session.id, routeDirectoryForSession(session.directory))
     },
-    [navigateToSession],
+    [navigateToSession, routeDirectoryForSession],
   )
 
   // New session
   const handleNewSession = useCallback(() => {
-    navigateHome()
+    navigateHome(null)
     handleNewChat()
   }, [navigateHome, handleNewChat])
 
@@ -1067,12 +1084,12 @@ export function useChatSession({
     const currentIndex = sessions.findIndex(s => s.id === routeSessionId)
     if (currentIndex > 0) {
       const target = sessions[currentIndex - 1]
-      navigateToSession(target.id, target.directory)
+      navigateToSession(target.id, routeDirectoryForSession(target.directory))
     } else if (currentIndex === -1 && sessions.length > 0) {
       // Not in any session, go to first
-      navigateToSession(sessions[0].id, sessions[0].directory)
+      navigateToSession(sessions[0].id, routeDirectoryForSession(sessions[0].directory))
     }
-  }, [sessions, routeSessionId, navigateToSession])
+  }, [sessions, routeSessionId, navigateToSession, routeDirectoryForSession])
 
   // Navigate to next session
   const handleNextSession = useCallback(() => {
@@ -1080,9 +1097,9 @@ export function useChatSession({
     const currentIndex = sessions.findIndex(s => s.id === routeSessionId)
     if (currentIndex >= 0 && currentIndex < sessions.length - 1) {
       const target = sessions[currentIndex + 1]
-      navigateToSession(target.id, target.directory)
+      navigateToSession(target.id, routeDirectoryForSession(target.directory))
     }
-  }, [sessions, routeSessionId, navigateToSession])
+  }, [sessions, routeSessionId, navigateToSession, routeDirectoryForSession])
 
   // Toggle agent (cycle through primary agents only, matching toolbar display)
   const handleToggleAgent = useCallback(() => {

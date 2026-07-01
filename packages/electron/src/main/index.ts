@@ -37,7 +37,7 @@ async function createWindow() {
     titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 20, y: 18 } : undefined,
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -60,6 +60,13 @@ async function createWindow() {
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-load", { errorCode, errorDescription, validatedURL })
     mainWindow?.show()
+  })
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    if (level < 2) return
+    writeLog("renderer", "console-message", { level, message, line, sourceId })
+  })
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    writeLog("renderer", "render-process-gone", details)
   })
   setTimeout(() => {
     if (!mainWindow || mainWindow.isVisible()) return

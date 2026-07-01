@@ -30,9 +30,12 @@ import {
 import { keybindingStore, matchesKeybinding } from '../../store/keybindingStore'
 import { themeStore } from '../../store/themeStore'
 import { useChatViewport } from './chatViewport'
+import { useDirectory } from '../../contexts/useDirectory'
+import { ChevronDownIcon, FolderIcon, GlobeIcon } from '../../components/Icons'
 import type { ApiAgent } from '../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
+import { getDirectoryName, isSameDirectory } from '../../utils'
 import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
   getInternalDragSnapshot,
@@ -228,6 +231,7 @@ function InputBoxComponent({
   collapsedQuestion,
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
+  const { currentDirectory, setCurrentDirectory, savedDirectories } = useDirectory()
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
   const fileCaps: FileCapabilities = useMemo(
     () =>
@@ -249,6 +253,7 @@ function InputBoxComponent({
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
 
   // @ Mention 状态
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -281,6 +286,7 @@ function InputBoxComponent({
   const latestDraftRef = useRef<HistoryEntry>({ text: '', attachments: [] })
   const contentWrapRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
+  const projectMenuRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
   const compositionEndTimerRef = useRef<number | null>(null)
   const [composerMaxHeight, setComposerMaxHeight] = useState(280)
@@ -362,6 +368,18 @@ function InputBoxComponent({
     [],
   )
 
+  useEffect(() => {
+    if (!projectMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (projectMenuRef.current?.contains(event.target as Node)) return
+      setProjectMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [projectMenuOpen])
+
   const updateComposerHeightBudget = useCallback(() => {
     const paneHeight = getComposerPaneHeight(inputContainerRef.current ?? contentWrapRef.current)
     const nextComposerMaxHeight = getComposerMaxHeight(paneHeight, isCompact)
@@ -428,6 +446,25 @@ function InputBoxComponent({
   // 计算
   const inputDisabled = !!disabled
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !inputDisabled
+  const projectOptions = useMemo(() => {
+    if (!currentDirectory || savedDirectories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
+      return savedDirectories
+    }
+
+    return [
+      ...savedDirectories,
+      {
+        path: currentDirectory,
+        name: getDirectoryName(currentDirectory) || currentDirectory,
+        addedAt: Date.now(),
+      },
+    ]
+  }, [currentDirectory, savedDirectories])
+  const selectedProjectName = currentDirectory
+    ? projectOptions.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
+      getDirectoryName(currentDirectory) ||
+      currentDirectory
+    : '选择工作目录'
 
   // ============================================
   // Handlers
@@ -1478,6 +1515,68 @@ function InputBoxComponent({
                 </div>
               </div>
             </div>
+
+            {!sessionId && (
+              <div className="relative mt-1 px-4 pb-1" ref={projectMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setProjectMenuOpen(value => !value)}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[length:var(--fs-sm)] text-text-300 transition-colors hover:bg-bg-200/70 hover:text-text-100"
+                  aria-haspopup="menu"
+                  aria-expanded={projectMenuOpen}
+                  title={currentDirectory || '不选择工作目录时，对话会归到下面的对话列表'}
+                >
+                  {currentDirectory ? <FolderIcon size={14} /> : <GlobeIcon size={14} />}
+                  <span className="truncate">{selectedProjectName}</span>
+                  <ChevronDownIcon size={13} className="shrink-0 text-text-500" />
+                </button>
+
+                {projectMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute bottom-full left-4 z-50 mb-2 max-h-64 min-w-56 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={!currentDirectory}
+                      onClick={() => {
+                        setCurrentDirectory(undefined)
+                        setProjectMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${
+                        !currentDirectory ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'
+                      }`}
+                    >
+                      <GlobeIcon size={14} />
+                      <span className="min-w-0 flex-1 truncate">无工作目录</span>
+                    </button>
+                    {projectOptions.map(directory => {
+                      const selected = !!currentDirectory && isSameDirectory(directory.path, currentDirectory)
+                      return (
+                        <button
+                          key={directory.path}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selected}
+                          onClick={() => {
+                            setCurrentDirectory(directory.path)
+                            setProjectMenuOpen(false)
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${
+                            selected ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'
+                          }`}
+                          title={directory.path}
+                        >
+                          <FolderIcon size={14} />
+                          <span className="min-w-0 flex-1 truncate">{directory.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -43,11 +43,6 @@ function parseHash(): RouteState {
     }
   }
 
-  if (!directory) {
-    const saved = serverStorage.get(STORAGE_KEY_LAST_DIRECTORY)
-    if (saved) directory = saved
-  }
-
   const sessionMatch = path.match(/^#\/session\/(.+)$/)
   if (sessionMatch) {
     return { sessionId: sessionMatch[1], directory }
@@ -134,10 +129,19 @@ export function useRouter() {
     emitRoute(next)
   }, [])
 
-  const navigateHome = useCallback(() => {
+  const navigateHome = useCallback((directory?: string | null) => {
     const currentRoute = getSnapshot()
-    const next = { sessionId: null, directory: currentRoute.directory }
-    const newHash = buildHash(null, currentRoute.directory)
+    const dir =
+      directory === undefined ? currentRoute.directory : directory ? normalizeToForwardSlash(directory) || undefined : undefined
+    const next = { sessionId: null, directory: dir }
+    const newHash = buildHash(null, dir)
+    if (directory !== undefined) {
+      if (dir) {
+        serverStorage.set(STORAGE_KEY_LAST_DIRECTORY, dir)
+      } else {
+        serverStorage.remove(STORAGE_KEY_LAST_DIRECTORY)
+      }
+    }
     if (isMobileRef.current) {
       window.history.replaceState(null, '', newHash)
     } else {

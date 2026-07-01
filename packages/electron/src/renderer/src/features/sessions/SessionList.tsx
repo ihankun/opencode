@@ -35,6 +35,7 @@ interface SessionListProps {
   inlineChildSessions?: Map<string, ApiSession[]>
   onSelectChildSession?: (session: ApiSession) => void
   pinnedDividerAfterIds?: Set<string>
+  embedded?: boolean
   // ---- 编辑模式 ----
   isEditMode?: boolean
   selectedSessionIds?: Set<string>
@@ -68,6 +69,7 @@ export function SessionList({
   inlineChildSessions,
   onSelectChildSession,
   pinnedDividerAfterIds,
+  embedded = false,
   isEditMode = false,
   selectedSessionIds,
   onToggleSessionSelection,
@@ -140,7 +142,7 @@ export function SessionList({
   const showGroups = !search && grouped
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={`flex flex-col ${embedded ? '' : 'h-full'}`}>
       {/* Search Bar + New Chat */}
       {showHeader && (
         <div className="px-3 pb-2 flex-shrink-0">
@@ -175,7 +177,9 @@ export function SessionList({
       {/* Session List */}
       <div
         ref={listRef}
-        className={`flex-1 overflow-y-auto custom-scrollbar px-2 ${isCompact ? 'pb-2 space-y-1' : 'pb-4 space-y-4'}`}
+        className={`${embedded ? 'max-h-52' : 'flex-1'} overflow-y-auto custom-scrollbar px-2 ${
+          isCompact ? 'pb-2 space-y-1' : 'pb-4 space-y-4'
+        }`}
       >
         {isLoading && sessions.length === 0 ? (
           <div className="flex items-center justify-center py-8">
@@ -591,7 +595,7 @@ export function SessionListItem({
           >
             {isChecked && <CheckIcon size={9} className="text-white" />}
           </button>
-        ) : (
+        ) : activeStatus || hasUnreadCompletedNotification ? (
           <span className="relative shrink-0 flex items-center justify-center size-5" title={statusIndicatorTitle}>
             {activeStatus ? (
               <>
@@ -604,7 +608,7 @@ export function SessionListItem({
               <span className="absolute w-1.5 h-1.5 rounded-full bg-accent-main-100" />
             ) : null}
           </span>
-        )}
+        ) : null}
 
         {isEditMode ? (
           <div

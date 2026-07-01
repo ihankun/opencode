@@ -16,7 +16,7 @@ import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
 import { SessionContext, type SessionContextValue } from './SessionContext.shared'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const { currentDirectory } = useDirectory()
+  const { currentDirectory, pathInfo } = useDirectory()
 
   const [sessions, setSessions] = useState<ApiSession[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -26,21 +26,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const requestIdRef = useRef(0)
   const searchTimerRef = useRef<number | null>(null)
-  const currentDirectoryRef = useRef(currentDirectory)
   const searchRef = useRef(search)
   const isLoadingMoreRef = useRef(false) // 防止并发 loadMore
   const isFetchingRef = useRef(false) // 防止 onReconnected 密集触发时重复请求
   const queuedReconnectRefreshRef = useRef(false)
   const retryTimerRef = useRef<number | null>(null)
+  const effectiveDirectoryRef = useRef<string | undefined>(undefined)
   const fetchSessionsRef = useRef<
     (params?: SessionListParams & { append?: boolean; retryAttempt?: number }) => Promise<void>
   >(() => Promise.resolve())
   const currentLimitRef = useRef(30) // 当前 limit，loadMore 时递增
+  const effectiveDirectory = useMemo(
+    () => normalizeToForwardSlash(currentDirectory || pathInfo?.directory) || undefined,
+    [currentDirectory, pathInfo?.directory],
+  )
 
-  // 保持 ref 同步
   useEffect(() => {
-    currentDirectoryRef.current = currentDirectory
-  }, [currentDirectory])
+    effectiveDirectoryRef.current = effectiveDirectory
+  }, [effectiveDirectory])
 
   useEffect(() => {
     searchRef.current = search
@@ -63,7 +66,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       try {
         // 使用正斜杠格式传给 API（http 层会处理兼容）
-        const targetDir = normalizeToForwardSlash(currentDirectory) || undefined
+        const targetDir = effectiveDirectory
+
+        if (!targetDir) {
+          if (!append) {
+            setSessions([])
+            setHasMore(false)
+          }
+          return
+        }
 
         const data = await getSessions({
           roots: true,
@@ -118,14 +129,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [currentDirectory, search],
+    [effectiveDirectory, search],
   )
 
   // 保持 fetchSessions ref 同步（用于 SSE onReconnected 回调）
   fetchSessionsRef.current = fetchSessions
 
   const matchesCurrentDirectory = useCallback((session: ApiSession) => {
-    return !currentDirectoryRef.current || isSameDirectory(currentDirectoryRef.current, session.directory)
+    return !!effectiveDirectoryRef.current && isSameDirectory(effectiveDirectoryRef.current, session.directory)
   }, [])
 
   // 监听 directory 和 search 变化
@@ -146,7 +157,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
     }
-  }, [fetchSessions, search, currentDirectory])
+  }, [fetchSessions, search, effectiveDirectory])
 
   // 订阅 SSE 事件，实时更新 session 列表
   useEffect(() => {
@@ -247,7 +258,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const createSession = useCallback(
     async (title?: string) => {
       // 使用正斜杠格式传给后端
-      const targetDir = normalizeToForwardSlash(currentDirectory) || undefined
+      const targetDir = effectiveDirectory
 
       const newSession = await apiCreateSession({
         title,
@@ -255,18 +266,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       })
       return newSession
     },
-    [currentDirectory],
+    [effectiveDirectory],
   )
 
   const deleteSession = useCallback(
     async (id: string) => {
-      const targetDir = normalizeToForwardSlash(currentDirectory) || undefined
+      const targetDir = effectiveDirectory
       await apiDeleteSession(id, targetDir)
       pinnedSessionsStore.unpin(id)
       clearSessionRuntimeState(id)
       setSessions(prev => prev.filter(s => s.id !== id))
     },
-    [currentDirectory],
+    [effectiveDirectory],
   )
 
   // 稳定化 Provider value，避免每次渲染创建新对象导致子组件不必要重渲染

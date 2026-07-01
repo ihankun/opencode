@@ -46,7 +46,7 @@ interface ChatPaneProps {
   onSplitPane?: () => void
   onTogglePaneFullscreen?: () => void
   navigatePaneToSession: (paneId: string, sessionId: string, directory?: string) => void
-  navigatePaneHome: (paneId: string) => void
+  navigatePaneHome: (paneId: string, directory?: string | null) => void
 }
 
 // ============================================
@@ -201,9 +201,12 @@ export const ChatPane = memo(function ChatPane({
     [paneId, navigatePaneToSession],
   )
 
-  const navigateHome = useCallback(() => {
-    navigatePaneHome(paneId)
-  }, [paneId, navigatePaneHome])
+  const navigateHome = useCallback(
+    (directory?: string | null) => {
+      navigatePaneHome(paneId, directory)
+    },
+    [paneId, navigatePaneHome],
+  )
 
   // ============================================
   // Visible Message IDs (for outline index)
