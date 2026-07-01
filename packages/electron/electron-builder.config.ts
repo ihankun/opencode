@@ -2,13 +2,14 @@ import type { Configuration } from "electron-builder"
 
 const config: Configuration = {
   appId: "com.hankun.opencode.custom",
-  productName: "Custom OpenCode",
+  productName: "OpenCode",
   directories: {
     output: "release",
   },
-  files: ["out/**/*", "package.json"],
+  files: ["out/**/*", "assets/**/*", "package.json"],
   asarUnpack: ["out/main/chunks/*.wasm"],
   mac: {
+    icon: "assets/icon.icns",
     target: ["dmg", "zip"],
     category: "public.app-category.developer-tools",
   },

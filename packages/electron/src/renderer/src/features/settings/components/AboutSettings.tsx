@@ -111,9 +111,9 @@ export function AboutSettings() {
                 </div>
               </div>
               <div className="rounded-lg border border-border-200/50 bg-bg-000/35 px-3 py-2.5">
-                <div className="text-[length:var(--fs-xs)] text-text-400 mb-1">{t('about.latestVersion')}</div>
+                <div className="text-[length:var(--fs-xs)] text-text-400 mb-1">{t('about.opencodeVersion')}</div>
                 <div className="text-[length:var(--fs-base)] font-semibold text-text-100 font-mono">
-                  {latestVersion}
+                  v{__OPENCODE_VERSION__}
                 </div>
               </div>
             </div>

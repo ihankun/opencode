@@ -1,16 +1,17 @@
 {
   "name": "@opencode-ai/custom-electron",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "install:electron": "node ./node_modules/electron/install.js",
-    "predev": "bun ./scripts/build-server.ts",
+    "icons": "bun ./scripts/generate-icons.ts",
+    "predev": "bun run icons && bun ./scripts/build-server.ts",
     "dev": "electron-vite dev",
-    "prebuild": "bun ./scripts/build-server.ts",
+    "prebuild": "bun run icons && bun ./scripts/build-server.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "prepackage": "bun run build",
@@ -68,6 +69,7 @@
     "electron": "42.3.3",
     "electron-builder": "26.15.2",
     "electron-vite": "^5",
+    "sharp": "^0.33.5",
     "typescript": "catalog:",
     "vite": "catalog:"
   },

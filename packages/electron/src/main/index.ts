@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol } from "electron"
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
 import { join } from "node:path"
 import { initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
@@ -7,6 +7,9 @@ import type { SidecarHandle } from "./server"
 let mainWindow: BrowserWindow | undefined
 let server: SidecarHandle | undefined
 let serverError: string | undefined
+let tray: Tray | undefined
+let isQuitting = false
+let isStoppingForQuit = false
 
 function rendererUrl() {
   if (process.env.ELECTRON_RENDERER_URL) return process.env.ELECTRON_RENDERER_URL
@@ -14,6 +17,11 @@ function rendererUrl() {
 }
 
 async function createWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    showWindow()
+    return
+  }
+
   const url = rendererUrl()
   writeLog("main", "creating window", { url })
 
@@ -24,6 +32,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 580,
     show: false,
+    icon: iconPath("icon.icns"),
     backgroundColor: "#0f1115",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
@@ -37,6 +46,11 @@ async function createWindow() {
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault()
     mainWindow?.setTitle("")
+  })
+  mainWindow.on("close", (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+    mainWindow?.hide()
   })
   mainWindow.once("ready-to-show", () => {
     writeLog("main", "window ready-to-show")
@@ -57,6 +71,60 @@ async function createWindow() {
     mainWindow?.show()
   })
   void startServer(url)
+}
+
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow()
+    return
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function createTray() {
+  if (tray) return
+
+  const image = nativeImage.createFromPath(iconPath("generated/opencode-trayTemplate.png"))
+  if (process.platform === "darwin") image.setTemplateImage(true)
+
+  tray = new Tray(image)
+  tray.setToolTip("Custom OpenCode")
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "打开 OpenCode", click: showWindow },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
+  tray.on("click", showWindow)
+}
+
+function iconPath(filename: string) {
+  return join(__dirname, "../../assets", filename)
+}
+
+function setDockIcon() {
+  if (process.platform !== "darwin") return
+
+  try {
+    const image = nativeImage.createFromPath(iconPath("icon.icns"))
+    if (image.isEmpty()) {
+      writeLog("main", "dock icon skipped because image is empty", { path: iconPath("icon.icns") })
+      return
+    }
+    app.dock?.setIcon(image)
+  } catch (error) {
+    writeLog("main", "dock icon failed", error)
+  }
 }
 
 async function startServer(url: string) {
@@ -121,22 +189,27 @@ function currentServerState() {
 
 ipcMain.handle("server:get", currentServerState)
 
-app.on("before-quit", () => {
-  void stopServer()
+app.on("before-quit", (event) => {
+  if (isStoppingForQuit) return
+  event.preventDefault()
+  isQuitting = true
+  isStoppingForQuit = true
+  void stopServer().finally(() => app.exit(0))
 })
 
 app.on("window-all-closed", () => {
-  void stopServer().finally(() => app.quit())
+  if (process.platform !== "darwin") return
 })
 
 void app.whenReady().then(() => {
   writeLog("main", "app ready")
+  createTray()
+  setDockIcon()
   return createWindow()
 }).catch((error: unknown) => {
   writeLog("main", "startup failed", error)
 })
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length > 0) return
-  void createWindow()
+  showWindow()
 })
