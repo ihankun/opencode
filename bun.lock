@@ -443,7 +443,7 @@
     },
     "packages/electron": {
       "name": "@opencode-ai/custom-electron",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@codemirror/commands": "^6.10.3",
         "@codemirror/search": "^6.7.0",
