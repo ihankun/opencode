@@ -958,11 +958,11 @@ const codexLight: ThemeColors = {
 
 const codexDark: ThemeColors = {
   background: {
-    bg000: '220 10% 12%',
-    bg100: '220 11% 10%',
-    bg200: '220 12% 8%',
-    bg300: '220 12% 16%',
-    bg400: '220 10% 22%',
+    bg000: '0 0% 7%',
+    bg100: '0 0% 5%',
+    bg200: '0 0% 10%',
+    bg300: '0 0% 15%',
+    bg400: '0 0% 23%',
   },
   text: {
     text000: '0 0% 100%',

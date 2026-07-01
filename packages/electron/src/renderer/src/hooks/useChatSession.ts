@@ -232,10 +232,10 @@ export function useChatSession({
   const routeDirectoryForSession = useCallback(
     (directory: string | undefined) => {
       if (!directory) return ''
-      if (!currentDirectory && pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
+      if (pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
       return directory
     },
-    [currentDirectory, pathInfo?.directory],
+    [pathInfo?.directory],
   )
 
   const fullAutoMode = useSyncExternalStore(

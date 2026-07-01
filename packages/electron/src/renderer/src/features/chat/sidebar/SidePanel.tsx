@@ -97,6 +97,11 @@ function findProjectGroupForDirectory(projects: ProjectItem[], directory: string
   })
 }
 
+function areSessionListsSame(a: ApiSession[], b: ApiSession[]) {
+  if (a.length !== b.length) return false
+  return a.every((session, index) => session.id === b[index]?.id && session.title === b[index]?.title)
+}
+
 export function SidePanel({
   onNewSession,
   onSelectSession,
@@ -601,14 +606,20 @@ export function SidePanel({
 
   useEffect(() => {
     if (currentProject.id !== 'global') return
-    setDefaultSessions({ sessions: orderedSessions, isLoading: false })
+    setDefaultSessions(prev => {
+      if (!prev.isLoading && areSessionListsSame(prev.sessions, orderedSessions)) return prev
+      return { sessions: orderedSessions, isLoading: false }
+    })
   }, [currentProject.id, orderedSessions])
 
   useEffect(() => {
     if (currentProject.id === 'global' || !pathInfo?.directory) return
 
     let cancelled = false
-    setDefaultSessions(prev => ({ ...prev, isLoading: true }))
+    setDefaultSessions(prev => {
+      if (prev.isLoading) return prev
+      return { ...prev, isLoading: true }
+    })
 
     getSessions({
       roots: true,
@@ -618,7 +629,10 @@ export function SidePanel({
     })
       .then(data => {
         if (cancelled) return
-        setDefaultSessions({ sessions: data, isLoading: false })
+        setDefaultSessions(prev => {
+          if (!prev.isLoading && areSessionListsSame(prev.sessions, data)) return prev
+          return { sessions: data, isLoading: false }
+        })
         setFetchedSessions(prev => ({
           ...prev,
           ...Object.fromEntries(data.map(session => [session.id, session])),
@@ -626,7 +640,10 @@ export function SidePanel({
       })
       .catch(() => {
         if (cancelled) return
-        setDefaultSessions(prev => ({ ...prev, isLoading: false }))
+        setDefaultSessions(prev => {
+          if (!prev.isLoading) return prev
+          return { ...prev, isLoading: false }
+        })
       })
 
     return () => {

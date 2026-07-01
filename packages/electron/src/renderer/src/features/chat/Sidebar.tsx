@@ -253,7 +253,7 @@ export const Sidebar = memo(function Sidebar({
     if (mobileInline) {
       return (
         <>
-          <div className="relative flex h-full w-full flex-col overflow-hidden bg-[hsl(var(--sidebar-bg))] [contain:strict]">
+          <div className="sidebar-surface relative flex h-full w-full flex-col overflow-hidden [contain:strict]">
             <SidePanel
               onNewSession={onNewSession}
               onSelectSession={handleSelectSession}
@@ -297,7 +297,7 @@ export const Sidebar = memo(function Sidebar({
           onTouchCancel={handleSidebarTouchEnd}
           className={`
             fixed left-0 z-40
-            flex flex-col bg-[hsl(var(--sidebar-bg))] shadow-lg
+            flex flex-col sidebar-surface shadow-lg
             ${isSwipingActive ? '' : 'transition-transform duration-300 ease-out'}
             ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           `}
@@ -338,7 +338,7 @@ export const Sidebar = memo(function Sidebar({
         ref={sidebarRef}
         style={{ width: `${previewMode ? layout.sidebar.openWidth : layout.sidebar.dockedWidth}px` }}
         className={`
-          relative flex flex-col h-full bg-[hsl(var(--sidebar-bg))] overflow-hidden shrink-0 min-w-0
+          sidebar-surface relative flex flex-col h-full overflow-hidden shrink-0 min-w-0
           border-r border-border-200/50
           ${previewMode ? 'shadow-xl shadow-black/10' : ''}
           ${isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-out'}

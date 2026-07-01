@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '@tauri-apps/api/core'
@@ -24,7 +25,6 @@ import {
   usePaneController,
   usePaneControllers,
   usePaneLayout,
-  updateStore,
 } from './store'
 import {
   ChatViewportProvider,
@@ -140,11 +140,6 @@ function App() {
     })
   }, [])
 
-  useEffect(() => {
-    if (import.meta.env.DEV) return
-    void updateStore.checkForUpdates()
-  }, [])
-
   useViewportHeight()
   useWakeLock(wakeLock)
 
@@ -212,10 +207,10 @@ function App() {
   const routeDirectoryForSession = useCallback(
     (directory: string | undefined) => {
       if (!directory) return ''
-      if (!currentDirectory && pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
+      if (pathInfo?.directory && isSameDirectory(directory, pathInfo.directory)) return ''
       return directory
     },
-    [currentDirectory, pathInfo?.directory],
+    [pathInfo?.directory],
   )
 
   const handleSelectSession = useCallback(
@@ -921,11 +916,19 @@ function App() {
   ])
 
   const { showCloseDialog, handleCloseDialogConfirm, handleCloseDialogCancel } = useCloseServiceDialog()
+  const appShellStyle = useMemo(
+    () =>
+      ({
+        '--sidebar-width': `${chatViewport.layout.sidebar.dockedWidth}px`,
+      }) as CSSProperties,
+    [chatViewport.layout.sidebar.dockedWidth],
+  )
 
   return (
     <div
-      className="relative flex h-full flex-col bg-[hsl(var(--chat-bg))] overflow-hidden"
+      className="app-shell relative flex h-full flex-col overflow-hidden"
       data-sidebar-expanded={sidebarExpanded ? 'true' : 'false'}
+      style={appShellStyle}
     >
       <DesktopTitlebar />
       {showTitlebarSidebarButton && (
@@ -959,7 +962,7 @@ function App() {
                 onTouchCancel={handleMobilePagerInteractionEnd}
               >
                 <section
-                  className="h-full shrink-0 overflow-hidden bg-[hsl(var(--sidebar-bg))]"
+                  className="sidebar-surface h-full shrink-0 overflow-hidden"
                   aria-hidden={mobileActivePage !== 'left'}
                   inert={mobileActivePage !== 'left'}
                   style={{
@@ -1071,7 +1074,7 @@ function App() {
 
               {!sidebarExpanded && sidebarPreviewOpen && (
                 <div
-                  className="absolute left-0 top-0 bottom-0 z-[250] bg-[hsl(var(--sidebar-bg))]"
+                  className="sidebar-surface absolute left-0 top-0 bottom-0 z-[250]"
                   onPointerEnter={openSidebarPreview}
                   onPointerLeave={closeSidebarPreview}
                 >
@@ -1091,7 +1094,7 @@ function App() {
                 </div>
               )}
 
-              <div className="flex-1 flex min-w-0 h-full overflow-hidden">
+              <div className="chat-surface flex-1 flex min-w-0 h-full overflow-hidden">
                 <div
                   ref={surfaceRef}
                   className="flex-1 flex flex-col min-w-0 overflow-hidden"

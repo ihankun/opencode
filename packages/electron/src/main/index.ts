@@ -33,7 +33,10 @@ async function createWindow() {
     minHeight: 580,
     show: false,
     icon: iconPath("icon.icns"),
-    backgroundColor: "#0f1115",
+    backgroundColor: process.platform === "darwin" ? "#00000000" : "#0f1115",
+    transparent: process.platform === "darwin",
+    vibrancy: process.platform === "darwin" ? "under-window" : undefined,
+    visualEffectState: process.platform === "darwin" ? "active" : undefined,
     titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 20, y: 18 } : undefined,
     webPreferences: {

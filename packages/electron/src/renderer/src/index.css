@@ -74,6 +74,12 @@ body,
   background: hsl(var(--bg-100));
 }
 
+html.electron-app[data-theme-preset='codex'][data-glass],
+html.electron-app[data-theme-preset='codex'][data-glass] body,
+html.electron-app[data-theme-preset='codex'][data-glass] #root {
+  background: transparent;
+}
+
 /* Safe-area padding 应用在 #root 上：浏览器、PWA、Tauri 共用同一份 env()。
  * 非 PWA 浏览器场景下 env() 自然返回 0，不会产生副作用；Tauri 走原生 setPadding，
  * 由下方 .tauri-app #root 显式重置为 0，避免与原生层叠加产生双倍 padding。
@@ -525,21 +531,94 @@ body,
 }
 
 :root:root[data-theme-preset='codex'][data-mode='dark'] {
-  --sidebar-bg: 220 11% 10%;
-  --sidebar-selected-bg: 220 8% 18%;
-  --chat-bg: 220 10% 12%;
+  --sidebar-bg: 0 0% 24%;
+  --sidebar-selected-bg: 0 0% 36%;
+  --chat-bg: 0 0% 7%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:root[data-theme-preset='codex']:not([data-mode]) {
-    --sidebar-bg: 220 11% 10%;
-    --sidebar-selected-bg: 220 8% 18%;
-    --chat-bg: 220 10% 12%;
+    --sidebar-bg: 0 0% 24%;
+    --sidebar-selected-bg: 0 0% 36%;
+    --chat-bg: 0 0% 7%;
+  }
+}
+
+.sidebar-surface {
+  background-color: hsl(var(--sidebar-bg));
+}
+
+.app-shell,
+.chat-surface {
+  background-color: hsl(var(--chat-bg));
+}
+
+.desktop-titlebar-surface {
+  background-color: hsl(var(--bg-100));
+}
+
+html.electron-app[data-theme-preset='codex'][data-glass] .app-shell {
+  background-color: transparent;
+}
+
+html.electron-app[data-theme-preset='codex'][data-glass] .chat-surface {
+  background-color: hsl(var(--chat-bg));
+}
+
+html.electron-app[data-theme-preset='codex'][data-glass] .desktop-titlebar-surface {
+  background:
+    linear-gradient(
+      to right,
+      hsl(var(--sidebar-bg) / 0.28) 0 var(--sidebar-width, 288px),
+      hsl(var(--chat-bg)) var(--sidebar-width, 288px) 100%
+    );
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+  backdrop-filter: blur(34px) saturate(180%);
+}
+
+:root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-surface {
+  background-color: hsl(var(--sidebar-bg) / 0.34);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+}
+
+:root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-surface {
+  background-color: hsl(var(--sidebar-bg) / 0.34);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-surface {
+  background-color: hsl(var(--sidebar-bg) / 0.24);
+  -webkit-backdrop-filter: blur(44px) saturate(210%);
+  backdrop-filter: blur(44px) saturate(210%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-surface {
+    background-color: hsl(var(--sidebar-bg) / 0.24);
+    -webkit-backdrop-filter: blur(44px) saturate(210%);
+    backdrop-filter: blur(44px) saturate(210%);
   }
 }
 
 .sidebar-selected-row {
   background-color: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.96);
+}
+
+:root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-selected-row,
+:root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-selected-row {
+  background-color: hsl(var(--sidebar-selected-bg) / 0.42);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-selected-row {
+  background-color: hsl(var(--sidebar-selected-bg) / 0.30);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-selected-row {
+    background-color: hsl(var(--sidebar-selected-bg) / 0.30);
+  }
 }
 
 /* Base styles */
@@ -943,6 +1022,32 @@ body {
   background-color: hsl(var(--bg-100) / 0.78);
   -webkit-backdrop-filter: blur(22px) saturate(200%);
   backdrop-filter: blur(22px) saturate(200%);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .glass {
+  background-color: hsl(0 0% 14% / 0.56);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .glass-alt {
+  background-color: hsl(0 0% 18% / 0.48);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  backdrop-filter: blur(32px) saturate(180%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .glass {
+    background-color: hsl(0 0% 14% / 0.56);
+    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    backdrop-filter: blur(28px) saturate(170%);
+  }
+
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .glass-alt {
+    background-color: hsl(0 0% 18% / 0.48);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    backdrop-filter: blur(32px) saturate(180%);
+  }
 }
 
 /* ============================================

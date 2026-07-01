@@ -1,44 +1,18 @@
 import { useCallback, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
-import { DownloadIcon, ExternalLinkIcon, RetryIcon, UploadIcon } from '../../../components/Icons'
-import { hasUpdateAvailable, updateStore, useUpdateStore, RELEASES_PAGE_URL } from '../../../store/updateStore'
+import { DownloadIcon, UploadIcon } from '../../../components/Icons'
+import { useUpdateStore } from '../../../store/updateStore'
 import { saveData } from '../../../utils/downloadUtils'
 import { exportSettingsBackup, importSettingsBackup, previewBackupMeta } from '../../../utils/settingsBackup'
-import { isTauri } from '../../../utils/tauri'
 import { SettingsCard, SettingsSection } from './SettingsUI'
-
-async function openExternalUrl(url: string): Promise<void> {
-  if (isTauri()) {
-    await import('@tauri-apps/plugin-opener')
-      .then(mod => mod.openUrl(url))
-      .catch(() => window.open(url, '_blank', 'noopener,noreferrer'))
-    return
-  }
-
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
 
 export function AboutSettings() {
   const { t } = useTranslation(['settings'])
   const updateState = useUpdateStore()
-  const hasUpdate = hasUpdateAvailable(updateState)
-  const latestRelease = updateState.latestRelease
-  const latestVersion = latestRelease?.tagName || t('about.unknownVersion')
-  const releaseDate = latestRelease?.publishedAt ? new Date(latestRelease.publishedAt).toLocaleString() : null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
-
-  const handleCheckUpdates = useCallback(() => {
-    void updateStore.checkForUpdates({ force: true })
-  }, [])
-
-  const handleOpenRelease = useCallback(() => {
-    const targetUrl = latestRelease?.url || RELEASES_PAGE_URL
-    updateStore.hideToastForCurrentVersion()
-    void openExternalUrl(targetUrl)
-  }, [latestRelease?.url])
 
   const handleExportBackup = useCallback(async () => {
     setBackupError(null)
@@ -87,17 +61,6 @@ export function AboutSettings() {
     [t],
   )
 
-  let statusText = t('about.statusIdle')
-  if (updateState.checking) {
-    statusText = t('about.statusChecking')
-  } else if (updateState.error) {
-    statusText = t('about.statusError', { error: updateState.error })
-  } else if (hasUpdate) {
-    statusText = t('about.statusUpdateAvailable', { version: latestVersion })
-  } else if (latestRelease) {
-    statusText = t('about.statusUpToDate')
-  }
-
   return (
     <div className="space-y-7">
       <SettingsSection title={t('about.title')}>
@@ -116,22 +79,6 @@ export function AboutSettings() {
                   v{__OPENCODE_VERSION__}
                 </div>
               </div>
-            </div>
-
-            <div className="rounded-lg border border-border-200/50 bg-bg-100/35 px-3 py-3 text-[length:var(--fs-sm)] text-text-300 leading-relaxed">
-              <div className="font-medium text-text-100">{statusText}</div>
-              {releaseDate && <div className="mt-1 text-text-400">{t('about.publishedAt', { date: releaseDate })}</div>}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" isLoading={updateState.checking} onClick={handleCheckUpdates}>
-                {!updateState.checking && <RetryIcon size={12} />}
-                {t('about.checkNow')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={handleOpenRelease}>
-                <ExternalLinkIcon size={12} />
-                {hasUpdate ? t('about.viewUpdate') : t('about.openReleases')}
-              </Button>
             </div>
           </div>
         </SettingsCard>

@@ -91,6 +91,10 @@ interface StartOpencodeServiceResult {
 }
 
 function configureNativeShell() {
+  if ('customOpenCode' in window) {
+    document.documentElement.classList.add('electron-app')
+  }
+
   if (!isNativeTauri) return
 
   // 添加 CSS class 用于 safe-area 适配

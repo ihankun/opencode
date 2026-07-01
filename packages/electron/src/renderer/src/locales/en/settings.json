@@ -358,9 +358,9 @@
     "valuePlaceholder": "value"
   },
   "about": {
-    "title": "About & Updates",
+    "title": "About",
     "versionCardTitle": "Version",
-    "versionCardDesc": "Check whether a newer OpenCodeUI release is available and jump to the download page.",
+    "versionCardDesc": "View the current app version and bundled OpenCode Server version.",
     "backupCardTitle": "Backup & Restore",
     "backupCardDesc": "Export your local settings to a JSON backup, or restore them later on another device.",
     "backupWarning": "Backups include local server credentials, service environment variables, and other sensitive settings stored in this browser/app profile. Keep the file private.",
