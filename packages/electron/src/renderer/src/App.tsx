@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { invoke } from '@tauri-apps/api/core'
 import { Sidebar } from './features/chat'
@@ -9,6 +10,7 @@ import { ToastContainer } from './components/ToastContainer'
 import { RightPanel } from './components/RightPanel'
 import { BottomPanel } from './components/BottomPanel'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
+import { SidebarIcon } from './components/Icons'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
 import { useCloseServiceDialog } from './hooks/useCloseServiceDialog'
@@ -50,8 +52,44 @@ const CloseServiceDialog = lazy(() =>
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
 const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
+const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
+
+function ElectronSidebarToggle({
+  expanded,
+  title,
+  onToggle,
+  onPreviewOpen,
+  onPreviewClose,
+}: {
+  expanded: boolean
+  title: string
+  onToggle: () => void
+  onPreviewOpen: () => void
+  onPreviewClose: () => void
+}) {
+  return createPortal(
+    <button
+      type="button"
+      onPointerEnter={onPreviewOpen}
+      onPointerLeave={onPreviewClose}
+      onPointerDownCapture={event => event.stopPropagation()}
+      onMouseDownCapture={event => event.stopPropagation()}
+      onClickCapture={event => {
+        event.stopPropagation()
+        onToggle()
+      }}
+      aria-label={title}
+      aria-pressed={expanded}
+      title={title}
+      className="electron-sidebar-toggle window-no-drag"
+    >
+      <SidebarIcon size={16} />
+    </button>,
+    document.body,
+  )
+}
 
 function App() {
   const { t } = useTranslation(['commands', 'chat', 'common', 'components'])
@@ -71,11 +109,15 @@ function App() {
     requestedRightPanelWidth: rightPanelWidth,
   })
   const splitPaneEnabled = canUseSplitPane(chatViewport)
+  const showTitlebarSidebarButton = !isTauri() && chatViewport.interaction.sidebarBehavior !== 'overlay'
   const paneLayout = usePaneLayout()
   const focusedController = usePaneController(paneLayout.focusedPaneId)
   const paneControllers = usePaneControllers()
   const syncingFromRouteRef = useRef(false)
   const lastRouteSessionIdRef = useRef<string | null | undefined>(undefined)
+  const sidebarTransitionTimerRef = useRef<number | null>(null)
+  const sidebarPreviewCloseTimerRef = useRef<number | null>(null)
+  const [sidebarPreviewOpen, setSidebarPreviewOpen] = useState(false)
   // 当 currentDirectory 为 undefined 时表示全局模式，
   // 不应 fallback 到 session 自身的 directory，否则 replaceSession 会把 dir 参数写回 URL
   const focusedRouteDirectory =
@@ -427,12 +469,53 @@ function App() {
   }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
 
   const handleToggleSidebar = useCallback(() => {
+    if (!isMobilePanelLayout) {
+      if (sidebarTransitionTimerRef.current !== null) window.clearTimeout(sidebarTransitionTimerRef.current)
+      window.dispatchEvent(new CustomEvent('panel-resize-start'))
+      sidebarTransitionTimerRef.current = window.setTimeout(() => {
+        sidebarTransitionTimerRef.current = null
+        window.dispatchEvent(new CustomEvent('panel-resize-end'))
+      }, SIDEBAR_TRANSITION_MS + 50)
+    }
+
     if (sidebarExpanded) {
+      setSidebarPreviewOpen(false)
       handleCloseSidebar()
     } else {
+      setSidebarPreviewOpen(false)
       handleOpenSidebar()
     }
-  }, [handleCloseSidebar, handleOpenSidebar, sidebarExpanded])
+  }, [handleCloseSidebar, handleOpenSidebar, isMobilePanelLayout, sidebarExpanded])
+
+  const openSidebarPreview = useCallback(() => {
+    if (sidebarExpanded || isMobilePanelLayout) return
+    if (sidebarPreviewCloseTimerRef.current !== null) {
+      window.clearTimeout(sidebarPreviewCloseTimerRef.current)
+      sidebarPreviewCloseTimerRef.current = null
+    }
+    setSidebarPreviewOpen(true)
+  }, [isMobilePanelLayout, sidebarExpanded])
+
+  const closeSidebarPreview = useCallback(() => {
+    if (sidebarExpanded) return
+    if (sidebarPreviewCloseTimerRef.current !== null) window.clearTimeout(sidebarPreviewCloseTimerRef.current)
+    sidebarPreviewCloseTimerRef.current = window.setTimeout(() => {
+      sidebarPreviewCloseTimerRef.current = null
+      setSidebarPreviewOpen(false)
+    }, 120)
+  }, [sidebarExpanded])
+
+  useEffect(() => {
+    return () => {
+      if (sidebarTransitionTimerRef.current !== null) {
+        window.clearTimeout(sidebarTransitionTimerRef.current)
+        window.dispatchEvent(new CustomEvent('panel-resize-end'))
+      }
+      if (sidebarPreviewCloseTimerRef.current !== null) {
+        window.clearTimeout(sidebarPreviewCloseTimerRef.current)
+      }
+    }
+  }, [])
 
   const handleToggleRightPanel = useCallback(() => {
     if (!isMobilePanelLayout) {
@@ -831,8 +914,20 @@ function App() {
   const { showCloseDialog, handleCloseDialogConfirm, handleCloseDialogCancel } = useCloseServiceDialog()
 
   return (
-    <div className="relative flex h-full flex-col bg-bg-100 overflow-hidden">
+    <div
+      className="relative flex h-full flex-col bg-[hsl(var(--chat-bg))] overflow-hidden"
+      data-sidebar-expanded={sidebarExpanded ? 'true' : 'false'}
+    >
       <DesktopTitlebar />
+      {showTitlebarSidebarButton && (
+        <ElectronSidebarToggle
+          expanded={sidebarExpanded}
+          title={sidebarExpanded ? t('chat:sidebar.collapseSidebar') : t('chat:sidebar.expandSidebar')}
+          onToggle={handleToggleSidebar}
+          onPreviewOpen={openSidebarPreview}
+          onPreviewClose={closeSidebarPreview}
+        />
+      )}
       <InternalDragLayer />
       <ChatViewportProvider value={chatViewport}>
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -840,7 +935,7 @@ function App() {
             <>
               <div
                 ref={mobilePagerRef}
-                className="mobile-chat-pager absolute inset-x-0 top-0 -bottom-4 flex overflow-x-auto overflow-y-hidden bg-bg-100 pb-4"
+                className="mobile-chat-pager absolute inset-x-0 top-0 -bottom-4 flex overflow-x-auto overflow-y-hidden bg-[hsl(var(--chat-bg))] pb-4"
                 style={{
                   scrollSnapType: 'x mandatory',
                   overscrollBehaviorX: 'contain',
@@ -855,7 +950,7 @@ function App() {
                 onTouchCancel={handleMobilePagerInteractionEnd}
               >
                 <section
-                  className="h-full shrink-0 overflow-hidden bg-bg-100"
+                  className="h-full shrink-0 overflow-hidden bg-[hsl(var(--sidebar-bg))]"
                   aria-hidden={mobileActivePage !== 'left'}
                   inert={mobileActivePage !== 'left'}
                   style={{
@@ -882,7 +977,7 @@ function App() {
 
                 <section
                   ref={surfaceRef}
-                  className="relative h-full shrink-0 overflow-visible bg-bg-100"
+                  className="relative h-full shrink-0 overflow-visible bg-[hsl(var(--chat-bg))]"
                   style={{
                     width: `${mobilePageWidth}px`,
                     flexBasis: `${mobilePageWidth}px`,
@@ -891,7 +986,7 @@ function App() {
                   }}
                 >
                   <div
-                    className="absolute inset-y-0 -left-4 -right-4 z-10 flex flex-col overflow-hidden bg-bg-100 rounded-xl shadow-[0_0_24px_hsl(var(--always-black)/0.15)] [contain:layout_paint]"
+                    className="absolute inset-y-0 -left-4 -right-4 z-10 flex flex-col overflow-hidden bg-[hsl(var(--chat-bg))] rounded-xl shadow-[0_0_24px_hsl(var(--always-black)/0.15)] [contain:layout_paint]"
                     aria-hidden={mobileActivePage !== 'chat'}
                     inert={mobileActivePage !== 'chat'}
                     style={{
@@ -927,7 +1022,7 @@ function App() {
                 </section>
 
                 <section
-                  className="h-full shrink-0 overflow-hidden bg-bg-100"
+                  className="h-full shrink-0 overflow-hidden bg-[hsl(var(--chat-bg))]"
                   aria-hidden={mobileActivePage !== 'right'}
                   inert={mobileActivePage !== 'right'}
                   style={{
@@ -950,18 +1045,42 @@ function App() {
             </>
           ) : (
             <>
-              <Sidebar
-                isOpen={sidebarExpanded}
-                selectedSessionId={paneLayout.focusedSessionId}
-                onSelectSession={handleSelectSession}
-                onNewSession={handleNewSession}
-                onOpen={handleOpenSidebar}
-                onClose={handleCloseSidebar}
-                contextLimit={focusedController?.contextLimit}
-                onOpenSettings={openSettings}
-                projectDialogOpen={projectDialogOpen}
-                onProjectDialogClose={closeProjectDialog}
-              />
+              {sidebarExpanded && (
+                <Sidebar
+                  isOpen={true}
+                  selectedSessionId={paneLayout.focusedSessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewSession={handleNewSession}
+                  onOpen={handleOpenSidebar}
+                  onClose={handleCloseSidebar}
+                  contextLimit={focusedController?.contextLimit}
+                  onOpenSettings={openSettings}
+                  projectDialogOpen={projectDialogOpen}
+                  onProjectDialogClose={closeProjectDialog}
+                />
+              )}
+
+              {!sidebarExpanded && sidebarPreviewOpen && (
+                <div
+                  className="absolute left-0 top-0 bottom-0 z-[250] bg-[hsl(var(--sidebar-bg))]"
+                  onPointerEnter={openSidebarPreview}
+                  onPointerLeave={closeSidebarPreview}
+                >
+                  <Sidebar
+                    isOpen={true}
+                    selectedSessionId={paneLayout.focusedSessionId}
+                    onSelectSession={handleSelectSession}
+                    onNewSession={handleNewSession}
+                    onOpen={handleOpenSidebar}
+                    onClose={handleCloseSidebar}
+                    contextLimit={focusedController?.contextLimit}
+                    onOpenSettings={openSettings}
+                    projectDialogOpen={projectDialogOpen}
+                    onProjectDialogClose={closeProjectDialog}
+                    previewMode
+                  />
+                </div>
+              )}
 
               <div className="flex-1 flex min-w-0 h-full overflow-hidden">
                 <div

@@ -125,6 +125,8 @@
     "addProject": "Add project...",
     "searchChats": "Search chats...",
     "clearSearch": "Clear search",
+    "projects": "Projects",
+    "conversations": "Conversations",
     "recents": "Recents",
     "active": "Active",
     "noActiveSessions": "No active sessions",

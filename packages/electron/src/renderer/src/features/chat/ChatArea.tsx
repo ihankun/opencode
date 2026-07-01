@@ -195,8 +195,8 @@ export const ChatArea = memo(
       const { isWideMode } = useTheme()
       const { presentation } = useChatViewport()
       const atBottomThreshold = presentation.isCompact ? 150 : AT_BOTTOM_THRESHOLD_PX
-      const messagePaddingClass = presentation.isCompact ? 'px-3' : 'px-5'
-      const messageMaxWidthClass = isWideMode ? 'max-w-[95%] xl:max-w-6xl' : 'max-w-2xl'
+      const messagePaddingClass = presentation.isCompact ? 'px-3' : 'px-4'
+      const messageMaxWidthClass = isWideMode ? 'max-w-[95%] xl:max-w-7xl' : 'max-w-[min(76rem,calc(100%-5rem))]'
       const shouldUseExternalViewModel = pageRecords != null && visibleMessagesProp != null
       const visibleMessageEntries = useMemo(
         () => (shouldUseExternalViewModel ? [] : buildVisibleMessageEntries(messages)),

@@ -772,16 +772,11 @@ export const ChatPane = memo(function ChatPane({
         <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
           <div className="pointer-events-auto">
             <Header
-              models={visibleModels}
-              modelsLoading={modelsLoading}
-              selectedModelKey={selectedModelKey}
-              onModelChange={handleModelChange}
               onOpenSidebar={onOpenSidebar}
               onToggleRightPanel={onToggleRightPanel}
               onSplitPane={onSplitPane}
               isPaneFullscreen={isPaneFullscreen}
               onTogglePaneFullscreen={onTogglePaneFullscreen}
-              modelSelectorRef={modelSelectorRef}
             />
           </div>
         </div>
@@ -956,10 +951,10 @@ export const ChatPane = memo(function ChatPane({
           showCompactShell
             ? `relative h-full flex flex-col overflow-hidden rounded-lg transition-all duration-200 ${
                 isFocused
-                  ? 'ring-1 ring-accent-main-100/60 bg-bg-100'
-                  : 'ring-1 ring-border-200/30 bg-bg-100 hover:ring-border-200/50'
+                  ? 'ring-1 ring-accent-main-100/60 bg-[hsl(var(--chat-bg))]'
+                  : 'ring-1 ring-border-200/30 bg-[hsl(var(--chat-bg))] hover:ring-border-200/50'
               }`
-            : 'relative h-full flex flex-col overflow-hidden bg-bg-100'
+            : 'relative h-full flex flex-col overflow-hidden bg-[hsl(var(--chat-bg))]'
         }
         onClick={handlePaneFocus}
       >

@@ -134,7 +134,7 @@ export function SessionList({
     return groups
   }, [sessions])
 
-  const isCompact = density === 'compact'
+  const isCompact = density === 'compact' || density === 'minimal'
 
   // 只有非搜索状态才显示分组
   const showGroups = !search && grouped
@@ -175,7 +175,7 @@ export function SessionList({
       {/* Session List */}
       <div
         ref={listRef}
-        className={`flex-1 overflow-y-auto custom-scrollbar px-2 ${isCompact ? 'pb-3 space-y-2' : 'pb-4 space-y-4'}`}
+        className={`flex-1 overflow-y-auto custom-scrollbar px-2 ${isCompact ? 'pb-2 space-y-1' : 'pb-4 space-y-4'}`}
       >
         {isLoading && sessions.length === 0 ? (
           <div className="flex items-center justify-center py-8">
@@ -565,7 +565,7 @@ export function SessionListItem({
         onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
         className={`group relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-default transition-colors duration-150 select-none ${
           isSelected && !isEditMode
-            ? 'bg-bg-200/80 text-text-100'
+            ? 'sidebar-selected-row text-text-100'
             : isEditMode && isChecked
               ? 'text-text-100'
               : 'text-text-300 hover:bg-bg-200/40 hover:text-text-200'

@@ -214,6 +214,50 @@ body,
   color: hsl(var(--always-white, 0 0% 100%));
 }
 
+.electron-sidebar-toggle {
+  position: fixed;
+  left: 112px;
+  top: 10px;
+  z-index: 10001;
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  pointer-events: auto;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.electron-sidebar-toggle:hover {
+  background: hsl(var(--bg-200) / 0.7);
+  color: hsl(var(--text-100));
+}
+
+.electron-sidebar-toggle:focus-visible {
+  outline: 2px solid hsl(var(--accent-main-100) / 0.55);
+  outline-offset: 2px;
+}
+
+.electron-sidebar-toggle:active {
+  transform: scale(0.98);
+}
+
+:root:not(.tauri-app) [data-sidebar-expanded='false'] [data-chat-header='true'] {
+  padding-left: 172px;
+}
+
 /* Browser/PWA: keyboard inset via visualViewport (Tauri uses native insets) */
 @media (display-mode: browser), (display-mode: standalone) {
   :root:not(.tauri-app) #root {
@@ -395,6 +439,8 @@ body,
   --bg-200: 150 12% 93%;
   --bg-300: 150 10% 89%;
   --bg-400: 150 10% 85%;
+  --sidebar-bg: var(--bg-100);
+  --chat-bg: var(--bg-100);
 
   /* Text - 墨绿灰 */
   --text-000: 0 0% 100%;
@@ -470,6 +516,30 @@ body,
   --fs-heading-3: 16px;
   --fs-heading-2: 18px;
   --fs-heading-1: 20px;
+}
+
+:root:root[data-theme-preset='codex'] {
+  --sidebar-bg: 210 20% 97%;
+  --sidebar-selected-bg: 210 8% 91%;
+  --chat-bg: 0 0% 100%;
+}
+
+:root:root[data-theme-preset='codex'][data-mode='dark'] {
+  --sidebar-bg: 220 11% 10%;
+  --sidebar-selected-bg: 220 8% 18%;
+  --chat-bg: 220 10% 12%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:root[data-theme-preset='codex']:not([data-mode]) {
+    --sidebar-bg: 220 11% 10%;
+    --sidebar-selected-bg: 220 8% 18%;
+    --chat-bg: 220 10% 12%;
+  }
+}
+
+.sidebar-selected-row {
+  background-color: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.96);
 }
 
 /* Base styles */

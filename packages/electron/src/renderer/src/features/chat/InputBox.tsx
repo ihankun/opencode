@@ -14,7 +14,6 @@ import {
 import { SlashCommandMenu, type SlashCommandMenuHandle } from '../slash-command'
 import { InputToolbar } from './input/InputToolbar'
 import type { ModelSelectorHandle } from './ModelSelector'
-import { InputFooter } from './input/InputFooter'
 import { FloatingActions, CollapsedCapsule } from './input/InputActions'
 import { useMobileCollapse } from './input/useMobileCollapse'
 import { useAttachmentRail } from './input/useAttachmentRail'
@@ -1276,12 +1275,12 @@ function InputBoxComponent({
   //   公式：max(0, env - 2rem) → 总缓冲 = Footer + padding = max(32px, env)
   const bottomDockPadding = isCollapsed
     ? 'max(12px, var(--safe-area-inset-bottom, 0px))'
-    : 'max(0px, calc(var(--safe-area-inset-bottom, 0px) - 2rem))'
+    : 'max(6px, var(--safe-area-inset-bottom, 0px))'
 
   return (
     <div className="w-full">
       <div
-        className={`mx-auto max-w-3xl pointer-events-auto transition-[max-width] duration-300 ease-in-out ${isCompact ? 'px-2' : 'px-4'}`}
+        className={`mx-auto max-w-[min(76rem,calc(100%-5rem))] pointer-events-auto transition-[max-width] duration-300 ease-in-out ${isCompact ? 'px-2' : 'px-4'}`}
         style={{ paddingBottom: bottomDockPadding }}
       >
         <div
@@ -1482,21 +1481,7 @@ function InputBoxComponent({
           </div>
         </div>
 
-        {/* Footer: 输入框下方固定高度区域，内容垂直水平居中 */}
-        {!isCollapsed && (
-          <div
-            ref={footerRef}
-            onPointerDown={handleContainerPointerDown}
-            className="h-8 flex items-center justify-center"
-          >
-            <InputFooter
-              paneId={paneId}
-              sessionId={sessionId}
-              onNewChat={onNewChat}
-              inputContainerRef={inputContainerRef}
-            />
-          </div>
-        )}
+        <div ref={footerRef} className="hidden" />
       </div>
     </div>
   )

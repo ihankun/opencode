@@ -10,7 +10,6 @@ import {
   MinimizeIcon,
 } from '../../components/Icons'
 import { IconButton } from '../../components/ui'
-import { ModelSelector, type ModelSelectorHandle } from './ModelSelector'
 import { ShareDialog } from './ShareDialog'
 import { messageStore, useMessageStore } from '../../store'
 import { useLayoutStore, layoutStore } from '../../store/layoutStore'
@@ -19,19 +18,13 @@ import { updateSession } from '../../api'
 import { useDirectory } from '../../contexts/useDirectory'
 import { uiErrorHandler } from '../../utils'
 import { useChatViewport } from './chatViewport'
-import type { ModelInfo } from '../../api'
 
 interface HeaderProps {
-  models: ModelInfo[]
-  modelsLoading: boolean
-  selectedModelKey: string | null
-  onModelChange: (modelKey: string, model: ModelInfo) => void
   onOpenSidebar?: () => void
   onToggleRightPanel?: () => void
   onSplitPane?: () => void
   isPaneFullscreen?: boolean
   onTogglePaneFullscreen?: () => void
-  modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
 }
 
 interface SessionTitleControlProps {
@@ -112,16 +105,11 @@ function SessionTitleControl({
 }
 
 export function Header({
-  models,
-  modelsLoading,
-  selectedModelKey,
-  onModelChange,
   onOpenSidebar,
   onToggleRightPanel,
   onSplitPane,
   isPaneFullscreen = false,
   onTogglePaneFullscreen,
-  modelSelectorRef,
 }: HeaderProps) {
   const { t } = useTranslation('chat')
   const { sessionId, sessionDirectory, sessionTitle: currentSessionTitle } = useMessageStore()
@@ -197,7 +185,8 @@ export function Header({
 
   return (
     <div
-      className={`mobile-safe-topbar-14 window-drag-region flex justify-between items-center z-20 bg-bg-100 transition-colors duration-200 relative ${isCompact ? 'px-2' : 'px-4'}`}
+      data-chat-header="true"
+      className={`mobile-safe-topbar-14 window-drag-region flex justify-between items-center z-20 bg-[hsl(var(--chat-bg))] transition-colors duration-200 relative ${isCompact ? 'px-2' : 'px-4'}`}
     >
       <div className="flex items-center gap-2 min-w-0 shrink-1 z-20">
         {interaction.sidebarBehavior === 'overlay' && onOpenSidebar && (
@@ -210,20 +199,8 @@ export function Header({
           </IconButton>
         )}
 
-        {!isCompact && (
-          <ModelSelector
-            ref={modelSelectorRef}
-            models={models}
-            selectedModelKey={selectedModelKey}
-            onSelect={onModelChange}
-            isLoading={modelsLoading}
-          />
-        )}
-
-        {isCompact && <div className="min-w-0">{titleControl}</div>}
+        <div className="min-w-0">{titleControl}</div>
       </div>
-
-      {!isCompact && <div className="absolute left-1/2 -translate-x-1/2 flex z-20">{titleControl}</div>}
 
       <div className="flex items-center gap-1 pointer-events-auto shrink-0 z-20">
         <div className="flex items-center gap-0.5">

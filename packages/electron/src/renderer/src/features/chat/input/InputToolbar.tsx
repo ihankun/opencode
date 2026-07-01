@@ -307,22 +307,8 @@ export function InputToolbar({
 
   return (
     <div className="flex items-center justify-between px-3 pb-3 relative">
-      {/* Left side: Model (mobile) + Agent + Variant selectors */}
+      {/* Left side: Agent selector */}
       <div className={`flex items-center min-w-0 ${isCompact ? 'gap-1' : 'gap-2'}`}>
-        {/* Model Selector — 移动端显示在最左边 */}
-        {isCompact && onModelChange && (
-          <ModelSelector
-            ref={modelSelectorRef}
-            models={models}
-            selectedModelKey={selectedModelKey}
-            onSelect={onModelChange}
-            isLoading={modelsLoading}
-            position="top"
-            trigger="toolbar"
-            constrainToRef={inputContainerRef}
-          />
-        )}
-
         {/* Agent Selector */}
         <AnimatedPresence show={selectableAgents.length > 1} className={isCompact ? 'shrink-0' : ''}>
           <div className="relative">
@@ -403,8 +389,46 @@ export function InputToolbar({
           </div>
         </AnimatedPresence>
 
-        {/* Variant Selector */}
-        <AnimatedPresence show={variants.length > 0} className={isCompact ? 'shrink-0' : ''}>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center gap-1 min-w-0">
+        <AnimatedPresence show={supportsAnyFile}>
+          <>
+            {/* 浏览器模式下的隐藏文件输入 */}
+            {useBrowserFileInput && (
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={acceptString}
+                multiple
+                className="hidden"
+                onChange={e => {
+                  onFilesSelected(Array.from(e.target.files ?? []))
+                  e.currentTarget.value = ''
+                }}
+              />
+            )}
+            <IconButton aria-label={t('inputToolbar.attachFile')} disabled={controlsDisabled} onClick={handleFileClick}>
+              <PaperclipIcon />
+            </IconButton>
+          </>
+        </AnimatedPresence>
+        {onModelChange && (
+          <div className="min-w-0 max-w-[180px]">
+            <ModelSelector
+              ref={modelSelectorRef}
+              models={models}
+              selectedModelKey={selectedModelKey}
+              onSelect={onModelChange}
+              isLoading={modelsLoading}
+              position="top"
+              trigger="toolbar"
+              constrainToRef={inputContainerRef}
+            />
+          </div>
+        )}
+        <AnimatedPresence show={variants.length > 0} className="shrink-0">
           <div className="relative">
             <button
               ref={variantTriggerRef}
@@ -431,8 +455,7 @@ export function InputToolbar({
                   : t('inputToolbar.default')
               }
             >
-              {/* 紧凑信息流隐藏 ThinkingIcon */}
-              <span className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}>
+              <span className="text-text-400 shrink-0">
                 <ThinkingIcon />
               </span>
               <span className="text-[length:var(--fs-sm)] text-text-300 truncate">
@@ -440,7 +463,7 @@ export function InputToolbar({
                   ? selectedVariant.charAt(0).toUpperCase() + selectedVariant.slice(1)
                   : t('inputToolbar.default')}
               </span>
-              <span className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}>
+              <span className="text-text-400 shrink-0">
                 <ChevronDownIcon />
               </span>
             </button>
@@ -488,31 +511,6 @@ export function InputToolbar({
               </div>
             </DropdownMenu>
           </div>
-        </AnimatedPresence>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center gap-1">
-        <AnimatedPresence show={supportsAnyFile}>
-          <>
-            {/* 浏览器模式下的隐藏文件输入 */}
-            {useBrowserFileInput && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={acceptString}
-                multiple
-                className="hidden"
-                onChange={e => {
-                  onFilesSelected(Array.from(e.target.files ?? []))
-                  e.currentTarget.value = ''
-                }}
-              />
-            )}
-            <IconButton aria-label={t('inputToolbar.attachFile')} disabled={controlsDisabled} onClick={handleFileClick}>
-              <PaperclipIcon />
-            </IconButton>
-          </>
         </AnimatedPresence>
         {!canSend && isStreaming && !isSending ? (
           <IconButton aria-label={t('inputToolbar.stopGeneration')} variant="solid" onClick={onAbort}>

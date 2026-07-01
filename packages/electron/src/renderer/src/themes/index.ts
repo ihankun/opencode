@@ -901,10 +901,127 @@ export const obsidianTheme: ThemePreset = {
 }
 
 // ============================================
+// Codex 主题 - 清爽中性、高可读黑色文字
+// ============================================
+
+const codexLight: ThemeColors = {
+  background: {
+    bg000: '0 0% 100%',
+    bg100: '210 20% 98%',
+    bg200: '210 20% 95%',
+    bg300: '214 18% 90%',
+    bg400: '214 16% 84%',
+  },
+  text: {
+    text000: '0 0% 100%',
+    text100: '220 14% 10%',
+    text200: '220 10% 25%',
+    text300: '220 8% 38%',
+    text400: '220 7% 52%',
+    text500: '220 7% 66%',
+    text600: '220 8% 78%',
+  },
+  accent: {
+    brand: '217 88% 58%',
+    main000: '217 72% 44%',
+    main100: '217 88% 58%',
+    main200: '213 96% 68%',
+    secondary100: '160 64% 38%',
+  },
+  semantic: {
+    success100: '158 64% 34%',
+    success200: '158 64% 28%',
+    successBg: '154 48% 94%',
+    warning100: '35 88% 44%',
+    warning200: '32 82% 38%',
+    warningBg: '40 92% 94%',
+    danger000: '358 72% 45%',
+    danger100: '358 78% 56%',
+    danger200: '358 86% 64%',
+    dangerBg: '358 92% 96%',
+    danger900: '358 72% 92%',
+    info100: '217 88% 54%',
+    info200: '213 96% 64%',
+    infoBg: '214 100% 96%',
+  },
+  border: {
+    border100: '214 20% 90%',
+    border200: '214 18% 84%',
+    border300: '214 14% 76%',
+  },
+  special: {
+    alwaysBlack: '0 0% 0%',
+    alwaysWhite: '0 0% 100%',
+    oncolor100: '0 0% 100%',
+  },
+}
+
+const codexDark: ThemeColors = {
+  background: {
+    bg000: '220 10% 12%',
+    bg100: '220 11% 10%',
+    bg200: '220 12% 8%',
+    bg300: '220 12% 16%',
+    bg400: '220 10% 22%',
+  },
+  text: {
+    text000: '0 0% 100%',
+    text100: '210 20% 96%',
+    text200: '214 14% 84%',
+    text300: '214 10% 68%',
+    text400: '214 8% 52%',
+    text500: '214 8% 38%',
+    text600: '214 8% 28%',
+  },
+  accent: {
+    brand: '213 96% 68%',
+    main000: '217 88% 58%',
+    main100: '213 96% 68%',
+    main200: '211 100% 76%',
+    secondary100: '160 68% 46%',
+  },
+  semantic: {
+    success100: '158 64% 48%',
+    success200: '158 64% 58%',
+    successBg: '158 30% 17%',
+    warning100: '38 92% 58%',
+    warning200: '40 96% 68%',
+    warningBg: '36 30% 17%',
+    danger000: '358 86% 62%',
+    danger100: '358 86% 68%',
+    danger200: '358 90% 76%',
+    dangerBg: '358 28% 17%',
+    danger900: '358 22% 24%',
+    info100: '213 96% 68%',
+    info200: '211 100% 76%',
+    infoBg: '214 30% 17%',
+  },
+  border: {
+    border100: '220 10% 22%',
+    border200: '220 9% 28%',
+    border300: '220 8% 36%',
+  },
+  special: {
+    alwaysBlack: '0 0% 0%',
+    alwaysWhite: '0 0% 100%',
+    oncolor100: '0 0% 100%',
+  },
+}
+
+export const codexTheme: ThemePreset = {
+  id: 'codex',
+  name: 'Codex',
+  description: 'Neutral Codex-style interface with crisp dark text',
+  light: codexLight,
+  dark: codexDark,
+}
+
+// ============================================
 // Theme Registry
 // ============================================
 
 export const builtinThemes: ThemePreset[] = [
+  codexTheme,
   eucalyptusTheme,
   claudeTheme,
   breezeTheme,

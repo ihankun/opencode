@@ -754,6 +754,7 @@ class ThemeStore {
   applyTheme() {
     const root = document.documentElement
     const resolvedMode = this.getResolvedMode()
+    root.setAttribute('data-theme-preset', this.state.presetId)
 
     // 1. 设置 data-mode（驱动 CSS 中日/夜模式相关的非颜色规则，以及 Terminal、Shiki 等联动）
     if (this.state.colorMode === 'system') {

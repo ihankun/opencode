@@ -9,7 +9,6 @@ function clampSidebarWidth(width: number, minWidth: number, maxWidth: number) {
   return Math.min(Math.max(width, minWidth), maxWidth)
 }
 
-const SIDEBAR_TRANSITION_MS = 300
 const SIDEBAR_SWIPE_LOCK_PX = 10
 const SIDEBAR_SWIPE_HORIZONTAL_BIAS = 1.25
 const SIDEBAR_SWIPE_CLOSE_PX = 80
@@ -28,6 +27,7 @@ interface SidebarProps {
   projectDialogOpen?: boolean
   onProjectDialogClose?: () => void
   mobileInline?: boolean
+  previewMode?: boolean
 }
 
 export const Sidebar = memo(function Sidebar({
@@ -42,6 +42,7 @@ export const Sidebar = memo(function Sidebar({
   projectDialogOpen,
   onProjectDialogClose,
   mobileInline = false,
+  previewMode = false,
 }: SidebarProps) {
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
   const [projectDialogKey, setProjectDialogKey] = useState(0)
@@ -55,7 +56,6 @@ export const Sidebar = memo(function Sidebar({
   const sidebarRef = useRef<HTMLDivElement>(null)
   const currentWidthRef = useRef(layout.sidebar.openWidth)
   const rafRef = useRef<number>(0)
-  const transitionResizeTimerRef = useRef<number | null>(null)
 
   const handleAddProject = useCallback(
     (path: string) => {
@@ -179,32 +179,6 @@ export const Sidebar = memo(function Sidebar({
     }
   }, [isOverlay, isOpen, onClose])
 
-  const handleToggle = useCallback(() => {
-    if (!isOverlay) {
-      if (transitionResizeTimerRef.current !== null) window.clearTimeout(transitionResizeTimerRef.current)
-      window.dispatchEvent(new CustomEvent('panel-resize-start'))
-      transitionResizeTimerRef.current = window.setTimeout(() => {
-        transitionResizeTimerRef.current = null
-        window.dispatchEvent(new CustomEvent('panel-resize-end'))
-      }, SIDEBAR_TRANSITION_MS + 50)
-    }
-
-    if (isOpen) {
-      onClose()
-    } else {
-      onOpen()
-    }
-  }, [isOverlay, isOpen, onClose, onOpen])
-
-  useEffect(() => {
-    return () => {
-      if (transitionResizeTimerRef.current !== null) {
-        window.clearTimeout(transitionResizeTimerRef.current)
-        window.dispatchEvent(new CustomEvent('panel-resize-end'))
-      }
-    }
-  }, [])
-
   const handleSelectSession = useCallback(
     (session: ApiSession) => {
       onSelectSession(session)
@@ -279,7 +253,7 @@ export const Sidebar = memo(function Sidebar({
     if (mobileInline) {
       return (
         <>
-          <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg-100 [contain:strict]">
+          <div className="relative flex h-full w-full flex-col overflow-hidden bg-[hsl(var(--sidebar-bg))] [contain:strict]">
             <SidePanel
               onNewSession={onNewSession}
               onSelectSession={handleSelectSession}
@@ -288,7 +262,6 @@ export const Sidebar = memo(function Sidebar({
               onAddProject={openProjectDialog}
               isMobile={true}
               isExpanded={true}
-              onToggleSidebar={onClose}
               contextLimit={contextLimit}
               onOpenSettings={onOpenSettings}
             />
@@ -324,7 +297,7 @@ export const Sidebar = memo(function Sidebar({
           onTouchCancel={handleSidebarTouchEnd}
           className={`
             fixed left-0 z-40
-            flex flex-col bg-bg-100 shadow-lg
+            flex flex-col bg-[hsl(var(--sidebar-bg))] shadow-lg
             ${isSwipingActive ? '' : 'transition-transform duration-300 ease-out'}
             ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           `}
@@ -343,7 +316,6 @@ export const Sidebar = memo(function Sidebar({
             onAddProject={openProjectDialog}
             isMobile={true}
             isExpanded={true}
-            onToggleSidebar={onClose}
             contextLimit={contextLimit}
             onOpenSettings={onOpenSettings}
           />
@@ -364,10 +336,11 @@ export const Sidebar = memo(function Sidebar({
     <>
       <div
         ref={sidebarRef}
-        style={{ width: `${layout.sidebar.dockedWidth}px` }}
+        style={{ width: `${previewMode ? layout.sidebar.openWidth : layout.sidebar.dockedWidth}px` }}
         className={`
-          relative flex flex-col h-full bg-bg-100 overflow-hidden shrink-0 min-w-0
+          relative flex flex-col h-full bg-[hsl(var(--sidebar-bg))] overflow-hidden shrink-0 min-w-0
           border-r border-border-200/50
+          ${previewMode ? 'shadow-xl shadow-black/10' : ''}
           ${isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-out'}
         `}
       >
@@ -379,12 +352,11 @@ export const Sidebar = memo(function Sidebar({
           onAddProject={openProjectDialog}
           isMobile={false}
           isExpanded={isOpen}
-          onToggleSidebar={handleToggle}
           contextLimit={contextLimit}
           onOpenSettings={onOpenSettings}
         />
 
-        {isOpen && (
+        {isOpen && !previewMode && (
           <div
             className={`
               absolute top-0 right-0 h-full cursor-col-resize z-50 touch-none bg-transparent

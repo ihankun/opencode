@@ -34,7 +34,8 @@ async function createWindow() {
     show: false,
     icon: iconPath("icon.icns"),
     backgroundColor: "#0f1115",
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
+    trafficLightPosition: process.platform === "darwin" ? { x: 20, y: 18 } : undefined,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -91,7 +92,7 @@ function createTray() {
   if (process.platform === "darwin") image.setTemplateImage(true)
 
   tray = new Tray(image)
-  tray.setToolTip("Custom OpenCode")
+  tray.setToolTip("OpenCode")
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "打开 OpenCode", click: showWindow },
@@ -156,7 +157,7 @@ function allowedOrigins(url: string) {
   }
 }
 
-app.setName("Custom OpenCode")
+app.setName("OpenCode")
 app.setAppUserModelId("com.hankun.opencode.custom")
 app.setPath("userData", join(app.getPath("appData"), "CustomOpenCode"))
 initLogging()

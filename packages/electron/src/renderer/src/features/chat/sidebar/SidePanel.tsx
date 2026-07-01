@@ -8,15 +8,12 @@ import { ActiveSessionItem } from './ActiveSessionItem'
 import { NotificationItem } from './NotificationItem'
 import { SidebarFooter } from './SidebarFooter'
 import { buildActiveSessionTree } from './activeSessionTree'
-import { getParentPath } from './sidebarUtils'
 import {
-  SidebarIcon,
   FolderIcon,
   GlobeIcon,
   PlusIcon,
   TrashIcon,
   SearchIcon,
-  ChevronDownIcon,
   PencilIcon,
   CheckIcon,
   CloseIcon,
@@ -54,7 +51,6 @@ interface SidePanelProps {
   onAddProject: () => void
   isMobile?: boolean
   isExpanded?: boolean
-  onToggleSidebar: () => void
   contextLimit?: number
   onOpenSettings?: () => void
 }
@@ -107,7 +103,6 @@ export function SidePanel({
   onAddProject,
   isMobile = false,
   isExpanded = true,
-  onToggleSidebar,
   contextLimit = 200000,
   onOpenSettings,
 }: SidePanelProps) {
@@ -145,9 +140,9 @@ export function SidePanel({
     isOpen: false,
     projectId: null,
   })
-  const [projectsExpanded, setProjectsExpanded] = useState(false)
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
+  const [searchExpanded, setSearchExpanded] = useState(false)
 
   // ---- 编辑模式状态 ----
   const [isEditMode, setIsEditMode] = useState(false)
@@ -156,8 +151,8 @@ export function SidePanel({
   const sessionSelectionAnchorIdRef = useRef<string | null>(null)
   const projectSelectionAnchorIdRef = useRef<string | null>(null)
   const recentsSelectionRootRef = useRef<HTMLDivElement>(null)
-  const projectToggleRef = useRef<HTMLButtonElement>(null)
   const projectsDropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   // 批量删除确认弹窗
   const [batchDeleteSessionConfirm, setBatchDeleteSessionConfirm] = useState(false)
   const [batchRemoveProjectConfirm, setBatchRemoveProjectConfirm] = useState(false)
@@ -241,12 +236,9 @@ export function SidePanel({
   const newChatShortcut = useKeybindingLabel('newSession')
 
   useEffect(() => {
-    if (showLabels && projectsExpanded) return
-    const activeElement = document.activeElement as Node | null
-    if (activeElement && projectsDropdownRef.current?.contains(activeElement)) {
-      projectToggleRef.current?.focus()
-    }
-  }, [projectsExpanded, showLabels])
+    if (!searchExpanded) return
+    requestAnimationFrame(() => searchInputRef.current?.focus())
+  }, [searchExpanded])
 
   // Session stats
   const { messages } = useMessageStore()
@@ -661,7 +653,6 @@ export function SidePanel({
       } else {
         setCurrentDirectory(projectId)
       }
-      setProjectsExpanded(false)
     },
     [setCurrentDirectory],
   )
@@ -855,40 +846,11 @@ export function SidePanel({
     onToggleProjectSelection: toggleProjectSelection,
   }
 
-  useEffect(() => {
-    let frameId: number | null = null
-
-    if (!isExpanded) {
-      frameId = requestAnimationFrame(() => {
-        setProjectsExpanded(false)
-      })
-    }
-
-    return () => {
-      if (frameId !== null) cancelAnimationFrame(frameId)
-    }
-  }, [isExpanded])
-
   // 统一的结构，通过 CSS 控制显示/隐藏
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ===== Header ===== */}
-      <div className="mobile-safe-topbar-14 window-drag-region shrink-0 flex items-center">
-        {!isMobile && (
-          <div
-            className="flex-1 flex items-center transition-all duration-300 ease-out"
-            style={{ justifyContent: showLabels ? 'flex-end' : 'center', paddingRight: showLabels ? 8 : 0 }}
-          >
-            <button
-              onClick={onToggleSidebar}
-              aria-label={isExpanded ? t('sidebar.collapseSidebar') : t('sidebar.expandSidebar')}
-              className="h-8 w-8 flex items-center justify-center rounded-lg text-text-400 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-200"
-            >
-              <SidebarIcon size={18} />
-            </button>
-          </div>
-        )}
-      </div>
+      <div className="mobile-safe-topbar-14 window-drag-region shrink-0" />
 
       {/* ===== Navigation - 图标位置固定 ===== */}
       <div className="flex flex-col gap-0.5 mx-2">
@@ -922,59 +884,21 @@ export function SidePanel({
           </span>
         </button>
 
-        {/* Project Selector - 只在展开时显示 */}
         {showLabels && (
-          <button
-            ref={projectToggleRef}
-            type="button"
-            onClick={() => setProjectsExpanded(!projectsExpanded)}
-            aria-expanded={projectsExpanded}
-            className={`h-8 flex items-center rounded-lg active:scale-[0.98] transition-all duration-300 overflow-hidden ${
-              projectsExpanded ? 'bg-bg-200 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200'
-            }`}
-            style={{ paddingLeft: 6, paddingRight: 6 }}
-            title={currentProjectLabel}
-          >
-            <span className="size-5 flex items-center justify-center shrink-0">
-              {currentProject?.id === 'global' ? (
-                <GlobeIcon size={16} className="text-accent-main-100" />
-              ) : (
-                <FolderIcon size={16} />
-              )}
-            </span>
-            <div className="ml-2 min-w-0 flex-1 text-left text-[length:var(--fs-base)]">
-              <div
-                className="block overflow-hidden whitespace-nowrap text-left"
-                style={{
-                  WebkitMaskImage: 'linear-gradient(to right, black 82%, transparent 100%)',
-                  maskImage: 'linear-gradient(to right, black 82%, transparent 100%)',
-                }}
+          <section className="mt-3">
+            <div className="mb-1 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
+              <span>{t('sidebar.projects')}</span>
+              <button
+                type="button"
+                onClick={onAddProject}
+                className="ml-auto rounded-md p-1 text-text-500 transition-colors hover:bg-bg-200/60 hover:text-text-200"
+                aria-label={t('sidebar.addProject')}
+                title={t('sidebar.addProject')}
               >
-                {currentProjectLabel}
-              </div>
+                <PlusIcon size={13} />
+              </button>
             </div>
-            <ChevronDownIcon
-              size={14}
-              className={`ml-auto text-text-400 transition-transform duration-200 shrink-0 ${projectsExpanded ? '' : '-rotate-90'}`}
-            />
-          </button>
-        )}
-
-        {/* Projects Dropdown */}
-        <div
-          ref={projectsDropdownRef}
-          className="overflow-hidden pb-px transition-all duration-300 ease-out"
-          style={{
-            maxHeight: showLabels && projectsExpanded ? 304 : 0,
-            opacity: showLabels && projectsExpanded ? 1 : 0,
-            marginTop: showLabels && projectsExpanded ? 4 : 0,
-            visibility: showLabels && projectsExpanded ? 'visible' : 'hidden',
-            pointerEvents: showLabels && projectsExpanded ? 'auto' : 'none',
-          }}
-          aria-hidden={!showLabels || !projectsExpanded}
-        >
-          <div className="rounded-lg border border-border-200/60 glass-alt shadow-sm overflow-hidden">
-            <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+            <div ref={projectsDropdownRef} className="max-h-36 overflow-y-auto custom-scrollbar">
               {projects.map(project => {
                 const isGlobal = project.id === 'global'
                 const isActive = currentProject?.id === project.id
@@ -986,8 +910,10 @@ export function SidePanel({
                   <div
                     key={project.id}
                     onClick={() => handleSelectProject(project.id)}
-                    className={`group w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors ${
-                      isActive ? 'bg-bg-200/60 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
+                    className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors ${
+                      isActive
+                        ? 'sidebar-selected-row text-text-100'
+                        : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
                     }`}
                   >
                     <button
@@ -1000,31 +926,10 @@ export function SidePanel({
                       className="min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0"
                       title={project.worktree}
                     >
-                      <span className="w-5 h-5 flex items-center justify-center shrink-0">
+                      <span className="flex size-5 shrink-0 items-center justify-center">
                         {isGlobal ? <GlobeIcon size={14} className="text-accent-main-100" /> : <FolderIcon size={14} />}
                       </span>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="text-left text-[length:var(--fs-sm)]">
-                          <div
-                            className="overflow-hidden whitespace-nowrap text-left"
-                            style={{
-                              WebkitMaskImage: 'linear-gradient(to right, black 82%, transparent 100%)',
-                              maskImage: 'linear-gradient(to right, black 82%, transparent 100%)',
-                            }}
-                          >
-                            {itemLabel}
-                          </div>
-                        </div>
-                        <div
-                          className={`text-[length:var(--fs-xxs)] text-text-400 truncate opacity-70 ${isGlobal ? '' : 'font-mono'}`}
-                        >
-                          {isGlobal
-                            ? t('sidebar.globalProjectHint')
-                            : project.worktree
-                              ? getParentPath(project.worktree)
-                              : ''}
-                        </div>
-                      </div>
+                      <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
                     </button>
                     {!isGlobal && (
                       <button
@@ -1034,7 +939,7 @@ export function SidePanel({
                           setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
                         }}
                         aria-label={t('sidebar.removeProject')}
-                        className="p-1 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-all"
+                        className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
                         title={t('common:remove')}
                       >
                         <TrashIcon size={12} />
@@ -1044,19 +949,8 @@ export function SidePanel({
                 )
               })}
             </div>
-            <div className="relative p-1 pt-1.5">
-              <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-border-200/30" />
-              <button
-                type="button"
-                onClick={onAddProject}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors"
-              >
-                <PlusIcon size={14} />
-                {t('sidebar.addProject')}
-              </button>
-            </div>
-          </div>
-        </div>
+          </section>
+        )}
       </div>
 
       {/* ===== Main Content ===== */}
@@ -1067,88 +961,88 @@ export function SidePanel({
           visibility: showLabels ? 'visible' : 'hidden',
         }}
       >
-        {/* Search */}
-        <div className="px-3 pt-1.5 pb-2">
-          <div className="relative group">
-            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
-            <input
-              type="text"
-              name="sidebar-chat-search"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={t('sidebar.searchChats')}
-              aria-label={t('sidebar.searchChats')}
-              autoComplete="off"
-              className="w-full bg-bg-200/40 hover:bg-bg-200/60 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-1.5 pl-[30px] pr-8 text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-400/70 focus-visible:ring-1 focus-visible:ring-border-200 focus-visible:ring-inset transition-all"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-400 hover:text-text-100 text-[length:var(--fs-base)]"
-                aria-label={t('sidebar.clearSearch')}
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Tab Bar: Recents / Active */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex items-center mx-2 gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setSidebarTab('recents')
-                if (sidebarTab !== 'recents') exitEditMode()
-              }}
-              className={`pl-[6px] pr-2 py-1.5 text-[length:var(--fs-xxs)] font-semibold uppercase tracking-wider transition-colors duration-150 ${
-                sidebarTab === 'recents' ? 'text-text-100' : 'text-text-500 hover:text-text-300'
-              }`}
-            >
-              {t('sidebar.recents')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSidebarTab('active')
-                exitEditMode()
-              }}
-              className={`pl-[6px] pr-2 py-1.5 text-[length:var(--fs-xxs)] font-semibold uppercase tracking-wider transition-colors duration-150 flex items-center gap-1 ${
-                sidebarTab === 'active' ? 'text-text-100' : 'text-text-500 hover:text-text-300'
-              }`}
-            >
-              <span className="inline-flex h-4 items-center leading-none">{t('sidebar.active')}</span>
-              {attentionCount > 0 && (
-                <span
-                  className={`inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center self-center rounded-full px-1 text-[length:var(--fs-xxs)] font-medium leading-none transition-colors ${
-                    attentionCount > busyCount
-                      ? 'bg-accent-main-100/10 text-accent-main-100'
-                      : 'bg-success-100/10 text-success-100'
-                  }`}
-                >
-                  {attentionCount}
-                </span>
-              )}
-            </button>
-            {/* 编辑按钮 — 只在 Recents tab 显示 */}
-            {sidebarTab === 'recents' && (
-              <button
-                type="button"
-                onMouseDown={e => e.preventDefault()}
-                onClick={isEditMode ? exitEditMode : enterEditMode}
-                aria-label={isEditMode ? t('common:done') : t('common:edit')}
-                className={`ml-auto p-1 rounded-md transition-colors duration-150 ${
-                  isEditMode
-                    ? 'text-accent-main-100 hover:bg-accent-main-100/10'
-                    : 'text-text-500 hover:text-text-300 hover:bg-bg-200/50'
+          <div className="mx-2 flex shrink-0 items-center gap-1">
+            <div className="pl-[6px] pr-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-500">
+              {t('sidebar.conversations')}
+            </div>
+            {attentionCount > 0 && (
+              <span
+                className={`inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full px-1 text-[length:var(--fs-xxs)] font-medium leading-none ${
+                  attentionCount > busyCount
+                    ? 'bg-accent-main-100/10 text-accent-main-100'
+                    : 'bg-success-100/10 text-success-100'
                 }`}
-                title={isEditMode ? t('common:done') : t('common:edit')}
+                title={t('sidebar.active')}
               >
-                {isEditMode ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
-              </button>
+                {attentionCount}
+              </span>
             )}
+            <button
+              type="button"
+              onClick={() => setSearchExpanded(value => !value)}
+              className={`ml-auto rounded-md p-1 transition-colors duration-150 ${
+                searchExpanded
+                  ? 'text-text-200 bg-bg-200/60'
+                  : 'text-text-500 hover:text-text-300 hover:bg-bg-200/50'
+              }`}
+              aria-label={t('sidebar.searchChats')}
+              aria-expanded={searchExpanded}
+              title={t('sidebar.searchChats')}
+            >
+              <SearchIcon size={14} />
+            </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={isEditMode ? exitEditMode : enterEditMode}
+              aria-label={isEditMode ? t('common:done') : t('common:edit')}
+              className={`ml-auto p-1 rounded-md transition-colors duration-150 ${
+                isEditMode
+                  ? 'text-accent-main-100 hover:bg-accent-main-100/10'
+                  : 'text-text-500 hover:text-text-300 hover:bg-bg-200/50'
+              }`}
+              title={isEditMode ? t('common:done') : t('common:edit')}
+            >
+              {isEditMode ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
+            </button>
+          </div>
+
+          <div
+            className="grid shrink-0 transition-[grid-template-rows,opacity] duration-200 ease-out"
+            style={{
+              gridTemplateRows: searchExpanded ? '1fr' : '0fr',
+              opacity: searchExpanded ? 1 : 0,
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="px-3 pb-2">
+                <div className="relative group">
+                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    name="sidebar-chat-search"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={t('sidebar.searchChats')}
+                    aria-label={t('sidebar.searchChats')}
+                    autoComplete="off"
+                    className="w-full bg-bg-200/40 hover:bg-bg-200/60 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-1.5 pl-[30px] pr-8 text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-400/70 focus-visible:ring-1 focus-visible:ring-border-200 focus-visible:ring-inset transition-all"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-400 hover:text-text-100 text-[length:var(--fs-base)]"
+                      aria-label={t('sidebar.clearSearch')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 编辑模式批量操作条 */}
@@ -1184,55 +1078,32 @@ export function SidePanel({
           {/* Recents Tab */}
           {sidebarTab === 'recents' && (
             <div ref={recentsSelectionRootRef} className="flex-1 overflow-hidden">
-              {canShowFolderRecents ? (
-                <FolderRecentList
-                  projects={folderProjects}
-                  {...commonFolderRecentListProps}
-                  onReorderProject={handleReorderProjectGroup}
-                  workspaceDirectoriesByProjectId={workspaceDirectoriesByProjectId}
-                  pinnedSessions={resolvedPinnedSessions}
-                  unavailablePinnedEntries={unavailablePinnedEntries}
-                />
-              ) : shouldRenderWorkspaceTreeOnly ? (
-                <FolderRecentList
-                  projects={currentProjectTreeProjects}
-                  {...commonFolderRecentListProps}
-                  onReorderProject={reorderDirectories}
-                  pinnedSessions={resolvedPinnedSessions}
-                  unavailablePinnedEntries={unavailablePinnedEntries}
-                />
-              ) : shouldWaitForWorkspaceResolution ? (
-                <div className="flex h-full items-center justify-center text-text-400/70">
-                  <SpinnerIcon size={14} className="animate-spin" />
-                </div>
-              ) : (
-                <SessionList
-                  sessions={orderedSessions}
-                  selectedId={selectedSessionId}
-                  isLoading={isLoading}
-                  isLoadingMore={isLoadingMore}
-                  hasMore={hasMore}
-                  search={search}
-                  onSearchChange={setSearch}
-                  onSelect={handleSelect}
-                  onDelete={handleDeleteSession}
-                  onRename={handleRename}
-                  onLoadMore={loadMore}
-                  onNewChat={onNewSession}
-                  showHeader={false}
-                  grouped={false}
-                  density="compact"
-                  showStats
-                  showDirectory={!currentDirectory}
-                  expandedChildSessionIds={expandedChildSessionIds}
-                  inlineChildSessions={inlineChildSessions}
-                  onSelectChildSession={handleSelectActive}
-                  pinnedDividerAfterIds={pinnedDividerAfterIds}
-                  isEditMode={isEditMode}
-                  selectedSessionIds={selectedSessionIds}
-                  onToggleSessionSelection={toggleSessionSelection}
-                />
-              )}
+              <SessionList
+                sessions={orderedSessions}
+                selectedId={selectedSessionId}
+                isLoading={isLoading || shouldWaitForWorkspaceResolution}
+                isLoadingMore={isLoadingMore}
+                hasMore={hasMore}
+                search={search}
+                onSearchChange={setSearch}
+                onSelect={handleSelect}
+                onDelete={handleDeleteSession}
+                onRename={handleRename}
+                onLoadMore={loadMore}
+                onNewChat={onNewSession}
+                showHeader={false}
+                grouped={false}
+                density="minimal"
+                showStats={false}
+                showDirectory={false}
+                expandedChildSessionIds={expandedChildSessionIds}
+                inlineChildSessions={inlineChildSessions}
+                onSelectChildSession={handleSelectActive}
+                pinnedDividerAfterIds={pinnedDividerAfterIds}
+                isEditMode={isEditMode}
+                selectedSessionIds={selectedSessionIds}
+                onToggleSessionSelection={toggleSessionSelection}
+              />
             </div>
           )}
 
