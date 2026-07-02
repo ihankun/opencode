@@ -2,7 +2,7 @@
   "title": "设置",
   "subtitle": "自定义界面、行为和服务器配置",
   "closeSettings": "关闭设置",
-  "version": "OpenCodeUI v{{version}}",
+  "version": "OpenCodex v{{version}}",
   "tabs": {
     "servers": "服务器",
     "serversDesc": "后端连接和快速切换活跃端点",
@@ -238,7 +238,7 @@
     "testNotification": "测试通知",
     "sendSampleDesc": "发送一条示例通知",
     "enableToTest": "启用通知以进行测试",
-    "testTitle": "OpenCode",
+    "testTitle": "OpenCodex",
     "testBody": "这是一条测试通知",
     "notAvailable": "此环境不支持系统通知",
     "notificationTypes": "通知类型",

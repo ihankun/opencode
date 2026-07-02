@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
@@ -102,10 +103,10 @@ function createTray() {
   if (process.platform === "darwin") image.setTemplateImage(true)
 
   tray = new Tray(image)
-  tray.setToolTip("OpenCode")
+  tray.setToolTip("OpenCodex")
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "打开 OpenCode", click: showWindow },
+      { label: "打开 OpenCodex", click: showWindow },
       { type: "separator" },
       {
         label: "退出",
@@ -167,9 +168,9 @@ function allowedOrigins(url: string) {
   }
 }
 
-app.setName("OpenCode")
-app.setAppUserModelId("com.hankun.opencode.custom")
-app.setPath("userData", join(app.getPath("appData"), "CustomOpenCode"))
+app.setName("OpenCodex")
+app.setAppUserModelId("com.hankun.opencodex")
+app.setPath("userData", join(homedir(), ".opencodex"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData") })
 

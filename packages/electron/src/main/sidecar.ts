@@ -1,3 +1,4 @@
+import { join } from "node:path"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
 
 type StartCommand = {
@@ -70,11 +71,16 @@ async function stop() {
 }
 
 function prepareEnv(command: StartCommand) {
+  const xdgRoot = join(command.userDataPath, "xdg")
+
   Object.assign(process.env, {
-    OPENCODE_CLIENT: "custom-electron",
+    OPENCODE_CLIENT: "opencodex-electron",
     OPENCODE_DISABLE_EMBEDDED_WEB_UI: "true",
     OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-    XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? command.userDataPath,
+    XDG_CACHE_HOME: join(xdgRoot, "cache"),
+    XDG_CONFIG_HOME: join(xdgRoot, "config"),
+    XDG_DATA_HOME: join(xdgRoot, "data"),
+    XDG_STATE_HOME: join(xdgRoot, "state"),
   })
 
   if (command.password) {

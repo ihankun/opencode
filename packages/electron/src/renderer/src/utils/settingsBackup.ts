@@ -52,7 +52,7 @@ export interface SettingsBackupModules {
 }
 
 export interface SettingsBackupFile {
-  app: 'OpenCodeUI'
+  app: 'OpenCodex'
   kind: typeof BACKUP_KIND
   schemaVersion: typeof BACKUP_SCHEMA_VERSION
   createdAt: string
@@ -87,7 +87,7 @@ function normalizeBackupFile(raw: unknown): SettingsBackupFile {
   }
 
   const parsed = raw as Record<string, unknown>
-  if (parsed.app !== 'OpenCodeUI' || parsed.kind !== BACKUP_KIND || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (parsed.app !== 'OpenCodex' || parsed.kind !== BACKUP_KIND || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
     throw new Error('Unsupported backup format')
   }
 
@@ -115,7 +115,7 @@ function normalizeBackupFile(raw: unknown): SettingsBackupFile {
   }
 
   return {
-    app: 'OpenCodeUI',
+    app: 'OpenCodex',
     kind: BACKUP_KIND,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
@@ -125,13 +125,13 @@ function normalizeBackupFile(raw: unknown): SettingsBackupFile {
 
 function buildBackupFileName(createdAt: string): string {
   const safeTimestamp = createdAt.replace(/[:]/g, '-').replace(/\.\d+Z$/, 'Z')
-  return `opencodeui-settings-backup-${safeTimestamp}.json`
+  return `opencodex-settings-backup-${safeTimestamp}.json`
 }
 
 export async function exportSettingsBackup(): Promise<{ fileName: string; data: Uint8Array }> {
   const createdAt = new Date().toISOString()
   const backup: SettingsBackupFile = {
-    app: 'OpenCodeUI',
+    app: 'OpenCodex',
     kind: BACKUP_KIND,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     createdAt,

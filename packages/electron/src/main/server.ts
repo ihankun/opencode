@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, utilityProcess } from "electron"
@@ -20,15 +21,17 @@ export type SidecarHandle = {
   stop(): Promise<void>
 }
 
-const SIDECAR_SERVICE_NAME = "custom opencode server"
+const SIDECAR_SERVICE_NAME = "opencodex server"
 const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
 export async function spawnServer(userDataPath: string, cors: string[]): Promise<SidecarHandle> {
   const port = 4096
-  writeLog("server", "spawning opencode sidecar", { cors, port })
+  const workspacePath = join(userDataPath, "workspace")
+  mkdirSync(workspacePath, { recursive: true })
+  writeLog("server", "spawning opencode sidecar", { cors, port, workspacePath })
   const child = utilityProcess.fork(join(dirname(fileURLToPath(import.meta.url)), "sidecar.js"), [], {
-    cwd: process.cwd(),
+    cwd: workspacePath,
     env: createEnv(),
     serviceName: SIDECAR_SERVICE_NAME,
     stdio: "pipe",

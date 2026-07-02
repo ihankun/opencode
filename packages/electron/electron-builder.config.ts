@@ -1,8 +1,8 @@
 import type { Configuration } from "electron-builder"
 
 const config: Configuration = {
-  appId: "com.hankun.opencode.custom",
-  productName: "OpenCode",
+  appId: "com.hankun.opencodex",
+  productName: "OpenCodex",
   directories: {
     output: "release",
   },

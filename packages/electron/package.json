@@ -1,5 +1,5 @@
 {
-  "name": "@opencode-ai/custom-electron",
+  "name": "@opencode-ai/opencodex-electron",
   "private": true,
   "version": "1.2.0",
   "type": "module",

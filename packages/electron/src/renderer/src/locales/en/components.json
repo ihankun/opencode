@@ -155,7 +155,7 @@
     "selectFile": "Select a file to view changes"
   },
   "closeService": {
-    "title": "Close OpenCode",
+    "title": "Close OpenCodex",
     "description": "The opencode service was started by this app. Do you want to stop it as well?",
     "closeAndStop": "Close and stop service",
     "closeKeepRunning": "Close, keep service running"
