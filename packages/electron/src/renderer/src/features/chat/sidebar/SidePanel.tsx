@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { ActiveSessionItem } from './ActiveSessionItem'
 import { NotificationItem } from './NotificationItem'
 import { SidebarFooter } from './SidebarFooter'
+import { SessionSearchDialog } from './SessionSearchDialog'
 import { buildActiveSessionTree } from './activeSessionTree'
 import {
   FolderIcon,
@@ -157,7 +158,7 @@ export function SidePanel({
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
-  const [searchExpanded, setSearchExpanded] = useState(false)
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false)
 
   // ---- 编辑模式状态 ----
   const [isEditMode, setIsEditMode] = useState(false)
@@ -167,7 +168,6 @@ export function SidePanel({
   const projectSelectionAnchorIdRef = useRef<string | null>(null)
   const recentsSelectionRootRef = useRef<HTMLDivElement>(null)
   const projectsDropdownRef = useRef<HTMLDivElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
   // 批量删除确认弹窗
   const [batchDeleteSessionConfirm, setBatchDeleteSessionConfirm] = useState(false)
   const [batchRemoveProjectConfirm, setBatchRemoveProjectConfirm] = useState(false)
@@ -249,11 +249,6 @@ export function SidePanel({
 
   const showLabels = isExpanded || isMobile
   const newChatShortcut = useKeybindingLabel('newSession')
-
-  useEffect(() => {
-    if (!searchExpanded) return
-    requestAnimationFrame(() => searchInputRef.current?.focus())
-  }, [searchExpanded])
 
   // Session stats
   const { messages } = useMessageStore()
@@ -1143,6 +1138,29 @@ export function SidePanel({
 
         <button
           type="button"
+          onClick={() => setSearchDialogOpen(true)}
+          aria-label={t('sidebar.search')}
+          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          style={{
+            width: showLabels ? '100%' : 32,
+            paddingLeft: 6,
+            paddingRight: 6,
+          }}
+          title={t('sidebar.search')}
+        >
+          <span className="size-5 flex items-center justify-center shrink-0">
+            <SearchIcon size={16} />
+          </span>
+          <span
+            className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
+            style={{ opacity: showLabels ? 1 : 0 }}
+          >
+            {t('sidebar.search')}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={onOpenSkills}
           aria-label={t('sidebar.skills')}
           className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
@@ -1359,20 +1377,6 @@ export function SidePanel({
             )}
             <button
               type="button"
-              onClick={() => setSearchExpanded(value => !value)}
-              className={`ml-1 rounded-md p-1 transition-colors duration-150 ${
-                searchExpanded
-                  ? 'text-text-200 bg-bg-200/60'
-                  : 'text-text-500 hover:text-text-300 hover:bg-bg-200/50'
-              }`}
-              aria-label={t('sidebar.searchChats')}
-              aria-expanded={searchExpanded}
-              title={t('sidebar.searchChats')}
-            >
-              <SearchIcon size={14} />
-            </button>
-            <button
-              type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={isEditMode ? exitEditMode : enterEditMode}
               aria-label={isEditMode ? t('common:done') : t('common:edit')}
@@ -1385,43 +1389,6 @@ export function SidePanel({
             >
               {isEditMode ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
             </button>
-          </div>
-
-          <div
-            className="grid shrink-0 transition-[grid-template-rows,opacity] duration-200 ease-out"
-            style={{
-              gridTemplateRows: searchExpanded ? '1fr' : '0fr',
-              opacity: searchExpanded ? 1 : 0,
-            }}
-          >
-            <div className="overflow-hidden">
-              <div className="px-3 pb-2">
-                <div className="relative group">
-                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400 w-3.5 h-3.5 group-focus-within:text-accent-main-100 transition-colors" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    name="sidebar-chat-search"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder={t('sidebar.searchChats')}
-                    aria-label={t('sidebar.searchChats')}
-                    autoComplete="off"
-                    className="w-full bg-bg-200/40 hover:bg-bg-200/60 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-lg py-1.5 pl-[30px] pr-8 text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-400/70 focus-visible:ring-1 focus-visible:ring-border-200 focus-visible:ring-inset transition-all"
-                  />
-                  {search && (
-                    <button
-                      type="button"
-                      onClick={() => setSearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-400 hover:text-text-100 text-[length:var(--fs-base)]"
-                      aria-label={t('sidebar.clearSearch')}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* 编辑模式批量操作条 */}
@@ -1602,6 +1569,13 @@ export function SidePanel({
         description={t('sidebar.batchRemoveProjectsConfirm', { count: selectedProjectIds.size })}
         confirmText={t('common:remove')}
         variant="warning"
+      />
+
+      <SessionSearchDialog
+        isOpen={searchDialogOpen}
+        directory={currentDirectory}
+        onClose={() => setSearchDialogOpen(false)}
+        onSelectSession={handleSelect}
       />
     </div>
   )

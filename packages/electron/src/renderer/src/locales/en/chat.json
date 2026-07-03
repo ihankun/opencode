@@ -122,6 +122,7 @@
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "newChat": "New chat",
+    "search": "Search",
     "skills": "Skills",
     "mcpServers": "MCP",
     "addProject": "Add project...",
@@ -161,6 +162,17 @@
     "batchDeleteIncludesCurrent": "The currently open session is included. It will switch to a new session after deletion.",
     "batchRemoveProjects": "Remove {{count}} Project(s)",
     "batchRemoveProjectsConfirm": "Remove {{count}} project(s) from the list? This only removes them from the sidebar — no sessions will be deleted and no files on disk will be affected."
+  },
+  "sessionSearch": {
+    "title": "Search chats",
+    "placeholder": "Search chat titles or content",
+    "recentChats": "Recent chats",
+    "results": "Results",
+    "loading": "Searching...",
+    "noResults": "No matching chats",
+    "untitled": "Untitled chat",
+    "titleMatch": "Title",
+    "contentMatch": "Content"
   },
   "activeSession": {
     "awaitingPermission": "Awaiting Permission",
