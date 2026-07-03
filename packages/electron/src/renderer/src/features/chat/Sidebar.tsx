@@ -26,6 +26,7 @@ interface SidebarProps {
   onOpenSettings?: () => void
   onOpenSkills?: () => void
   onOpenMcp?: () => void
+  onOpenPlugins?: () => void
   projectDialogOpen?: boolean
   onProjectDialogClose?: () => void
   mobileInline?: boolean
@@ -43,6 +44,7 @@ export const Sidebar = memo(function Sidebar({
   onOpenSettings,
   onOpenSkills,
   onOpenMcp,
+  onOpenPlugins,
   projectDialogOpen,
   onProjectDialogClose,
   mobileInline = false,
@@ -270,6 +272,7 @@ export const Sidebar = memo(function Sidebar({
               onOpenSettings={onOpenSettings}
               onOpenSkills={onOpenSkills}
               onOpenMcp={onOpenMcp}
+              onOpenPlugins={onOpenPlugins}
             />
           </div>
 
@@ -326,6 +329,7 @@ export const Sidebar = memo(function Sidebar({
             onOpenSettings={onOpenSettings}
             onOpenSkills={onOpenSkills}
             onOpenMcp={onOpenMcp}
+            onOpenPlugins={onOpenPlugins}
           />
         </div>
 
@@ -364,6 +368,7 @@ export const Sidebar = memo(function Sidebar({
           onOpenSettings={onOpenSettings}
           onOpenSkills={onOpenSkills}
           onOpenMcp={onOpenMcp}
+          onOpenPlugins={onOpenPlugins}
         />
 
         {isOpen && !previewMode && (

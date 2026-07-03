@@ -125,6 +125,28 @@
     "failedToCreate": "创建技能失败",
     "failedToImport": "导入技能失败"
   },
+  "pluginPanel": {
+    "title": "插件",
+    "loadingPlugins": "加载插件...",
+    "failedToLoad": "加载插件失败",
+    "noPlugins": "暂无插件配置",
+    "addPlugin": "添加插件",
+    "editPlugin": "编辑插件",
+    "removePlugin": "移除插件",
+    "pluginSpec": "包名或本地路径",
+    "pluginSpecPlaceholder": "opencode-wakatime 或 ./plugins/my-plugin.ts",
+    "options": "Options JSON",
+    "optionsPlaceholder": "{\n  \"key\": \"value\"\n}",
+    "savePlugin": "保存插件",
+    "npmPlugin": "npm",
+    "localPlugin": "本地",
+    "optionsEnabled": "有配置",
+    "noOptions": "无配置",
+    "changesApplyAfterReload": "插件会保存到 opencode 配置中。npm 包和本地插件路径会在工作区重新加载后生效。",
+    "invalidOptions": "Options 必须是 JSON 对象。",
+    "specRequired": "请填写插件包名或路径。",
+    "failedToSave": "保存插件配置失败"
+  },
   "worktreePanel": {
     "selectProject": "选择项目以管理 Worktrees",
     "git": "Git",

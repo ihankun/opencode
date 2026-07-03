@@ -126,6 +126,28 @@
     "failedToCreate": "Failed to create skill",
     "failedToImport": "Failed to import skill"
   },
+  "pluginPanel": {
+    "title": "Plugins",
+    "loadingPlugins": "Loading plugins...",
+    "failedToLoad": "Failed to load plugins",
+    "noPlugins": "No plugins configured",
+    "addPlugin": "Add plugin",
+    "editPlugin": "Edit plugin",
+    "removePlugin": "Remove plugin",
+    "pluginSpec": "Package or local path",
+    "pluginSpecPlaceholder": "opencode-wakatime or ./plugins/my-plugin.ts",
+    "options": "Options JSON",
+    "optionsPlaceholder": "{\n  \"key\": \"value\"\n}",
+    "savePlugin": "Save plugin",
+    "npmPlugin": "npm",
+    "localPlugin": "local",
+    "optionsEnabled": "options",
+    "noOptions": "no options",
+    "changesApplyAfterReload": "Plugins are saved to opencode config. npm packages and local plugin paths are loaded when the workspace reloads.",
+    "invalidOptions": "Options must be a JSON object.",
+    "specRequired": "Plugin package or path is required.",
+    "failedToSave": "Failed to save plugin config"
+  },
   "worktreePanel": {
     "selectProject": "Select a project to manage worktrees",
     "git": "Git",

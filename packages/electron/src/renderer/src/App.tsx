@@ -55,13 +55,16 @@ const SkillPanel = lazy(() =>
 const McpPanel = lazy(() =>
   import('./components/McpPanel').then(module => ({ default: module.McpPanel })),
 )
+const PluginPanel = lazy(() =>
+  import('./components/PluginPanel').then(module => ({ default: module.PluginPanel })),
+)
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
 const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
-type MainUtilityPage = 'skills' | 'mcp'
+type MainUtilityPage = 'skills' | 'mcp' | 'plugins'
 
 function ElectronSidebarToggle({
   expanded,
@@ -314,6 +317,14 @@ function App() {
 
   const openMcpPage = useCallback(() => {
     setUtilityPage('mcp')
+    if (isMobilePanelLayout) {
+      scrollMobilePagerTo('chat')
+      setSidebarExpanded(false)
+    }
+  }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
+
+  const openPluginPage = useCallback(() => {
+    setUtilityPage('plugins')
     if (isMobilePanelLayout) {
       scrollMobilePagerTo('chat')
       setSidebarExpanded(false)
@@ -952,7 +963,13 @@ function App() {
   const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
       <Suspense fallback={null}>
-        {utilityPage === 'mcp' ? <McpPanel /> : <SkillPanel />}
+        {utilityPage === 'mcp' ? (
+          <McpPanel />
+        ) : utilityPage === 'plugins' ? (
+          <PluginPanel />
+        ) : (
+          <SkillPanel />
+        )}
       </Suspense>
     </div>
   )
@@ -1016,6 +1033,7 @@ function App() {
                     onOpenSettings={openSettings}
                     onOpenSkills={openSkillsPage}
                     onOpenMcp={openMcpPage}
+                    onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1108,6 +1126,7 @@ function App() {
                   onOpenSettings={openSettings}
                   onOpenSkills={openSkillsPage}
                   onOpenMcp={openMcpPage}
+                  onOpenPlugins={openPluginPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1130,6 +1149,7 @@ function App() {
                     onOpenSettings={openSettings}
                     onOpenSkills={openSkillsPage}
                     onOpenMcp={openMcpPage}
+                    onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
