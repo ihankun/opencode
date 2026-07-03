@@ -9,6 +9,7 @@ import {
   KeyboardIcon,
   CloseIcon,
   BellIcon,
+  KeyIcon,
   PlugIcon,
   MessageSquareIcon,
   LayersIcon,
@@ -24,6 +25,7 @@ import { AboutSettings } from './components/AboutSettings'
 import { ChatSettings } from './components/ChatSettings'
 import { ModelsSettings } from './components/ModelsSettings'
 import { NotificationSettings } from './components/NotificationSettings'
+import { ProviderSettings } from './components/ProviderSettings'
 import { ServiceSettings } from './components/ServiceSettings'
 import { ServersSettings } from './components/ServersSettings'
 import { WorkspaceSettings } from './components/WorkspaceSettings'
@@ -38,6 +40,7 @@ export type SettingsTab =
   | 'appearance'
   | 'chat'
   | 'models'
+  | 'providers'
   | 'notifications'
   | 'service'
   | 'config'
@@ -61,6 +64,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   agent: <AgentIcon size={15} />,
   chat: <MessageSquareIcon size={15} />,
   models: <CpuIcon size={15} />,
+  providers: <KeyIcon size={15} />,
   appearance: <SunIcon size={15} />,
   workspace: <LayersIcon size={15} />,
   notifications: <BellIcon size={15} />,
@@ -72,6 +76,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
 
 const TAB_IDS: SettingsTab[] = [
   'servers',
+  'providers',
   'models',
   'agent',
   'chat',
@@ -89,6 +94,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   agent: 'tabs.agent',
   chat: 'tabs.chat',
   models: 'tabs.models',
+  providers: 'tabs.providers',
   appearance: 'tabs.appearance',
   workspace: 'tabs.workspace',
   notifications: 'tabs.notifications',
@@ -103,6 +109,7 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   agent: 'tabs.agentDesc',
   chat: 'tabs.chatDesc',
   models: 'tabs.modelsDesc',
+  providers: 'tabs.providersDesc',
   appearance: 'tabs.appearanceDesc',
   workspace: 'tabs.workspaceDesc',
   notifications: 'tabs.notificationsDesc',
@@ -113,7 +120,7 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'models', 'agent', 'chat', 'workspace', 'appearance', 'notifications'] },
+  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'workspace', 'appearance', 'notifications'] },
   { labelKey: 'groups.advanced', tabs: ['service', 'config', 'keybindings', 'about'] },
 ]
 
@@ -131,6 +138,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ChatSettings />
     case 'models':
       return <ModelsSettings />
+    case 'providers':
+      return <ProviderSettings />
     case 'notifications':
       return <NotificationSettings />
     case 'service':

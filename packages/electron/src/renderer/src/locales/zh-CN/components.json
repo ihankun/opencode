@@ -102,11 +102,28 @@
     "authenticate": "认证"
   },
   "skillPanel": {
-    "title": "Skills",
-    "filterPlaceholder": "筛选 Skills...",
-    "loadingSkills": "加载 Skills...",
-    "failedToLoad": "加载 Skills 失败",
-    "noSkills": "暂无 Skills"
+    "title": "技能",
+    "filterPlaceholder": "筛选技能...",
+    "loadingSkills": "加载技能...",
+    "failedToLoad": "加载技能失败",
+    "noSkills": "暂无技能",
+    "addSkill": "添加技能",
+    "createSkill": "创建技能",
+    "importFromGithub": "从 GitHub 导入",
+    "skillName": "名称",
+    "skillNamePlaceholder": "code-review",
+    "skillDescription": "描述",
+    "skillDescriptionPlaceholder": "什么时候应该使用这个技能？",
+    "skillInstructions": "指令",
+    "skillInstructionsPlaceholder": "写下这个技能要加载的工作流、约束和参考资料。",
+    "githubUrl": "GitHub URL",
+    "githubUrlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
+    "importName": "导入为",
+    "importNamePlaceholder": "留空则使用 GitHub 文件夹名",
+    "githubImportHint": "支持包含 SKILL.md 的 GitHub 文件或文件夹 URL。",
+    "importSkill": "导入技能",
+    "failedToCreate": "创建技能失败",
+    "failedToImport": "导入技能失败"
   },
   "worktreePanel": {
     "selectProject": "选择项目以管理 Worktrees",

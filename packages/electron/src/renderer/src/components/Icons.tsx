@@ -81,6 +81,7 @@ import {
   VolumeX,
   Play,
   Upload,
+  PackagePlus,
   Shield,
   Columns2,
   Rows2,
@@ -207,6 +208,7 @@ export const VolumeIcon = wrap(Volume2)
 export const VolumeOffIcon = wrap(VolumeX)
 export const PlayIcon = wrap(Play)
 export const UploadIcon = wrap(Upload)
+export const PackagePlusIcon = wrap(PackagePlus)
 export const ShieldIcon = wrap(Shield)
 export const SplitHorizontalIcon = wrap(Columns2)
 export const SplitVerticalIcon = wrap(Rows2)

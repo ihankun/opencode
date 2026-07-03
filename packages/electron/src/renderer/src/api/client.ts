@@ -44,6 +44,7 @@ export * from './command'
 export * from './global'
 export * from './tool'
 export * from './lsp'
+export * from './provider'
 
 // ============================================
 // Model API Functions

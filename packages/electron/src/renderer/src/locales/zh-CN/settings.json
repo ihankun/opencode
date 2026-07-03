@@ -6,6 +6,8 @@
   "tabs": {
     "servers": "服务器",
     "serversDesc": "后端连接和快速切换活跃端点",
+    "providers": "供应商",
+    "providersDesc": "连接模型供应商并保存 API Key",
     "models": "模型",
     "modelsDesc": "控制哪些模型保留在选择器里",
     "agent": "Agent",
@@ -59,6 +61,29 @@
     "editServer": "编辑服务器",
     "deleteServer": "删除服务器",
     "deleteServerConfirm": "确定从列表中移除「{{name}}」？此操作无法撤销。"
+  },
+  "providers": {
+    "title": "供应商连接",
+    "desc": "实时读取当前 opencode 后端支持的供应商。保存 API Key 后，进入模型页即可看到该供应商可用的模型。",
+    "searchPlaceholder": "搜索供应商",
+    "refresh": "刷新供应商",
+    "loading": "正在加载供应商...",
+    "empty": "当前服务器没有返回供应商",
+    "noResults": "没有匹配当前搜索的供应商",
+    "loadFailed": "加载供应商失败",
+    "saveFailed": "保存供应商凭证失败",
+    "disconnectFailed": "断开供应商失败",
+    "apiKeyRequired": "请先输入 API Key",
+    "providerMeta": "{{id}} · {{count}} 个模型",
+    "connected": "已连接",
+    "notConnected": "未连接",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "输入该供应商的 API Key",
+    "apiKeyConnectedPlaceholder": "已保存，输入新 Key 可覆盖",
+    "saveHint": "凭证会保存到本地 opencode auth 存储，不会在这里回显。",
+    "saved": "已保存，模型列表正在刷新。",
+    "disconnect": "断开",
+    "apiUnsupported": "该供应商当前只提供 OAuth 或其他认证方式，前台 API Key 连接暂未支持。"
   },
   "chat": {
     "pathsFormatting": "路径和格式",

@@ -49,6 +49,9 @@ const CommandPalette = lazy(() =>
 const CloseServiceDialog = lazy(() =>
   import('./components/CloseServiceDialog').then(module => ({ default: module.CloseServiceDialog })),
 )
+const SkillPanel = lazy(() =>
+  import('./components/SkillPanel').then(module => ({ default: module.SkillPanel })),
+)
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
 const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
@@ -126,6 +129,7 @@ function App() {
         ? routeDirectory || focusedController?.effectiveDirectory || currentDirectory
         : focusedController?.effectiveDirectory || currentDirectory
       : undefined
+  const [skillsPageOpen, setSkillsPageOpen] = useState(false)
 
   useEffect(() => {
     const cleanup = initNotificationSound()
@@ -217,6 +221,7 @@ function App() {
     (session: { id: string; directory?: string }) => {
       const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
       if (!paneId) return
+      setSkillsPageOpen(false)
       navigatePaneToSession(paneId, session.id, routeDirectoryForSession(session.directory))
     },
     [paneLayout.focusedPaneId, navigatePaneToSession, routeDirectoryForSession],
@@ -225,6 +230,7 @@ function App() {
   const handleNewSession = useCallback(() => {
     const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
     if (!paneId) return
+    setSkillsPageOpen(false)
     navigatePaneHome(paneId, null)
   }, [paneLayout.focusedPaneId, navigatePaneHome])
 
@@ -293,6 +299,14 @@ function App() {
     },
     [getMobilePageScrollLeft],
   )
+
+  const openSkillsPage = useCallback(() => {
+    setSkillsPageOpen(true)
+    if (isMobilePanelLayout) {
+      scrollMobilePagerTo('chat')
+      setSidebarExpanded(false)
+    }
+  }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
 
   const getNearestMobilePage = useCallback(
     (scrollLeft: number): MobilePagerPage => {
@@ -923,6 +937,13 @@ function App() {
       }) as CSSProperties,
     [chatViewport.layout.sidebar.dockedWidth],
   )
+  const skillPage = (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
+      <Suspense fallback={null}>
+        <SkillPanel />
+      </Suspense>
+    </div>
+  )
 
   return (
     <div
@@ -981,6 +1002,7 @@ function App() {
                     onClose={handleCloseSidebar}
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
+                    onOpenSkills={openSkillsPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1009,13 +1031,17 @@ function App() {
                       willChange: 'transform',
                     }}
                   >
-                    <div className={`flex-1 min-h-0 px-4 ${paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'py-2' : ''}`}>
-                      <SplitContainer
-                        node={paneLayout.root}
-                        renderLeaf={renderPaneLeaf}
-                        fullscreenPaneId={paneLayout.fullscreenPaneId}
-                      />
-                    </div>
+                    {skillsPageOpen ? (
+                      skillPage
+                    ) : (
+                      <div className={`flex-1 min-h-0 px-4 ${paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'py-2' : ''}`}>
+                        <SplitContainer
+                          node={paneLayout.root}
+                          renderLeaf={renderPaneLeaf}
+                          fullscreenPaneId={paneLayout.fullscreenPaneId}
+                        />
+                      </div>
+                    )}
 
                     <div
                       aria-hidden="true"
@@ -1053,7 +1079,7 @@ function App() {
                 </section>
               </div>
 
-              <BottomPanel directory={focusedDirectory} />
+              {!skillsPageOpen && <BottomPanel directory={focusedDirectory} />}
             </>
           ) : (
             <>
@@ -1067,6 +1093,7 @@ function App() {
                   onClose={handleCloseSidebar}
                   contextLimit={focusedController?.contextLimit}
                   onOpenSettings={openSettings}
+                  onOpenSkills={openSkillsPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1087,6 +1114,7 @@ function App() {
                     onClose={handleCloseSidebar}
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
+                    onOpenSkills={openSkillsPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
@@ -1100,18 +1128,24 @@ function App() {
                   className="flex-1 flex flex-col min-w-0 overflow-hidden"
                   style={{ minWidth: `${CHAT_SURFACE_MIN_WIDTH}px` }}
                 >
-                  <div className={paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'flex-1 min-h-0 p-2' : 'flex-1 min-h-0'}>
-                    <SplitContainer
-                      node={paneLayout.root}
-                      renderLeaf={renderPaneLeaf}
-                      fullscreenPaneId={paneLayout.fullscreenPaneId}
-                    />
-                  </div>
+                  {skillsPageOpen ? (
+                    skillPage
+                  ) : (
+                    <>
+                      <div className={paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'flex-1 min-h-0 p-2' : 'flex-1 min-h-0'}>
+                        <SplitContainer
+                          node={paneLayout.root}
+                          renderLeaf={renderPaneLeaf}
+                          fullscreenPaneId={paneLayout.fullscreenPaneId}
+                        />
+                      </div>
 
-                  <BottomPanel directory={focusedDirectory} />
+                      <BottomPanel directory={focusedDirectory} />
+                    </>
+                  )}
                 </div>
 
-                <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />
+                {!skillsPageOpen && <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />}
               </div>
             </>
           )}
