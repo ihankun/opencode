@@ -44,7 +44,7 @@
     "renameTerminal": "重命名终端",
     "moveToRight": "移动到右侧面板",
     "moveToBottom": "移动到底部面板",
-    "mcpServers": "MCP 服务器"
+    "mcpServers": "MCP"
   },
   "sessionChanges": {
     "loadingChanges": "加载变更中...",
@@ -78,7 +78,7 @@
     "split": "分栏"
   },
   "mcpPanel": {
-    "title": "MCP 服务器",
+    "title": "MCP",
     "addServer": "添加服务器",
     "loadingServers": "加载服务器中...",
     "failedToLoad": "加载 MCP 服务器失败",

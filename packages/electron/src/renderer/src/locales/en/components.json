@@ -44,7 +44,7 @@
     "renameTerminal": "Rename Terminal",
     "moveToRight": "Move to Right Panel",
     "moveToBottom": "Move to Bottom Panel",
-    "mcpServers": "MCP Servers"
+    "mcpServers": "MCP"
   },
   "sessionChanges": {
     "loadingChanges": "Loading changes...",
@@ -79,7 +79,7 @@
     "split": "Split"
   },
   "mcpPanel": {
-    "title": "MCP Servers",
+    "title": "MCP",
     "addServer": "Add Server",
     "loadingServers": "Loading servers...",
     "failedToLoad": "Failed to load MCP servers",

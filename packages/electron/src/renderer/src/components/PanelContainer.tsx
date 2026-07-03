@@ -457,30 +457,6 @@ export const PanelContainer = memo(function PanelContainer({
             </button>
             <button
               onClick={() => {
-                layoutStore.addMcpTab(position)
-                setAddMenuPos(null)
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors"
-            >
-              <span className="opacity-60 shrink-0">
-                <PlugIcon size={12} />
-              </span>
-              {t('panelContainer.mcpServers')}
-            </button>
-            <button
-              onClick={() => {
-                layoutStore.addSkillTab(position)
-                setAddMenuPos(null)
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors"
-            >
-              <span className="opacity-60 shrink-0">
-                <TeachIcon size={12} />
-              </span>
-              {t('panelContainer.skills')}
-            </button>
-            <button
-              onClick={() => {
                 layoutStore.addWorktreeTab(position)
                 setAddMenuPos(null)
               }}

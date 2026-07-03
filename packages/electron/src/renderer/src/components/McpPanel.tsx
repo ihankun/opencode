@@ -195,16 +195,6 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setShowAddForm(true)}
-            disabled={showAddForm}
-            aria-label={t('mcpPanel.addServer')}
-            className="inline-flex h-6 w-6 items-center justify-center hover:bg-bg-200/50 rounded-md text-text-300 hover:text-text-100 transition-colors disabled:opacity-50"
-            title={t('mcpPanel.addServer')}
-          >
-            <PlusIcon size={12} />
-          </button>
-          <button
-            type="button"
             onClick={handleRefresh}
             disabled={loading}
             aria-label={t('common:refresh')}
@@ -212,6 +202,16 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
             title={t('common:refresh')}
           >
             <RetryIcon size={12} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(true)}
+            disabled={showAddForm}
+            aria-label={t('mcpPanel.addServer')}
+            className="inline-flex h-6 w-6 items-center justify-center hover:bg-bg-200/50 rounded-md text-text-300 hover:text-text-100 transition-colors disabled:opacity-50"
+            title={t('mcpPanel.addServer')}
+          >
+            <PlusIcon size={12} />
           </button>
         </div>
         <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />

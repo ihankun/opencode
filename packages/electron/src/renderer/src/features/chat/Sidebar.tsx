@@ -25,6 +25,7 @@ interface SidebarProps {
   contextLimit?: number
   onOpenSettings?: () => void
   onOpenSkills?: () => void
+  onOpenMcp?: () => void
   projectDialogOpen?: boolean
   onProjectDialogClose?: () => void
   mobileInline?: boolean
@@ -41,6 +42,7 @@ export const Sidebar = memo(function Sidebar({
   contextLimit,
   onOpenSettings,
   onOpenSkills,
+  onOpenMcp,
   projectDialogOpen,
   onProjectDialogClose,
   mobileInline = false,
@@ -267,6 +269,7 @@ export const Sidebar = memo(function Sidebar({
               contextLimit={contextLimit}
               onOpenSettings={onOpenSettings}
               onOpenSkills={onOpenSkills}
+              onOpenMcp={onOpenMcp}
             />
           </div>
 
@@ -322,6 +325,7 @@ export const Sidebar = memo(function Sidebar({
             contextLimit={contextLimit}
             onOpenSettings={onOpenSettings}
             onOpenSkills={onOpenSkills}
+            onOpenMcp={onOpenMcp}
           />
         </div>
 
@@ -359,6 +363,7 @@ export const Sidebar = memo(function Sidebar({
           contextLimit={contextLimit}
           onOpenSettings={onOpenSettings}
           onOpenSkills={onOpenSkills}
+          onOpenMcp={onOpenMcp}
         />
 
         {isOpen && !previewMode && (

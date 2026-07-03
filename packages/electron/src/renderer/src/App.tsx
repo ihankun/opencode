@@ -52,12 +52,16 @@ const CloseServiceDialog = lazy(() =>
 const SkillPanel = lazy(() =>
   import('./components/SkillPanel').then(module => ({ default: module.SkillPanel })),
 )
+const McpPanel = lazy(() =>
+  import('./components/McpPanel').then(module => ({ default: module.McpPanel })),
+)
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
 const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
+type MainUtilityPage = 'skills' | 'mcp'
 
 function ElectronSidebarToggle({
   expanded,
@@ -129,7 +133,7 @@ function App() {
         ? routeDirectory || focusedController?.effectiveDirectory || currentDirectory
         : focusedController?.effectiveDirectory || currentDirectory
       : undefined
-  const [skillsPageOpen, setSkillsPageOpen] = useState(false)
+  const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
 
   useEffect(() => {
     const cleanup = initNotificationSound()
@@ -221,7 +225,7 @@ function App() {
     (session: { id: string; directory?: string }) => {
       const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
       if (!paneId) return
-      setSkillsPageOpen(false)
+      setUtilityPage(null)
       navigatePaneToSession(paneId, session.id, routeDirectoryForSession(session.directory))
     },
     [paneLayout.focusedPaneId, navigatePaneToSession, routeDirectoryForSession],
@@ -230,7 +234,7 @@ function App() {
   const handleNewSession = useCallback(() => {
     const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
     if (!paneId) return
-    setSkillsPageOpen(false)
+    setUtilityPage(null)
     navigatePaneHome(paneId, null)
   }, [paneLayout.focusedPaneId, navigatePaneHome])
 
@@ -301,7 +305,15 @@ function App() {
   )
 
   const openSkillsPage = useCallback(() => {
-    setSkillsPageOpen(true)
+    setUtilityPage('skills')
+    if (isMobilePanelLayout) {
+      scrollMobilePagerTo('chat')
+      setSidebarExpanded(false)
+    }
+  }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
+
+  const openMcpPage = useCallback(() => {
+    setUtilityPage('mcp')
     if (isMobilePanelLayout) {
       scrollMobilePagerTo('chat')
       setSidebarExpanded(false)
@@ -937,10 +949,10 @@ function App() {
       }) as CSSProperties,
     [chatViewport.layout.sidebar.dockedWidth],
   )
-  const skillPage = (
+  const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
       <Suspense fallback={null}>
-        <SkillPanel />
+        {utilityPage === 'mcp' ? <McpPanel /> : <SkillPanel />}
       </Suspense>
     </div>
   )
@@ -1003,6 +1015,7 @@ function App() {
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
                     onOpenSkills={openSkillsPage}
+                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1031,8 +1044,8 @@ function App() {
                       willChange: 'transform',
                     }}
                   >
-                    {skillsPageOpen ? (
-                      skillPage
+                    {utilityPage ? (
+                      utilityPageContent
                     ) : (
                       <div className={`flex-1 min-h-0 px-4 ${paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'py-2' : ''}`}>
                         <SplitContainer
@@ -1079,7 +1092,7 @@ function App() {
                 </section>
               </div>
 
-              {!skillsPageOpen && <BottomPanel directory={focusedDirectory} />}
+              {!utilityPage && <BottomPanel directory={focusedDirectory} />}
             </>
           ) : (
             <>
@@ -1094,6 +1107,7 @@ function App() {
                   contextLimit={focusedController?.contextLimit}
                   onOpenSettings={openSettings}
                   onOpenSkills={openSkillsPage}
+                  onOpenMcp={openMcpPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1115,6 +1129,7 @@ function App() {
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
                     onOpenSkills={openSkillsPage}
+                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
@@ -1128,8 +1143,8 @@ function App() {
                   className="flex-1 flex flex-col min-w-0 overflow-hidden"
                   style={{ minWidth: `${CHAT_SURFACE_MIN_WIDTH}px` }}
                 >
-                  {skillsPageOpen ? (
-                    skillPage
+                  {utilityPage ? (
+                    utilityPageContent
                   ) : (
                     <>
                       <div className={paneLayout.isSplit && !paneLayout.fullscreenPaneId ? 'flex-1 min-h-0 p-2' : 'flex-1 min-h-0'}>
@@ -1145,7 +1160,7 @@ function App() {
                   )}
                 </div>
 
-                {!skillsPageOpen && <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />}
+                {!utilityPage && <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />}
               </div>
             </>
           )}
