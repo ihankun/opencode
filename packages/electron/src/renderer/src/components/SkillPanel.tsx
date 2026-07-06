@@ -876,51 +876,89 @@ function isSamePath(a: string, b: string) {
 
 function SkillSection({ section }: { section: SkillSectionGroup }) {
   const { t } = useTranslation(['components'])
+  const [expanded, setExpanded] = useState(true)
+  const skillCount = section.groups.reduce((total, group) => total + group.skills.length, 0)
+    + (section.projects ?? []).reduce(
+      (total, project) => total + project.groups.reduce((projectTotal, group) => projectTotal + group.skills.length, 0),
+      0,
+    )
 
   return (
     <section className="pb-1">
-      <div className="sticky top-0 z-10 flex h-7 items-center bg-bg-100/95 px-2 text-[length:var(--fs-xs)] font-medium text-text-400 backdrop-blur-sm">
-        {section.title}
-      </div>
-      {section.groups.length === 0 ? (
-        section.projects && section.projects.length > 0 ? (
-          section.projects.map(project => <SkillProject key={project.id} project={project} />)
+      <button
+        type="button"
+        onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded}
+        className="sticky top-0 z-10 flex h-7 w-full items-center gap-1.5 bg-bg-100/95 px-2 text-left text-[length:var(--fs-xs)] font-medium text-text-400 backdrop-blur-sm transition-colors hover:bg-bg-200/60 hover:text-text-200"
+      >
+        {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+        <span className="min-w-0 truncate">{section.title}</span>
+        <span className="ml-auto shrink-0 text-text-500">{skillCount}</span>
+      </button>
+      {expanded && (
+        section.groups.length === 0 ? (
+          section.projects && section.projects.length > 0 ? (
+            section.projects.map(project => <SkillProject key={project.id} project={project} defaultExpanded={false} />)
+          ) : (
+            <div className="px-2 py-2 text-[length:var(--fs-sm)] text-text-500">{t('skillPanel.noSkillsInGroup')}</div>
+          )
         ) : (
-          <div className="px-2 py-2 text-[length:var(--fs-sm)] text-text-500">{t('skillPanel.noSkillsInGroup')}</div>
+          <>
+            {section.groups.map(group => <SkillSource key={group.id} group={group} defaultExpanded={section.id === 'system'} />)}
+            {section.projects?.map(project => <SkillProject key={project.id} project={project} defaultExpanded={false} />)}
+          </>
         )
-      ) : (
-        <>
-          {section.groups.map(group => <SkillSource key={group.id} group={group} />)}
-          {section.projects?.map(project => <SkillProject key={project.id} project={project} />)}
-        </>
       )}
     </section>
   )
 }
 
-function SkillProject({ project }: { project: SkillProjectGroup }) {
+function SkillProject({ project, defaultExpanded = true }: { project: SkillProjectGroup; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const skillCount = project.groups.reduce((total, group) => total + group.skills.length, 0)
+
   return (
     <div className="pb-1">
-      <div className="mx-2 mt-1 flex min-h-8 flex-col justify-center rounded-md bg-bg-200/35 px-2 py-1">
-        <div className="truncate text-[length:var(--fs-sm)] font-medium text-text-200">{project.name}</div>
-        <div className="truncate font-mono text-[length:var(--fs-xs)] text-text-500" title={project.displayPath}>{project.displayPath}</div>
-      </div>
-      <div className="pl-2">
-        {project.groups.map(group => <SkillSource key={group.id} group={group} />)}
-      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded}
+        className="mx-2 mt-1 flex min-h-8 w-[calc(100%-1rem)] items-center gap-2 rounded-md bg-bg-200/35 px-2 py-1 text-left transition-colors hover:bg-bg-200/60"
+      >
+        {expanded ? <ChevronDownIcon size={12} className="shrink-0 text-text-500" /> : <ChevronRightIcon size={12} className="shrink-0 text-text-500" />}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[length:var(--fs-sm)] font-medium text-text-200">{project.name}</span>
+          <span className="block truncate font-mono text-[length:var(--fs-xs)] text-text-500" title={project.displayPath}>{project.displayPath}</span>
+        </span>
+        <span className="shrink-0 text-[length:var(--fs-xs)] text-text-500">{skillCount}</span>
+      </button>
+      {expanded && (
+        <div className="pl-2">
+          {project.groups.map(group => <SkillSource key={group.id} group={group} />)}
+        </div>
+      )}
     </div>
   )
 }
 
-function SkillSource({ group }: { group: SkillSourceGroup }) {
+function SkillSource({ group, defaultExpanded = true }: { group: SkillSourceGroup; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+
   return (
     <div className="pb-1">
-      <div className="flex min-h-7 items-center gap-1.5 px-2 text-[length:var(--fs-xs)] text-text-500">
+      <button
+        type="button"
+        onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded}
+        className="flex min-h-7 w-full items-center gap-1.5 px-2 text-left text-[length:var(--fs-xs)] text-text-500 transition-colors hover:bg-bg-200/50 hover:text-text-300"
+      >
+        {expanded ? <ChevronDownIcon size={11} className="shrink-0" /> : <ChevronRightIcon size={11} className="shrink-0" />}
         <span className="shrink-0">{group.label}</span>
         <span className="text-text-600">|</span>
-        <span className="min-w-0 truncate font-mono" title={group.detail}>{group.detail}</span>
-      </div>
-      {group.skills.map(skill => (
+        <span className="min-w-0 flex-1 truncate font-mono" title={group.detail}>{group.detail}</span>
+        <span className="shrink-0 text-text-500">{group.skills.length}</span>
+      </button>
+      {expanded && group.skills.map(skill => (
         <SkillItem key={skill.name} skill={skill} sourcePath={group.displayPath} />
       ))}
     </div>
