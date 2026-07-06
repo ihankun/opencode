@@ -187,6 +187,7 @@ export interface InputBoxProps {
   // Collapsed dialog capsules
   collapsedPermission?: CollapsedDialogInfo
   collapsedQuestion?: CollapsedDialogInfo
+  homeMode?: boolean
 }
 
 // ============================================
@@ -229,6 +230,7 @@ function InputBoxComponent({
   onScrollToBottom,
   collapsedPermission,
   collapsedQuestion,
+  homeMode = false,
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
   const { currentDirectory, setCurrentDirectory, savedDirectories } = useDirectory()
@@ -464,7 +466,13 @@ function InputBoxComponent({
     ? projectOptions.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
       getDirectoryName(currentDirectory) ||
       currentDirectory
-    : '选择工作目录'
+    : t('emptyState.chooseProject')
+  const shouldShowProjectInTitle = currentDirectory && selectedProjectName.length <= 18
+  const homeTitle = shouldShowProjectInTitle
+    ? t('emptyState.projectTitle', { project: selectedProjectName })
+    : currentDirectory
+      ? t('emptyState.projectTitleShort')
+    : t('emptyState.homeTitle')
 
   // ============================================
   // Handlers
@@ -1317,9 +1325,14 @@ function InputBoxComponent({
   return (
     <div className="w-full">
       <div
-        className={`mx-auto max-w-[min(76rem,calc(100%-5rem))] pointer-events-auto transition-[max-width] duration-300 ease-in-out ${isCompact ? 'px-2' : 'px-4'}`}
+        className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out ${homeMode ? 'max-w-[min(78rem,calc(100%-6rem))]' : 'max-w-[min(76rem,calc(100%-5rem))]'} ${isCompact ? 'px-2' : 'px-4'}`}
         style={{ paddingBottom: bottomDockPadding }}
       >
+        {homeMode && (
+          <h1 className="mb-10 truncate text-center text-[1.75rem] font-normal leading-tight text-text-100 md:text-[2rem]">
+            {homeTitle}
+          </h1>
+        )}
         <div
           ref={contentWrapRef}
           onPointerDown={handleContainerPointerDown}
@@ -1477,7 +1490,7 @@ function InputBoxComponent({
                       onFocus={handleFocus}
                       onBlur={handleBlur}
                       disabled={inputDisabled}
-                      placeholder={isCompact ? t('inputBox.replyToAgentMobile') : t('inputBox.replyToAgent')}
+                      placeholder={homeMode ? t('emptyState.promptPlaceholder') : isCompact ? t('inputBox.replyToAgentMobile') : t('inputBox.replyToAgent')}
                       className={`w-full resize-none focus:outline-none focus:ring-0 bg-transparent text-text-100 placeholder:text-text-400 custom-scrollbar ${isCompact ? 'px-3' : 'px-4'}`}
                       style={{
                         ...TEXT_STYLE,

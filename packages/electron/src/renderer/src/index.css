@@ -569,7 +569,7 @@ html.electron-app[data-theme-preset='codex'][data-glass] .desktop-titlebar-surfa
   background:
     linear-gradient(
       to right,
-      hsl(var(--sidebar-bg) / 0.28) 0 var(--sidebar-width, 288px),
+      hsl(var(--sidebar-bg) / 0.2) 0 var(--sidebar-width, 288px),
       hsl(var(--chat-bg)) var(--sidebar-width, 288px) 100%
     );
   -webkit-backdrop-filter: blur(34px) saturate(180%);
@@ -577,26 +577,26 @@ html.electron-app[data-theme-preset='codex'][data-glass] .desktop-titlebar-surfa
 }
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.26);
+  background-color: hsl(var(--sidebar-bg) / 0.18);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   backdrop-filter: blur(40px) saturate(200%);
 }
 
 :root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.26);
+  background-color: hsl(var(--sidebar-bg) / 0.18);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   backdrop-filter: blur(40px) saturate(200%);
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.24);
+  background-color: hsl(var(--sidebar-bg) / 0.16);
   -webkit-backdrop-filter: blur(44px) saturate(210%);
   backdrop-filter: blur(44px) saturate(210%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-surface {
-    background-color: hsl(var(--sidebar-bg) / 0.24);
+    background-color: hsl(var(--sidebar-bg) / 0.16);
     -webkit-backdrop-filter: blur(44px) saturate(210%);
     backdrop-filter: blur(44px) saturate(210%);
   }

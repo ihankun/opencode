@@ -16,6 +16,11 @@
   },
   "emptyState": {
     "title": "开始新对话",
+    "homeTitle": "我们该做什么？",
+    "projectTitle": "我们应该在 {{project}} 中构建什么？",
+    "projectTitleShort": "我们应该构建什么？",
+    "promptPlaceholder": "随心输入",
+    "chooseProject": "Choose project",
     "description": "为此会话选择工作目录",
     "workingDirectory": "工作目录",
     "enterAbsolutePath": "输入绝对路径...",

@@ -16,6 +16,11 @@
   },
   "emptyState": {
     "title": "Start a new conversation",
+    "homeTitle": "What should we do?",
+    "projectTitle": "What should we build in {{project}}?",
+    "projectTitleShort": "What should we build?",
+    "promptPlaceholder": "Type anything",
+    "chooseProject": "Choose project",
     "description": "Choose a working directory for this session",
     "workingDirectory": "Working Directory",
     "enterAbsolutePath": "Enter absolute path...",

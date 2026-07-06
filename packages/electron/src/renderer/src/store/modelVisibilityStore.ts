@@ -32,6 +32,7 @@ class ModelVisibilityStore {
   }
 
   private persist() {
+    this.updateSnapshot()
     serverStorage.setJSON(STORAGE_KEY_HIDDEN_MODELS, this.snapshot)
   }
 
