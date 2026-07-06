@@ -27,7 +27,7 @@ import {
 import { useDirectory, useSessionStats, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
 import { useLayoutStore, useMessageStore, childSessionStore } from '../../../store'
-import { useBusySessions, useBusyCount } from '../../../store/activeSessionStore'
+import { useBusySessions } from '../../../store/activeSessionStore'
 import { notificationStore, useNotifications, useUnreadNotificationCount } from '../../../store/notificationStore'
 import { pinnedSessionsStore } from '../../../store/pinnedSessionsStore'
 import type { NotificationEntry } from '../../../store/notificationStore'
@@ -41,6 +41,7 @@ import {
   type ConnectionInfo,
 } from '../../../api'
 import { getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
+import { clearSessionRuntimeState } from '../../../utils/sessionLifecycle'
 import { uiErrorHandler } from '../../../utils'
 
 // 侧边栏设计模式：
@@ -260,7 +261,6 @@ export function SidePanel({
 
   // Active sessions
   const busySessions = useBusySessions()
-  const busyCount = useBusyCount()
   useSyncExternalStore(
     childSessionStore.subscribe.bind(childSessionStore),
     childSessionStore.getVersion,
@@ -269,7 +269,6 @@ export function SidePanel({
   // Notification history
   const notifications = useNotifications()
   const unreadNotificationCount = useUnreadNotificationCount()
-  const attentionCount = busyCount + unreadNotificationCount
 
   useEffect(() => {
     return subscribeToConnectionState(setConnectionState)
@@ -607,6 +606,26 @@ export function SidePanel({
       displayedProjects.filter(project => project.id !== 'global' && expandedProjectIds.includes(project.id)),
     [displayedProjects, expandedProjectIds],
   )
+
+  const projectBusyCount = useMemo(
+    () =>
+      busySessions.filter(entry => {
+        if (!entry.directory) return false
+        return Boolean(findProjectGroupForDirectory(displayedProjects, entry.directory))
+      }).length,
+    [busySessions, displayedProjects],
+  )
+
+  const conversationBusyCount = useMemo(
+    () =>
+      busySessions.filter(entry => {
+        if (!entry.directory) return true
+        return !findProjectGroupForDirectory(displayedProjects, entry.directory)
+      }).length,
+    [busySessions, displayedProjects],
+  )
+
+  const conversationAttentionCount = conversationBusyCount + unreadNotificationCount
 
   useEffect(() => {
     if (currentProject.id !== 'global') return
@@ -1235,6 +1254,14 @@ export function SidePanel({
           <section className="mt-2">
             <div className="mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
               <span>{t('sidebar.projects')}</span>
+              {projectBusyCount > 0 && (
+                <span
+                  className="ml-1.5 inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100"
+                  title={t('sidebar.active')}
+                >
+                  {projectBusyCount}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onAddProject}
@@ -1387,18 +1414,18 @@ export function SidePanel({
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="mx-2 flex shrink-0 items-center gap-1">
             <div className="pl-[6px] py-1 text-left text-[length:var(--fs-sm)] text-text-500">
-              {t('sidebar.conversations')}
+              <span>{t('sidebar.conversations')}</span>
             </div>
-            {attentionCount > 0 && (
+            {conversationAttentionCount > 0 && (
               <span
                 className={`inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full px-1 text-[length:var(--fs-xxs)] font-medium leading-none ${
-                  attentionCount > busyCount
+                  unreadNotificationCount > 0
                     ? 'bg-accent-main-100/10 text-accent-main-100'
                     : 'bg-success-100/10 text-success-100'
                 }`}
                 title={t('sidebar.active')}
               >
-                {attentionCount}
+                {conversationAttentionCount}
               </span>
             )}
             <button
