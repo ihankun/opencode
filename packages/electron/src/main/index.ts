@@ -1,6 +1,9 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
+import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
@@ -11,6 +14,38 @@ let serverError: string | undefined
 let tray: Tray | undefined
 let isQuitting = false
 let isStoppingForQuit = false
+
+type PluginInstallTarget = {
+  kind: "server" | "tui"
+  opts?: Record<string, unknown>
+}
+
+type NpmPackageManifest = {
+  name?: string
+  version?: string
+  description?: string
+  keywords?: string[]
+  exports?: unknown
+  main?: string
+  "oc-themes"?: unknown
+}
+
+type NpmSearchPackage = {
+  name?: string
+  version?: string
+  description?: string
+  keywords?: string[]
+  date?: string
+  publisher?: {
+    username?: string
+  }
+}
+
+type NpmSearchResponse = {
+  objects?: Array<{
+    package?: NpmSearchPackage
+  }>
+}
 
 function rendererUrl() {
   if (process.env.ELECTRON_RENDERER_URL) return process.env.ELECTRON_RENDERER_URL
@@ -200,6 +235,8 @@ function currentServerState() {
 }
 
 ipcMain.handle("server:get", currentServerState)
+ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
+ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
@@ -225,3 +262,236 @@ void app.whenReady().then(() => {
 app.on("activate", () => {
   showWindow()
 })
+
+async function searchPlugins(raw: string) {
+  const query = raw.trim()
+  if (!query) return []
+
+  const url = new URL("https://registry.npmjs.org/-/v1/search")
+  url.searchParams.set("text", `${query} opencode plugin`)
+  url.searchParams.set("size", "20")
+  url.searchParams.set("quality", "0.65")
+  url.searchParams.set("popularity", "0.2")
+  url.searchParams.set("maintenance", "0.15")
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`npm search failed with ${response.status}`)
+
+  const data = (await response.json()) as NpmSearchResponse
+  const exact = await readNpmManifest(query).catch(() => undefined)
+  const results = (data.objects ?? []).flatMap((item) => {
+    const pkg = item.package
+    if (!pkg?.name) return []
+    return [
+      {
+        name: pkg.name,
+        version: pkg.version ?? "",
+        description: pkg.description ?? "",
+        keywords: Array.isArray(pkg.keywords) ? pkg.keywords.filter((keyword) => typeof keyword === "string") : [],
+        publisher: pkg.publisher?.username ?? "",
+        date: pkg.date ?? "",
+      },
+    ]
+  })
+
+  const withExact = exact?.name
+    ? [
+        {
+          name: exact.name,
+          version: exact.version ?? "",
+          description: exact.description ?? "",
+          keywords: Array.isArray(exact.keywords) ? exact.keywords : [],
+          publisher: "",
+          date: "",
+        },
+        ...results,
+      ]
+    : results
+
+  const seen = new Set<string>()
+  return withExact.filter((item) => {
+    if (seen.has(item.name)) return false
+    seen.add(item.name)
+    return true
+  })
+}
+
+async function installPlugin(raw: string) {
+  const spec = raw.trim()
+  if (!spec) throw new Error("Plugin package name is required")
+  if (isPathPluginSpec(spec)) throw new Error("One-click install only supports npm packages")
+
+  const manifest = await readNpmManifest(spec)
+  const targets = pluginTargets(manifest)
+  if (!targets.length) {
+    throw new Error(`${manifest.name ?? spec} does not expose opencode plugin entrypoints`)
+  }
+
+  const configDir = pluginConfigDir()
+  await mkdir(configDir, { recursive: true })
+  await mkdir(pluginCacheDir(), { recursive: true })
+
+  const items = await Promise.all(targets.map((target) => patchPluginConfig(configDir, target, spec)))
+  return {
+    ok: true,
+    spec,
+    packageName: manifest.name ?? parseNpmSpecifier(spec).name,
+    version: manifest.version ?? "",
+    configDir,
+    cacheDir: pluginCacheDir(),
+    items,
+  }
+}
+
+function pluginConfigDir() {
+  return join(app.getPath("userData"), "xdg", "config", "opencode")
+}
+
+function pluginCacheDir() {
+  return join(app.getPath("userData"), "xdg", "cache", "opencode", "packages")
+}
+
+async function readNpmManifest(spec: string): Promise<NpmPackageManifest> {
+  const parsed = parseNpmSpecifier(spec)
+  const version = parsed.version || "latest"
+  const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(parsed.name).replace("%2F", "%2f")}/${version}`)
+  if (!response.ok) throw new Error(`npm package lookup failed with ${response.status}`)
+  return (await response.json()) as NpmPackageManifest
+}
+
+function parseNpmSpecifier(spec: string) {
+  if (spec.startsWith("@")) {
+    const slash = spec.indexOf("/")
+    const versionAt = slash >= 0 ? spec.indexOf("@", slash) : -1
+    if (versionAt > 0) return { name: spec.slice(0, versionAt), version: spec.slice(versionAt + 1) }
+    return { name: spec, version: "latest" }
+  }
+
+  const versionAt = spec.indexOf("@")
+  if (versionAt > 0) return { name: spec.slice(0, versionAt), version: spec.slice(versionAt + 1) }
+  return { name: spec, version: "latest" }
+}
+
+function isPathPluginSpec(spec: string) {
+  return spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("file:")
+}
+
+function pluginTargets(pkg: NpmPackageManifest) {
+  const targets: PluginInstallTarget[] = []
+  const server = exportTarget(pkg.exports, "server")
+  if (server) {
+    targets.push({ kind: "server", opts: server.opts })
+  } else if (typeof pkg.main === "string" && pkg.main.trim()) {
+    targets.push({ kind: "server" })
+  }
+
+  const tui = exportTarget(pkg.exports, "tui")
+  if (tui) targets.push({ kind: "tui", opts: tui.opts })
+  if (!targets.some((target) => target.kind === "tui") && hasThemeTargets(pkg["oc-themes"])) {
+    targets.push({ kind: "tui" })
+  }
+
+  return targets
+}
+
+function exportTarget(exports: unknown, kind: "server" | "tui") {
+  if (!isRecord(exports)) return
+  const value = exports[`./${kind}`]
+  if (!exportValue(value)) return
+  return {
+    opts: exportOptions(value),
+  }
+}
+
+function exportValue(value: unknown) {
+  if (typeof value === "string") return value.trim() || undefined
+  if (!isRecord(value)) return
+  for (const key of ["import", "default"]) {
+    const next = value[key]
+    if (typeof next === "string" && next.trim()) return next.trim()
+  }
+}
+
+function exportOptions(value: unknown) {
+  if (!isRecord(value)) return
+  const config = value.config
+  if (!isRecord(config)) return
+  return config
+}
+
+function hasThemeTargets(value: unknown) {
+  return Array.isArray(value) && value.some((item) => typeof item === "string" && item.trim() && !item.startsWith("/") && !item.startsWith("file:"))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+async function patchPluginConfig(dir: string, target: PluginInstallTarget, spec: string) {
+  const file = await pluginConfigFile(dir, target.kind)
+  const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return "{}"
+    throw error
+  })
+  const source = text.trim() || "{}"
+  const errors: ParseError[] = []
+  const config = parseJsonc(source, errors, { allowTrailingComma: true }) as { plugin?: unknown[] }
+  if (errors.length) {
+    const error = errors[0]
+    throw new Error(`Invalid JSON in ${file}: ${printParseErrorCode(error.error)}`)
+  }
+  const plugins = Array.isArray(config.plugin) ? config.plugin : []
+  const entry = target.opts && Object.keys(target.opts).length ? [spec, target.opts] : spec
+  const next = upsertPluginEntry(plugins, spec, entry)
+
+  await writeFile(
+    file,
+    applyEdits(
+      source,
+      modify(source, ["plugin"], next.plugins, {
+        formattingOptions: {
+          insertSpaces: true,
+          tabSize: 2,
+        },
+      }),
+    ),
+  )
+  return {
+    kind: target.kind,
+    mode: next.mode,
+    file,
+  }
+}
+
+async function pluginConfigFile(dir: string, kind: "server" | "tui") {
+  const name = kind === "server" ? "opencode" : "tui"
+  const json = join(dir, `${name}.json`)
+  const jsonc = join(dir, `${name}.jsonc`)
+  const existingJsonc = await readFile(jsonc, "utf8").then(
+    () => true,
+    () => false,
+  )
+  if (existingJsonc) return jsonc
+  return json
+}
+
+function upsertPluginEntry(plugins: unknown[], spec: string, entry: unknown) {
+  const pkg = parseNpmSpecifier(spec).name
+  const index = plugins.findIndex((item) => {
+    const current = pluginEntrySpec(item)
+    if (!current || current.startsWith("file:")) return false
+    return parseNpmSpecifier(current).name === pkg
+  })
+  if (index < 0) return { mode: "add" as const, plugins: [...plugins, entry] }
+
+  const next = [...plugins]
+  next[index] = entry
+  return { mode: "replace" as const, plugins: next }
+}
+
+function pluginEntrySpec(value: unknown) {
+  if (typeof value === "string") return value
+  if (!Array.isArray(value)) return
+  if (typeof value[0] !== "string") return
+  return value[0]
+}

@@ -3,10 +3,13 @@ import { useTranslation } from 'react-i18next'
 import {
   AlertCircleIcon,
   CloseIcon,
+  CheckIcon,
+  DownloadIcon,
   PackagePlusIcon,
   PencilIcon,
   PlusIcon,
   RetryIcon,
+  SearchIcon,
   SpinnerIcon,
   TrashIcon,
 } from './Icons'
@@ -17,6 +20,7 @@ import type { Config } from '../types/api/config'
 
 type PluginOptions = Record<string, unknown>
 type PluginEntry = string | [string, PluginOptions]
+type PluginSearchResult = Awaited<ReturnType<typeof window.customOpenCode.searchPlugins>>[number]
 
 type PluginDialog =
   | {
@@ -90,8 +94,16 @@ export const PluginPanel = memo(function PluginPanel() {
   const [specDraft, setSpecDraft] = useState('')
   const [optionsDraft, setOptionsDraft] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<PluginSearchResult[]>([])
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [installingSpec, setInstallingSpec] = useState<string | null>(null)
+  const [installMessage, setInstallMessage] = useState<string | null>(null)
 
   const plugins = useMemo(() => readPlugins(config), [config])
+  const configuredSpecs = useMemo(() => new Set(plugins.map(plugin => pluginSpec(plugin))), [plugins])
+  const canUseElectronInstaller = typeof window.customOpenCode?.searchPlugins === 'function'
 
   const loadPlugins = useCallback(async () => {
     try {
@@ -114,6 +126,23 @@ export const PluginPanel = memo(function PluginPanel() {
     setLoading(true)
     void loadPlugins()
   }, [loadPlugins])
+
+  const handleSearch = useCallback(async () => {
+    const query = searchDraft.trim()
+    if (!query || !canUseElectronInstaller) return
+    setSearching(true)
+    setSearchError(null)
+    setInstallMessage(null)
+    try {
+      setSearchResults(await window.customOpenCode.searchPlugins(query))
+    } catch (err) {
+      apiErrorHandler('search npm plugins', err)
+      setSearchError(t('pluginPanel.searchFailed'))
+      setSearchResults([])
+    } finally {
+      setSearching(false)
+    }
+  }, [canUseElectronInstaller, searchDraft, t])
 
   const openAddDialog = useCallback(() => {
     setDialog({ mode: 'add' })
@@ -190,6 +219,28 @@ export const PluginPanel = memo(function PluginPanel() {
     [plugins, savePlugins, t],
   )
 
+  const handleInstallSearchResult = useCallback(
+    async (spec: string) => {
+      if (!canUseElectronInstaller) return
+      setInstallingSpec(spec)
+      setSearchError(null)
+      setInstallMessage(null)
+      try {
+        const result = await window.customOpenCode.installPlugin(spec)
+        setInstallMessage(t('pluginPanel.installedTo', { dir: result.configDir }))
+        setLoading(true)
+        await loadPlugins()
+      } catch (err) {
+        apiErrorHandler('install npm plugin', err)
+        setSearchError(err instanceof Error ? err.message : t('pluginPanel.installFailed'))
+      } finally {
+        setInstallingSpec(null)
+        setLoading(false)
+      }
+    },
+    [canUseElectronInstaller, loadPlugins, t],
+  )
+
   return (
     <div className="flex h-full flex-col bg-bg-100">
       <div className="relative flex h-10 items-center justify-between px-3">
@@ -223,6 +274,54 @@ export const PluginPanel = memo(function PluginPanel() {
       </div>
 
       <div className="flex-1 overflow-auto">
+        {canUseElectronInstaller && (
+          <div className="border-b border-border-200/50 p-3">
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <SearchIcon size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400" />
+                <input
+                  value={searchDraft}
+                  onChange={event => setSearchDraft(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    void handleSearch()
+                  }}
+                  placeholder={t('pluginPanel.searchPlaceholder')}
+                  className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pr-2 pl-8 text-text-100 text-[length:var(--fs-sm)] outline-none transition-colors placeholder:text-text-400 focus:border-border-100"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSearch()}
+                disabled={searching || !searchDraft.trim()}
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-bg-200/70 px-3 text-text-200 text-[length:var(--fs-sm)] transition-colors hover:bg-bg-200 disabled:opacity-50"
+              >
+                {searching ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}
+                {t('pluginPanel.search')}
+              </button>
+            </div>
+
+            {searchError && <div className="mt-2 text-danger-100 text-[length:var(--fs-xs)]">{searchError}</div>}
+            {installMessage && <div className="mt-2 text-success-100 text-[length:var(--fs-xs)]">{installMessage}</div>}
+
+            {searchResults.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {searchResults.map(result => (
+                  <PluginSearchRow
+                    key={result.name}
+                    result={result}
+                    installed={configuredSpecs.has(result.name)}
+                    installing={installingSpec === result.name}
+                    disabled={Boolean(installingSpec)}
+                    onInstall={() => void handleInstallSearchResult(result.name)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {dialog && (
           <PluginForm
             title={dialog.mode === 'edit' ? t('pluginPanel.editPlugin') : t('pluginPanel.addPlugin')}
@@ -288,6 +387,55 @@ export const PluginPanel = memo(function PluginPanel() {
     </div>
   )
 })
+
+function PluginSearchRow({
+  result,
+  installed,
+  installing,
+  disabled,
+  onInstall,
+}: {
+  result: PluginSearchResult
+  installed: boolean
+  installing: boolean
+  disabled: boolean
+  onInstall: () => void
+}) {
+  const { t } = useTranslation(['components'])
+
+  return (
+    <div className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 text-text-300">
+        <PackagePlusIcon size={15} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="truncate font-medium text-text-100 text-[length:var(--fs-sm)]">{result.name}</div>
+          {result.version && <div className="shrink-0 text-text-400 text-[length:var(--fs-xs)]">v{result.version}</div>}
+        </div>
+        <div className="mt-0.5 line-clamp-2 text-text-400 text-[length:var(--fs-xs)]">
+          {result.description || t('pluginPanel.noDescription')}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onInstall}
+        disabled={disabled || installed}
+        aria-label={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
+        title={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-300 transition-colors hover:bg-bg-200 hover:text-text-100 disabled:opacity-50"
+      >
+        {installing ? (
+          <SpinnerIcon size={13} className="animate-spin" />
+        ) : installed ? (
+          <CheckIcon size={13} />
+        ) : (
+          <DownloadIcon size={13} />
+        )}
+      </button>
+    </div>
+  )
+}
 
 function PluginRow({
   plugin,
