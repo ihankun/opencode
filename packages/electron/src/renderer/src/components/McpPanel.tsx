@@ -309,8 +309,7 @@ const AddServerForm = memo(function AddServerForm({ onSubmit, onCancel, isLoadin
           setError(t('mcpPanel.commandRequired'))
           return
         }
-        // 解析命令为数组
-        const cmdParts = command.trim().split(/\s+/)
+        const cmdParts = parseCommandLine(command)
         await onSubmit(name.trim(), {
           type: 'local',
           command: cmdParts,
@@ -430,6 +429,50 @@ const AddServerForm = memo(function AddServerForm({ onSubmit, onCancel, isLoadin
     </form>
   )
 })
+
+function parseCommandLine(value: string) {
+  const parts: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaping = false
+
+  for (const char of value.trim()) {
+    if (escaping) {
+      current += char
+      escaping = false
+      continue
+    }
+    if (char === '\\') {
+      escaping = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+        continue
+      }
+      current += char
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current)
+        current = ''
+      }
+      continue
+    }
+    current += char
+  }
+
+  if (escaping) current += '\\'
+  if (quote) throw new Error('Command contains an unclosed quote.')
+  if (current) parts.push(current)
+  return parts
+}
 
 // ============================================
 // ServerItem Component

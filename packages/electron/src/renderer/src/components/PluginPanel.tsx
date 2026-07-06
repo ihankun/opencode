@@ -14,6 +14,8 @@ import {
   TrashIcon,
 } from './Icons'
 import { getConfig, updateConfig } from '../api/config'
+import { reconnectSSE } from '../api/events'
+import { abortInFlightApiRequests, invalidateSDKClient } from '../api/sdk'
 import { useDirectory } from '../hooks'
 import { apiErrorHandler } from '../utils'
 import type { Config } from '../types/api/config'
@@ -81,6 +83,13 @@ function parseOptions(value: string) {
   } catch {
     return null
   }
+}
+
+async function restartElectronServer() {
+  await window.customOpenCode.restartServer()
+  abortInFlightApiRequests('Electron server restarted')
+  invalidateSDKClient()
+  reconnectSSE()
 }
 
 export const PluginPanel = memo(function PluginPanel() {
@@ -170,6 +179,11 @@ export const PluginPanel = memo(function PluginPanel() {
       try {
         const nextConfig = await updateConfig(withPlugins(config, nextPlugins), currentDirectory)
         setConfig(nextConfig)
+        if (typeof window.customOpenCode?.restartServer === 'function') {
+          setInstallMessage(t('pluginPanel.restartingAfterInstall'))
+          await restartElectronServer()
+          setInstallMessage(t('pluginPanel.refreshed'))
+        }
       } catch (err) {
         apiErrorHandler('save plugin config', err)
         throw err
@@ -177,7 +191,7 @@ export const PluginPanel = memo(function PluginPanel() {
         setSaving(false)
       }
     },
-    [config, currentDirectory],
+    [config, currentDirectory, t],
   )
 
   const handleSubmit = useCallback(async () => {
@@ -227,6 +241,8 @@ export const PluginPanel = memo(function PluginPanel() {
       setInstallMessage(null)
       try {
         const result = await window.customOpenCode.installPlugin(spec)
+        setInstallMessage(t('pluginPanel.restartingAfterInstall'))
+        await restartElectronServer()
         setInstallMessage(t('pluginPanel.installedTo', { dir: result.configDir }))
         setLoading(true)
         await loadPlugins()

@@ -4,7 +4,9 @@
 
 import { getSDKClient, unwrap } from './sdk'
 import { formatPathForApi } from '../utils/directoryUtils'
+import { getConfig, updateConfig } from './config'
 import type { MCPStatusResponse, McpServerConfig } from '../types/api/mcp'
+import type { Config } from '../types/api/config'
 
 /**
  * 获取所有 MCP 服务器状态
@@ -20,6 +22,27 @@ export async function getMcpStatus(directory?: string): Promise<MCPStatusRespons
 export async function addMcpServer(name: string, config: McpServerConfig, directory?: string): Promise<void> {
   const sdk = getSDKClient()
   unwrap(await sdk.mcp.add({ name, config, directory: formatPathForApi(directory) }))
+  await persistMcpServer(name, config, directory)
+}
+
+async function persistMcpServer(name: string, server: McpServerConfig, directory?: string) {
+  const config = await getConfig(directory)
+  await updateConfig(
+    {
+      ...(config as unknown as Record<string, unknown>),
+      mcp: {
+        ...mcpConfig(config),
+        [name]: server,
+      },
+    } as unknown as Config,
+    directory,
+  )
+}
+
+function mcpConfig(config: Config) {
+  const value = (config as unknown as { mcp?: unknown }).mcp
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value
 }
 
 /**

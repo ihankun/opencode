@@ -35,15 +35,24 @@ export type CustomOpenCodePluginInstallResult = {
   }>
 }
 
+export type CustomOpenCodeSkillWriteResult = {
+  ok: true
+  root: string
+  count: number
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
+  restartServer(): Promise<CustomOpenCodeServerState>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
+  writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
 }
 
 const api: CustomOpenCodeApi = {
   server: () => ipcRenderer.invoke("server:get"),
+  restartServer: () => ipcRenderer.invoke("server:restart"),
   onServerUpdated(callback) {
     const listener = (_event: unknown, state: CustomOpenCodeServerState) => callback(state)
     ipcRenderer.on("server:updated", listener)
@@ -51,6 +60,7 @@ const api: CustomOpenCodeApi = {
   },
   searchPlugins: (query) => ipcRenderer.invoke("plugin:search", query),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
+  writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

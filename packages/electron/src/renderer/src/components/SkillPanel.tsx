@@ -521,6 +521,11 @@ function normalizeSkillName(value: string) {
 }
 
 async function writeSkillFiles(root: string, files: { path: string; content: string }[]) {
+  if (typeof window.customOpenCode?.writeSkillFiles === 'function') {
+    await window.customOpenCode.writeSkillFiles(root, files)
+    return
+  }
+
   const { mkdir, writeTextFile } = await import('@tauri-apps/plugin-fs')
   await mkdir(root, { recursive: true })
   for (const file of files) {

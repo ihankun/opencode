@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
@@ -45,6 +45,11 @@ type NpmSearchResponse = {
   objects?: Array<{
     package?: NpmSearchPackage
   }>
+}
+
+type SkillFileInput = {
+  path: string
+  content: string
 }
 
 function rendererUrl() {
@@ -192,6 +197,15 @@ async function stopServer() {
   await current?.stop()
 }
 
+async function restartServer() {
+  writeLog("main", "restarting opencode server")
+  serverError = undefined
+  await stopServer()
+  mainWindow?.webContents.send("server:updated", currentServerState())
+  await startServer(rendererUrl())
+  return currentServerState()
+}
+
 function allowedOrigins(url: string) {
   const defaults = ["custom-opencode://renderer", "http://localhost:46237", "http://127.0.0.1:46237"]
   try {
@@ -235,8 +249,10 @@ function currentServerState() {
 }
 
 ipcMain.handle("server:get", currentServerState)
+ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
+ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
@@ -494,4 +510,41 @@ function pluginEntrySpec(value: unknown) {
   if (!Array.isArray(value)) return
   if (typeof value[0] !== "string") return
   return value[0]
+}
+
+async function writeSkillFiles(rawRoot: string, rawFiles: unknown) {
+  const root = resolve(rawRoot)
+  const allowedRoot = resolve(app.getPath("userData"), "skills")
+  if (!containsPath(allowedRoot, root)) throw new Error("Skill path must stay inside the OpenCodex skills directory")
+  if (!Array.isArray(rawFiles)) throw new Error("Skill files are required")
+
+  const files = rawFiles.flatMap((item): SkillFileInput[] => {
+    if (!isRecord(item) || typeof item.path !== "string" || typeof item.content !== "string") return []
+    return [{ path: item.path, content: item.content }]
+  })
+  if (!files.length) throw new Error("Skill files are required")
+
+  await mkdir(root, { recursive: true })
+  for (const file of files) {
+    const normalized = normalizeSkillRelativePath(file.path)
+    const destination = resolve(root, normalized)
+    if (!containsPath(root, destination)) throw new Error("Skill file path is outside the skill directory")
+    await mkdir(dirname(destination), { recursive: true })
+    await writeFile(destination, file.content)
+  }
+
+  return { ok: true as const, root, count: files.length }
+}
+
+function normalizeSkillRelativePath(value: string) {
+  const file = value.replace(/\\/g, "/").replace(/^\/+/, "")
+  if (!file || file.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Skill file path is invalid")
+  }
+  return file
+}
+
+function containsPath(parent: string, child: string) {
+  const next = relative(parent, child)
+  return next === "" || (!next.startsWith("..") && !next.startsWith("/") && !/^[A-Za-z]:/.test(next))
 }
