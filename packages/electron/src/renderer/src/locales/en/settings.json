@@ -66,6 +66,8 @@
     "title": "Provider Connections",
     "desc": "Reads the providers supported by the current opencode backend in real time. After saving an API key, open Models to see that provider's available models.",
     "searchPlaceholder": "Search providers",
+    "configuredOnly": "Configured providers only",
+    "configuredOnlyDesc": "Show providers with a saved API key.",
     "refresh": "Refresh providers",
     "loading": "Loading providers...",
     "empty": "The current server did not return any providers",

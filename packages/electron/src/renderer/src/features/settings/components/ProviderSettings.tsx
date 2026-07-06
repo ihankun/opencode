@@ -11,7 +11,7 @@ import {
 import { KeyIcon, RetryIcon, SearchIcon, TrashIcon } from '../../../components/Icons'
 import { Button } from '../../../components/ui/Button'
 import { refreshModels } from '../../../hooks/useModels'
-import { SettingsCard, SettingsSection } from './SettingsUI'
+import { SettingsCard, SettingsSection, Toggle } from './SettingsUI'
 import type { Provider, ProviderAuthMethod } from '@opencode-ai/sdk/v2/client'
 
 type AuthPrompt = NonNullable<ProviderAuthMethod['prompts']>[number]
@@ -39,6 +39,7 @@ function promptDefaultValue(prompt: AuthPrompt) {
 export function ProviderSettings() {
   const { t } = useTranslation(['settings', 'common'])
   const [query, setQuery] = useState('')
+  const [configuredOnly, setConfiguredOnly] = useState(false)
   const [providersResult, setProvidersResult] = useState<ProviderListResult | null>(null)
   const [authMethods, setAuthMethods] = useState<Record<string, ProviderAuthMethod[]>>({})
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({})
@@ -89,6 +90,7 @@ export function ProviderSettings() {
     const normalizedQuery = query.trim().toLowerCase()
     return providers
       .filter(provider => {
+        if (configuredOnly && !connected.has(provider.id)) return false
         if (!normalizedQuery) return true
         const haystack = `${provider.id} ${provider.name} ${provider.source}`.toLowerCase()
         return haystack.includes(normalizedQuery)
@@ -98,7 +100,7 @@ export function ProviderSettings() {
           (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base', numeric: true }) ||
           a.id.localeCompare(b.id, undefined, { sensitivity: 'base', numeric: true }),
       )
-  }, [providers, query])
+  }, [configuredOnly, connected, providers, query])
 
   const save = async (provider: Provider) => {
     const key = apiKeys[provider.id]?.trim() ?? ''
@@ -179,6 +181,17 @@ export function ProviderSettings() {
             <RetryIcon size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border-200/45 bg-bg-100/35 px-3 py-2">
+          <div className="min-w-0">
+            <div className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('providers.configuredOnly')}</div>
+            <div className="text-[length:var(--fs-xs)] text-text-500">{t('providers.configuredOnlyDesc')}</div>
+          </div>
+          <Toggle
+            enabled={configuredOnly}
+            onChange={() => setConfiguredOnly(value => !value)}
+            ariaLabel={t('providers.configuredOnly')}
+          />
+        </div>
 
         {error && (
           <div className="rounded-lg border border-danger-100/25 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100">
@@ -190,7 +203,7 @@ export function ProviderSettings() {
           <div className="py-8 text-[length:var(--fs-sm)] text-text-400">{t('providers.loading')}</div>
         ) : filteredProviders.length === 0 ? (
           <div className="py-8 text-[length:var(--fs-sm)] text-text-400">
-            {query ? t('providers.noResults') : t('providers.empty')}
+            {query || configuredOnly ? t('providers.noResults') : t('providers.empty')}
           </div>
         ) : (
           <div className="space-y-3">
