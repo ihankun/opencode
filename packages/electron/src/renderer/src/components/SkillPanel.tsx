@@ -3,7 +3,7 @@
 // 显示所有可用 Skill，支持查看详情
 // ============================================
 
-import { memo, useState, useEffect, useCallback, useRef, type ReactNode, type RefObject } from 'react'
+import { memo, useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   TeachIcon,
@@ -21,7 +21,7 @@ import {
 import { getSkills } from '../api/skill'
 import type { Skill } from '../types/api/skill'
 import { useDirectory } from '../hooks'
-import { apiErrorHandler } from '../utils'
+import { apiErrorHandler, getDirectoryName } from '../utils'
 
 // ============================================
 // SkillPanel Component
@@ -34,7 +34,7 @@ interface SkillPanelProps {
 
 export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, showHeader = true }: SkillPanelProps) {
   const { t } = useTranslation(['components', 'common'])
-  const { currentDirectory, pathInfo } = useDirectory()
+  const { currentDirectory, pathInfo, savedDirectories } = useDirectory()
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,20 +42,41 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'create' | 'github' | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const workspaceDirectories = useMemo(
+    () => uniqueWorkspaceDirectories([
+      currentDirectory ? { path: currentDirectory, name: getDirectoryName(currentDirectory) || currentDirectory } : undefined,
+      pathInfo?.directory ? { path: pathInfo.directory, name: getDirectoryName(pathInfo.directory) || pathInfo.directory } : undefined,
+      ...savedDirectories.map(directory => ({ path: directory.path, name: directory.name })),
+    ]),
+    [currentDirectory, pathInfo?.directory, savedDirectories],
+  )
 
   const loadSkills = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await getSkills(currentDirectory)
-      setSkills(data)
+      const results = await Promise.all(
+        (workspaceDirectories.length > 0 ? workspaceDirectories : [undefined]).map(async directory => {
+          try {
+            return await getSkills(directory?.path)
+          } catch (err) {
+            apiErrorHandler('load skills', err)
+            return undefined
+          }
+        }),
+      )
+      const data = results.flatMap(result => result ?? [])
+      if (results.every(result => result === undefined)) {
+        setError(t('skillPanel.failedToLoad'))
+      }
+      setSkills(dedupeSkills(data))
     } catch (err) {
       apiErrorHandler('load skills', err)
       setError(t('skillPanel.failedToLoad'))
     } finally {
       setLoading(false)
     }
-  }, [currentDirectory, t])
+  }, [t, workspaceDirectories])
 
   useEffect(() => {
     loadSkills()
@@ -76,7 +97,18 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
   const filteredSkills = skills.filter(
     skill =>
       skill.name.toLowerCase().includes(normalizedFilter) ||
-      (skill.description ?? '').toLowerCase().includes(normalizedFilter),
+      (skill.description ?? '').toLowerCase().includes(normalizedFilter) ||
+      skill.location.toLowerCase().includes(normalizedFilter),
+  )
+  const skillGroups = useMemo(
+    () => groupSkills(filteredSkills, {
+      homeDirectory: pathInfo?.home,
+      workspaceDirectories,
+      systemLabel: t('skillPanel.systemDefaultSkills'),
+      projectLabel: t('skillPanel.projectSkillSource'),
+      otherLabel: t('skillPanel.otherSkillSource'),
+    }),
+    [filteredSkills, pathInfo?.home, t, workspaceDirectories],
   )
 
   return (
@@ -143,15 +175,15 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
               {t('common:retry')}
             </button>
           </div>
-        ) : filteredSkills.length === 0 ? (
+        ) : skills.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-400 text-[length:var(--fs-base)] gap-2 px-4 text-center">
             <TeachIcon size={24} className="opacity-30" />
             <span>{t('skillPanel.noSkills')}</span>
           </div>
         ) : (
           <div className="p-1">
-            {filteredSkills.map(skill => (
-              <SkillItem key={skill.name} skill={skill} />
+            {skillGroups.map(section => (
+              <SkillSection key={section.id} section={section} />
             ))}
           </div>
         )}
@@ -623,11 +655,283 @@ function dirname(value: string) {
   return value.includes('\\') ? dir.replace(/\//g, '\\') : dir
 }
 
+type SkillSectionGroup = {
+  id: string
+  title: string
+  alwaysShow?: boolean
+  groups: SkillSourceGroup[]
+  projects?: SkillProjectGroup[]
+}
+
+type SkillSourceGroup = {
+  id: string
+  label: string
+  detail: string
+  displayPath: string
+  skills: Skill[]
+}
+
+type SkillProjectGroup = {
+  id: string
+  name: string
+  path: string
+  displayPath: string
+  groups: SkillSourceGroup[]
+}
+
+type WorkspaceSkillDirectory = {
+  path: string
+  name: string
+}
+
+type SkillSource = {
+  section: string
+  id: string
+  label: string
+  detail: string
+  displayPath: string
+  project?: {
+    id: string
+    name: string
+    path: string
+    displayPath: string
+  }
+}
+
+function groupSkills(skills: Skill[], options: {
+  homeDirectory?: string
+  workspaceDirectories: WorkspaceSkillDirectory[]
+  systemLabel: string
+  projectLabel: string
+  otherLabel: string
+}) {
+  const sections: SkillSectionGroup[] = [
+    { id: 'system', title: options.systemLabel, alwaysShow: true, groups: [] },
+    { id: 'project', title: options.projectLabel, groups: [] },
+    { id: 'other', title: options.otherLabel, groups: [] },
+  ]
+
+  skills.forEach(skill => {
+    const source = getSkillSource(skill, options)
+    const section = sections.find(item => item.id === source.section) ?? sections[2]
+    if (source.section === 'project' && source.project) {
+      const project = section.projects?.find(item => item.id === source.project?.id)
+      if (project) {
+        addSkillToSourceGroup(project.groups, source, skill)
+        return
+      }
+      section.projects = [
+        ...(section.projects ?? []),
+        {
+          ...source.project,
+          groups: [{
+            id: source.id,
+            label: source.label,
+            detail: source.detail,
+            displayPath: source.displayPath,
+            skills: [skill],
+          }],
+        },
+      ]
+      return
+    }
+    addSkillToSourceGroup(section.groups, source, skill)
+  })
+
+  return sections
+    .map(section => ({
+      ...section,
+      groups: sortSkillSourceGroups(section.groups),
+      projects: section.projects
+        ?.map(project => ({ ...project, groups: sortSkillSourceGroups(project.groups) }))
+        .toSorted((a, b) => a.name.localeCompare(b.name) || a.displayPath.localeCompare(b.displayPath)),
+    }))
+    .filter(section => section.alwaysShow || section.groups.length > 0 || (section.projects?.length ?? 0) > 0)
+}
+
+function addSkillToSourceGroup(groups: SkillSourceGroup[], source: SkillSource, skill: Skill) {
+  const existing = groups.find(group => group.id === source.id)
+  if (existing) {
+    existing.skills.push(skill)
+    return
+  }
+  groups.push({
+    id: source.id,
+    label: source.label,
+    detail: source.detail,
+    displayPath: source.displayPath,
+    skills: [skill],
+  })
+}
+
+function sortSkillSourceGroups(groups: SkillSourceGroup[]) {
+  return groups
+    .map(group => ({ ...group, skills: group.skills.toSorted((a, b) => a.name.localeCompare(b.name)) }))
+    .toSorted((a, b) => a.displayPath.localeCompare(b.displayPath))
+}
+
+function getSkillSource(skill: Skill, options: {
+  homeDirectory?: string
+  workspaceDirectories: WorkspaceSkillDirectory[]
+  systemLabel: string
+  projectLabel: string
+  otherLabel: string
+}) {
+  const sourceDir = getSkillSourceDirectory(skill.location)
+  const normalizedSource = normalizePath(sourceDir)
+  const normalizedHome = normalizePath(options.homeDirectory)
+  const workspace = options.workspaceDirectories.find(directory => isUnderPath(normalizedSource, directory.path))
+
+  if (skill.location === '<built-in>' || isUnderPath(normalizedSource, joinNormalized(normalizedHome, '.opencodex', 'skills'))) {
+    return {
+      section: 'system',
+      id: 'system-default',
+      label: options.systemLabel,
+      detail: options.systemLabel,
+      displayPath: options.systemLabel,
+    }
+  }
+
+  if (workspace && isUnderPath(normalizedSource, workspace.path)) {
+    const displayPath = formatProjectSkillPath(
+      normalizedSource,
+      workspace.path,
+      options.workspaceDirectories.length > 1,
+      normalizedHome,
+    )
+    return {
+      section: 'project',
+      id: `project:${normalizedSource}`,
+      label: options.projectLabel,
+      detail: displayPath,
+      displayPath,
+      project: {
+        id: `project:${workspace.path}`,
+        name: workspace.name,
+        path: workspace.path,
+        displayPath: formatHomePath(workspace.path, normalizedHome),
+      },
+    }
+  }
+
+  const displayPath = formatHomePath(normalizedSource, normalizedHome)
+  return {
+    section: 'other',
+    id: `other:${normalizedSource}`,
+    label: options.otherLabel,
+    detail: displayPath,
+    displayPath,
+  }
+}
+
+function getSkillSourceDirectory(location: string) {
+  const normalized = normalizePath(location)
+  if (normalized === '<built-in>') return normalized
+  if (!normalized.toLowerCase().endsWith('/skill.md')) return dirname(normalized)
+  return dirname(dirname(normalized))
+}
+
+function formatProjectSkillPath(sourceDir: string, workspaceDirectory: string, includeWorkspace: boolean, homeDirectory?: string) {
+  if (includeWorkspace) return formatHomePath(sourceDir, homeDirectory)
+  const relative = sourceDir.slice(workspaceDirectory.length).replace(/^\/+/, '')
+  return relative || sourceDir
+}
+
+function formatHomePath(value: string, homeDirectory?: string) {
+  if (homeDirectory && isUnderPath(value, homeDirectory)) return `~/${value.slice(homeDirectory.length).replace(/^\/+/, '')}`
+  return value
+}
+
+function normalizePath(value?: string) {
+  return (value ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function joinNormalized(...parts: string[]) {
+  return normalizePath(parts.filter(Boolean).join('/'))
+}
+
+function isUnderPath(value: string, parent: string) {
+  if (!value || !parent) return false
+  return value === parent || value.startsWith(`${parent}/`)
+}
+
+function uniqueWorkspaceDirectories(directories: Array<WorkspaceSkillDirectory | undefined>) {
+  return directories.flatMap(directory => {
+    const normalized = normalizePath(directory?.path)
+    if (!normalized) return []
+    return [{ path: normalized, name: directory?.name || getDirectoryName(normalized) || normalized }]
+  }).filter((directory, index, list) => list.findIndex(item => isSamePath(item.path, directory.path)) === index)
+}
+
+function dedupeSkills(skills: Skill[]) {
+  return skills.filter((skill, index, list) => {
+    const key = `${normalizePath(skill.location)}:${skill.name}`
+    return list.findIndex(item => `${normalizePath(item.location)}:${item.name}` === key) === index
+  })
+}
+
+function isSamePath(a: string, b: string) {
+  return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase()
+}
+
+function SkillSection({ section }: { section: SkillSectionGroup }) {
+  const { t } = useTranslation(['components'])
+
+  return (
+    <section className="pb-1">
+      <div className="sticky top-0 z-10 flex h-7 items-center bg-bg-100/95 px-2 text-[length:var(--fs-xs)] font-medium text-text-400 backdrop-blur-sm">
+        {section.title}
+      </div>
+      {section.groups.length === 0 ? (
+        section.projects && section.projects.length > 0 ? (
+          section.projects.map(project => <SkillProject key={project.id} project={project} />)
+        ) : (
+          <div className="px-2 py-2 text-[length:var(--fs-sm)] text-text-500">{t('skillPanel.noSkillsInGroup')}</div>
+        )
+      ) : (
+        <>
+          {section.groups.map(group => <SkillSource key={group.id} group={group} />)}
+          {section.projects?.map(project => <SkillProject key={project.id} project={project} />)}
+        </>
+      )}
+    </section>
+  )
+}
+
+function SkillProject({ project }: { project: SkillProjectGroup }) {
+  return (
+    <div className="pb-1">
+      <div className="mx-2 mt-1 flex min-h-8 flex-col justify-center rounded-md bg-bg-200/35 px-2 py-1">
+        <div className="truncate text-[length:var(--fs-sm)] font-medium text-text-200">{project.name}</div>
+        <div className="truncate font-mono text-[length:var(--fs-xs)] text-text-500" title={project.displayPath}>{project.displayPath}</div>
+      </div>
+      <div className="pl-2">
+        {project.groups.map(group => <SkillSource key={group.id} group={group} />)}
+      </div>
+    </div>
+  )
+}
+
+function SkillSource({ group }: { group: SkillSourceGroup }) {
+  return (
+    <div className="pb-1">
+      <div className="flex min-h-7 items-center gap-1.5 px-2 text-[length:var(--fs-xs)] text-text-500">
+        <span className="shrink-0">{group.label}</span>
+        <span className="text-text-600">|</span>
+        <span className="min-w-0 truncate font-mono" title={group.detail}>{group.detail}</span>
+      </div>
+      {group.skills.map(skill => (
+        <SkillItem key={skill.name} skill={skill} sourcePath={group.displayPath} />
+      ))}
+    </div>
+  )
+}
+
 // ============================================
 // SkillItem Component
 // ============================================
 
-const SkillItem = memo(function SkillItem({ skill }: { skill: Skill }) {
+const SkillItem = memo(function SkillItem({ skill, sourcePath }: { skill: Skill; sourcePath: string }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -644,6 +948,7 @@ const SkillItem = memo(function SkillItem({ skill }: { skill: Skill }) {
 
         <div className="flex-1 min-w-0">
           <div className="text-[length:var(--fs-base)] text-text-100 font-medium">{skill.name}</div>
+          <div className="text-[length:var(--fs-xs)] text-text-500 truncate font-mono">{sourcePath}</div>
           <div className="text-[length:var(--fs-sm)] text-text-400 truncate">{skill.description ?? ''}</div>
         </div>
       </button>
