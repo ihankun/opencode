@@ -1108,13 +1108,13 @@ export function SidePanel({
       <div className="mobile-safe-topbar-14 window-drag-region shrink-0" />
 
       {/* ===== Navigation - 图标位置固定 ===== */}
-      <div className="flex flex-col gap-0.5 mx-2">
+      <div className="flex flex-col gap-0 mx-2">
         {/* New Chat - 图标始终在 padding-left: 6px 位置，收起时刚好居中 */}
         <button
           type="button"
           onClick={onNewSession}
           aria-label={t('sidebar.newChat')}
-          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 group overflow-hidden"
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 group overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1143,7 +1143,7 @@ export function SidePanel({
           type="button"
           onClick={() => setSearchDialogOpen(true)}
           aria-label={t('sidebar.search')}
-          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1166,7 +1166,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenSkills}
           aria-label={t('sidebar.skills')}
-          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1189,7 +1189,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenPlugins}
           aria-label={t('sidebar.plugins')}
-          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1212,7 +1212,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenMcp}
           aria-label={t('sidebar.mcpServers')}
-          className="h-8 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1232,8 +1232,8 @@ export function SidePanel({
         </button>
 
         {showLabels && (
-          <section className="mt-3">
-            <div className="mb-1 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
+          <section className="mt-2">
+            <div className="mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
               <span>{t('sidebar.projects')}</span>
               <button
                 type="button"
@@ -1276,10 +1276,10 @@ export function SidePanel({
                   <div key={project.id}>
                     <div
                       onClick={() => handleSelectProject(project.id)}
-                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors ${
+                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors ${
                         isActive
                           ? 'sidebar-selected-row text-text-100'
-                          : 'text-text-300 hover:text-text-100 hover:bg-bg-200/50'
+                          : 'text-text-300 hover:text-text-100 hover:bg-bg-200/45'
                       }`}
                     >
                       <button
@@ -1338,7 +1338,7 @@ export function SidePanel({
                       isExpanded &&
                       sidebarTab === 'recents' &&
                       (projectSessionSource.sessions.length > 0 || projectSessionSource.isLoading || search) && (
-                        <div className="ml-7 mt-0.5 mb-1">
+                        <div className="ml-7 mt-0.5 mb-0.5">
                           <SessionList
                             sessions={projectSessionSource.sessions}
                             selectedId={selectedSessionId}
@@ -1386,7 +1386,7 @@ export function SidePanel({
       >
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="mx-2 flex shrink-0 items-center gap-1">
-            <div className="pl-[6px] py-1.5 text-left text-[length:var(--fs-sm)] text-text-500">
+            <div className="pl-[6px] py-1 text-left text-[length:var(--fs-sm)] text-text-500">
               {t('sidebar.conversations')}
             </div>
             {attentionCount > 0 && (

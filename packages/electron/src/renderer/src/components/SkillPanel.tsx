@@ -34,7 +34,7 @@ interface SkillPanelProps {
 
 export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, showHeader = true }: SkillPanelProps) {
   const { t } = useTranslation(['components', 'common'])
-  const { currentDirectory } = useDirectory()
+  const { currentDirectory, pathInfo } = useDirectory()
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -159,7 +159,7 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
 
       {dialog === 'create' && (
         <SkillCreateDialog
-          currentDirectory={currentDirectory}
+          homeDirectory={pathInfo?.home}
           onClose={() => setDialog(null)}
           onDone={() => {
             setDialog(null)
@@ -169,7 +169,7 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
       )}
       {dialog === 'github' && (
         <SkillGithubDialog
-          currentDirectory={currentDirectory}
+          homeDirectory={pathInfo?.home}
           onClose={() => setDialog(null)}
           onDone={() => {
             setDialog(null)
@@ -243,7 +243,7 @@ function SkillPanelActions(props: {
   )
 }
 
-function SkillCreateDialog(props: { currentDirectory?: string; onClose: () => void; onDone: () => void }) {
+function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void; onDone: () => void }) {
   const { t } = useTranslation(['components', 'common'])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -256,7 +256,7 @@ function SkillCreateDialog(props: { currentDirectory?: string; onClose: () => vo
       setSubmitting(true)
       setError(null)
       await createLocalSkill({
-        currentDirectory: props.currentDirectory,
+        homeDirectory: props.homeDirectory,
         name,
         description,
         content,
@@ -300,7 +300,7 @@ function SkillCreateDialog(props: { currentDirectory?: string; onClose: () => vo
   )
 }
 
-function SkillGithubDialog(props: { currentDirectory?: string; onClose: () => void; onDone: () => void }) {
+function SkillGithubDialog(props: { homeDirectory?: string; onClose: () => void; onDone: () => void }) {
   const { t } = useTranslation(['components', 'common'])
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
@@ -312,7 +312,7 @@ function SkillGithubDialog(props: { currentDirectory?: string; onClose: () => vo
       setSubmitting(true)
       setError(null)
       await importGithubSkill({
-        currentDirectory: props.currentDirectory,
+        homeDirectory: props.homeDirectory,
         url,
         name,
       })
@@ -444,14 +444,14 @@ function SkillDialogActions(props: {
 }
 
 async function createLocalSkill(input: {
-  currentDirectory?: string
+  homeDirectory?: string
   name: string
   description: string
   content: string
 }) {
-  const directory = requireProjectDirectory(input.currentDirectory)
+  const directory = requireHomeDirectory(input.homeDirectory)
   const name = normalizeSkillName(input.name)
-  const skillDir = joinPath(directory, '.opencode', 'skills', name)
+  const skillDir = joinPath(directory, '.opencodex', 'skills', name)
   const body = [
     '---',
     `name: ${name}`,
@@ -464,17 +464,17 @@ async function createLocalSkill(input: {
   await writeSkillFiles(skillDir, [{ path: 'SKILL.md', content: body }])
 }
 
-async function importGithubSkill(input: { currentDirectory?: string; url: string; name: string }) {
-  const directory = requireProjectDirectory(input.currentDirectory)
+async function importGithubSkill(input: { homeDirectory?: string; url: string; name: string }) {
+  const directory = requireHomeDirectory(input.homeDirectory)
   const source = parseGithubUrl(input.url)
   const files = await fetchGithubFiles(source)
   const name = normalizeSkillName(input.name || source.name)
-  await writeSkillFiles(joinPath(directory, '.opencode', 'skills', name), files)
+  await writeSkillFiles(joinPath(directory, '.opencodex', 'skills', name), files)
 }
 
-function requireProjectDirectory(currentDirectory?: string) {
-  if (!currentDirectory) throw new Error('No project directory is selected.')
-  return currentDirectory
+function requireHomeDirectory(homeDirectory?: string) {
+  if (!homeDirectory) throw new Error('Home directory is not available.')
+  return homeDirectory
 }
 
 function normalizeSkillName(value: string) {

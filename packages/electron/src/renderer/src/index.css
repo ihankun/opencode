@@ -525,8 +525,8 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 }
 
 :root:root[data-theme-preset='codex'] {
-  --sidebar-bg: 210 20% 97%;
-  --sidebar-selected-bg: 210 8% 91%;
+  --sidebar-bg: 210 18% 96%;
+  --sidebar-selected-bg: 210 8% 86%;
   --chat-bg: 0 0% 100%;
 }
 
@@ -577,13 +577,13 @@ html.electron-app[data-theme-preset='codex'][data-glass] .desktop-titlebar-surfa
 }
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.34);
+  background-color: hsl(var(--sidebar-bg) / 0.26);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   backdrop-filter: blur(40px) saturate(200%);
 }
 
 :root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.34);
+  background-color: hsl(var(--sidebar-bg) / 0.26);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   backdrop-filter: blur(40px) saturate(200%);
 }
@@ -608,7 +608,7 @@ html.electron-app[data-theme-preset='codex'][data-glass] .desktop-titlebar-surfa
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-selected-row,
 :root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-selected-row {
-  background-color: hsl(var(--sidebar-selected-bg) / 0.42);
+  background-color: hsl(var(--sidebar-selected-bg) / 0.74);
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-selected-row {

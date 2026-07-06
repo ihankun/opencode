@@ -178,7 +178,7 @@ export function SessionList({
       <div
         ref={listRef}
         className={`${embedded ? 'max-h-52' : 'flex-1'} overflow-y-auto custom-scrollbar px-2 ${
-          isCompact ? 'pb-2 space-y-1' : 'pb-4 space-y-4'
+          isCompact ? 'pb-2 space-y-0.5' : 'pb-4 space-y-4'
         }`}
       >
         {isLoading && sessions.length === 0 ? (
@@ -201,7 +201,7 @@ export function SessionList({
                 <h3 className="px-3 mb-1.5 mt-2 text-[length:var(--fs-xxs)] font-bold text-text-400/60 uppercase tracking-widest select-none">
                   {t(`sessions.groups.${group}`)}
                 </h3>
-                <div className="space-y-0.5">
+                <div className="space-y-0">
                   {groupSessions.map(session => (
                     <div key={session.id}>
                       <SessionListItem
@@ -243,7 +243,7 @@ export function SessionList({
           })
         ) : (
           // Flat View
-          <div className="space-y-0.5 mt-1">
+          <div className="space-y-0 mt-0.5">
             {sessions.map(session => {
               const inlineChildren = inlineChildSessions?.get(session.id)
               const shouldFetchAll = expandedChildSessionIds?.has(session.id)
@@ -567,13 +567,13 @@ export function SessionListItem({
         onTouchStart={!isEditMode ? handleTouchStart : undefined}
         onTouchMove={!isEditMode ? handleTouchMove : undefined}
         onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
-        className={`group relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-default transition-colors duration-150 select-none ${
+        className={`group relative flex items-center gap-2 px-2 py-1 rounded-md cursor-default transition-colors duration-150 select-none ${
           isSelected && !isEditMode
             ? 'sidebar-selected-row text-text-100'
             : isEditMode && isChecked
               ? 'text-text-100'
-              : 'text-text-300 hover:bg-bg-200/40 hover:text-text-200'
-        } ${showActions && !isEditMode ? 'bg-bg-200/40' : ''}`}
+              : 'text-text-300 hover:bg-bg-200/35 hover:text-text-200'
+        } ${showActions && !isEditMode ? 'bg-bg-200/35' : ''}`}
       >
         {/* 选中左侧色条 */}
         {isEditMode && isChecked && (
