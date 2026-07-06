@@ -20,8 +20,6 @@ import {
   CloseIcon,
   SpinnerIcon,
   ChevronRightIcon,
-  TeachIcon,
-  PlugIcon,
   PackagePlusIcon,
 } from '../../../components/Icons'
 import { useDirectory, useSessionStats, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
@@ -56,8 +54,6 @@ interface SidePanelProps {
   onCloseMobile?: () => void
   selectedSessionId: string | null
   onAddProject: () => void
-  onOpenSkills?: () => void
-  onOpenMcp?: () => void
   onOpenPlugins?: () => void
   isMobile?: boolean
   isExpanded?: boolean
@@ -116,8 +112,6 @@ export function SidePanel({
   onCloseMobile,
   selectedSessionId,
   onAddProject,
-  onOpenSkills,
-  onOpenMcp,
   onOpenPlugins,
   isMobile = false,
   isExpanded = true,
@@ -1183,29 +1177,6 @@ export function SidePanel({
 
         <button
           type="button"
-          onClick={onOpenSkills}
-          aria-label={t('sidebar.skills')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
-          style={{
-            width: showLabels ? '100%' : 32,
-            paddingLeft: 6,
-            paddingRight: 6,
-          }}
-          title={t('sidebar.skills')}
-        >
-          <span className="size-5 flex items-center justify-center shrink-0">
-            <TeachIcon size={16} />
-          </span>
-          <span
-            className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
-            style={{ opacity: showLabels ? 1 : 0 }}
-          >
-            {t('sidebar.skills')}
-          </span>
-        </button>
-
-        <button
-          type="button"
           onClick={onOpenPlugins}
           aria-label={t('sidebar.plugins')}
           className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
@@ -1224,29 +1195,6 @@ export function SidePanel({
             style={{ opacity: showLabels ? 1 : 0 }}
           >
             {t('sidebar.plugins')}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenMcp}
-          aria-label={t('sidebar.mcpServers')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
-          style={{
-            width: showLabels ? '100%' : 32,
-            paddingLeft: 6,
-            paddingRight: 6,
-          }}
-          title={t('sidebar.mcpServers')}
-        >
-          <span className="size-5 flex items-center justify-center shrink-0">
-            <PlugIcon size={16} />
-          </span>
-          <span
-            className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
-            style={{ opacity: showLabels ? 1 : 0 }}
-          >
-            {t('sidebar.mcpServers')}
           </span>
         </button>
 

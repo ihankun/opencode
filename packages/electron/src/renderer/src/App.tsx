@@ -65,6 +65,7 @@ const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
 type MainUtilityPage = 'skills' | 'mcp' | 'plugins'
+const MAIN_UTILITY_TABS: MainUtilityPage[] = ['skills', 'plugins', 'mcp']
 
 function ElectronSidebarToggle({
   expanded,
@@ -307,24 +308,8 @@ function App() {
     [getMobilePageScrollLeft],
   )
 
-  const openSkillsPage = useCallback(() => {
-    setUtilityPage('skills')
-    if (isMobilePanelLayout) {
-      scrollMobilePagerTo('chat')
-      setSidebarExpanded(false)
-    }
-  }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
-
-  const openMcpPage = useCallback(() => {
-    setUtilityPage('mcp')
-    if (isMobilePanelLayout) {
-      scrollMobilePagerTo('chat')
-      setSidebarExpanded(false)
-    }
-  }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
-
   const openPluginPage = useCallback(() => {
-    setUtilityPage('plugins')
+    setUtilityPage('skills')
     if (isMobilePanelLayout) {
       scrollMobilePagerTo('chat')
       setSidebarExpanded(false)
@@ -962,6 +947,26 @@ function App() {
   )
   const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border-200/30 px-3">
+        {MAIN_UTILITY_TABS.map(tab => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setUtilityPage(tab)}
+            className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${
+              utilityPage === tab
+                ? 'bg-bg-200 text-text-100'
+                : 'text-text-400 hover:bg-bg-200/60 hover:text-text-100'
+            }`}
+          >
+            {tab === 'skills'
+              ? t('chat:sidebar.skills')
+              : tab === 'plugins'
+                ? t('chat:sidebar.plugins')
+                : t('chat:sidebar.mcpServers')}
+          </button>
+        ))}
+      </div>
       <Suspense fallback={null}>
         {utilityPage === 'mcp' ? (
           <McpPanel />
@@ -1031,8 +1036,6 @@ function App() {
                     onClose={handleCloseSidebar}
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
-                    onOpenSkills={openSkillsPage}
-                    onOpenMcp={openMcpPage}
                     onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
@@ -1124,8 +1127,6 @@ function App() {
                   onClose={handleCloseSidebar}
                   contextLimit={focusedController?.contextLimit}
                   onOpenSettings={openSettings}
-                  onOpenSkills={openSkillsPage}
-                  onOpenMcp={openMcpPage}
                   onOpenPlugins={openPluginPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
@@ -1147,8 +1148,6 @@ function App() {
                     onClose={handleCloseSidebar}
                     contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
-                    onOpenSkills={openSkillsPage}
-                    onOpenMcp={openMcpPage}
                     onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
