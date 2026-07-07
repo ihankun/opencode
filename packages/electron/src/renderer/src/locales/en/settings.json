@@ -204,8 +204,6 @@
     "modeAuto": "Auto",
     "modeLight": "Light",
     "modeDark": "Dark",
-    "wideMode": "Wide Mode",
-    "wideModeDesc": "Expand chat area for long outputs",
     "glassEffect": "Frosted Glass",
     "glassEffectDesc": "Apply backdrop blur to floating panels like input box, menus, and dialogs",
     "diffStyle": "Diff Gutter Style",

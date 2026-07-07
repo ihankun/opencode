@@ -27,7 +27,6 @@ import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
 import { MessageErrorView } from '../message/parts'
 import { messageStore } from '../../store'
-import { useTheme } from '../../hooks/useTheme'
 import type { Message, MessageError } from '../../types/message'
 import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInline'
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
@@ -192,11 +191,10 @@ export const ChatArea = memo(
 
       const loadMoreBlockedRef = useRef(true)
 
-      const { isWideMode } = useTheme()
       const { presentation } = useChatViewport()
       const atBottomThreshold = presentation.isCompact ? 150 : AT_BOTTOM_THRESHOLD_PX
       const messagePaddingClass = presentation.isCompact ? 'px-3' : 'px-4'
-      const messageMaxWidthClass = isWideMode ? 'max-w-[95%] xl:max-w-7xl' : 'max-w-[min(76rem,calc(100%-5rem))]'
+      const messageMaxWidthClass = 'max-w-[95%] xl:max-w-7xl'
       const shouldUseExternalViewModel = pageRecords != null && visibleMessagesProp != null
       const visibleMessageEntries = useMemo(
         () => (shouldUseExternalViewModel ? [] : buildVisibleMessageEntries(messages)),

@@ -6,8 +6,6 @@ import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './Setting
 export function WorkspaceSettings() {
   const { t } = useTranslation(['settings'])
   const {
-    isWideMode,
-    toggleWideMode,
     diffStyle,
     setDiffStyle,
     codeWordWrap,
@@ -28,14 +26,6 @@ export function WorkspaceSettings() {
     <div>
       <SettingsSection title={t('workspace.layout')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('workspace.layoutDesc')}</p>
-
-        <SettingRow
-          label={t('appearance.wideMode')}
-          description={t('appearance.wideModeDesc')}
-          onClick={toggleWideMode}
-        >
-          <Toggle enabled={isWideMode} onChange={toggleWideMode} />
-        </SettingRow>
 
         <SettingRow
           label={t('appearance.wakeLock')}

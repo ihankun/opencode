@@ -204,8 +204,6 @@
     "modeAuto": "自动",
     "modeLight": "浅色",
     "modeDark": "深色",
-    "wideMode": "宽屏模式",
-    "wideModeDesc": "展开对话区域以适应长输出",
     "glassEffect": "毛玻璃效果",
     "glassEffectDesc": "对输入框、菜单、对话框等浮层启用背景模糊效果",
     "diffStyle": "Diff 边栏样式",

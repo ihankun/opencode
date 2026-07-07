@@ -8,8 +8,6 @@ import {
   SunIcon,
   MoonIcon,
   SystemIcon,
-  MaximizeIcon,
-  MinimizeIcon,
   ShareIcon,
 } from '../../../components/Icons'
 import { CircularProgress } from '../../../components/CircularProgress'
@@ -76,7 +74,7 @@ export interface SidebarFooterProps {
 
 export function SidebarFooter({ showLabels, connectionState, stats, hasMessages, onOpenSettings }: SidebarFooterProps) {
   const { t } = useTranslation(['chat', 'common'])
-  const { mode: themeMode, setThemeWithAnimation: onThemeChange, isWideMode, toggleWideMode } = useTheme()
+  const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -290,19 +288,6 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
 
           {/* Menu Items */}
           <div className="p-1">
-            {toggleWideMode && (
-              <button
-                onClick={() => {
-                  toggleWideMode()
-                  closeMenu()
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-              >
-                {isWideMode ? <MinimizeIcon size={14} /> : <MaximizeIcon size={14} />}
-                <span>{isWideMode ? t('sidebar.standardWidth') : t('sidebar.wideMode')}</span>
-              </button>
-            )}
-
             <button
               onClick={() => {
                 closeMenu()

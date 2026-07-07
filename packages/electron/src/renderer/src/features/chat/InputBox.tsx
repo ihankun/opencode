@@ -1325,7 +1325,7 @@ function InputBoxComponent({
   return (
     <div className="w-full">
       <div
-        className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out ${homeMode ? 'max-w-[min(78rem,calc(100%-6rem))]' : 'max-w-[min(76rem,calc(100%-5rem))]'} ${isCompact ? 'px-2' : 'px-4'}`}
+        className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out max-w-[95%] xl:max-w-7xl ${isCompact ? 'px-2' : 'px-4'}`}
         style={{ paddingBottom: bottomDockPadding }}
       >
         {homeMode && (

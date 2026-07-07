@@ -269,10 +269,6 @@ export function useTheme() {
     reasoningDisplayMode: state.reasoningDisplayMode,
     setReasoningDisplayMode,
 
-    // 宽模式
-    isWideMode: state.wideMode,
-    toggleWideMode: themeStore.toggleWideMode.bind(themeStore),
-
     // Diff 行标记风格
     diffStyle: state.diffStyle,
     setDiffStyle,
