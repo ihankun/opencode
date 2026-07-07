@@ -37,10 +37,12 @@ import {
   forkSession,
   extractUserMessageContent,
   type ApiPermissionRequest,
+  type ApiQuestionRequest,
   type ApiSession,
   type ApiAgent,
   type Attachment,
   type ModelInfo,
+  type SessionErrorPayload,
 } from '../api'
 import { getMessageText, isUserMessage, type AssistantMessageInfo, type Message as UIMessage } from '../types/message'
 import { clipboardErrorHandler, copyTextToClipboard, createErrorHandler, isSameDirectory } from '../utils'
@@ -77,6 +79,8 @@ const EMPTY_SESSION_STATE = {
   title: null,
 } as const
 
+const COMPLETED_NOTIFICATION_MAX_LENGTH = 180
+
 interface UseChatSessionOptions {
   paneId: string
   chatAreaRef: React.RefObject<ChatAreaHandle | null>
@@ -92,6 +96,31 @@ interface LiveRetryStatus {
   attempt: number
   message: string
   next: number
+}
+
+function buildCompletedNotificationBody(messages: UIMessage[]) {
+  const lastAssistant = [...messages].reverse().find(message => message.info.role === 'assistant')
+  const text = lastAssistant ? getMessageText(lastAssistant).replace(/\s+/g, ' ').trim() : ''
+
+  if (!text) return '会话已完成'
+  if (text.length <= COMPLETED_NOTIFICATION_MAX_LENGTH) return text
+  return `${text.slice(0, COMPLETED_NOTIFICATION_MAX_LENGTH).trimEnd()}.....`
+}
+
+function buildPermissionNotificationBody(request: ApiPermissionRequest) {
+  const pattern = request.patterns?.[0]
+  if (pattern) return `需要确认：${request.permission}（${pattern}）`
+  return `需要确认：${request.permission}`
+}
+
+function buildQuestionNotificationBody(request: ApiQuestionRequest) {
+  return request.questions?.[0]?.header || 'AI 正在等待你的输入'
+}
+
+function buildErrorNotificationBody(error: SessionErrorPayload) {
+  if (typeof error.data === 'string' && error.data.trim()) return error.data.trim()
+  if (error.name && error.name !== 'UnknownError') return `错误类型：${error.name}`
+  return '会话执行出错'
 }
 
 export function useChatSession({
@@ -378,7 +407,7 @@ export function useChatSession({
   // ============================================
   const sseCallbacks = useMemo(
     () => ({
-      onPermissionAsked: (request: import('../api').ApiPermissionRequest) => {
+      onPermissionAsked: (request: ApiPermissionRequest) => {
         // Full Auto 会话级：当前 session 的 handler 天然只处理当前 session 的请求
         const effectiveFullAutoMode = autoApproveStore.getPaneFullAutoMode(paneId)
         if (effectiveFullAutoMode === 'session') {
@@ -402,13 +431,15 @@ export function useChatSession({
         })
 
         // 页面不在前台时通知用户有权限请求等待批准
-        const permDesc = request.patterns?.length ? `${request.permission}: ${request.patterns[0]}` : request.permission
-        const title = buildNotificationTitle(request.sessionID, 'Permission Required')
         if (notificationEventSettingsStore.isSystemEnabled('permission')) {
-          sendNotification(title, permDesc, {
-            sessionId: request.sessionID,
-            directory: effectiveDirectory,
-          })
+          sendNotification(
+            buildNotificationTitle(request.sessionID, '权限请求'),
+            buildPermissionNotificationBody(request),
+            {
+              sessionId: request.sessionID,
+              directory: effectiveDirectory,
+            },
+          )
         }
         // 应用内 toast 已在 useGlobalEvents 中统一处理
       },
@@ -417,20 +448,22 @@ export function useChatSession({
           prev.some(r => r.id === data.requestID) ? prev.filter(r => r.id !== data.requestID) : prev,
         )
       },
-      onQuestionAsked: (request: import('../api').ApiQuestionRequest) => {
+      onQuestionAsked: (request: ApiQuestionRequest) => {
         setPendingQuestionRequests(prev => {
           if (prev.some(r => r.id === request.id)) return prev
           return [...prev, request]
         })
 
         // 页面不在前台时通知用户有问题等待回答
-        const questionDesc = request.questions?.[0]?.header || 'AI is waiting for your input'
-        const title = buildNotificationTitle(request.sessionID, 'Question')
         if (notificationEventSettingsStore.isSystemEnabled('question')) {
-          sendNotification(title, questionDesc, {
-            sessionId: request.sessionID,
-            directory: effectiveDirectory,
-          })
+          sendNotification(
+            buildNotificationTitle(request.sessionID, '需要回答'),
+            buildQuestionNotificationBody(request),
+            {
+              sessionId: request.sessionID,
+              directory: effectiveDirectory,
+            },
+          )
         }
         // 应用内 toast 已在 useGlobalEvents 中统一处理
       },
@@ -445,23 +478,29 @@ export function useChatSession({
       },
       onSessionIdle: (sessionID: string) => {
         // 页面不在前台时发送浏览器通知
-        const title = buildNotificationTitle(sessionID, 'Session completed')
         if (notificationEventSettingsStore.isSystemEnabled('completed')) {
-          sendNotification(title, 'Session completed', {
-            sessionId: sessionID,
-            directory: effectiveDirectory,
-          })
+          sendNotification(
+            getSessionTitle(sessionID),
+            buildCompletedNotificationBody(messageStore.getVisibleMessages(sessionID)),
+            {
+              sessionId: sessionID,
+              directory: effectiveDirectory,
+            },
+          )
         }
         // 应用内 toast 已在 useGlobalEvents 中统一处理
       },
-      onSessionError: (sessionID: string) => {
+      onSessionError: (error: SessionErrorPayload) => {
         // 页面不在前台时通知用户 session 出错
-        const title = buildNotificationTitle(sessionID, 'Session error')
         if (notificationEventSettingsStore.isSystemEnabled('error')) {
-          sendNotification(title, 'Session error', {
-            sessionId: sessionID,
-            directory: effectiveDirectory,
-          })
+          sendNotification(
+            buildNotificationTitle(error.sessionID, '执行出错'),
+            buildErrorNotificationBody(error),
+            {
+              sessionId: error.sessionID,
+              directory: effectiveDirectory,
+            },
+          )
         }
         // 应用内 toast 已在 useGlobalEvents 中统一处理
       },
@@ -493,6 +532,7 @@ export function useChatSession({
       setPendingPermissionRequests,
       setPendingQuestionRequests,
       buildNotificationTitle,
+      getSessionTitle,
       sendNotification,
       loadSession,
       refreshPendingRequests,
@@ -516,7 +556,7 @@ export function useChatSession({
       onQuestionRejected: data => sseCallbacksRef.current.onQuestionRejected(data),
       onScrollRequest: () => sseCallbacksRef.current.onScrollRequest(),
       onSessionIdle: sid => sseCallbacksRef.current.onSessionIdle(sid),
-      onSessionError: sid => sseCallbacksRef.current.onSessionError(sid),
+      onSessionError: error => sseCallbacksRef.current.onSessionError(error),
       onReconnected: reason => sseCallbacksRef.current.onReconnected(reason),
     })
 

@@ -1,4 +1,7 @@
-import { STORAGE_KEY_NOTIFICATIONS_ENABLED } from '../constants/storage'
+import {
+  STORAGE_KEY_NOTIFICATIONS_ENABLED,
+  STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED,
+} from '../constants/storage'
 import {
   exportLayoutBackup,
   exportNotificationEventSettingsBackup,
@@ -35,6 +38,7 @@ const BACKUP_SCHEMA_VERSION = 2
 
 export interface NotificationBackup {
   browserNotificationsEnabled: boolean
+  browserNotificationsOnlyWhenUnfocused: boolean
   toast: NotificationPreferencesBackup
   events: NotificationEventSettingsBackup
 }
@@ -62,6 +66,8 @@ export interface SettingsBackupFile {
 function exportNotificationBackup(): NotificationBackup {
   return {
     browserNotificationsEnabled: localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_ENABLED) === 'true',
+    browserNotificationsOnlyWhenUnfocused:
+      localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED) === 'true',
     toast: exportNotificationPreferencesBackup(),
     events: exportNotificationEventSettingsBackup(),
   }
@@ -70,11 +76,18 @@ function exportNotificationBackup(): NotificationBackup {
 function importNotificationBackup(raw: unknown): void {
   const parsed = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : undefined
   const browserNotificationsEnabled = parsed?.browserNotificationsEnabled === true
+  const browserNotificationsOnlyWhenUnfocused = parsed?.browserNotificationsOnlyWhenUnfocused === true
 
   if (browserNotificationsEnabled) {
     localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_ENABLED, 'true')
   } else {
     localStorage.removeItem(STORAGE_KEY_NOTIFICATIONS_ENABLED)
+  }
+
+  if (browserNotificationsOnlyWhenUnfocused) {
+    localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED, 'true')
+  } else {
+    localStorage.removeItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED)
   }
 
   importNotificationPreferencesBackup(parsed?.toast)

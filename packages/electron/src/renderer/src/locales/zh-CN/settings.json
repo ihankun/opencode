@@ -260,6 +260,8 @@
     "notificationsLabel": "通知",
     "blockedByBrowser": "已被浏览器阻止",
     "notifyWhenComplete": "AI 完成响应时通知",
+    "onlyWhenUnfocused": "只有在失焦时提醒",
+    "onlyWhenUnfocusedDesc": "应用在前台并处于焦点时不发送系统通知",
     "testNotification": "测试通知",
     "sendSampleDesc": "发送一条示例通知",
     "enableToTest": "启用通知以进行测试",

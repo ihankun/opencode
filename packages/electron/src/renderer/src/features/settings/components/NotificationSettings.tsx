@@ -352,6 +352,8 @@ export function NotificationSettings() {
   const {
     enabled: notificationsEnabled,
     setEnabled: setNotificationsEnabled,
+    onlyWhenUnfocused: notificationsOnlyWhenUnfocused,
+    setOnlyWhenUnfocused: setNotificationsOnlyWhenUnfocused,
     supported: notificationsSupported,
     permission: notificationPermission,
     sendNotification,
@@ -364,7 +366,9 @@ export function NotificationSettings() {
   const handleTestNotification = async () => {
     setTestSending(true)
     try {
-      const sent = await sendNotification(t('notifications.testTitle'), t('notifications.testBody'))
+      const sent = await sendNotification(t('notifications.testTitle'), t('notifications.testBody'), undefined, {
+        bypassFocusCheck: true,
+      })
       if (!sent) {
         notificationStore.push(
           'error',
@@ -411,6 +415,19 @@ export function NotificationSettings() {
                     }
                   />
                 </SettingRow>
+
+                {notificationsEnabled && notificationPermission !== 'denied' && (
+                  <SettingRow
+                    label={t('notifications.onlyWhenUnfocused')}
+                    description={t('notifications.onlyWhenUnfocusedDesc')}
+                    onClick={() => setNotificationsOnlyWhenUnfocused(!notificationsOnlyWhenUnfocused)}
+                  >
+                    <Toggle
+                      enabled={notificationsOnlyWhenUnfocused}
+                      onChange={() => setNotificationsOnlyWhenUnfocused(!notificationsOnlyWhenUnfocused)}
+                    />
+                  </SettingRow>
+                )}
 
                 <SettingRow
                   label={t('notifications.testNotification')}

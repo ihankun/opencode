@@ -260,6 +260,8 @@
     "notificationsLabel": "Notifications",
     "blockedByBrowser": "Blocked by browser",
     "notifyWhenComplete": "Notify when AI completes a response",
+    "onlyWhenUnfocused": "Only notify when unfocused",
+    "onlyWhenUnfocusedDesc": "Do not send system notifications while the app is visible and focused",
     "testNotification": "Test Notification",
     "sendSampleDesc": "Send a sample notification",
     "enableToTest": "Enable notifications to test",

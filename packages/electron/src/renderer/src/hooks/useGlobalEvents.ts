@@ -18,7 +18,7 @@ import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
 import { subscribeToEvents, getSessionStatus, getPendingPermissions, getPendingQuestions } from '../api'
 import { replyPermission } from '../api/permission'
 import { autoApproveStore } from '../store/autoApproveStore'
-import type { ApiMessage, ApiPart, ApiPermissionRequest, ApiQuestionRequest } from '../api/types'
+import type { ApiMessage, ApiPart, ApiPermissionRequest, ApiQuestionRequest, SessionErrorPayload } from '../api/types'
 import type { SessionStatusMap } from '../types/api/session'
 
 // ============================================
@@ -37,7 +37,7 @@ export interface SessionEventCallbacks {
   onQuestionRejected?: (data: { sessionID: string; requestID: string }) => void
   onScrollRequest?: () => void
   onSessionIdle?: (sessionID: string) => void
-  onSessionError?: (sessionID: string) => void
+  onSessionError?: (error: SessionErrorPayload) => void
   onReconnected?: (reason: 'network' | 'server-switch') => void
 }
 
@@ -468,12 +468,12 @@ export function useGlobalEvents(directories?: string[]) {
           if (!belongsToCurrentSession(error.sessionID)) {
             const meta = activeSessionStore.getSessionMeta(error.sessionID)
             const sessionLabel = meta?.title || error.sessionID.slice(0, 8)
-            notificationStore.push('error', sessionLabel, 'Session error', error.sessionID, meta?.directory)
+            notificationStore.push('error', sessionLabel, '会话执行出错', error.sessionID, meta?.directory)
           } else if (isSessionDirectlyOpen(error.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
             playNotificationSoundDeduped('error')
           }
         }
-        dispatchToConsumers(error.sessionID, cb => cb.onSessionError?.(error.sessionID))
+        dispatchToConsumers(error.sessionID, cb => cb.onSessionError?.(error))
       },
 
       onSessionUpdated: session => {
@@ -540,7 +540,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知 — 不属于当前 session family 的才弹
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('permission', `${sessionLabel} — Permission`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('permission', `${sessionLabel} — 权限请求`, desc, request.sessionID, meta?.directory)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           // 当前会话：如果开启了当前会话提示音
           playNotificationSoundDeduped('permission')
@@ -564,7 +564,7 @@ export function useGlobalEvents(directories?: string[]) {
       onQuestionAsked: request => {
         const meta = activeSessionStore.getSessionMeta(request.sessionID)
         const sessionLabel = meta?.title || request.sessionID.slice(0, 8)
-        const desc = request.questions?.[0]?.header || 'AI is waiting for your input'
+        const desc = request.questions?.[0]?.header || 'AI 正在等待你的输入'
 
         // Active 列表：注册 pending request
         activeSessionStore.addPendingRequest(request.id, request.sessionID, 'question', desc)
@@ -581,7 +581,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('question', `${sessionLabel} — Question`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('question', `${sessionLabel} — 需要回答`, desc, request.sessionID, meta?.directory)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           playNotificationSoundDeduped('question')
         }
@@ -627,7 +627,7 @@ export function useGlobalEvents(directories?: string[]) {
         if (wasBusy && data.status.type === 'idle' && !belongsToCurrentSession(data.sessionID)) {
           const meta = activeSessionStore.getSessionMeta(data.sessionID)
           const sessionLabel = meta?.title || data.sessionID.slice(0, 8)
-          notificationStore.push('completed', sessionLabel, 'Session completed', data.sessionID, meta?.directory)
+          notificationStore.push('completed', sessionLabel, '会话已完成', data.sessionID, meta?.directory)
         } else if (
           wasBusy &&
           data.status.type === 'idle' &&

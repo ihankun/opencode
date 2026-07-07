@@ -10,7 +10,10 @@
 // ServiceWorkerRegistration.showNotification() 发送
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { STORAGE_KEY_NOTIFICATIONS_ENABLED } from '../constants/storage'
+import {
+  STORAGE_KEY_NOTIFICATIONS_ENABLED,
+  STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED,
+} from '../constants/storage'
 import { isTauri } from '../utils/tauri'
 
 // ============================================
@@ -20,6 +23,10 @@ import { isTauri } from '../utils/tauri'
 interface NotificationData {
   sessionId: string
   directory?: string
+}
+
+interface NotificationSendOptions {
+  bypassFocusCheck?: boolean
 }
 
 // ============================================
@@ -94,6 +101,10 @@ function hasElectronNotificationBridge() {
   return typeof window !== 'undefined' && typeof window.customOpenCode?.sendNotification === 'function'
 }
 
+function isAppVisibleAndFocused() {
+  return typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
+}
+
 async function checkElectronPermission(): Promise<NotificationPermission> {
   if (typeof Notification !== 'undefined') return Notification.permission
   if (typeof window.customOpenCode?.notificationPermission !== 'function') return 'denied'
@@ -133,6 +144,14 @@ export function useNotification() {
     }
   })
 
+  const [onlyWhenUnfocused, setOnlyWhenUnfocusedState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED) === 'true'
+    } catch {
+      return false
+    }
+  })
+
   const [permission, setPermission] = useState<NotificationPermission>(() => {
     if (hasElectronNotificationBridge()) return 'default'
     if (isTauri()) return 'default' // Tauri 异步检查
@@ -145,6 +164,11 @@ export function useNotification() {
   useEffect(() => {
     enabledRef.current = enabled
   }, [enabled])
+
+  const onlyWhenUnfocusedRef = useRef(onlyWhenUnfocused)
+  useEffect(() => {
+    onlyWhenUnfocusedRef.current = onlyWhenUnfocused
+  }, [onlyWhenUnfocused])
 
   // Native environments: async permission/status check
   useEffect(() => {
@@ -228,69 +252,88 @@ export function useNotification() {
     }
   }, [])
 
-  // 发送通知
-  const sendNotification = useCallback(async (title: string, body: string, data?: NotificationData) => {
-    if (!enabledRef.current) return false
-
-    // Electron/macOS 原生通知
-    if (hasElectronNotificationBridge()) {
-      const result = await sendElectronNotification(title, body, data)
-      setPermission(result.permission)
-      return result.ok
-    }
-
-    // Tauri 原生通知
-    if (isTauri()) {
-      await sendTauriNotification(title, body)
-      return true
-    }
-
-    // 浏览器通知
-    if (typeof Notification === 'undefined') return false
-    if (Notification.permission !== 'granted') return false
-
-    const notificationOptions: NotificationOptions = {
-      body,
-      icon: '/opencode.svg',
-      tag: data?.sessionId || 'opencode',
-      data,
-    }
-
-    // 优先用 SW showNotification（Android Chrome 必须用这个）
+  const setOnlyWhenUnfocused = useCallback((value: boolean) => {
+    setOnlyWhenUnfocusedState(value)
     try {
-      const reg = await ensureServiceWorker()
-      if (reg) {
-        await reg.showNotification(title, notificationOptions)
-        return true
+      if (value) {
+        localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED, 'true')
+      } else {
+        localStorage.removeItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED)
       }
     } catch {
-      // SW 不可用，降级到 new Notification
-    }
-
-    // 降级：桌面浏览器直接用 new Notification
-    try {
-      const notification = new Notification(title, notificationOptions)
-      notification.onclick = () => {
-        window.focus()
-        if (data?.sessionId) {
-          const path = `#/session/${data.sessionId}`
-          const dir = data.directory ? `?dir=${data.directory}` : ''
-          window.location.hash = `${path}${dir}`
-        }
-        notification.close()
-      }
-      return true
-    } catch {
-      // 通知 API 可能在某些环境不可用
-      return false
+      /* ignore */
     }
   }, [])
+
+  // 发送通知
+  const sendNotification = useCallback(
+    async (title: string, body: string, data?: NotificationData, options?: NotificationSendOptions) => {
+      if (!enabledRef.current) return false
+      if (!options?.bypassFocusCheck && onlyWhenUnfocusedRef.current && isAppVisibleAndFocused()) return false
+
+      // Electron/macOS 原生通知
+      if (hasElectronNotificationBridge()) {
+        const result = await sendElectronNotification(title, body, data)
+        setPermission(result.permission)
+        return result.ok
+      }
+
+      // Tauri 原生通知
+      if (isTauri()) {
+        await sendTauriNotification(title, body)
+        return true
+      }
+
+      // 浏览器通知
+      if (typeof Notification === 'undefined') return false
+      if (Notification.permission !== 'granted') return false
+
+      const notificationOptions: NotificationOptions = {
+        body,
+        icon: '/opencode.svg',
+        tag: data?.sessionId || 'opencode',
+        data,
+      }
+
+      // 优先用 SW showNotification（Android Chrome 必须用这个）
+      try {
+        const reg = await ensureServiceWorker()
+        if (reg) {
+          await reg.showNotification(title, notificationOptions)
+          return true
+        }
+      } catch {
+        // SW 不可用，降级到 new Notification
+      }
+
+      // 降级：桌面浏览器直接用 new Notification
+      try {
+        const notification = new Notification(title, notificationOptions)
+        notification.onclick = () => {
+          window.focus()
+          if (data?.sessionId) {
+            const path = `#/session/${data.sessionId}`
+            const dir = data.directory ? `?dir=${data.directory}` : ''
+            window.location.hash = `${path}${dir}`
+          }
+          notification.close()
+        }
+        return true
+      } catch {
+        // 通知 API 可能在某些环境不可用
+        return false
+      }
+    },
+    [],
+  )
 
   const supported = hasElectronNotificationBridge() || isTauri() || typeof Notification !== 'undefined'
 
   return {
     enabled,
     setEnabled,
+    onlyWhenUnfocused,
+    setOnlyWhenUnfocused,
     permission,
     supported,
     sendNotification,

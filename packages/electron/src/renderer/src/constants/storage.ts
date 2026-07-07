@@ -13,3 +13,6 @@ export const STORAGE_KEY_LAST_DIRECTORY = 'last-directory'
 
 /** 浏览器通知开关 */
 export const STORAGE_KEY_NOTIFICATIONS_ENABLED = 'notifications-enabled'
+
+/** 仅在应用失焦时发送系统通知 */
+export const STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED = 'notifications-only-when-unfocused'
