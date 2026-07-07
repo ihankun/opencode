@@ -28,6 +28,18 @@ type Listener = {
   stop(close?: boolean): Promise<void> | void
 }
 
+type ServerModule = {
+  Server: {
+    listen(options: {
+      hostname: string
+      port: number
+      cors: string[]
+      username?: string
+      password?: string
+    }): Promise<Listener> | Listener
+  }
+}
+
 const parentPort = requireParentPort()
 let listener: Listener | undefined
 
@@ -45,9 +57,9 @@ async function start(command: StartCommand) {
   try {
     prepareEnv(command)
     useSystemCertificates()
-    const { Server } = await import("virtual:opencode-server")
+    const serverModule = await importServerModule()
 
-    listener = await Server.listen({
+    listener = await serverModule.Server.listen({
       hostname: command.hostname,
       port: command.port,
       cors: command.cors,
@@ -68,6 +80,12 @@ async function stop() {
     parentPort.postMessage({ type: "stopped" })
     setImmediate(() => process.exit(0))
   }
+}
+
+async function importServerModule() {
+  const serverModule = process.env.OPENCODE_SERVER_MODULE
+  if (!serverModule) throw new Error("OPENCODE_SERVER_MODULE is not configured")
+  return (await import(serverModule)) as ServerModule
 }
 
 function prepareEnv(command: StartCommand) {

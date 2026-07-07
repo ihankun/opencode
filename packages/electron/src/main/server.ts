@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { app, utilityProcess } from "electron"
 import type { Details } from "electron"
 import { writeLog } from "./logging"
@@ -127,7 +127,15 @@ function createEnv() {
   )
   delete env.DEBUG
   if (process.platform === "linux") delete env.LD_PRELOAD
+  env.OPENCODE_SERVER_MODULE = serverModuleUrl()
   return env
+}
+
+function serverModuleUrl() {
+  const mainDir = dirname(fileURLToPath(import.meta.url))
+  const bundled = join(mainDir, "chunks/opencode-server.js")
+  if (existsSync(bundled)) return pathToFileURL(bundled).href
+  return pathToFileURL(join(mainDir, "../../../opencode/dist/node/node.js")).href
 }
 
 function delay(ms: number) {

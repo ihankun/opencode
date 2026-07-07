@@ -1,5 +1,5 @@
 import { defineConfig } from "electron-vite"
-import { readdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import packageJson from "./package.json" with { type: "json" }
@@ -30,15 +30,20 @@ export default defineConfig({
         },
       },
       {
-        name: "custom-electron:opencode-server",
-        enforce: "pre",
-        resolveId(id) {
-          if (id === "virtual:opencode-server") return this.resolve(`${OPENCODE_SERVER_DIST}/node.js`)
-        },
-      },
-      {
-        name: "custom-electron:copy-server-assets",
+        name: "custom-electron:copy-opencode-server",
         async writeBundle() {
+          await mkdir("./out/main/chunks", { recursive: true })
+          await writeFile(
+            "./out/main/chunks/opencode-server.js",
+            (await readFile(`${OPENCODE_SERVER_DIST}/node.js`, "utf8")).replace(
+              /(["'])@lydell\/node-pty\1/g,
+              JSON.stringify(nodePtyPkg),
+            ),
+          )
+          await writeFile(
+            "./out/main/chunks/opencode-server.js.map",
+            await readFile(`${OPENCODE_SERVER_DIST}/node.js.map`),
+          )
           for (const file of await readdir(OPENCODE_SERVER_DIST)) {
             if (!file.endsWith(".wasm")) continue
             await writeFile(`./out/main/chunks/${file}`, await readFile(`${OPENCODE_SERVER_DIST}/${file}`))

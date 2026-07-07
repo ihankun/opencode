@@ -226,6 +226,9 @@ function allowedOrigins(url: string) {
   }
 }
 
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch("use-mock-keychain")
+}
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", join(homedir(), ".opencodex"))
