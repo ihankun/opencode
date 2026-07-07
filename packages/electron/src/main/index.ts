@@ -1,7 +1,9 @@
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol } from "electron"
+import { execFile } from "node:child_process"
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
+import { promisify } from "node:util"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
@@ -14,6 +16,8 @@ let serverError: string | undefined
 let tray: Tray | undefined
 let isQuitting = false
 let isStoppingForQuit = false
+const activeNotifications = new Set<Notification>()
+const execFileAsync = promisify(execFile)
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -50,6 +54,13 @@ type NpmSearchResponse = {
 type SkillFileInput = {
   path: string
   content: string
+}
+
+type NativeNotificationInput = {
+  title?: string
+  body?: string
+  sessionId?: string
+  directory?: string
 }
 
 function rendererUrl() {
@@ -255,6 +266,8 @@ ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
+ipcMain.handle("notification:permission", notificationPermission)
+ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
 
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
@@ -586,6 +599,74 @@ async function deleteSkill(rawLocation: string) {
   if (!containsPath(allowedRoot, root) || root === allowedRoot) throw new Error("Only user skills can be deleted")
   await rm(root, { recursive: true, force: true })
   return { ok: true as const, root }
+}
+
+async function notificationPermission() {
+  const supported = Notification.isSupported()
+  writeLog("main", "notification permission checked", { supported })
+  if (!supported) return "denied" as const
+  return "granted" as const
+}
+
+async function sendNativeNotification(input: unknown) {
+  if (!Notification.isSupported()) {
+    writeLog("main", "native notification unsupported")
+    return { ok: false as const, permission: "denied" as const }
+  }
+  const notificationInput = normalizeNativeNotification(input)
+  writeLog("main", "showing native notification", {
+    title: notificationInput.title,
+    hasBody: Boolean(notificationInput.body),
+    hasSessionId: Boolean(notificationInput.sessionId),
+  })
+  const notification = new Notification({
+    title: notificationInput.title,
+    body: notificationInput.body,
+  })
+  activeNotifications.add(notification)
+  notification.once("show", () => writeLog("main", "native notification shown"))
+  notification.once("failed", (_event, error) => {
+    writeLog("main", "native notification failed", { error })
+    void showAppleScriptNotification(notificationInput)
+  })
+  notification.once("close", () => {
+    activeNotifications.delete(notification)
+    writeLog("main", "native notification closed")
+  })
+  notification.on("click", () => {
+    showWindow()
+    if (!notificationInput.sessionId) return
+    mainWindow?.webContents.send("notification:clicked", {
+      sessionId: notificationInput.sessionId,
+      directory: notificationInput.directory,
+    })
+  })
+  notification.show()
+  return { ok: true as const, permission: await notificationPermission() }
+}
+
+async function showAppleScriptNotification(input: Required<Pick<NativeNotificationInput, "title" | "body">>) {
+  if (process.platform !== "darwin") return
+  try {
+    await execFileAsync("osascript", [
+      "-e",
+      `display notification ${JSON.stringify(input.body)} with title ${JSON.stringify(input.title)}`,
+    ])
+    writeLog("main", "native notification fallback shown")
+  } catch (error) {
+    writeLog("main", "native notification fallback failed", error)
+  }
+}
+
+function normalizeNativeNotification(input: unknown): Required<Pick<NativeNotificationInput, "title" | "body">> &
+  Pick<NativeNotificationInput, "sessionId" | "directory"> {
+  if (!isRecord(input)) return { title: "OpenCodex", body: "" }
+  return {
+    title: typeof input.title === "string" && input.title.trim() ? input.title : "OpenCodex",
+    body: typeof input.body === "string" ? input.body : "",
+    sessionId: typeof input.sessionId === "string" ? input.sessionId : undefined,
+    directory: typeof input.directory === "string" ? input.directory : undefined,
+  }
 }
 
 function normalizeSkillRelativePath(value: string) {

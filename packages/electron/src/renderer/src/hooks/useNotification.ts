@@ -90,6 +90,25 @@ async function requestTauriPermission(): Promise<NotificationPermission> {
   }
 }
 
+function hasElectronNotificationBridge() {
+  return typeof window !== 'undefined' && typeof window.customOpenCode?.sendNotification === 'function'
+}
+
+async function checkElectronPermission(): Promise<NotificationPermission> {
+  if (typeof window.customOpenCode?.notificationPermission !== 'function') return 'denied'
+  return window.customOpenCode.notificationPermission()
+}
+
+async function sendElectronNotification(title: string, body: string, data?: NotificationData): Promise<NotificationPermission> {
+  const result = await window.customOpenCode.sendNotification({
+    title,
+    body,
+    sessionId: data?.sessionId,
+    directory: data?.directory,
+  })
+  return result.permission
+}
+
 // ============================================
 // Hook
 // ============================================
@@ -104,6 +123,7 @@ export function useNotification() {
   })
 
   const [permission, setPermission] = useState<NotificationPermission>(() => {
+    if (hasElectronNotificationBridge()) return 'default'
     if (isTauri()) return 'default' // Tauri 异步检查
     if (typeof Notification === 'undefined') return 'denied'
     return Notification.permission
@@ -115,8 +135,12 @@ export function useNotification() {
     enabledRef.current = enabled
   }, [enabled])
 
-  // Tauri: 异步获取初始权限状态
+  // Native environments: async permission/status check
   useEffect(() => {
+    if (hasElectronNotificationBridge()) {
+      checkElectronPermission().then(setPermission)
+      return
+    }
     if (isTauri()) {
       checkTauriPermission().then(setPermission)
     }
@@ -124,13 +148,22 @@ export function useNotification() {
 
   // 启用时预注册 SW（浏览器环境）
   useEffect(() => {
-    if (enabled && !isTauri()) {
+    if (enabled && !isTauri() && !hasElectronNotificationBridge()) {
       ensureServiceWorker()
     }
   }, [enabled])
 
-  // 监听 SW 的 notificationclick 消息（浏览器环境用于跳转）
+  // 监听通知点击消息
   useEffect(() => {
+    if (hasElectronNotificationBridge()) {
+      return window.customOpenCode.onNotificationClicked(data => {
+        window.focus()
+        if (data.sessionId) {
+          const dir = data.directory ? `?dir=${data.directory}` : ''
+          window.location.hash = `#/session/${data.sessionId}${dir}`
+        }
+      })
+    }
     if (isTauri()) return
     if (!('serviceWorker' in navigator)) return
 
@@ -152,7 +185,11 @@ export function useNotification() {
   // 切换通知开关
   const setEnabled = useCallback(async (value: boolean) => {
     if (value) {
-      if (isTauri()) {
+      if (hasElectronNotificationBridge()) {
+        const result = await checkElectronPermission()
+        setPermission(result)
+        if (result === 'denied') return
+      } else if (isTauri()) {
         const result = await requestTauriPermission()
         setPermission(result)
         if (result !== 'granted') return
@@ -175,7 +212,7 @@ export function useNotification() {
     }
 
     // 启用时注册 SW（浏览器环境）
-    if (value && !isTauri()) {
+    if (value && !isTauri() && !hasElectronNotificationBridge()) {
       ensureServiceWorker()
     }
   }, [])
@@ -183,6 +220,13 @@ export function useNotification() {
   // 发送通知
   const sendNotification = useCallback(async (title: string, body: string, data?: NotificationData) => {
     if (!enabledRef.current) return
+
+    // Electron/macOS 原生通知
+    if (hasElectronNotificationBridge()) {
+      const result = await sendElectronNotification(title, body, data)
+      setPermission(result)
+      return
+    }
 
     // Tauri 原生通知
     if (isTauri()) {
@@ -229,7 +273,7 @@ export function useNotification() {
     }
   }, [])
 
-  const supported = isTauri() || typeof Notification !== 'undefined'
+  const supported = hasElectronNotificationBridge() || isTauri() || typeof Notification !== 'undefined'
 
   return {
     enabled,

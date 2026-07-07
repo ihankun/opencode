@@ -51,6 +51,13 @@ export type CustomOpenCodeSkillDeleteResult = {
   root: string
 }
 
+export type CustomOpenCodeNotificationPermission = "default" | "granted" | "denied"
+
+export type CustomOpenCodeNotificationSendResult = {
+  ok: boolean
+  permission: CustomOpenCodeNotificationPermission
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
@@ -60,6 +67,14 @@ export type CustomOpenCodeApi = {
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
+  notificationPermission(): Promise<CustomOpenCodeNotificationPermission>
+  sendNotification(input: {
+    title: string
+    body?: string
+    sessionId?: string
+    directory?: string
+  }): Promise<CustomOpenCodeNotificationSendResult>
+  onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
 }
 
 const api: CustomOpenCodeApi = {
@@ -75,6 +90,13 @@ const api: CustomOpenCodeApi = {
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
+  notificationPermission: () => ipcRenderer.invoke("notification:permission"),
+  sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
+  onNotificationClicked(callback) {
+    const listener = (_event: unknown, data: { sessionId?: string; directory?: string }) => callback(data)
+    ipcRenderer.on("notification:clicked", listener)
+    return () => ipcRenderer.removeListener("notification:clicked", listener)
+  },
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

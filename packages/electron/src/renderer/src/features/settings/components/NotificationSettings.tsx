@@ -357,11 +357,17 @@ export function NotificationSettings() {
     sendNotification,
   } = useNotification()
   const [toastEnabled, setToastEnabledState] = useState(notificationStore.toastEnabled)
+  const [testSending, setTestSending] = useState(false)
   const soundSettings = useSoundSettings()
   const soundSupported = isSoundSupported()
 
-  const handleTestNotification = () => {
-    sendNotification(t('notifications.testTitle'), t('notifications.testBody'))
+  const handleTestNotification = async () => {
+    setTestSending(true)
+    try {
+      await sendNotification(t('notifications.testTitle'), t('notifications.testBody'))
+    } finally {
+      setTestSending(false)
+    }
   }
 
   const handleToastToggle = () => {
@@ -408,9 +414,9 @@ export function NotificationSettings() {
                     size="sm"
                     variant="ghost"
                     onClick={handleTestNotification}
-                    disabled={!notificationsEnabled || notificationPermission === 'denied'}
+                    disabled={testSending || !notificationsEnabled || notificationPermission === 'denied'}
                   >
-                    {t('common:send')}
+                    {testSending ? t('common:loading') : t('common:send')}
                   </Button>
                 </SettingRow>
               </div>
