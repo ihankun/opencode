@@ -126,8 +126,15 @@
     "importNamePlaceholder": "留空则使用 GitHub 文件夹名",
     "githubImportHint": "支持包含 SKILL.md 的 GitHub 文件或文件夹 URL。",
     "importSkill": "导入技能",
+    "refreshingSkills": "正在刷新技能列表...",
+    "createdSkill": "已创建技能“{{name}}”",
+    "importedSkill": "已导入技能“{{name}}”",
+    "deletedSkill": "已删除技能“{{name}}”",
+    "deleteSkill": "删除技能",
+    "deleteSkillConfirm": "确定删除技能“{{name}}”吗？这会删除 ~/.opencodex/skills 下的对应文件。",
     "failedToCreate": "创建技能失败",
-    "failedToImport": "导入技能失败"
+    "failedToImport": "导入技能失败",
+    "failedToDelete": "删除技能失败"
   },
   "pluginPanel": {
     "title": "插件",

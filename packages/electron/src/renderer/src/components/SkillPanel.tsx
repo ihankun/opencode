@@ -17,8 +17,12 @@ import {
   PackagePlusIcon,
   DownloadIcon,
   CloseIcon,
+  TrashIcon,
 } from './Icons'
 import { getSkills } from '../api/skill'
+import { reconnectSSE } from '../api/events'
+import { abortInFlightApiRequests, invalidateSDKClient } from '../api/sdk'
+import { notificationStore } from '../store'
 import type { Skill } from '../types/api/skill'
 import { useDirectory } from '../hooks'
 import { apiErrorHandler, getDirectoryName } from '../utils'
@@ -55,6 +59,10 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
     try {
       setLoading(true)
       setError(null)
+      if (typeof window.customOpenCode?.ensureSkillRoot === 'function') {
+        const result = await window.customOpenCode.ensureSkillRoot()
+        if (result.changed) await restartElectronServer()
+      }
       const results = await Promise.all(
         (workspaceDirectories.length > 0 ? workspaceDirectories : [undefined]).map(async directory => {
           try {
@@ -77,6 +85,10 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
       setLoading(false)
     }
   }, [t, workspaceDirectories])
+
+  const showToast = useCallback((message: string) => {
+    notificationStore.push('completed', message, '', '', currentDirectory || pathInfo?.directory)
+  }, [currentDirectory, pathInfo?.directory])
 
   useEffect(() => {
     loadSkills()
@@ -183,7 +195,15 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
         ) : (
           <div className="p-1">
             {skillGroups.map(section => (
-              <SkillSection key={section.id} section={section} />
+              <SkillSection
+                key={section.id}
+                section={section}
+                homeDirectory={pathInfo?.home}
+                onDeleted={async name => {
+                  await loadSkills()
+                  showToast(t('skillPanel.deletedSkill', { name }))
+                }}
+              />
             ))}
           </div>
         )}
@@ -193,9 +213,12 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
         <SkillCreateDialog
           homeDirectory={pathInfo?.home}
           onClose={() => setDialog(null)}
-          onDone={() => {
+          onDone={async name => {
+            await restartElectronServer()
+            setFilter('')
+            await loadSkills()
+            showToast(t('skillPanel.createdSkill', { name }))
             setDialog(null)
-            loadSkills()
           }}
         />
       )}
@@ -203,9 +226,12 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
         <SkillGithubDialog
           homeDirectory={pathInfo?.home}
           onClose={() => setDialog(null)}
-          onDone={() => {
+          onDone={async name => {
+            await restartElectronServer()
+            setFilter('')
+            await loadSkills()
+            showToast(t('skillPanel.importedSkill', { name }))
             setDialog(null)
-            loadSkills()
           }}
         />
       )}
@@ -275,7 +301,15 @@ function SkillPanelActions(props: {
   )
 }
 
-function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void; onDone: () => void }) {
+async function restartElectronServer() {
+  if (typeof window.customOpenCode?.restartServer !== 'function') return
+  await window.customOpenCode.restartServer()
+  abortInFlightApiRequests('Electron server restarted')
+  invalidateSDKClient()
+  reconnectSSE()
+}
+
+function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void; onDone: (name: string) => void | Promise<void> }) {
   const { t } = useTranslation(['components', 'common'])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -287,13 +321,13 @@ function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void;
     try {
       setSubmitting(true)
       setError(null)
-      await createLocalSkill({
+      const skillName = await createLocalSkill({
         homeDirectory: props.homeDirectory,
         name,
         description,
         content,
       })
-      props.onDone()
+      await props.onDone(skillName)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('skillPanel.failedToCreate'))
     } finally {
@@ -332,7 +366,7 @@ function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void;
   )
 }
 
-function SkillGithubDialog(props: { homeDirectory?: string; onClose: () => void; onDone: () => void }) {
+function SkillGithubDialog(props: { homeDirectory?: string; onClose: () => void; onDone: (name: string) => void | Promise<void> }) {
   const { t } = useTranslation(['components', 'common'])
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
@@ -343,12 +377,12 @@ function SkillGithubDialog(props: { homeDirectory?: string; onClose: () => void;
     try {
       setSubmitting(true)
       setError(null)
-      await importGithubSkill({
+      const skillName = await importGithubSkill({
         homeDirectory: props.homeDirectory,
         url,
         name,
       })
-      props.onDone()
+      await props.onDone(skillName)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('skillPanel.failedToImport'))
     } finally {
@@ -486,22 +520,28 @@ async function createLocalSkill(input: {
   const skillDir = joinPath(directory, '.opencodex', 'skills', name)
   const body = [
     '---',
-    `name: ${name}`,
-    `description: ${input.description.trim() || name}`,
+    `name: ${yamlString(name)}`,
+    `description: ${yamlString(input.description.trim() || name)}`,
     '---',
     '',
     input.content.trim() || `Use this skill for ${name}.`,
     '',
   ].join('\n')
   await writeSkillFiles(skillDir, [{ path: 'SKILL.md', content: body }])
+  return name
+}
+
+function yamlString(value: string) {
+  return JSON.stringify(value)
 }
 
 async function importGithubSkill(input: { homeDirectory?: string; url: string; name: string }) {
   const directory = requireHomeDirectory(input.homeDirectory)
   const source = parseGithubUrl(input.url)
   const files = await fetchGithubFiles(source)
-  const name = normalizeSkillName(input.name || source.name)
+  const name = normalizeSkillName(input.name.trim() || source.name)
   await writeSkillFiles(joinPath(directory, '.opencodex', 'skills', name), files)
+  return name
 }
 
 function requireHomeDirectory(homeDirectory?: string) {
@@ -562,10 +602,18 @@ function parseGithubUrl(value: string): GithubSource {
   }
   if (url.hostname !== 'github.com') throw new Error('Enter a github.com URL.')
   const [owner, repo, kind, ref, ...parts] = url.pathname.split('/').filter(Boolean)
-  if (!owner || !repo || !kind || !ref || parts.length === 0 || (kind !== 'tree' && kind !== 'blob')) {
+  if (!owner || !repo) {
     throw new Error('Enter a GitHub file or folder URL.')
   }
-  return { owner, repo, ref, path: parts.join('/'), name: skillNameFromPath(parts) }
+  const repoName = normalizeGithubRepoName(repo)
+  if (!kind) return { owner, repo: repoName, ref: '', path: '', name: repoName }
+  if (!ref || (kind !== 'tree' && kind !== 'blob')) throw new Error('Enter a GitHub file or folder URL.')
+  if (parts.length === 0) return { owner, repo: repoName, ref, path: '', name: repoName }
+  return { owner, repo: repoName, ref, path: parts.join('/'), name: skillNameFromPath(parts) }
+}
+
+function normalizeGithubRepoName(value: string) {
+  return value.replace(/\.git$/i, '')
 }
 
 function skillNameFromPath(parts: string[]) {
@@ -575,15 +623,56 @@ function skillNameFromPath(parts: string[]) {
 }
 
 async function fetchGithubFiles(source: GithubSource) {
-  const apiUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${encodeURIComponentPath(source.path)}?ref=${encodeURIComponent(source.ref)}`
-  const response = await fetch(apiUrl, { headers: { Accept: 'application/vnd.github+json' } })
-  if (!response.ok) throw new Error('Unable to read that GitHub URL.')
-  const data: unknown = await response.json()
-  const files = await collectGithubFiles(data, source.path)
+  const resolved = await resolveGithubSkillSource(source)
+  const data = await fetchGithubContents(resolved, resolved.path)
+  const files = await collectGithubFiles(data, resolved.path)
   if (!files.some(file => file.path === 'SKILL.md' || file.path.endsWith('/SKILL.md'))) {
     throw new Error('The GitHub source must contain a SKILL.md file.')
   }
   return files
+}
+
+async function resolveGithubSkillSource(source: GithubSource): Promise<GithubSource> {
+  if (source.path) return source
+
+  const root = await fetchGithubContents(source, '')
+  if (Array.isArray(root) && root.some(item => isGithubEntry(item) && item.type === 'file' && item.path === 'SKILL.md')) {
+    return source
+  }
+
+  const candidatePaths = [
+    `.opencode/skills/${source.name}`,
+    `.codex/skills/${source.name}`,
+    `skills/${source.name}`,
+  ]
+  const matches = await Promise.all(
+    candidatePaths.map(async candidatePath => {
+      const data = await fetchGithubContentsOption(source, candidatePath)
+      if (!data) return undefined
+      const files = await collectGithubFiles(data, candidatePath)
+      return files.some(file => file.path === 'SKILL.md' || file.path.endsWith('/SKILL.md'))
+        ? { ...source, path: candidatePath, name: skillNameFromPath(candidatePath.split('/')) }
+        : undefined
+    }),
+  )
+  const match = matches.find((item): item is GithubSource => Boolean(item))
+  if (match) return match
+
+  return source
+}
+
+async function fetchGithubContents(source: GithubSource, path: string): Promise<unknown> {
+  const data = await fetchGithubContentsOption(source, path)
+  if (!data) throw new Error('Unable to read that GitHub URL.')
+  return data
+}
+
+async function fetchGithubContentsOption(source: GithubSource, path: string): Promise<unknown | undefined> {
+  const apiUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${encodeURIComponentPath(path)}${source.ref ? `?ref=${encodeURIComponent(source.ref)}` : ''}`
+  const response = await fetch(apiUrl, { headers: { Accept: 'application/vnd.github+json' } })
+  if (response.status === 404) return undefined
+  if (!response.ok) throw new Error('Unable to read that GitHub URL.')
+  return response.json()
 }
 
 async function collectGithubFiles(data: unknown, rootPath: string): Promise<{ path: string; content: string }[]> {
@@ -879,9 +968,10 @@ function isSamePath(a: string, b: string) {
   return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase()
 }
 
-function SkillSection({ section }: { section: SkillSectionGroup }) {
+function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: string; onDeleted: (name: string) => void | Promise<void> }) {
   const { t } = useTranslation(['components'])
   const [expanded, setExpanded] = useState(true)
+  const section = props.section
   const skillCount = section.groups.reduce((total, group) => total + group.skills.length, 0)
     + (section.projects ?? []).reduce(
       (total, project) => total + project.groups.reduce((projectTotal, group) => projectTotal + group.skills.length, 0),
@@ -903,14 +993,38 @@ function SkillSection({ section }: { section: SkillSectionGroup }) {
       {expanded && (
         section.groups.length === 0 ? (
           section.projects && section.projects.length > 0 ? (
-            section.projects.map(project => <SkillProject key={project.id} project={project} defaultExpanded={false} />)
+            section.projects.map(project => (
+              <SkillProject
+                key={project.id}
+                project={project}
+                defaultExpanded={false}
+                homeDirectory={props.homeDirectory}
+                onDeleted={props.onDeleted}
+              />
+            ))
           ) : (
             <div className="px-2 py-2 text-[length:var(--fs-sm)] text-text-500">{t('skillPanel.noSkillsInGroup')}</div>
           )
         ) : (
           <>
-            {section.groups.map(group => <SkillSource key={group.id} group={group} defaultExpanded={section.id === 'system'} />)}
-            {section.projects?.map(project => <SkillProject key={project.id} project={project} defaultExpanded={false} />)}
+            {section.groups.map(group => (
+              <SkillSource
+                key={group.id}
+                group={group}
+                defaultExpanded={section.id === 'system'}
+                homeDirectory={props.homeDirectory}
+                onDeleted={props.onDeleted}
+              />
+            ))}
+            {section.projects?.map(project => (
+              <SkillProject
+                key={project.id}
+                project={project}
+                defaultExpanded={false}
+                homeDirectory={props.homeDirectory}
+                onDeleted={props.onDeleted}
+              />
+            ))}
           </>
         )
       )}
@@ -918,7 +1032,14 @@ function SkillSection({ section }: { section: SkillSectionGroup }) {
   )
 }
 
-function SkillProject({ project, defaultExpanded = true }: { project: SkillProjectGroup; defaultExpanded?: boolean }) {
+function SkillProject(props: {
+  project: SkillProjectGroup
+  defaultExpanded?: boolean
+  homeDirectory?: string
+  onDeleted: (name: string) => void | Promise<void>
+}) {
+  const project = props.project
+  const defaultExpanded = props.defaultExpanded ?? true
   const [expanded, setExpanded] = useState(defaultExpanded)
   const skillCount = project.groups.reduce((total, group) => total + group.skills.length, 0)
 
@@ -939,14 +1060,28 @@ function SkillProject({ project, defaultExpanded = true }: { project: SkillProje
       </button>
       {expanded && (
         <div className="pl-2">
-          {project.groups.map(group => <SkillSource key={group.id} group={group} />)}
+          {project.groups.map(group => (
+            <SkillSource
+              key={group.id}
+              group={group}
+              homeDirectory={props.homeDirectory}
+              onDeleted={props.onDeleted}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function SkillSource({ group, defaultExpanded = true }: { group: SkillSourceGroup; defaultExpanded?: boolean }) {
+function SkillSource(props: {
+  group: SkillSourceGroup
+  defaultExpanded?: boolean
+  homeDirectory?: string
+  onDeleted: (name: string) => void | Promise<void>
+}) {
+  const group = props.group
+  const defaultExpanded = props.defaultExpanded ?? true
   const [expanded, setExpanded] = useState(defaultExpanded)
 
   return (
@@ -964,7 +1099,13 @@ function SkillSource({ group, defaultExpanded = true }: { group: SkillSourceGrou
         <span className="shrink-0 text-text-500">{group.skills.length}</span>
       </button>
       {expanded && group.skills.map(skill => (
-        <SkillItem key={skill.name} skill={skill} sourcePath={group.displayPath} />
+        <SkillItem
+          key={skill.name}
+          skill={skill}
+          sourcePath={group.displayPath}
+          homeDirectory={props.homeDirectory}
+          onDeleted={props.onDeleted}
+        />
       ))}
     </div>
   )
@@ -974,27 +1115,66 @@ function SkillSource({ group, defaultExpanded = true }: { group: SkillSourceGrou
 // SkillItem Component
 // ============================================
 
-const SkillItem = memo(function SkillItem({ skill, sourcePath }: { skill: Skill; sourcePath: string }) {
+const SkillItem = memo(function SkillItem(props: {
+  skill: Skill
+  sourcePath: string
+  homeDirectory?: string
+  onDeleted: (name: string) => void | Promise<void>
+}) {
+  const { t } = useTranslation(['components', 'common'])
+  const skill = props.skill
   const [expanded, setExpanded] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const canDelete = isUserSkill(skill, props.homeDirectory) && typeof window.customOpenCode?.deleteSkill === 'function'
+
+  const deleteSkill = async () => {
+    if (!canDelete) return
+    if (!window.confirm(t('skillPanel.deleteSkillConfirm', { name: skill.name }))) return
+    try {
+      setDeleting(true)
+      await window.customOpenCode.deleteSkill(skill.location)
+      await restartElectronServer()
+      await props.onDeleted(skill.name)
+    } catch (err) {
+      apiErrorHandler('delete skill', err)
+      window.alert(err instanceof Error ? err.message : t('skillPanel.failedToDelete'))
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="group">
-      <button
-        type="button"
-        aria-expanded={expanded}
-        className="flex w-full items-start gap-2 rounded-md px-2 py-2 hover:bg-bg-200/50 transition-colors bg-transparent border-none text-left"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span className="text-text-400 shrink-0 mt-0.5">
-          {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-        </span>
+      <div className="flex items-start rounded-md px-2 py-2 hover:bg-bg-200/50 transition-colors">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-start gap-2 bg-transparent border-none text-left"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span className="text-text-400 shrink-0 mt-0.5">
+            {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+          </span>
 
-        <div className="flex-1 min-w-0">
-          <div className="text-[length:var(--fs-base)] text-text-100 font-medium">{skill.name}</div>
-          <div className="text-[length:var(--fs-xs)] text-text-500 truncate font-mono">{sourcePath}</div>
-          <div className="text-[length:var(--fs-sm)] text-text-400 truncate">{skill.description ?? ''}</div>
-        </div>
-      </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[length:var(--fs-base)] text-text-100 font-medium">{skill.name}</div>
+            <div className="text-[length:var(--fs-xs)] text-text-500 truncate font-mono">{props.sourcePath}</div>
+            <div className="text-[length:var(--fs-sm)] text-text-400 truncate">{skill.description ?? ''}</div>
+          </div>
+        </button>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={deleteSkill}
+            disabled={deleting}
+            aria-label={t('skillPanel.deleteSkill')}
+            title={t('skillPanel.deleteSkill')}
+            className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-500 opacity-0 transition-all hover:bg-danger-100/10 hover:text-danger-100 disabled:opacity-50 group-hover:opacity-100 focus:opacity-100"
+          >
+            {deleting ? <SpinnerIcon size={13} className="animate-spin" /> : <TrashIcon size={13} />}
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="mx-2 mb-2 ml-7 rounded-md border border-border-200/40 bg-bg-100/50 px-3 py-2">
@@ -1007,3 +1187,8 @@ const SkillItem = memo(function SkillItem({ skill, sourcePath }: { skill: Skill;
     </div>
   )
 })
+
+function isUserSkill(skill: Skill, homeDirectory?: string) {
+  if (skill.location === '<built-in>') return false
+  return isUnderPath(normalizePath(skill.location), joinNormalized(normalizePath(homeDirectory), '.opencodex', 'skills'))
+}

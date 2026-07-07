@@ -579,7 +579,7 @@ export function SessionListItem({
         {isEditMode && isChecked && (
           <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-accent-main-100" />
         )}
-        {/* 编辑模式：checkbox；普通模式：活跃状态圆点 */}
+        {/* 编辑模式：checkbox */}
         {isEditMode ? (
           <button
             type="button"
@@ -595,19 +595,6 @@ export function SessionListItem({
           >
             {isChecked && <CheckIcon size={9} className="text-white" />}
           </button>
-        ) : activeStatus || hasUnreadCompletedNotification ? (
-          <span className="relative shrink-0 flex items-center justify-center size-5" title={statusIndicatorTitle}>
-            {activeStatus ? (
-              <>
-                <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot}`} />
-                {activeStatus.pulse && (
-                  <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot} animate-ping opacity-50`} />
-                )}
-              </>
-            ) : hasUnreadCompletedNotification ? (
-              <span className="absolute w-1.5 h-1.5 rounded-full bg-accent-main-100" />
-            ) : null}
-          </span>
         ) : null}
 
         {isEditMode ? (
@@ -618,15 +605,31 @@ export function SessionListItem({
           >
             {/* 标题 */}
             <span
-              className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]"
+              className="min-w-0 truncate text-[length:var(--fs-sm)]"
               title={session.title || t('sessions.untitledChat')}
             >
               {session.title || t('sessions.untitledChat')}
             </span>
+            {activeStatus && (
+              <span className="relative shrink-0 flex items-center justify-center w-3 h-3" title={statusIndicatorTitle}>
+                <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot}`} />
+                {activeStatus.pulse && (
+                  <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot} animate-ping opacity-50`} />
+                )}
+              </span>
+            )}
+            {!activeStatus && hasUnreadCompletedNotification && (
+              <span
+                className="relative shrink-0 flex items-center justify-center w-3 h-3"
+                title={t('chat:notification.completed')}
+              >
+                <span className="absolute w-1.5 h-1.5 rounded-full bg-accent-main-100" />
+              </span>
+            )}
 
             {((hasSummaryStats && session.summary) || session.time?.updated) && (
               <div
-                className={`${actionsVisible ? 'hidden' : 'flex group-hover:hidden'} shrink-0 items-center gap-1.5 text-[length:var(--fs-xxs)] text-text-500`}
+                className={`${actionsVisible ? 'hidden' : 'flex group-hover:hidden'} ml-auto shrink-0 items-center gap-1.5 text-[length:var(--fs-xxs)] text-text-500`}
               >
                 {hasSummaryStats && session.summary && (
                   <span className="flex shrink-0 items-center gap-1 font-mono">
@@ -657,15 +660,31 @@ export function SessionListItem({
             >
               {/* 标题 */}
               <span
-                className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]"
+                className="min-w-0 truncate text-[length:var(--fs-sm)]"
                 title={session.title || t('sessions.untitledChat')}
               >
                 {session.title || t('sessions.untitledChat')}
               </span>
+              {activeStatus && (
+                <span className="relative shrink-0 flex items-center justify-center w-3 h-3" title={statusIndicatorTitle}>
+                  <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot}`} />
+                  {activeStatus.pulse && (
+                    <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot} animate-ping opacity-50`} />
+                  )}
+                </span>
+              )}
+              {!activeStatus && hasUnreadCompletedNotification && (
+                <span
+                  className="relative shrink-0 flex items-center justify-center w-3 h-3"
+                  title={t('chat:notification.completed')}
+                >
+                  <span className="absolute w-1.5 h-1.5 rounded-full bg-accent-main-100" />
+                </span>
+              )}
 
               {((hasSummaryStats && session.summary) || session.time?.updated) && (
                 <div
-                  className={`${actionsVisible ? 'hidden' : 'flex group-hover:hidden'} shrink-0 items-center gap-1.5 text-[length:var(--fs-xxs)] text-text-500`}
+                  className={`${actionsVisible ? 'hidden' : 'flex group-hover:hidden'} ml-auto shrink-0 items-center gap-1.5 text-[length:var(--fs-xxs)] text-text-500`}
                 >
                   {hasSummaryStats && session.summary && (
                     <span className="flex shrink-0 items-center gap-1 font-mono">
@@ -833,29 +852,29 @@ export function SessionListItem({
             className={`flex-1 min-w-0 transition-[padding] duration-200 ${showActions ? 'pr-[88px]' : 'pr-1 group-hover:pr-[88px]'}`}
           >
             {/* Row 1: Title */}
-            <p
-              className={`${isCompact ? 'text-[length:var(--fs-md)]' : 'text-[length:var(--fs-base)]'} truncate font-medium ${isSelected ? 'text-text-100' : 'text-text-200 group-hover:text-text-100'}`}
-              title={session.title || t('sessions.untitledChat')}
-            >
-              {session.title || t('sessions.untitledChat')}
-            </p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p
+                className={`${isCompact ? 'text-[length:var(--fs-md)]' : 'text-[length:var(--fs-base)]'} min-w-0 truncate font-medium ${isSelected ? 'text-text-100' : 'text-text-200 group-hover:text-text-100'}`}
+                title={session.title || t('sessions.untitledChat')}
+              >
+                {session.title || t('sessions.untitledChat')}
+              </p>
+              {activeStatus && (
+                <span className="relative shrink-0 flex items-center justify-center w-3 h-3" title={activeStatus.label}>
+                  <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot}`} />
+                  {activeStatus.pulse && (
+                    <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot} animate-ping opacity-50`} />
+                  )}
+                </span>
+              )}
+            </div>
 
             {/* Row 2: Meta line — 始终存在，保持高度一致 */}
             <div
               className={`flex items-center ${isCompact ? 'mt-1' : 'mt-1.5'} h-4 text-[length:var(--fs-xxs)] text-text-400 gap-1 overflow-hidden`}
             >
-              {/* 活跃状态标记 / 已完成未读圆点 */}
-              {activeStatus ? (
-                <>
-                  <span className="relative shrink-0 flex items-center justify-center w-3 h-3">
-                    <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot}`} />
-                    {activeStatus.pulse && (
-                      <span className={`absolute w-1.5 h-1.5 rounded-full ${activeStatus.dot} animate-ping opacity-50`} />
-                    )}
-                  </span>
-                  <span className="opacity-30 shrink-0">·</span>
-                </>
-              ) : hasUnreadCompletedNotification ? (
+              {/* 已完成未读圆点 */}
+              {!activeStatus && hasUnreadCompletedNotification ? (
                 <>
                   <span
                     className="relative shrink-0 flex items-center justify-center w-3 h-3"

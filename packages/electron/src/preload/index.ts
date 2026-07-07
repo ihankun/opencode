@@ -41,6 +41,16 @@ export type CustomOpenCodeSkillWriteResult = {
   count: number
 }
 
+export type CustomOpenCodeSkillEnsureRootResult = {
+  changed: boolean
+  file: string
+}
+
+export type CustomOpenCodeSkillDeleteResult = {
+  ok: true
+  root: string
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
@@ -48,6 +58,8 @@ export type CustomOpenCodeApi = {
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
+  ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
+  deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
 }
 
 const api: CustomOpenCodeApi = {
@@ -61,6 +73,8 @@ const api: CustomOpenCodeApi = {
   searchPlugins: (query) => ipcRenderer.invoke("plugin:search", query),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
+  ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
+  deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

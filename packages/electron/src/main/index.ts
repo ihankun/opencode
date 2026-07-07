@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, protocol } from "electron"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
@@ -253,6 +253,8 @@ ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
+ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
+ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
 
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
@@ -533,7 +535,57 @@ async function writeSkillFiles(rawRoot: string, rawFiles: unknown) {
     await writeFile(destination, file.content)
   }
 
+  await ensureSkillRootConfig()
   return { ok: true as const, root, count: files.length }
+}
+
+async function ensureSkillRootConfig() {
+  const configDir = join(app.getPath("userData"), "xdg", "config", "opencode")
+  await mkdir(configDir, { recursive: true })
+  const file = await pluginConfigFile(configDir, "server")
+  const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return "{}"
+    throw error
+  })
+  const source = text.trim() || "{}"
+  const errors: ParseError[] = []
+  const config = parseJsonc(source, errors, { allowTrailingComma: true }) as { skills?: { paths?: unknown } }
+  if (errors.length) {
+    const error = errors[0]
+    throw new Error(`Invalid JSON in ${file}: ${printParseErrorCode(error.error)}`)
+  }
+
+  const paths = Array.isArray(config.skills?.paths) ? config.skills.paths.filter(isString) : []
+  if (paths.includes("~/.opencodex/skills")) return { changed: false as const, file }
+  await writeFile(
+    file,
+    applyEdits(
+      source,
+      modify(source, ["skills", "paths"], [...paths, "~/.opencodex/skills"], {
+        formattingOptions: {
+          insertSpaces: true,
+          tabSize: 2,
+        },
+      }),
+    ),
+  )
+  return { changed: true as const, file }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string"
+}
+
+async function deleteSkill(rawLocation: string) {
+  const location = resolve(rawLocation)
+  const allowedRoot = resolve(app.getPath("userData"), "skills")
+  if (!containsPath(allowedRoot, location)) throw new Error("Only user skills can be deleted")
+  if (location === allowedRoot) throw new Error("Select a skill to delete")
+
+  const root = location.replace(/\\/g, "/").toLowerCase().endsWith("/skill.md") ? dirname(location) : location
+  if (!containsPath(allowedRoot, root) || root === allowedRoot) throw new Error("Only user skills can be deleted")
+  await rm(root, { recursive: true, force: true })
+  return { ok: true as const, root }
 }
 
 function normalizeSkillRelativePath(value: string) {

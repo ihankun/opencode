@@ -127,8 +127,15 @@
     "importNamePlaceholder": "Leave blank to use the GitHub folder name",
     "githubImportHint": "Supports GitHub file or folder URLs that contain SKILL.md.",
     "importSkill": "Import skill",
+    "refreshingSkills": "Refreshing skills...",
+    "createdSkill": "Created skill \"{{name}}\"",
+    "importedSkill": "Imported skill \"{{name}}\"",
+    "deletedSkill": "Deleted skill \"{{name}}\"",
+    "deleteSkill": "Delete skill",
+    "deleteSkillConfirm": "Delete skill \"{{name}}\"? This will delete its files from ~/.opencodex/skills.",
     "failedToCreate": "Failed to create skill",
-    "failedToImport": "Failed to import skill"
+    "failedToImport": "Failed to import skill",
+    "failedToDelete": "Failed to delete skill"
   },
   "pluginPanel": {
     "title": "Plugins",

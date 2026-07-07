@@ -26,7 +26,7 @@ import { useDirectory, useSessionStats, useKeybindingLabel, useGitWorkspaceCatal
 import { useSessionContext } from '../../../contexts/useSessionContext'
 import { useLayoutStore, useMessageStore, childSessionStore } from '../../../store'
 import { useBusySessions } from '../../../store/activeSessionStore'
-import { notificationStore, useNotifications, useUnreadNotificationCount } from '../../../store/notificationStore'
+import { notificationStore, useNotifications } from '../../../store/notificationStore'
 import { pinnedSessionsStore } from '../../../store/pinnedSessionsStore'
 import type { NotificationEntry } from '../../../store/notificationStore'
 import {
@@ -262,7 +262,6 @@ export function SidePanel({
   )
   // Notification history
   const notifications = useNotifications()
-  const unreadNotificationCount = useUnreadNotificationCount()
 
   useEffect(() => {
     return subscribeToConnectionState(setConnectionState)
@@ -618,8 +617,6 @@ export function SidePanel({
       }).length,
     [busySessions, displayedProjects],
   )
-
-  const conversationAttentionCount = conversationBusyCount + unreadNotificationCount
 
   useEffect(() => {
     if (currentProject.id !== 'global') return
@@ -1364,16 +1361,12 @@ export function SidePanel({
             <div className="pl-[6px] py-1 text-left text-[length:var(--fs-sm)] text-text-500">
               <span>{t('sidebar.conversations')}</span>
             </div>
-            {conversationAttentionCount > 0 && (
+            {conversationBusyCount > 0 && (
               <span
-                className={`inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full px-1 text-[length:var(--fs-xxs)] font-medium leading-none ${
-                  unreadNotificationCount > 0
-                    ? 'bg-accent-main-100/10 text-accent-main-100'
-                    : 'bg-success-100/10 text-success-100'
-                }`}
+                className="inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100"
                 title={t('sidebar.active')}
               >
-                {conversationAttentionCount}
+                {conversationBusyCount}
               </span>
             )}
             <button
