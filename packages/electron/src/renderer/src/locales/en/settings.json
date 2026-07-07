@@ -267,6 +267,8 @@
     "enableToTest": "Enable notifications to test",
     "testTitle": "OpenCodex",
     "testBody": "This is a test notification",
+    "testFailedTitle": "System notification failed",
+    "testFailedDesc": "macOS requires notifications to come from a signed app. Run the packaged OpenCodex.app and allow notifications in System Settings.",
     "notAvailable": "System notifications are not available in this environment",
     "notificationTypes": "Notification Types",
     "notificationTypesDesc": "Choose which notification types are enabled",

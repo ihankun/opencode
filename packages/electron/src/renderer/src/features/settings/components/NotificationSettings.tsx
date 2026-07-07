@@ -364,7 +364,15 @@ export function NotificationSettings() {
   const handleTestNotification = async () => {
     setTestSending(true)
     try {
-      await sendNotification(t('notifications.testTitle'), t('notifications.testBody'))
+      const sent = await sendNotification(t('notifications.testTitle'), t('notifications.testBody'))
+      if (!sent) {
+        notificationStore.push(
+          'error',
+          t('notifications.testFailedTitle'),
+          t('notifications.testFailedDesc'),
+          '',
+        )
+      }
     } finally {
       setTestSending(false)
     }

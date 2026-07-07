@@ -1,9 +1,7 @@
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol } from "electron"
-import { execFile } from "node:child_process"
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol, session } from "electron"
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
-import { promisify } from "node:util"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
@@ -17,7 +15,7 @@ let tray: Tray | undefined
 let isQuitting = false
 let isStoppingForQuit = false
 const activeNotifications = new Set<Notification>()
-const execFileAsync = promisify(execFile)
+const appId = "com.hankun.opencodex"
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -229,7 +227,7 @@ function allowedOrigins(url: string) {
 }
 
 app.setName("OpenCodex")
-app.setAppUserModelId("com.hankun.opencodex")
+app.setAppUserModelId(appId)
 app.setPath("userData", join(homedir(), ".opencodex"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData") })
@@ -283,6 +281,7 @@ app.on("window-all-closed", () => {
 
 void app.whenReady().then(() => {
   writeLog("main", "app ready")
+  configureNotificationPermissionHandler()
   createTray()
   setDockIcon()
   return createWindow()
@@ -589,6 +588,17 @@ function isString(value: unknown): value is string {
   return typeof value === "string"
 }
 
+function configureNotificationPermissionHandler() {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (permission !== "notifications") {
+      callback(false)
+      return
+    }
+    writeLog("main", "notification permission requested")
+    callback(true)
+  })
+}
+
 async function deleteSkill(rawLocation: string) {
   const location = resolve(rawLocation)
   const allowedRoot = resolve(app.getPath("userData"), "skills")
@@ -627,7 +637,6 @@ async function sendNativeNotification(input: unknown) {
   notification.once("show", () => writeLog("main", "native notification shown"))
   notification.once("failed", (_event, error) => {
     writeLog("main", "native notification failed", { error })
-    void showAppleScriptNotification(notificationInput)
   })
   notification.once("close", () => {
     activeNotifications.delete(notification)
@@ -641,21 +650,29 @@ async function sendNativeNotification(input: unknown) {
       directory: notificationInput.directory,
     })
   })
+  const resultPromise = new Promise<{ ok: true } | { ok: false; error: string }>((resolveResult) => {
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolveResult({ ok: true })
+    }, 1_500)
+    notification.once("show", () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolveResult({ ok: true })
+    })
+    notification.once("failed", (_event, error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolveResult({ ok: false, error })
+    })
+  })
   notification.show()
-  return { ok: true as const, permission: await notificationPermission() }
-}
-
-async function showAppleScriptNotification(input: Required<Pick<NativeNotificationInput, "title" | "body">>) {
-  if (process.platform !== "darwin") return
-  try {
-    await execFileAsync("osascript", [
-      "-e",
-      `display notification ${JSON.stringify(input.body)} with title ${JSON.stringify(input.title)}`,
-    ])
-    writeLog("main", "native notification fallback shown")
-  } catch (error) {
-    writeLog("main", "native notification fallback failed", error)
-  }
+  const result = await resultPromise
+  return { ...result, permission: await notificationPermission() }
 }
 
 function normalizeNativeNotification(input: unknown): Required<Pick<NativeNotificationInput, "title" | "body">> &

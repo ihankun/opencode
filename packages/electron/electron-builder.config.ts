@@ -12,6 +12,7 @@ const config: Configuration = {
     icon: "assets/icon.icns",
     target: ["dmg", "zip"],
     category: "public.app-category.developer-tools",
+    identity: process.env.CSC_IDENTITY ?? "-",
   },
 }
 

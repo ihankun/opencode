@@ -56,6 +56,7 @@ export type CustomOpenCodeNotificationPermission = "default" | "granted" | "deni
 export type CustomOpenCodeNotificationSendResult = {
   ok: boolean
   permission: CustomOpenCodeNotificationPermission
+  error?: string
 }
 
 export type CustomOpenCodeApi = {

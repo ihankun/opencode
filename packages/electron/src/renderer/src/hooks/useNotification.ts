@@ -95,18 +95,29 @@ function hasElectronNotificationBridge() {
 }
 
 async function checkElectronPermission(): Promise<NotificationPermission> {
+  if (typeof Notification !== 'undefined') return Notification.permission
   if (typeof window.customOpenCode?.notificationPermission !== 'function') return 'denied'
   return window.customOpenCode.notificationPermission()
 }
 
-async function sendElectronNotification(title: string, body: string, data?: NotificationData): Promise<NotificationPermission> {
+async function requestElectronPermission(): Promise<NotificationPermission> {
+  if (typeof Notification === 'undefined') return checkElectronPermission()
+  if (Notification.permission !== 'default') return Notification.permission
+  return Notification.requestPermission()
+}
+
+async function sendElectronNotification(title: string, body: string, data?: NotificationData) {
+  const permission = await requestElectronPermission()
+  if (permission !== 'granted') return { ok: false, permission }
+
   const result = await window.customOpenCode.sendNotification({
     title,
     body,
     sessionId: data?.sessionId,
     directory: data?.directory,
   })
-  return result.permission
+  if (!result.ok) return { ok: false, permission: result.permission, error: result.error }
+  return { ok: true, permission }
 }
 
 // ============================================
@@ -186,9 +197,9 @@ export function useNotification() {
   const setEnabled = useCallback(async (value: boolean) => {
     if (value) {
       if (hasElectronNotificationBridge()) {
-        const result = await checkElectronPermission()
+        const result = await requestElectronPermission()
         setPermission(result)
-        if (result === 'denied') return
+        if (result !== 'granted') return
       } else if (isTauri()) {
         const result = await requestTauriPermission()
         setPermission(result)
@@ -219,24 +230,24 @@ export function useNotification() {
 
   // 发送通知
   const sendNotification = useCallback(async (title: string, body: string, data?: NotificationData) => {
-    if (!enabledRef.current) return
+    if (!enabledRef.current) return false
 
     // Electron/macOS 原生通知
     if (hasElectronNotificationBridge()) {
       const result = await sendElectronNotification(title, body, data)
-      setPermission(result)
-      return
+      setPermission(result.permission)
+      return result.ok
     }
 
     // Tauri 原生通知
     if (isTauri()) {
       await sendTauriNotification(title, body)
-      return
+      return true
     }
 
     // 浏览器通知
-    if (typeof Notification === 'undefined') return
-    if (Notification.permission !== 'granted') return
+    if (typeof Notification === 'undefined') return false
+    if (Notification.permission !== 'granted') return false
 
     const notificationOptions: NotificationOptions = {
       body,
@@ -250,7 +261,7 @@ export function useNotification() {
       const reg = await ensureServiceWorker()
       if (reg) {
         await reg.showNotification(title, notificationOptions)
-        return
+        return true
       }
     } catch {
       // SW 不可用，降级到 new Notification
@@ -268,8 +279,10 @@ export function useNotification() {
         }
         notification.close()
       }
+      return true
     } catch {
       // 通知 API 可能在某些环境不可用
+      return false
     }
   }, [])
 

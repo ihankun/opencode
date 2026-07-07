@@ -267,6 +267,8 @@
     "enableToTest": "启用通知以进行测试",
     "testTitle": "OpenCodex",
     "testBody": "这是一条测试通知",
+    "testFailedTitle": "系统通知发送失败",
+    "testFailedDesc": "macOS 要求通知来自已签名的应用。请用打包后的 OpenCodex.app 运行，并在系统设置里允许通知。",
     "notAvailable": "此环境不支持系统通知",
     "notificationTypes": "通知类型",
     "notificationTypesDesc": "选择启用哪些通知类型",
