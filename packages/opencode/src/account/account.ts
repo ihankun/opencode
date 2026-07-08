@@ -102,14 +102,16 @@ class DeviceTokenSuccess extends Schema.Class<DeviceTokenSuccess>("DeviceTokenSu
 
 class DeviceTokenError extends Schema.Class<DeviceTokenError>("DeviceTokenError")({
   error: Schema.String,
-  error_description: Schema.String,
+  error_description: Schema.optional(Schema.String),
 }) {
   toPollResult(): PollResult {
     if (this.error === "authorization_pending") return new PollPending()
     if (this.error === "slow_down") return new PollSlow()
+    if (this.error === "server_error") return new PollSlow()
+    if (this.error === "temporarily_unavailable") return new PollSlow()
     if (this.error === "expired_token") return new PollExpired()
     if (this.error === "access_denied") return new PollDenied()
-    return new PollError({ cause: this.error })
+    return new PollError({ cause: [this.error, this.error_description].filter(Boolean).join(": ") })
   }
 }
 
@@ -415,10 +417,13 @@ const layer: Layer.Layer<Service, never, AccountRepo.Service | HttpClient.HttpCl
       if (parsed instanceof DeviceTokenError) return parsed.toPollResult()
       const accessToken = parsed.access_token
 
-      const user = fetchUser(input.server, accessToken)
-      const orgs = fetchOrgs(input.server, accessToken)
-
-      const [account, remoteOrgs] = yield* Effect.all([user, orgs], { concurrency: 2 })
+      const [account, remoteOrgs] = yield* Effect.all(
+        [
+          fetchUser(input.server, accessToken),
+          fetchOrgs(input.server, accessToken).pipe(Effect.catch(() => Effect.succeed([] as readonly Org[]))),
+        ],
+        { concurrency: 2 },
+      )
 
       // TODO: When there are multiple orgs, let the user choose
       const firstOrgID = remoteOrgs.length > 0 ? Option.some(remoteOrgs[0].id) : Option.none<OrgID>()

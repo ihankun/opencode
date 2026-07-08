@@ -14,7 +14,7 @@ import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
 import { PaneDropOverlay, resolveDropZone, type DropZone, type PaneDropOverlayHandle } from './PaneDropOverlay'
-import { useChatSession, useModels, useModelSelection } from '../../hooks'
+import { useChatSession, useModels, useModelSelection, useSessionStats } from '../../hooks'
 import { useServerStore } from '../../hooks/useServerStore'
 import { useCancelHint } from '../../hooks/useCancelHint'
 import { InlineToolRequestContext, type InlineToolRequestContextValue } from './InlineToolRequestContext'
@@ -642,6 +642,7 @@ export const ChatPane = memo(function ChatPane({
   }, [])
 
   const contextLimit = currentModel?.contextLimit
+  const contextStats = useSessionStats(contextLimit)
 
   const controllerActionsRef = useRef({
     newSession: handleNewSession,
@@ -881,6 +882,8 @@ export const ChatPane = memo(function ChatPane({
           onModelChange={handleModelChange}
           modelsLoading={modelsLoading}
           modelSelectorRef={modelSelectorRef}
+          contextStats={contextStats}
+          hasMessages={messages.length > 0}
           rootPath={effectiveDirectory}
           sessionId={routeSessionId}
           revertedText={revertedMessage?.text}

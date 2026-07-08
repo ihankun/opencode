@@ -146,6 +146,16 @@
     "contextUsage": "上下文用量",
     "viewDetails": "查看详情",
     "appearance": "外观",
+    "accountLogin": "登录账号",
+    "accountProfile": "个人信息",
+    "accountLogout": "退出登录",
+    "connection": {
+      "connected": "已连接",
+      "connecting": "连接中",
+      "disconnected": "未连接",
+      "error": "连接异常",
+      "unknown": "未知状态"
+    },
     "shareChat": "分享对话",
     "settings": "设置",
     "noProjectFoldersYet": "还没有项目文件夹",
@@ -166,6 +176,27 @@
     "batchDeleteIncludesCurrent": "包含当前打开的会话，删除后将切换到新会话。",
     "batchRemoveProjects": "移除 {{count}} 个项目",
     "batchRemoveProjectsConfirm": "确定从列表中移除 {{count}} 个项目？这只会从侧边栏中移除，不会删除任何会话，也不会删除磁盘上的文件。"
+  },
+  "accountLogin": {
+    "title": "登录账号",
+    "description": "打开 opencode.ai/auth 登录 OpenCode，创建 API Key 后粘贴到这里。保存后会作为 OpenCode Zen provider 使用。",
+    "openBrowser": "打开 opencode.ai/auth",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "粘贴从 opencode.ai/auth 创建的 API Key",
+    "apiKeyRequired": "请输入 API Key。",
+    "save": "保存并连接",
+    "saving": "正在保存...",
+    "success": "OpenCode 已连接",
+    "account": "账号",
+    "error": "登录失败"
+  },
+  "accountProfile": {
+    "title": "个人信息",
+    "provider": "Provider",
+    "status": "状态",
+    "connected": "OpenCode 已连接",
+    "notLoggedIn": "未登录",
+    "description": "这里连接的是 OpenCode Zen 的 API Key，不是 console.opencode.ai 的 Console 账号。"
   },
   "sessionSearch": {
     "title": "搜索对话",
@@ -206,6 +237,13 @@
     "reasoning": "Reasoning",
     "cacheRW": "缓存 (读/写)",
     "rawMessages": "原始消息"
+  },
+  "contextIndicator": {
+    "label": "上下文用量",
+    "title": "背景信息窗口：",
+    "used": "已用",
+    "remaining": "剩余 {{percent}}%",
+    "tokens": "已用 {{used}} token，共 {{total}}"
   },
   "hints": {
     "pressEscAgain": "再按一次 <1>Esc</1> 停止",

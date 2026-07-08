@@ -19,6 +19,7 @@ import { parsePtyFrame } from '../utils/ptyProtocol'
 import { isTauri } from '../utils/tauri'
 import { copyTextToClipboard, readTextFromClipboard } from '../utils/clipboard'
 import { keybindingStore } from '../store/keybindingStore'
+import { openUrl } from '../utils/browserOpen'
 
 const TERMINAL_FONT_FALLBACK =
   "'Fira Code', 'Noto Sans Mono CJK SC', 'JetBrains Mono', 'Cascadia Code', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'Noto Sans Mono', 'Ubuntu Mono', 'WenQuanYi Micro Hei Mono', 'DejaVu Sans Mono', 'Noto Sans CJK SC', ui-monospace, monospace"
@@ -443,13 +444,7 @@ export const Terminal = memo(function Terminal({ ptyId, directory, isActive }: T
 
     const fitAddon = new FitAddon()
     const serializeAddon = new SerializeAddon()
-    const webLinksAddon = new WebLinksAddon((_event, uri) => {
-      if (isTauri()) {
-        import('@tauri-apps/plugin-opener').then(mod => mod.openUrl(uri)).catch(() => window.open(uri))
-      } else {
-        window.open(uri)
-      }
-    })
+    const webLinksAddon = new WebLinksAddon((_event, uri) => void openUrl(uri))
 
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(serializeAddon)

@@ -146,6 +146,16 @@
     "contextUsage": "Context Usage",
     "viewDetails": "View details",
     "appearance": "Appearance",
+    "accountLogin": "Log in",
+    "accountProfile": "Profile",
+    "accountLogout": "Log out",
+    "connection": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "error": "Connection error",
+      "unknown": "Unknown"
+    },
     "shareChat": "Share Chat",
     "settings": "Settings",
     "noProjectFoldersYet": "No project folders yet",
@@ -166,6 +176,27 @@
     "batchDeleteIncludesCurrent": "The currently open session is included. It will switch to a new session after deletion.",
     "batchRemoveProjects": "Remove {{count}} Project(s)",
     "batchRemoveProjectsConfirm": "Remove {{count}} project(s) from the list? This only removes them from the sidebar — no sessions will be deleted and no files on disk will be affected."
+  },
+  "accountLogin": {
+    "title": "Log in",
+    "description": "Open opencode.ai/auth, log in to OpenCode, create an API key, then paste it here. It will be saved for the OpenCode Zen provider.",
+    "openBrowser": "Open opencode.ai/auth",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Paste the API key created at opencode.ai/auth",
+    "apiKeyRequired": "Enter an API key.",
+    "save": "Save and connect",
+    "saving": "Saving...",
+    "success": "OpenCode connected",
+    "account": "account",
+    "error": "Login failed"
+  },
+  "accountProfile": {
+    "title": "Profile",
+    "provider": "Provider",
+    "status": "Status",
+    "connected": "OpenCode connected",
+    "notLoggedIn": "Not logged in",
+    "description": "This connects the OpenCode Zen API key, not the console.opencode.ai Console account."
   },
   "sessionSearch": {
     "title": "Search chats",
@@ -206,6 +237,13 @@
     "reasoning": "Reasoning",
     "cacheRW": "Cache (r/w)",
     "rawMessages": "Raw Messages"
+  },
+  "contextIndicator": {
+    "label": "Context usage",
+    "title": "Context window:",
+    "used": "used",
+    "remaining": "{{percent}}% remaining",
+    "tokens": "{{used}} tokens used, {{total}} total"
   },
   "hints": {
     "pressEscAgain": "Press <1>Esc</1> again to stop",

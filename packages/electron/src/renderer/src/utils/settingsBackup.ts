@@ -1,4 +1,5 @@
 import {
+  STORAGE_KEY_BROWSER_OPEN_MODE,
   STORAGE_KEY_NOTIFICATIONS_ENABLED,
   STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED,
 } from '../constants/storage'
@@ -39,6 +40,7 @@ const BACKUP_SCHEMA_VERSION = 2
 export interface NotificationBackup {
   browserNotificationsEnabled: boolean
   browserNotificationsOnlyWhenUnfocused: boolean
+  browserOpenMode?: 'internal' | 'system'
   toast: NotificationPreferencesBackup
   events: NotificationEventSettingsBackup
 }
@@ -68,6 +70,7 @@ function exportNotificationBackup(): NotificationBackup {
     browserNotificationsEnabled: localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_ENABLED) === 'true',
     browserNotificationsOnlyWhenUnfocused:
       localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED) === 'true',
+    browserOpenMode: localStorage.getItem(STORAGE_KEY_BROWSER_OPEN_MODE) === 'system' ? 'system' : 'internal',
     toast: exportNotificationPreferencesBackup(),
     events: exportNotificationEventSettingsBackup(),
   }
@@ -77,6 +80,7 @@ function importNotificationBackup(raw: unknown): void {
   const parsed = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : undefined
   const browserNotificationsEnabled = parsed?.browserNotificationsEnabled === true
   const browserNotificationsOnlyWhenUnfocused = parsed?.browserNotificationsOnlyWhenUnfocused === true
+  const browserOpenMode = parsed?.browserOpenMode === 'system' ? 'system' : 'internal'
 
   if (browserNotificationsEnabled) {
     localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_ENABLED, 'true')
@@ -88,6 +92,12 @@ function importNotificationBackup(raw: unknown): void {
     localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED, 'true')
   } else {
     localStorage.removeItem(STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED)
+  }
+
+  if (browserOpenMode === 'system') {
+    localStorage.setItem(STORAGE_KEY_BROWSER_OPEN_MODE, 'system')
+  } else {
+    localStorage.removeItem(STORAGE_KEY_BROWSER_OPEN_MODE)
   }
 
   importNotificationPreferencesBackup(parsed?.toast)

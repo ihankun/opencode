@@ -115,6 +115,39 @@ export function getSDKClient(): OpencodeClient {
   return _cachedClient
 }
 
+export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  if (isTauri()) {
+    await getTauriFetch()
+  }
+
+  const baseUrl = serverStore.getActiveBaseUrl()
+  const url = new URL(path, baseUrl)
+  const headers = new Headers(init?.headers)
+  for (const [key, value] of Object.entries(buildHeaders())) {
+    headers.set(key, value)
+  }
+  if (init?.body && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json')
+  }
+  if (!headers.has('accept')) {
+    headers.set('accept', 'application/json')
+  }
+
+  const response = await trackedFetch(
+    url,
+    {
+      ...init,
+      headers,
+    },
+    _apiRequestGeneration,
+  )
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`)
+  }
+  return response.json() as Promise<T>
+}
+
 /**
  * 异步获取 SDK client（确保 tauri fetch 已加载）
  * 在应用初始化时应该先调一次这个

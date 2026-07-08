@@ -2,41 +2,29 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { ShareDialog } from '../ShareDialog'
-import { ContextDetailsDialog } from './ContextDetailsDialog'
 import {
   CogIcon,
+  ExternalLinkIcon,
+  KeyIcon,
+  LogOutIcon,
   SunIcon,
   MoonIcon,
   SystemIcon,
   ShareIcon,
+  UsersIcon,
 } from '../../../components/Icons'
-import { CircularProgress } from '../../../components/CircularProgress'
-import { formatTokens, formatCost, useTheme } from '../../../hooks'
-import type { SessionStats } from '../../../hooks'
+import { Dialog } from '../../../components/ui'
+import { refreshModels, useTheme } from '../../../hooks'
+import {
+  disposeInstance,
+  getProviders,
+  logoutConsoleAccount,
+  removeProviderAuth,
+  setProviderAuth,
+} from '../../../api'
+import { openUrl } from '../../../utils/browserOpen'
 
-// 状态指示器 - 圆环 + 右下角状态点
-function StatusIndicator({
-  percent,
-  connectionState,
-  size = 24,
-}: {
-  percent: number
-  connectionState: string
-  size?: number
-}) {
-  const clampedPercent = Math.min(Math.max(percent, 0), 100)
-
-  // 进度颜色
-  const progressColor =
-    clampedPercent === 0
-      ? 'text-text-500'
-      : clampedPercent >= 90
-        ? 'text-danger-100'
-        : clampedPercent >= 70
-          ? 'text-warning-100'
-          : 'text-accent-main-100'
-
-  // 连接状态颜色
+function AccountIndicator({ connectionState, size = 24 }: { connectionState: string; size?: number }) {
   const statusColor =
     connectionState === 'connected'
       ? 'bg-success-100'
@@ -47,38 +35,178 @@ function StatusIndicator({
           : 'bg-text-500'
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <CircularProgress
-        progress={clampedPercent / 100}
-        size={size}
-        strokeWidth={3}
-        trackClassName="text-text-100/10"
-        progressClassName={progressColor}
-      />
-
-      {/* 右下角状态点 - 带背景边框以突出显示 */}
-      <div
-        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-200 ${statusColor}`}
-      />
+    <div
+      className="relative shrink-0 rounded-full border border-border-200/60 bg-bg-200/70"
+      style={{ width: size, height: size }}
+    >
+      <div className="absolute inset-1.5 rounded-full bg-text-400/25" />
+      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-200 ${statusColor}`} />
     </div>
+  )
+}
+
+function OpenCodeLoginDialog({
+  isOpen,
+  onClose,
+  onLoggedIn,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onLoggedIn: () => void
+}) {
+  const { t } = useTranslation(['chat'])
+  const [apiKey, setApiKey] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  const [error, setError] = useState('')
+  const onLoggedInRef = useRef(onLoggedIn)
+
+  useEffect(() => {
+    onLoggedInRef.current = onLoggedIn
+  }, [onLoggedIn])
+
+  const reset = useCallback(() => {
+    setApiKey('')
+    setStatus('idle')
+    setError('')
+  }, [])
+
+  const handleClose = useCallback(() => {
+    reset()
+    onClose()
+  }, [onClose, reset])
+
+  const save = useCallback(async () => {
+    const key = apiKey.trim()
+    if (!key) {
+      setStatus('error')
+      setError(t('accountLogin.apiKeyRequired'))
+      return
+    }
+
+    setStatus('saving')
+    setError('')
+    try {
+      await setProviderAuth('opencode', { type: 'api', key })
+      await logoutConsoleAccount().catch(() => undefined)
+      await disposeInstance()
+      await refreshModels()
+      setStatus('success')
+      onLoggedInRef.current()
+    } catch (err) {
+      setStatus('error')
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [apiKey, t])
+
+  useEffect(() => {
+    if (status !== 'success') return
+
+    const timer = setTimeout(handleClose, 900)
+    return () => clearTimeout(timer)
+  }, [handleClose, status])
+
+  return (
+    <Dialog isOpen={isOpen} onClose={handleClose} title={t('accountLogin.title')} width={440}>
+      <div className="space-y-4">
+        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3 text-[length:var(--fs-sm)] text-text-300">
+          {t('accountLogin.description')}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void openUrl('https://opencode.ai/auth')}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-main-100 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-white transition-opacity hover:opacity-90"
+        >
+          <ExternalLinkIcon size={15} />
+          {t('accountLogin.openBrowser')}
+        </button>
+
+        <div className="space-y-2">
+          <label className="text-[length:var(--fs-xs)] font-medium text-text-400" htmlFor="opencode-api-key">
+            {t('accountLogin.apiKey')}
+          </label>
+          <input
+            id="opencode-api-key"
+            type="password"
+            value={apiKey}
+            onChange={event => setApiKey(event.target.value)}
+            placeholder={t('accountLogin.apiKeyPlaceholder')}
+            className="w-full rounded-lg border border-border-200 bg-bg-000 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none transition-colors placeholder:text-text-500 focus:border-accent-main-100"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={status === 'saving'}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-bg-200 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-text-100 transition-colors hover:bg-bg-300 disabled:opacity-60"
+        >
+          <KeyIcon size={15} />
+          {t(status === 'saving' ? 'accountLogin.saving' : 'accountLogin.save')}
+        </button>
+
+        {status === 'success' && (
+          <div className="text-[length:var(--fs-sm)] text-success-100">{t('accountLogin.success')}</div>
+        )}
+        {status === 'error' && (
+          <div className="text-[length:var(--fs-sm)] text-danger-100">
+            {t('accountLogin.error')}
+            {error ? `：${error}` : ''}
+          </div>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
+function OpenCodeProfileDialog({
+  isOpen,
+  onClose,
+  connected,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  connected: boolean
+}) {
+  const { t } = useTranslation(['chat'])
+
+  return (
+    <Dialog isOpen={isOpen} onClose={onClose} title={t('accountProfile.title')} width={420}>
+      <div className="space-y-3 text-[length:var(--fs-sm)]">
+        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3">
+          <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">{t('accountProfile.provider')}</div>
+          <div className="font-medium text-text-100">OpenCode Zen</div>
+        </div>
+        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3">
+          <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">{t('accountProfile.status')}</div>
+          <div className={connected ? 'text-success-100' : 'text-text-400'}>
+            {connected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3 text-text-300">
+          {t('accountProfile.description')}
+        </div>
+      </div>
+    </Dialog>
   )
 }
 
 export interface SidebarFooterProps {
   showLabels: boolean
   connectionState: string
-  stats: SessionStats
-  hasMessages: boolean
   onOpenSettings?: () => void
 }
 
-export function SidebarFooter({ showLabels, connectionState, stats, hasMessages, onOpenSettings }: SidebarFooterProps) {
+export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: SidebarFooterProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
-  const [contextDialogOpen, setContextDialogOpen] = useState(false)
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
+  const [opencodeConnected, setOpencodeConnected] = useState(false)
+  const [accountActionError, setAccountActionError] = useState('')
   const [isVisible, setIsVisible] = useState(false)
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -94,9 +222,21 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
       disconnected: 'bg-text-500',
       error: 'bg-danger-100',
     }[connectionState] || 'bg-text-500'
-
-  const statsColor =
-    stats.contextPercent >= 90 ? 'bg-danger-100' : stats.contextPercent >= 70 ? 'bg-warning-100' : 'bg-accent-main-100'
+  const connectionLabel = t(`sidebar.connection.${connectionState}`, {
+    defaultValue: t('sidebar.connection.unknown'),
+  })
+  const refreshOpencodeConnection = useCallback(() => {
+    return getProviders()
+      .then(result => {
+        const connected = result.connected.includes('opencode')
+        setOpencodeConnected(connected)
+        return connected
+      })
+      .catch(() => {
+        setOpencodeConnected(false)
+        return false
+      })
+  }, [])
 
   // 打开菜单
   const openMenu = useCallback(() => {
@@ -136,6 +276,20 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
     // 保存到 ref 以便清理
     closeTimeoutIdRef.current = closeTimeoutId
   }, [])
+
+  const handleLogout = useCallback(async () => {
+    closeMenu()
+    setAccountActionError('')
+    try {
+      await removeProviderAuth('opencode')
+      await logoutConsoleAccount().catch(() => undefined)
+      await disposeInstance()
+      setOpencodeConnected(false)
+      await refreshModels()
+    } catch (err) {
+      setAccountActionError(err instanceof Error ? err.message : String(err))
+    }
+  }, [closeMenu])
 
   // 切换菜单
   const toggleMenu = useCallback(() => {
@@ -194,6 +348,16 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
     }
   }, [])
 
+  useEffect(() => {
+    let disposed = false
+    refreshOpencodeConnection().then(connected => {
+      if (!disposed) setOpencodeConnected(connected)
+    })
+    return () => {
+      disposed = true
+    }
+  }, [refreshOpencodeConnection])
+
   // 浮动菜单
   const floatingMenu = isOpen
     ? createPortal(
@@ -211,47 +375,6 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
             transformOrigin: showLabels ? 'bottom left' : 'bottom left',
           }}
         >
-          {/* Context Stats */}
-          <div className="relative p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('sidebar.contextUsage')}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-[length:var(--fs-sm)] font-mono text-text-400">
-                  {Math.round(stats.contextPercent)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    closeMenu()
-                    setContextDialogOpen(true)
-                  }}
-                  className="
-                shrink-0 h-6 px-2
-                rounded-md border border-border-200/60
-                bg-bg-200/70 hover:bg-bg-300
-                text-[length:var(--fs-xxs)] font-medium text-text-200
-                transition-colors
-              "
-                >
-                  {t('sidebar.viewDetails')}
-                </button>
-              </div>
-            </div>
-            <div className="w-full h-1.5 bg-bg-300 rounded-full overflow-hidden relative mb-2">
-              <div
-                className={`absolute inset-0 ${statsColor} transition-transform duration-500 ease-out origin-left`}
-                style={{ transform: `scaleX(${Math.min(100, stats.contextPercent) / 100})` }}
-              />
-            </div>
-            <div className="flex justify-between text-[length:var(--fs-xxs)] text-text-400 font-mono">
-              <span>
-                {formatTokens(stats.contextUsed)} / {formatTokens(stats.contextLimit)}
-              </span>
-              <span>{formatCost(stats.totalCost)}</span>
-            </div>
-            <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />
-          </div>
-
           {/* Theme Selector */}
           <div className="relative p-2">
             <div className="text-[length:var(--fs-xxs)] font-bold text-text-400 uppercase tracking-wider px-1 mb-1.5">
@@ -288,6 +411,43 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
 
           {/* Menu Items */}
           <div className="p-1">
+            {accountActionError && (
+              <div className="mx-2 my-1 rounded-md bg-danger-100/10 px-2 py-1.5 text-[length:var(--fs-xs)] text-danger-100">
+                {accountActionError}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                closeMenu()
+                setLoginDialogOpen(true)
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
+            >
+              <KeyIcon size={14} />
+              <span>{t('sidebar.accountLogin')}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                closeMenu()
+                setProfileDialogOpen(true)
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
+            >
+              <UsersIcon size={14} />
+              <span>{t('sidebar.accountProfile')}</span>
+            </button>
+
+            {opencodeConnected && (
+              <button
+                onClick={() => void handleLogout()}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
+              >
+                <LogOutIcon size={14} />
+                <span>{t('sidebar.accountLogout')}</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 closeMenu()
@@ -315,7 +475,7 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
           <div className="relative flex items-center gap-2 px-3 py-2 text-[length:var(--fs-xxs)] text-text-300 cursor-default">
             <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-border-200/30" />
             <div className={`w-1.5 h-1.5 rounded-full ${statusColorClass}`} />
-            <span className="capitalize">{connectionState}</span>
+            <span>{connectionLabel}</span>
           </div>
         </div>,
         document.body,
@@ -338,29 +498,16 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
             paddingLeft: showLabels ? 6 : 4, // 收起时为了对齐中心线(16px)，24px圆环需要4px padding (4+12=16)
             paddingRight: showLabels ? 8 : 4,
           }}
-          title={`Context: ${formatTokens(hasMessages ? stats.contextUsed : 0)} tokens • ${Math.round(stats.contextPercent)}% • ${formatCost(stats.totalCost)}`}
+          title={opencodeConnected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
         >
-          {/* 状态指示器 */}
-          <StatusIndicator percent={stats.contextPercent} connectionState={connectionState} size={24} />
+          <AccountIndicator connectionState={connectionState} size={24} />
 
-          {/* 展开时显示详细信息 */}
           <span
             className="ml-2 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-300"
             style={{ opacity: showLabels ? 1 : 0 }}
           >
-            <span className="text-[length:var(--fs-sm)] font-mono text-text-300 truncate">
-              {hasMessages ? formatTokens(stats.contextUsed) : '0'} / {formatTokens(stats.contextLimit)}
-            </span>
-            <span
-              className={`text-[length:var(--fs-sm)] font-medium ml-2 ${
-                stats.contextPercent >= 90
-                  ? 'text-danger-100'
-                  : stats.contextPercent >= 70
-                    ? 'text-warning-100'
-                    : 'text-text-400'
-              }`}
-            >
-              {Math.round(stats.contextPercent)}%
+            <span className="text-[length:var(--fs-sm)] text-text-300 truncate">
+              {opencodeConnected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
             </span>
           </span>
         </button>
@@ -368,10 +515,18 @@ export function SidebarFooter({ showLabels, connectionState, stats, hasMessages,
 
       {floatingMenu}
       <ShareDialog isOpen={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
-      <ContextDetailsDialog
-        isOpen={contextDialogOpen}
-        onClose={() => setContextDialogOpen(false)}
-        contextLimit={stats.contextLimit}
+      <OpenCodeProfileDialog
+        isOpen={profileDialogOpen}
+        onClose={() => setProfileDialogOpen(false)}
+        connected={opencodeConnected}
+      />
+      <OpenCodeLoginDialog
+        isOpen={loginDialogOpen}
+        onClose={() => setLoginDialogOpen(false)}
+        onLoggedIn={() => {
+          setOpencodeConnected(true)
+          void refreshOpencodeConnection()
+        }}
       />
     </div>
   )

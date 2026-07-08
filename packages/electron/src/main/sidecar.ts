@@ -89,16 +89,14 @@ async function importServerModule() {
 }
 
 function prepareEnv(command: StartCommand) {
-  const xdgRoot = join(command.userDataPath, "xdg")
-
   Object.assign(process.env, {
     OPENCODE_CLIENT: "opencodex-electron",
     OPENCODE_DISABLE_EMBEDDED_WEB_UI: "true",
     OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
-    XDG_CACHE_HOME: join(xdgRoot, "cache"),
-    XDG_CONFIG_HOME: join(xdgRoot, "config"),
-    XDG_DATA_HOME: join(xdgRoot, "data"),
-    XDG_STATE_HOME: join(xdgRoot, "state"),
+    XDG_CACHE_HOME: join(command.userDataPath, "cache"),
+    XDG_CONFIG_HOME: join(command.userDataPath, "config"),
+    XDG_DATA_HOME: join(command.userDataPath, "data"),
+    XDG_STATE_HOME: join(command.userDataPath, "state"),
   })
 
   if (command.password) {

@@ -59,6 +59,21 @@ export type CustomOpenCodeNotificationSendResult = {
   error?: string
 }
 
+export type CustomOpenCodeConsoleLoginStart = {
+  code: string
+  user: string
+  url: string
+  server: string
+  expiresInMs: number
+  intervalMs: number
+}
+
+export type CustomOpenCodeConsoleLoginResult = {
+  status: "success" | "pending" | "slow" | "expired" | "denied" | "error"
+  email?: string
+  message?: string
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
@@ -68,6 +83,8 @@ export type CustomOpenCodeApi = {
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
+  openExternalUrl(url: string): Promise<boolean>
+  waitConsoleLogin(login: CustomOpenCodeConsoleLoginStart): Promise<CustomOpenCodeConsoleLoginResult>
   notificationPermission(): Promise<CustomOpenCodeNotificationPermission>
   sendNotification(input: {
     title: string
@@ -91,6 +108,8 @@ const api: CustomOpenCodeApi = {
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
+  openExternalUrl: (url) => ipcRenderer.invoke("browser:open-external", url),
+  waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
   onNotificationClicked(callback) {

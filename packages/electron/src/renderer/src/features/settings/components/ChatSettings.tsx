@@ -4,6 +4,7 @@ import { PathAutoIcon, PathUnixIcon, PathWindowsIcon } from '../../../components
 import { usePathMode, useIsMobile, useTheme } from '../../../hooks'
 import { themeStore, type ReasoningDisplayMode, type CompletedAtFormat } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
+import { getBrowserOpenMode, setBrowserOpenMode, type BrowserOpenMode } from '../../../utils/browserOpen'
 import type { PathMode } from '../../../utils/directoryUtils'
 
 export function ChatSettings() {
@@ -21,6 +22,7 @@ export function ChatSettings() {
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
   const [reasoningDisplayMode, setReasoningDisplayMode] = useState(themeStore.reasoningDisplayMode)
+  const [browserOpenMode, setBrowserOpenModeState] = useState<BrowserOpenMode>(() => getBrowserOpenMode())
   const isMobile = useIsMobile()
   void isMobile
 
@@ -46,6 +48,11 @@ export function ChatSettings() {
 
   const handleOutlineHighlightToggle = () => {
     setOutlineCurrentHighlight(!outlineCurrentHighlight)
+  }
+
+  const handleBrowserOpenModeChange = (mode: BrowserOpenMode) => {
+    setBrowserOpenModeState(mode)
+    setBrowserOpenMode(mode)
   }
 
   return (
@@ -107,6 +114,19 @@ export function ChatSettings() {
         >
           <Toggle enabled={outlineCurrentHighlight} onChange={handleOutlineHighlightToggle} />
         </SettingRow>
+
+        <div>
+          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.browserOpenMode')}</p>
+          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.browserOpenModeDesc')}</p>
+          <SegmentedControl
+            value={browserOpenMode}
+            options={[
+              { value: 'internal', label: t('chat.browserOpenInternal') },
+              { value: 'system', label: t('chat.browserOpenSystem') },
+            ]}
+            onChange={v => handleBrowserOpenModeChange(v as BrowserOpenMode)}
+          />
+        </div>
 
         <div>
           <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.thinkingDisplay')}</p>

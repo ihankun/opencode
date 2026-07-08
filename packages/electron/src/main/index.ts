@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol, session } from "electron"
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol, session, shell } from "electron"
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
@@ -15,6 +15,7 @@ let tray: Tray | undefined
 let isQuitting = false
 let isStoppingForQuit = false
 const activeNotifications = new Set<Notification>()
+const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const appId = "com.hankun.opencodex"
 
 type PluginInstallTarget = {
@@ -61,6 +62,21 @@ type NativeNotificationInput = {
   directory?: string
 }
 
+type ConsoleLoginStart = {
+  code?: string
+  user?: string
+  url?: string
+  server?: string
+  expiresInMs?: number
+  intervalMs?: number
+}
+
+type ConsoleLoginResult = {
+  status: "success" | "pending" | "slow" | "expired" | "denied" | "error"
+  email?: string
+  message?: string
+}
+
 function rendererUrl() {
   if (process.env.ELECTRON_RENDERER_URL) return process.env.ELECTRON_RENDERER_URL
   return `file://${join(__dirname, "../renderer/index.html")}`
@@ -94,6 +110,7 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   })
 
@@ -231,7 +248,7 @@ if (process.platform === "darwin") {
 }
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
-app.setPath("userData", join(homedir(), ".opencodex"))
+app.setPath("userData", userDataRoot())
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData") })
 
@@ -267,6 +284,8 @@ ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
+ipcMain.handle("browser:open-external", (_event, url: unknown) => openExternalUrl(String(url ?? "")))
+ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
 
@@ -377,11 +396,11 @@ async function installPlugin(raw: string) {
 }
 
 function pluginConfigDir() {
-  return join(app.getPath("userData"), "xdg", "config", "opencode")
+  return join(app.getPath("userData"), "config", "opencode")
 }
 
 function pluginCacheDir() {
-  return join(app.getPath("userData"), "xdg", "cache", "opencode", "packages")
+  return join(app.getPath("userData"), "cache", "opencode", "packages")
 }
 
 async function readNpmManifest(spec: string): Promise<NpmPackageManifest> {
@@ -555,7 +574,7 @@ async function writeSkillFiles(rawRoot: string, rawFiles: unknown) {
 }
 
 async function ensureSkillRootConfig() {
-  const configDir = join(app.getPath("userData"), "xdg", "config", "opencode")
+  const configDir = pluginConfigDir()
   await mkdir(configDir, { recursive: true })
   const file = await pluginConfigFile(configDir, "server")
   const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
@@ -612,6 +631,52 @@ async function deleteSkill(rawLocation: string) {
   if (!containsPath(allowedRoot, root) || root === allowedRoot) throw new Error("Only user skills can be deleted")
   await rm(root, { recursive: true, force: true })
   return { ok: true as const, root }
+}
+
+async function openExternalUrl(rawUrl: string) {
+  const url = new URL(rawUrl)
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
+  await shell.openExternal(url.toString())
+  return true
+}
+
+async function waitConsoleLogin(rawLogin: unknown): Promise<ConsoleLoginResult> {
+  const current = server?.state
+  if (!current) throw new Error("OpenCodex server is not ready")
+
+  const login = normalizeConsoleLogin(rawLogin)
+  const key = `${login.server}:${login.code}`
+  const existing = consoleLoginWaits.get(key)
+  if (existing) return existing
+
+  const waiting = performConsoleLoginWait(current, login).finally(() => {
+    consoleLoginWaits.delete(key)
+  })
+  consoleLoginWaits.set(key, waiting)
+  return waiting
+}
+
+async function performConsoleLoginWait(current: SidecarHandle["state"], login: ReturnType<typeof normalizeConsoleLogin>) {
+  writeLog("main", "console login wait started", { server: login.server, intervalMs: login.intervalMs, expiresInMs: login.expiresInMs })
+
+  const response = await fetch(new URL("/experimental/console/login/wait", current.url), {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Basic ${Buffer.from(`${current.username}:${current.password}`).toString("base64")}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(login),
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    writeLog("main", "console login wait failed", { status: response.status, body: text })
+    throw new Error(text ? `HTTP ${response.status}: ${text}` : `HTTP ${response.status}`)
+  }
+
+  const result = parseConsoleLoginResult(text)
+  writeLog("main", "console login wait result", result)
+  return result
 }
 
 async function notificationPermission() {
@@ -695,6 +760,39 @@ function normalizeSkillRelativePath(value: string) {
     throw new Error("Skill file path is invalid")
   }
   return file
+}
+
+function userDataRoot() {
+  return join(homedir(), ".opencodex")
+}
+
+function normalizeConsoleLogin(rawLogin: unknown) {
+  if (!rawLogin || typeof rawLogin !== "object") throw new Error("Invalid console login payload")
+  const login = rawLogin as ConsoleLoginStart
+  if (!login.code || !login.user || !login.url || !login.server) throw new Error("Invalid console login payload")
+  return {
+    code: login.code,
+    user: login.user,
+    url: login.url,
+    server: login.server,
+    expiresInMs: Math.max(0, Number(login.expiresInMs ?? 0)),
+    intervalMs: Math.max(0, Number(login.intervalMs ?? 0)),
+  }
+}
+
+function parseConsoleLoginResult(text: string): ConsoleLoginResult {
+  const result = JSON.parse(text) as ConsoleLoginResult
+  if (
+    result.status !== "success" &&
+    result.status !== "pending" &&
+    result.status !== "slow" &&
+    result.status !== "expired" &&
+    result.status !== "denied" &&
+    result.status !== "error"
+  ) {
+    throw new Error("Invalid console login result")
+  }
+  return result
 }
 
 function containsPath(parent: string, child: string) {

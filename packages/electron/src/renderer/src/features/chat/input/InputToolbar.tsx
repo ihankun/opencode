@@ -1,12 +1,17 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDownIcon, SendIcon, StopIcon, PaperclipIcon, AgentIcon, ThinkingIcon } from '../../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../components/ui'
+import { CircularProgress } from '../../../components/CircularProgress'
 import { ModelSelector, type ModelSelectorHandle } from '../ModelSelector'
+import { ContextDetailsDialog } from '../sidebar/ContextDetailsDialog'
 import { useChatViewport } from '../chatViewport'
+import { formatTokens, formatCost } from '../../../hooks'
 import { isTauri, isTauriMobile, extToMime } from '../../../utils/tauri'
 import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
+import type { SessionStats } from '../../../hooks'
 
 interface InputToolbarProps {
   agents: ApiAgent[]
@@ -35,6 +40,105 @@ interface InputToolbarProps {
   // 输入框容器 ref，用于约束菜单边界
   inputContainerRef?: React.RefObject<HTMLDivElement | null>
   modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
+  contextStats?: SessionStats
+  hasMessages?: boolean
+}
+
+function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; hasMessages?: boolean }) {
+  const { t } = useTranslation('chat')
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [tooltipOpen, setTooltipOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+  const contextUsed = hasMessages ? (stats?.contextUsed ?? 0) : 0
+  const contextLimit = stats?.contextLimit ?? 0
+  const contextPercent = hasMessages ? (stats?.contextPercent ?? 0) : 0
+  const remainingPercent = Math.max(0, 100 - Math.round(contextPercent))
+  const progressColor =
+    contextPercent >= 90 ? 'text-danger-100' : contextPercent >= 70 ? 'text-warning-100' : 'text-text-400'
+
+  const updateTooltipPosition = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    setTooltipPosition({
+      top: Math.max(8, rect.top - 8),
+      left: Math.min(window.innerWidth - 12, rect.right + 8),
+    })
+  }, [])
+
+  const showTooltip = useCallback(() => {
+    updateTooltipPosition()
+    setTooltipOpen(true)
+  }, [updateTooltipPosition])
+
+  useEffect(() => {
+    if (!tooltipOpen) return
+
+    updateTooltipPosition()
+    window.addEventListener('resize', updateTooltipPosition)
+    window.addEventListener('scroll', updateTooltipPosition, true)
+    return () => {
+      window.removeEventListener('resize', updateTooltipPosition)
+      window.removeEventListener('scroll', updateTooltipPosition, true)
+    }
+  }, [tooltipOpen, updateTooltipPosition])
+
+  return (
+    <div className="relative shrink-0" onMouseEnter={showTooltip} onMouseLeave={() => setTooltipOpen(false)}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg text-text-400 transition-colors hover:bg-bg-200 hover:text-text-100"
+        aria-label={t('contextIndicator.label')}
+        onClick={() => {
+          setTooltipOpen(false)
+          setDetailsOpen(true)
+        }}
+        onFocus={showTooltip}
+        onBlur={() => setTooltipOpen(false)}
+      >
+        <CircularProgress
+          progress={contextPercent / 100}
+          size={18}
+          strokeWidth={3}
+          trackClassName="text-text-500/25"
+          progressClassName={progressColor}
+        />
+      </button>
+
+      {tooltipOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[10000] w-52 rounded-lg border border-border-200/70 bg-bg-000/95 px-3 py-2 text-center shadow-xl backdrop-blur-md"
+              style={{
+                top: tooltipPosition.top,
+                left: tooltipPosition.left,
+                transform: 'translate(-100%, -100%)',
+              }}
+            >
+              <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">
+                {t('contextIndicator.title')}
+              </div>
+              <div className="text-[length:var(--fs-sm)] font-semibold leading-5 text-text-100">
+                {Math.round(contextPercent)}% {t('contextIndicator.used')}（
+                {t('contextIndicator.remaining', { percent: remainingPercent })}）
+              </div>
+              <div className="mt-0.5 text-[length:var(--fs-sm)] font-medium leading-5 text-text-200">
+                {t('contextIndicator.tokens', {
+                  used: formatTokens(contextUsed),
+                  total: contextLimit > 0 ? formatTokens(contextLimit) : '—',
+                })}
+              </div>
+              <div className="mt-0.5 text-[length:var(--fs-xxs)] text-text-500">{formatCost(stats?.totalCost ?? 0)}</div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <ContextDetailsDialog isOpen={detailsOpen} onClose={() => setDetailsOpen(false)} contextLimit={contextLimit} />
+    </div>
+  )
 }
 
 export function InputToolbar({
@@ -57,6 +161,8 @@ export function InputToolbar({
   modelsLoading = false,
   inputContainerRef,
   modelSelectorRef,
+  contextStats,
+  hasMessages = false,
 }: InputToolbarProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { presentation } = useChatViewport()
@@ -393,10 +499,10 @@ export function InputToolbar({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-1 min-w-0">
-        <AnimatedPresence show={supportsAnyFile}>
+        <AnimatedPresence show>
           <>
             {/* 浏览器模式下的隐藏文件输入 */}
-            {useBrowserFileInput && (
+            {useBrowserFileInput && supportsAnyFile && (
               <input
                 ref={fileInputRef}
                 type="file"
@@ -409,11 +515,16 @@ export function InputToolbar({
                 }}
               />
             )}
-            <IconButton aria-label={t('inputToolbar.attachFile')} disabled={controlsDisabled} onClick={handleFileClick}>
+            <IconButton
+              aria-label={t('inputToolbar.attachFile')}
+              disabled={controlsDisabled || !supportsAnyFile}
+              onClick={handleFileClick}
+            >
               <PaperclipIcon />
             </IconButton>
           </>
         </AnimatedPresence>
+        <ContextUsageIndicator stats={contextStats} hasMessages={hasMessages} />
         {onModelChange && (
           <div className="min-w-0 max-w-[180px]">
             <ModelSelector

@@ -35,6 +35,7 @@ import { ChevronDownIcon, FolderIcon, GlobeIcon } from '../../components/Icons'
 import type { ApiAgent } from '../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
+import type { SessionStats } from '../../hooks'
 import { getDirectoryName, isSameDirectory } from '../../utils'
 import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
@@ -169,6 +170,8 @@ export interface InputBoxProps {
   onModelChange?: (modelKey: string, model: ModelInfo) => void
   modelsLoading?: boolean
   modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
+  contextStats?: SessionStats
+  hasMessages?: boolean
   rootPath?: string
   sessionId?: string | null
   // Undo/Redo
@@ -215,6 +218,8 @@ function InputBoxComponent({
   onModelChange,
   modelsLoading = false,
   modelSelectorRef,
+  contextStats,
+  hasMessages = false,
   rootPath = '',
   sessionId,
   revertedText,
@@ -1523,6 +1528,8 @@ function InputBoxComponent({
                       modelsLoading={modelsLoading}
                       inputContainerRef={inputContainerRef}
                       modelSelectorRef={modelSelectorRef}
+                      contextStats={contextStats}
+                      hasMessages={hasMessages}
                     />
                   </div>
                 </div>

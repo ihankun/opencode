@@ -1034,7 +1034,6 @@ function App() {
                     onNewSession={handleNewSession}
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
-                    contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
                     onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}
@@ -1125,7 +1124,6 @@ function App() {
                   onNewSession={handleNewSession}
                   onOpen={handleOpenSidebar}
                   onClose={handleCloseSidebar}
-                  contextLimit={focusedController?.contextLimit}
                   onOpenSettings={openSettings}
                   onOpenPlugins={openPluginPage}
                   projectDialogOpen={projectDialogOpen}
@@ -1146,7 +1144,6 @@ function App() {
                     onNewSession={handleNewSession}
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
-                    contextLimit={focusedController?.contextLimit}
                     onOpenSettings={openSettings}
                     onOpenPlugins={openPluginPage}
                     projectDialogOpen={projectDialogOpen}

@@ -1,4 +1,4 @@
-import { AccountID, OrgID } from "@/account/schema"
+import { AccountID, DeviceCode, OrgID, UserCode } from "@/account/schema"
 import { MCP } from "@/mcp"
 
 import { Session } from "@/session/session"
@@ -42,9 +42,56 @@ const ConsoleOrgList = Schema.Struct({
   orgs: Schema.Array(ConsoleOrgOption),
 })
 
+const ConsoleAccountOption = Schema.Struct({
+  accountID: Schema.String,
+  accountEmail: Schema.String,
+  accountUrl: Schema.String,
+  active: Schema.Boolean,
+})
+
+const ConsoleAccountList = Schema.Struct({
+  accounts: Schema.Array(ConsoleAccountOption),
+})
+
+const ConsoleProfile = Schema.Struct({
+  account: Schema.optional(ConsoleAccountOption),
+  org: Schema.optional(
+    Schema.Struct({
+      orgID: Schema.String,
+      orgName: Schema.String,
+    }),
+  ),
+  accounts: Schema.Array(ConsoleAccountOption),
+})
+
+export const ConsoleLoginPayload = Schema.Struct({
+  url: Schema.optional(Schema.String),
+})
+
+const ConsoleLoginStart = Schema.Struct({
+  code: DeviceCode,
+  user: UserCode,
+  url: Schema.String,
+  server: Schema.String,
+  expiresInMs: NonNegativeInt,
+  intervalMs: NonNegativeInt,
+})
+
+export const ConsoleLoginPollPayload = ConsoleLoginStart
+
+const ConsoleLoginPoll = Schema.Struct({
+  status: Schema.Literals(["success", "pending", "slow", "expired", "denied", "error"]),
+  email: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
+})
+
 export const ConsoleSwitchPayload = Schema.Struct({
   accountID: AccountID,
   orgID: OrgID,
+})
+
+export const ConsoleLogoutPayload = Schema.Struct({
+  accountID: Schema.optional(AccountID),
 })
 
 const ToolIDs = Schema.Array(Schema.String).annotate({ identifier: "ToolIDs" })
@@ -91,6 +138,12 @@ export const ExperimentalPaths = {
   capabilities: "/experimental/capabilities",
   console: "/experimental/console",
   consoleOrgs: "/experimental/console/orgs",
+  consoleAccounts: "/experimental/console/accounts",
+  consoleProfile: "/experimental/console/profile",
+  consoleLogin: "/experimental/console/login",
+  consoleLoginPoll: "/experimental/console/login/poll",
+  consoleLoginWait: "/experimental/console/login/wait",
+  consoleLogout: "/experimental/console/logout",
   consoleSwitch: "/experimental/console/switch",
   tool: "/experimental/tool",
   toolIDs: "/experimental/tool/ids",
@@ -135,6 +188,76 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.console.listOrgs",
             summary: "List switchable Console orgs",
             description: "Get the available Console orgs across logged-in accounts, including the current active org.",
+          }),
+        ),
+        HttpApiEndpoint.get("consoleAccounts", ExperimentalPaths.consoleAccounts, {
+          query: WorkspaceRoutingQuery,
+          success: described(ConsoleAccountList, "Console accounts"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.listAccounts",
+            summary: "List Console accounts",
+            description: "Get logged-in Console accounts, including the current active account.",
+          }),
+        ),
+        HttpApiEndpoint.get("consoleProfile", ExperimentalPaths.consoleProfile, {
+          query: WorkspaceRoutingQuery,
+          success: described(ConsoleProfile, "Console profile"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.profile",
+            summary: "Get Console profile",
+            description: "Get the active Console account and org currently stored in local OpenCode state.",
+          }),
+        ),
+        HttpApiEndpoint.post("consoleLogin", ExperimentalPaths.consoleLogin, {
+          query: WorkspaceRoutingQuery,
+          payload: ConsoleLoginPayload,
+          success: described(ConsoleLoginStart, "Console login device code"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.login",
+            summary: "Start Console login",
+            description: "Start a Console device authorization flow for the current local OpenCode state.",
+          }),
+        ),
+        HttpApiEndpoint.post("consoleLoginPoll", ExperimentalPaths.consoleLoginPoll, {
+          query: WorkspaceRoutingQuery,
+          payload: ConsoleLoginPollPayload,
+          success: described(ConsoleLoginPoll, "Console login poll status"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.loginPoll",
+            summary: "Poll Console login",
+            description: "Poll a Console device authorization flow and persist the account when authorization succeeds.",
+          }),
+        ),
+        HttpApiEndpoint.post("consoleLoginWait", ExperimentalPaths.consoleLoginWait, {
+          query: WorkspaceRoutingQuery,
+          payload: ConsoleLoginPollPayload,
+          success: described(ConsoleLoginPoll, "Console login final status"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.loginWait",
+            summary: "Wait for Console login",
+            description: "Wait for a Console device authorization flow to finish and persist the account when authorization succeeds.",
+          }),
+        ),
+        HttpApiEndpoint.post("consoleLogout", ExperimentalPaths.consoleLogout, {
+          query: WorkspaceRoutingQuery,
+          payload: ConsoleLogoutPayload,
+          success: described(Schema.Boolean, "Logout success"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.console.logout",
+            summary: "Log out of Console",
+            description: "Remove a stored Console account from the current local OpenCode state.",
           }),
         ),
         HttpApiEndpoint.post("consoleSwitch", ExperimentalPaths.consoleSwitch, {

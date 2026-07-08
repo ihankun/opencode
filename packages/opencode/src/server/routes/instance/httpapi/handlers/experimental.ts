@@ -1,4 +1,5 @@
 import { Account } from "@/account/account"
+import { Login } from "@/account/schema"
 import { Agent } from "@/agent/agent"
 import { BackgroundJob } from "@/background/job"
 import { Config } from "@/config/config"
@@ -11,11 +12,30 @@ import type { SessionID } from "@/session/schema"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
 import { Worktree } from "@/worktree"
-import { Effect, Option } from "effect"
+import { Duration, Effect, Option } from "effect"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ConsoleSwitchPayload, SessionListQuery, ToolListQuery, WorktreeApiError } from "../groups/experimental"
+import {
+  ConsoleLogoutPayload,
+  ConsoleLoginPayload,
+  ConsoleLoginPollPayload,
+  ConsoleSwitchPayload,
+  SessionListQuery,
+  ToolListQuery,
+  WorktreeApiError,
+} from "../groups/experimental"
+import { markInstanceForDisposal } from "../lifecycle"
+
+const defaultConsoleUrl = "https://console.opencode.ai"
+
+type ConsoleLoginResult =
+  | { readonly _tag: "PollSuccess"; readonly email: string }
+  | { readonly _tag: "PollPending" }
+  | { readonly _tag: "PollSlow" }
+  | { readonly _tag: "PollExpired" }
+  | { readonly _tag: "PollDenied" }
+  | { readonly _tag: "PollError"; readonly cause: unknown }
 
 function mapWorktreeError<A, R>(self: Effect.Effect<A, Worktree.Error, R>) {
   return self.pipe(
@@ -80,6 +100,168 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
           })),
         ),
       }
+    })
+
+    const listConsoleAccounts = Effect.fn("ExperimentalHttpApi.consoleAccounts")(function* () {
+      const [accounts, active] = yield* Effect.all(
+        [
+          account.list().pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({})))),
+          account.active().pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({})))),
+        ],
+        {
+          concurrency: "unbounded",
+        },
+      )
+      const info = Option.getOrUndefined(active)
+      return {
+        accounts: accounts.map((item) => ({
+          accountID: item.id,
+          accountEmail: item.email,
+          accountUrl: item.url,
+          active: !!info && info.id === item.id,
+        })),
+      }
+    })
+
+    const getConsoleProfile = Effect.fn("ExperimentalHttpApi.consoleProfile")(function* () {
+      const [accounts, active, activeOrg] = yield* Effect.all(
+        [
+          account.list().pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({})))),
+          account.active().pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({})))),
+          account.activeOrg().pipe(Effect.catch(() => Effect.succeed(Option.none()))),
+        ],
+        {
+          concurrency: "unbounded",
+        },
+      )
+      const info = Option.getOrUndefined(active)
+      const org = Option.getOrUndefined(activeOrg)
+      return {
+        ...(info
+          ? {
+              account: {
+                accountID: info.id,
+                accountEmail: info.email,
+                accountUrl: info.url,
+                active: true,
+              },
+            }
+          : {}),
+        ...(org ? { org: { orgID: org.org.id, orgName: org.org.name } } : {}),
+        accounts: accounts.map((item) => ({
+          accountID: item.id,
+          accountEmail: item.email,
+          accountUrl: item.url,
+          active: !!info && info.id === item.id,
+        })),
+      }
+    })
+
+    const consoleLogin = Effect.fn("ExperimentalHttpApi.consoleLogin")(function* (ctx: {
+      payload: typeof ConsoleLoginPayload.Type
+    }) {
+      const login = yield* account
+        .login(ctx.payload.url ?? defaultConsoleUrl)
+        .pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))))
+      return {
+        code: login.code,
+        user: login.user,
+        url: login.url,
+        server: login.server,
+        expiresInMs: Duration.toMillis(login.expiry),
+        intervalMs: Duration.toMillis(login.interval),
+      }
+    })
+
+    const consoleLoginPoll = Effect.fn("ExperimentalHttpApi.consoleLoginPoll")(function* (ctx: {
+      payload: typeof ConsoleLoginPollPayload.Type
+    }) {
+      const result = yield* account
+        .poll(
+          new Login({
+            code: ctx.payload.code,
+            user: ctx.payload.user,
+            url: ctx.payload.url,
+            server: ctx.payload.server,
+            expiry: Duration.millis(ctx.payload.expiresInMs),
+            interval: Duration.millis(ctx.payload.intervalMs),
+          }),
+        )
+        .pipe(
+          Effect.catch((error) =>
+            Effect.succeed({
+              _tag: "PollError" as const,
+              cause: error instanceof Error ? error.message : String(error),
+            }),
+          ),
+        )
+
+      if (result._tag === "PollSuccess") {
+        yield* markInstanceForDisposal(yield* InstanceState.context)
+        return { status: "success" as const, email: result.email }
+      }
+      if (result._tag === "PollSlow") return { status: "slow" as const }
+      if (result._tag === "PollExpired") return { status: "expired" as const }
+      if (result._tag === "PollDenied") return { status: "denied" as const }
+      if (result._tag === "PollError") return { status: "error" as const, message: String(result.cause) }
+      return { status: "pending" as const }
+    })
+
+    const consoleLoginWait = Effect.fn("ExperimentalHttpApi.consoleLoginWait")(function* (ctx: {
+      payload: typeof ConsoleLoginPollPayload.Type
+    }) {
+      const login = new Login({
+        code: ctx.payload.code,
+        user: ctx.payload.user,
+        url: ctx.payload.url,
+        server: ctx.payload.server,
+        expiry: Duration.millis(ctx.payload.expiresInMs),
+        interval: Duration.millis(ctx.payload.intervalMs),
+      })
+      const toResponse = (result: ConsoleLoginResult) => {
+        if (result._tag === "PollSuccess") return { status: "success" as const, email: result.email }
+        if (result._tag === "PollSlow") return { status: "slow" as const }
+        if (result._tag === "PollExpired") return { status: "expired" as const }
+        if (result._tag === "PollDenied") return { status: "denied" as const }
+        if (result._tag === "PollError") return { status: "error" as const, message: String(result.cause) }
+        return { status: "pending" as const }
+      }
+      const poll = (wait: Duration.Duration): Effect.Effect<ConsoleLoginResult, never, never> =>
+        Effect.gen(function* () {
+          yield* Effect.sleep(wait)
+          const result = yield* account.poll(login).pipe(
+            Effect.catch((error) =>
+              Effect.succeed({
+                _tag: "PollError" as const,
+                cause: error instanceof Error ? error.message : String(error),
+              }),
+            ),
+          )
+          if (result._tag === "PollPending") return yield* poll(wait)
+          if (result._tag === "PollSlow") return yield* poll(Duration.sum(wait, Duration.seconds(5)))
+          return result
+        })
+
+      const result = yield* poll(login.interval).pipe(
+        Effect.timeout(login.expiry),
+        Effect.catchTag("TimeoutError", () => Effect.succeed({ _tag: "PollExpired" as const })),
+      )
+      if (result._tag === "PollSuccess") yield* markInstanceForDisposal(yield* InstanceState.context)
+      return toResponse(result)
+    })
+
+    const consoleLogout = Effect.fn("ExperimentalHttpApi.consoleLogout")(function* (ctx: {
+      payload: typeof ConsoleLogoutPayload.Type
+    }) {
+      const active = yield* account
+        .active()
+        .pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))))
+      const accountID = ctx.payload.accountID ?? Option.getOrUndefined(active)?.id
+      if (!accountID) return true
+
+      yield* account.remove(accountID).pipe(Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))))
+      yield* markInstanceForDisposal(yield* InstanceState.context)
+      return true
     })
 
     const switchConsole = Effect.fn("ExperimentalHttpApi.consoleSwitch")(function* (ctx: {
@@ -179,6 +361,12 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("capabilities", capabilities)
       .handle("console", getConsole)
       .handle("consoleOrgs", listConsoleOrgs)
+      .handle("consoleAccounts", listConsoleAccounts)
+      .handle("consoleProfile", getConsoleProfile)
+      .handle("consoleLogin", consoleLogin)
+      .handle("consoleLoginPoll", consoleLoginPoll)
+      .handle("consoleLoginWait", consoleLoginWait)
+      .handle("consoleLogout", consoleLogout)
       .handle("consoleSwitch", switchConsole)
       .handle("tool", tool)
       .handle("toolIDs", toolIDs)
