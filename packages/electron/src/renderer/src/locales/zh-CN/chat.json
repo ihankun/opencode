@@ -20,7 +20,7 @@
     "projectTitle": "我们应该在 {{project}} 中构建什么？",
     "projectTitleShort": "我们应该构建什么？",
     "promptPlaceholder": "随心输入",
-    "chooseProject": "Choose project",
+    "chooseProject": "选择项目",
     "description": "为此会话选择工作目录",
     "workingDirectory": "工作目录",
     "enterAbsolutePath": "输入绝对路径...",
@@ -43,8 +43,8 @@
     "tryDifferentKeyword": "试试其他关键词",
     "pinned": "已置顶",
     "recent": "最近使用",
-    "thinking": "Thinking",
-    "vision": "Vision",
+    "thinking": "思考",
+    "vision": "视觉",
     "unpin": "取消置顶",
     "pinToTop": "置顶",
     "model": "模型"
@@ -93,7 +93,17 @@
     "addCurrent": "添加当前目录"
   },
   "inputToolbar": {
-    "default": "Default",
+    "default": "默认",
+    "variants": {
+      "default": "默认",
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "agentDescriptions": {
+      "build": "Build 默认模式。会根据已配置的权限执行工具。",
+      "plan": "Plan 模式。禁止使用所有编辑工具。"
+    },
     "attachFile": "附加文件",
     "stopGeneration": "停止生成",
     "sendingMessage": "发送消息中",
@@ -116,9 +126,9 @@
     "reply": "回复..."
   },
   "undoStatus": {
-    "editing": "Editing",
-    "redo": "Redo",
-    "redoAll": "Redo All"
+    "editing": "编辑中",
+    "redo": "重做",
+    "redoAll": "全部重做"
   },
   "sidebar": {
     "allProjects": "全部项目",
@@ -192,7 +202,7 @@
   },
   "accountProfile": {
     "title": "个人信息",
-    "provider": "Provider",
+    "provider": "供应商",
     "status": "状态",
     "connected": "OpenCode 已连接",
     "notLoggedIn": "未登录",
@@ -234,7 +244,7 @@
     "totalCost": "总费用",
     "inputTokens": "输入",
     "outputTokens": "输出",
-    "reasoning": "Reasoning",
+    "reasoning": "思考",
     "cacheRW": "缓存 (读/写)",
     "rawMessages": "原始消息"
   },

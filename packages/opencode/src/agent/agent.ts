@@ -140,7 +140,7 @@ const layer = Layer.effect(
         const agents: Record<string, Info> = {
           build: {
             name: "build",
-            description: "The default agent. Executes tools based on configured permissions.",
+            description: "Build 默认模式。会根据已配置的权限执行工具。",
             options: {},
             permission: Permission.merge(
               defaults,
@@ -155,7 +155,7 @@ const layer = Layer.effect(
           },
           plan: {
             name: "plan",
-            description: "Plan mode. Disallows all edit tools.",
+            description: "Plan 模式。禁止使用所有编辑工具。",
             options: {},
             permission: Permission.merge(
               defaults,

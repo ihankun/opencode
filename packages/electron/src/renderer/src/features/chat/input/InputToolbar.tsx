@@ -1,7 +1,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronDownIcon, SendIcon, StopIcon, PaperclipIcon, AgentIcon, ThinkingIcon } from '../../../components/Icons'
+import {
+  ChevronDownIcon,
+  SendIcon,
+  StopIcon,
+  PaperclipIcon,
+  AgentIcon,
+  ThinkingIcon,
+  BuildAgentIcon,
+  PlanAgentIcon,
+} from '../../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../components/ui'
 import { CircularProgress } from '../../../components/CircularProgress'
 import { ModelSelector, type ModelSelectorHandle } from '../ModelSelector'
@@ -42,6 +51,44 @@ interface InputToolbarProps {
   modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
   contextStats?: SessionStats
   hasMessages?: boolean
+}
+
+function formatTitleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function getVariantLabel(variant: string | undefined, t: (key: string) => string) {
+  if (!variant) return t('inputToolbar.variants.default')
+
+  const normalized = variant.toLowerCase()
+  const knownLabels: Record<string, string> = {
+    default: t('inputToolbar.variants.default'),
+    low: t('inputToolbar.variants.low'),
+    medium: t('inputToolbar.variants.medium'),
+    middle: t('inputToolbar.variants.medium'),
+    middlw: t('inputToolbar.variants.medium'),
+    high: t('inputToolbar.variants.high'),
+  }
+
+  return knownLabels[normalized] ?? formatTitleCase(variant)
+}
+
+function getAgentLabel(agentName: string) {
+  return agentName === 'build' || agentName === 'plan' ? formatTitleCase(agentName) : formatTitleCase(agentName)
+}
+
+function getAgentDescription(agent: ApiAgent, t: (key: string) => string) {
+  if (agent.name === 'build') return t('inputToolbar.agentDescriptions.build')
+  if (agent.name === 'plan') return t('inputToolbar.agentDescriptions.plan')
+  return agent.description
+}
+
+function AgentModeIcon({ name, color }: { name?: string; color?: string }) {
+  const normalized = name?.toLowerCase()
+  const Icon = normalized === 'build' ? BuildAgentIcon : normalized === 'plan' ? PlanAgentIcon : AgentIcon
+  const style = normalized === 'build' ? { color: '#2563eb' } : color ? { color } : undefined
+
+  return <Icon style={style} />
 }
 
 function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; hasMessages?: boolean }) {
@@ -173,6 +220,7 @@ export function InputToolbar({
   const caps = fileCapabilities ?? { image: false, pdf: false, audio: false, video: false }
   const supportsAnyFile = caps.image || caps.pdf || caps.audio || caps.video
   const controlsDisabled = isSending
+  const selectedVariantLabel = getVariantLabel(selectedVariant, t)
 
   // 动态构建 HTML accept 和 Tauri filter
   const { acceptString, tauriFilters } = useMemo(() => {
@@ -410,6 +458,7 @@ export function InputToolbar({
 
   const selectableAgents = agents.filter(a => a.mode !== 'subagent' && !a.hidden)
   const currentAgent = agents.find(a => a.name === selectedAgent)
+  const currentAgentDescription = currentAgent ? getAgentDescription(currentAgent, t) : undefined
 
   return (
     <div className="flex items-center justify-between px-3 pb-3 relative">
@@ -439,16 +488,15 @@ export function InputToolbar({
               className="flex items-center gap-1.5 px-2 py-1.5 text-[length:var(--fs-base)] rounded-lg transition-all duration-150 hover:bg-bg-200 active:scale-95 cursor-pointer min-w-0 overflow-hidden w-full"
               title={
                 currentAgent
-                  ? `${currentAgent.name}${currentAgent.description ? ': ' + currentAgent.description : ''}`
+                  ? `${getAgentLabel(currentAgent.name)}${currentAgentDescription ? ': ' + currentAgentDescription : ''}`
                   : selectedAgent || 'build'
               }
             >
               {/* 紧凑信息流隐藏 AgentIcon 节省空间 */}
               <span
                 className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}
-                style={currentAgent?.color ? { color: currentAgent.color } : undefined}
               >
-                <AgentIcon />
+                <AgentModeIcon name={selectedAgent || 'build'} color={currentAgent?.color} />
               </span>
               <span className="text-[length:var(--fs-sm)] text-text-300 capitalize truncate">{selectedAgent || 'build'}</span>
               <span className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}>
@@ -475,11 +523,11 @@ export function InputToolbar({
                 {selectableAgents.map(agent => (
                   <MenuItem
                     key={agent.name}
-                    label={agent.name.charAt(0).toUpperCase() + agent.name.slice(1)}
-                    description={agent.description}
+                    label={getAgentLabel(agent.name)}
+                    description={getAgentDescription(agent, t)}
                     icon={
-                      <span style={agent.color ? { color: agent.color } : undefined}>
-                        <AgentIcon />
+                      <span className="text-text-400">
+                        <AgentModeIcon name={agent.name} color={agent.color} />
                       </span>
                     }
                     selected={selectedAgent === agent.name}
@@ -561,18 +609,14 @@ export function InputToolbar({
               aria-controls={variantMenuOpen ? variantMenuId : undefined}
               className="flex items-center gap-1.5 px-2 py-1.5 text-[length:var(--fs-base)] rounded-lg transition-all duration-150 hover:bg-bg-200 active:scale-95 cursor-pointer min-w-0 overflow-hidden w-full"
               title={
-                selectedVariant
-                  ? selectedVariant.charAt(0).toUpperCase() + selectedVariant.slice(1)
-                  : t('inputToolbar.default')
+                selectedVariantLabel
               }
             >
               <span className="text-text-400 shrink-0">
                 <ThinkingIcon />
               </span>
               <span className="text-[length:var(--fs-sm)] text-text-300 truncate">
-                {selectedVariant
-                  ? selectedVariant.charAt(0).toUpperCase() + selectedVariant.slice(1)
-                  : t('inputToolbar.default')}
+                {selectedVariantLabel}
               </span>
               <span className="text-text-400 shrink-0">
                 <ChevronDownIcon />
@@ -597,7 +641,7 @@ export function InputToolbar({
                 }
               >
                 <MenuItem
-                  label={t('inputToolbar.default')}
+                  label={getVariantLabel(undefined, t)}
                   icon={<ThinkingIcon />}
                   selected={!selectedVariant}
                   selectionRole="menuitemradio"
@@ -609,7 +653,7 @@ export function InputToolbar({
                 {variants.map(variant => (
                   <MenuItem
                     key={variant}
-                    label={variant.charAt(0).toUpperCase() + variant.slice(1)}
+                    label={getVariantLabel(variant, t)}
                     icon={<ThinkingIcon />}
                     selected={selectedVariant === variant}
                     selectionRole="menuitemradio"

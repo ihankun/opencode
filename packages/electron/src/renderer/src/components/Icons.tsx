@@ -83,6 +83,7 @@ import {
   Upload,
   PackagePlus,
   Shield,
+  Hammer,
   Columns2,
   Rows2,
   GripVertical,
@@ -211,6 +212,8 @@ export const PlayIcon = wrap(Play)
 export const UploadIcon = wrap(Upload)
 export const PackagePlusIcon = wrap(PackagePlus)
 export const ShieldIcon = wrap(Shield)
+export const BuildAgentIcon = wrap(Hammer)
+export const PlanAgentIcon = wrap(ListTodo)
 export const SplitHorizontalIcon = wrap(Columns2)
 export const SplitVerticalIcon = wrap(Rows2)
 export const GripVerticalIcon = wrap(GripVertical)

@@ -123,7 +123,7 @@ export const Plugin = define({
 
     yield* ctx.agent.transform((draft) => {
       draft.update(AgentV2.defaultID, (item) => {
-        item.description = "The default agent. Executes tools based on configured permissions."
+        item.description = "Build 默认模式。会根据已配置的权限执行工具。"
         item.system ??= BUILD_SYSTEM
         item.mode = "primary"
         item.permissions.push(
@@ -135,7 +135,7 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("plan"), (item) => {
-        item.description = "Plan mode. Disallows all edit tools."
+        item.description = "Plan 模式。禁止使用所有编辑工具。"
         item.mode = "primary"
         item.permissions.push(
           ...PermissionV2.merge(defaults, [

@@ -94,6 +94,16 @@
   },
   "inputToolbar": {
     "default": "Default",
+    "variants": {
+      "default": "Default",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "agentDescriptions": {
+      "build": "Build default mode. Executes tools based on configured permissions.",
+      "plan": "Plan mode. Disallows all edit tools."
+    },
     "attachFile": "Attach file",
     "stopGeneration": "Stop generation",
     "sendingMessage": "Sending message",
