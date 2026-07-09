@@ -175,6 +175,8 @@
     "visibilityDesc": "Disable models you do not want to appear in the selector. Disabled models stay hidden across sessions on this server.",
     "searchPlaceholder": "Search models",
     "clearSearch": "Clear search",
+    "enabledOnly": "Enabled models only",
+    "enabledOnlyDesc": "Only show models that appear in the chat model selector.",
     "keepOneEnabled": "At least one model stays enabled so the chat can still send messages.",
     "loading": "Loading models...",
     "empty": "No models available on the current server",

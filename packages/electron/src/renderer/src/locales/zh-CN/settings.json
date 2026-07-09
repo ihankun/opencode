@@ -175,6 +175,8 @@
     "visibilityDesc": "禁用你不想出现在选择器里的模型。禁用状态会按当前服务器保存。",
     "searchPlaceholder": "搜索模型",
     "clearSearch": "清空搜索",
+    "enabledOnly": "只显示已启用模型",
+    "enabledOnlyDesc": "仅显示会出现在对话模型选择器里的模型。",
     "keepOneEnabled": "至少保留一个启用模型，这样对话还能继续发送消息。",
     "loading": "正在加载模型...",
     "empty": "当前服务器没有可用模型",

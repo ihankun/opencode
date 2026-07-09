@@ -18,6 +18,7 @@ export function ModelsSettings() {
   const { models, isLoading } = useModels()
   const hiddenModelKeys = useHiddenModelKeys()
   const [query, setQuery] = useState('')
+  const [enabledOnly, setEnabledOnly] = useState(false)
   const hiddenModelKeySet = useMemo(() => new Set(hiddenModelKeys), [hiddenModelKeys])
 
   const visibleCount = useMemo(
@@ -27,17 +28,19 @@ export function ModelsSettings() {
 
   const filteredModels = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) return models
 
     const normalize = (value: unknown) => (typeof value === 'string' ? value.toLowerCase() : '')
-    return models.filter(
-      model =>
+    return models.filter(model => {
+      if (enabledOnly && hiddenModelKeySet.has(getModelKey(model))) return false
+      if (!normalizedQuery) return true
+      return (
         normalize(model.name).includes(normalizedQuery) ||
         normalize(model.id).includes(normalizedQuery) ||
         normalize(model.family).includes(normalizedQuery) ||
-        normalize(model.providerName).includes(normalizedQuery),
-    )
-  }, [models, query])
+        normalize(model.providerName).includes(normalizedQuery)
+      )
+    })
+  }, [enabledOnly, hiddenModelKeySet, models, query])
 
   const groups = useMemo(() => groupModelsByProvider(filteredModels), [filteredModels])
 
@@ -73,12 +76,24 @@ export function ModelsSettings() {
 
         <p className="text-[length:var(--fs-xs)] text-text-400">{t('models.keepOneEnabled')}</p>
 
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border-200/45 bg-bg-100/35 px-3 py-2">
+          <div className="min-w-0">
+            <div className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('models.enabledOnly')}</div>
+            <div className="text-[length:var(--fs-xs)] text-text-500">{t('models.enabledOnlyDesc')}</div>
+          </div>
+          <Toggle
+            enabled={enabledOnly}
+            onChange={() => setEnabledOnly(value => !value)}
+            ariaLabel={t('models.enabledOnly')}
+          />
+        </div>
+
         <div className="space-y-5">
           {isLoading ? (
             <div className="py-8 text-[length:var(--fs-sm)] text-text-400">{t('models.loading')}</div>
           ) : groups.length === 0 ? (
             <div className="py-8 text-[length:var(--fs-sm)] text-text-400">
-              {query ? t('models.noResults') : t('models.empty')}
+              {query || enabledOnly ? t('models.noResults') : t('models.empty')}
             </div>
           ) : (
             groups.map(group => {

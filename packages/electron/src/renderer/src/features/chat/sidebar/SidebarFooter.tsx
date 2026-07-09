@@ -4,25 +4,12 @@ import { createPortal } from 'react-dom'
 import { ShareDialog } from '../ShareDialog'
 import {
   CogIcon,
-  ExternalLinkIcon,
-  KeyIcon,
-  LogOutIcon,
   SunIcon,
   MoonIcon,
   SystemIcon,
   ShareIcon,
-  UsersIcon,
 } from '../../../components/Icons'
-import { Dialog } from '../../../components/ui'
-import { refreshModels, useTheme } from '../../../hooks'
-import {
-  disposeInstance,
-  getProviders,
-  logoutConsoleAccount,
-  removeProviderAuth,
-  setProviderAuth,
-} from '../../../api'
-import { openUrl } from '../../../utils/browserOpen'
+import { useTheme } from '../../../hooks'
 
 function AccountIndicator({ connectionState, size = 24 }: { connectionState: string; size?: number }) {
   const statusColor =
@@ -45,152 +32,6 @@ function AccountIndicator({ connectionState, size = 24 }: { connectionState: str
   )
 }
 
-function OpenCodeLoginDialog({
-  isOpen,
-  onClose,
-  onLoggedIn,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onLoggedIn: () => void
-}) {
-  const { t } = useTranslation(['chat'])
-  const [apiKey, setApiKey] = useState('')
-  const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
-  const [error, setError] = useState('')
-  const onLoggedInRef = useRef(onLoggedIn)
-
-  useEffect(() => {
-    onLoggedInRef.current = onLoggedIn
-  }, [onLoggedIn])
-
-  const reset = useCallback(() => {
-    setApiKey('')
-    setStatus('idle')
-    setError('')
-  }, [])
-
-  const handleClose = useCallback(() => {
-    reset()
-    onClose()
-  }, [onClose, reset])
-
-  const save = useCallback(async () => {
-    const key = apiKey.trim()
-    if (!key) {
-      setStatus('error')
-      setError(t('accountLogin.apiKeyRequired'))
-      return
-    }
-
-    setStatus('saving')
-    setError('')
-    try {
-      await setProviderAuth('opencode', { type: 'api', key })
-      await logoutConsoleAccount().catch(() => undefined)
-      await disposeInstance()
-      await refreshModels()
-      setStatus('success')
-      onLoggedInRef.current()
-    } catch (err) {
-      setStatus('error')
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [apiKey, t])
-
-  useEffect(() => {
-    if (status !== 'success') return
-
-    const timer = setTimeout(handleClose, 900)
-    return () => clearTimeout(timer)
-  }, [handleClose, status])
-
-  return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title={t('accountLogin.title')} width={440}>
-      <div className="space-y-4">
-        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3 text-[length:var(--fs-sm)] text-text-300">
-          {t('accountLogin.description')}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void openUrl('https://opencode.ai/auth')}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-main-100 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-white transition-opacity hover:opacity-90"
-        >
-          <ExternalLinkIcon size={15} />
-          {t('accountLogin.openBrowser')}
-        </button>
-
-        <div className="space-y-2">
-          <label className="text-[length:var(--fs-xs)] font-medium text-text-400" htmlFor="opencode-api-key">
-            {t('accountLogin.apiKey')}
-          </label>
-          <input
-            id="opencode-api-key"
-            type="password"
-            value={apiKey}
-            onChange={event => setApiKey(event.target.value)}
-            placeholder={t('accountLogin.apiKeyPlaceholder')}
-            className="w-full rounded-lg border border-border-200 bg-bg-000 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none transition-colors placeholder:text-text-500 focus:border-accent-main-100"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={status === 'saving'}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-bg-200 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-text-100 transition-colors hover:bg-bg-300 disabled:opacity-60"
-        >
-          <KeyIcon size={15} />
-          {t(status === 'saving' ? 'accountLogin.saving' : 'accountLogin.save')}
-        </button>
-
-        {status === 'success' && (
-          <div className="text-[length:var(--fs-sm)] text-success-100">{t('accountLogin.success')}</div>
-        )}
-        {status === 'error' && (
-          <div className="text-[length:var(--fs-sm)] text-danger-100">
-            {t('accountLogin.error')}
-            {error ? `：${error}` : ''}
-          </div>
-        )}
-      </div>
-    </Dialog>
-  )
-}
-
-function OpenCodeProfileDialog({
-  isOpen,
-  onClose,
-  connected,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  connected: boolean
-}) {
-  const { t } = useTranslation(['chat'])
-
-  return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={t('accountProfile.title')} width={420}>
-      <div className="space-y-3 text-[length:var(--fs-sm)]">
-        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3">
-          <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">{t('accountProfile.provider')}</div>
-          <div className="font-medium text-text-100">OpenCode Zen</div>
-        </div>
-        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3">
-          <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">{t('accountProfile.status')}</div>
-          <div className={connected ? 'text-success-100' : 'text-text-400'}>
-            {connected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border-200/60 bg-bg-100/60 p-3 text-text-300">
-          {t('accountProfile.description')}
-        </div>
-      </div>
-    </Dialog>
-  )
-}
-
 export interface SidebarFooterProps {
   showLabels: boolean
   connectionState: string
@@ -203,10 +44,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const [isOpen, setIsOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
-  const [opencodeConnected, setOpencodeConnected] = useState(false)
-  const [accountActionError, setAccountActionError] = useState('')
   const [isVisible, setIsVisible] = useState(false)
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -225,18 +62,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const connectionLabel = t(`sidebar.connection.${connectionState}`, {
     defaultValue: t('sidebar.connection.unknown'),
   })
-  const refreshOpencodeConnection = useCallback(() => {
-    return getProviders()
-      .then(result => {
-        const connected = result.connected.includes('opencode')
-        setOpencodeConnected(connected)
-        return connected
-      })
-      .catch(() => {
-        setOpencodeConnected(false)
-        return false
-      })
-  }, [])
 
   // 打开菜单
   const openMenu = useCallback(() => {
@@ -276,20 +101,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     // 保存到 ref 以便清理
     closeTimeoutIdRef.current = closeTimeoutId
   }, [])
-
-  const handleLogout = useCallback(async () => {
-    closeMenu()
-    setAccountActionError('')
-    try {
-      await removeProviderAuth('opencode')
-      await logoutConsoleAccount().catch(() => undefined)
-      await disposeInstance()
-      setOpencodeConnected(false)
-      await refreshModels()
-    } catch (err) {
-      setAccountActionError(err instanceof Error ? err.message : String(err))
-    }
-  }, [closeMenu])
 
   // 切换菜单
   const toggleMenu = useCallback(() => {
@@ -348,16 +159,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     }
   }, [])
 
-  useEffect(() => {
-    let disposed = false
-    refreshOpencodeConnection().then(connected => {
-      if (!disposed) setOpencodeConnected(connected)
-    })
-    return () => {
-      disposed = true
-    }
-  }, [refreshOpencodeConnection])
-
   // 浮动菜单
   const floatingMenu = isOpen
     ? createPortal(
@@ -411,42 +212,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
 
           {/* Menu Items */}
           <div className="p-1">
-            {accountActionError && (
-              <div className="mx-2 my-1 rounded-md bg-danger-100/10 px-2 py-1.5 text-[length:var(--fs-xs)] text-danger-100">
-                {accountActionError}
-              </div>
-            )}
-            <button
-              onClick={() => {
-                closeMenu()
-                setLoginDialogOpen(true)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-            >
-              <KeyIcon size={14} />
-              <span>{t('sidebar.accountLogin')}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                closeMenu()
-                setProfileDialogOpen(true)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-            >
-              <UsersIcon size={14} />
-              <span>{t('sidebar.accountProfile')}</span>
-            </button>
-
-            {opencodeConnected && (
-              <button
-                onClick={() => void handleLogout()}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-              >
-                <LogOutIcon size={14} />
-                <span>{t('sidebar.accountLogout')}</span>
-              </button>
-            )}
+            {/* 登录入口先隐藏；供应商 API Key 暂时统一走 设置 -> 供应商 配置。 */}
 
             <button
               onClick={() => {
@@ -498,7 +264,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
             paddingLeft: showLabels ? 6 : 4, // 收起时为了对齐中心线(16px)，24px圆环需要4px padding (4+12=16)
             paddingRight: showLabels ? 8 : 4,
           }}
-          title={opencodeConnected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
+          title={connectionLabel}
         >
           <AccountIndicator connectionState={connectionState} size={24} />
 
@@ -506,28 +272,13 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
             className="ml-2 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-300"
             style={{ opacity: showLabels ? 1 : 0 }}
           >
-            <span className="text-[length:var(--fs-sm)] text-text-300 truncate">
-              {opencodeConnected ? t('accountProfile.connected') : t('accountProfile.notLoggedIn')}
-            </span>
+            <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{connectionLabel}</span>
           </span>
         </button>
       </div>
 
       {floatingMenu}
       <ShareDialog isOpen={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
-      <OpenCodeProfileDialog
-        isOpen={profileDialogOpen}
-        onClose={() => setProfileDialogOpen(false)}
-        connected={opencodeConnected}
-      />
-      <OpenCodeLoginDialog
-        isOpen={loginDialogOpen}
-        onClose={() => setLoginDialogOpen(false)}
-        onLoggedIn={() => {
-          setOpencodeConnected(true)
-          void refreshOpencodeConnection()
-        }}
-      />
     </div>
   )
 }
