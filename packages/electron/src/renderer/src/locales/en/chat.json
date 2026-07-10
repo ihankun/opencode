@@ -100,9 +100,13 @@
       "medium": "Medium",
       "high": "High"
     },
+    "agents": {
+      "goal": "Goal"
+    },
     "agentDescriptions": {
       "build": "Build default mode. Executes tools based on configured permissions.",
-      "plan": "Plan mode. Disallows all edit tools."
+      "plan": "Plan mode. Disallows all edit tools.",
+      "goal": "Goal mode. Keeps one explicit objective active and tracks current progress."
     },
     "attachFile": "Attach file",
     "stopGeneration": "Stop generation",
@@ -124,6 +128,17 @@
   "inputActions": {
     "scrollToBottom": "Scroll to bottom",
     "reply": "Reply..."
+  },
+  "goalBar": {
+    "active": "Active goal",
+    "paused": "Paused goal",
+    "step": "Step {{step}}",
+    "pause": "Pause goal",
+    "resume": "Resume goal",
+    "clear": "Clear goal",
+    "details": "View goal details",
+    "noStatus": "The goal is waiting for the next progress update.",
+    "started": "{{elapsed}} elapsed"
   },
   "undoStatus": {
     "editing": "Editing",

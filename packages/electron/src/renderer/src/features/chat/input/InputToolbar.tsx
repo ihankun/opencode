@@ -10,6 +10,7 @@ import {
   ThinkingIcon,
   BuildAgentIcon,
   PlanAgentIcon,
+  GoalAgentIcon,
 } from '../../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../components/ui'
 import { CircularProgress } from '../../../components/CircularProgress'
@@ -73,20 +74,23 @@ function getVariantLabel(variant: string | undefined, t: (key: string) => string
   return knownLabels[normalized] ?? formatTitleCase(variant)
 }
 
-function getAgentLabel(agentName: string) {
+function getAgentLabel(agentName: string, t: (key: string) => string) {
+  if (agentName === 'goal') return t('inputToolbar.agents.goal')
   return agentName === 'build' || agentName === 'plan' ? formatTitleCase(agentName) : formatTitleCase(agentName)
 }
 
 function getAgentDescription(agent: ApiAgent, t: (key: string) => string) {
   if (agent.name === 'build') return t('inputToolbar.agentDescriptions.build')
   if (agent.name === 'plan') return t('inputToolbar.agentDescriptions.plan')
+  if (agent.name === 'goal') return t('inputToolbar.agentDescriptions.goal')
   return agent.description
 }
 
 function AgentModeIcon({ name, color }: { name?: string; color?: string }) {
   const normalized = name?.toLowerCase()
-  const Icon = normalized === 'build' ? BuildAgentIcon : normalized === 'plan' ? PlanAgentIcon : AgentIcon
-  const style = normalized === 'build' ? { color: '#2563eb' } : color ? { color } : undefined
+  const Icon =
+    normalized === 'build' ? BuildAgentIcon : normalized === 'plan' ? PlanAgentIcon : normalized === 'goal' ? GoalAgentIcon : AgentIcon
+  const style = normalized === 'build' ? { color: '#2563eb' } : normalized === 'goal' ? { color: '#f97316' } : color ? { color } : undefined
 
   return <Icon style={style} />
 }
@@ -488,7 +492,7 @@ export function InputToolbar({
               className="flex items-center gap-1.5 px-2 py-1.5 text-[length:var(--fs-base)] rounded-lg transition-all duration-150 hover:bg-bg-200 active:scale-95 cursor-pointer min-w-0 overflow-hidden w-full"
               title={
                 currentAgent
-                  ? `${getAgentLabel(currentAgent.name)}${currentAgentDescription ? ': ' + currentAgentDescription : ''}`
+                  ? `${getAgentLabel(currentAgent.name, t)}${currentAgentDescription ? ': ' + currentAgentDescription : ''}`
                   : selectedAgent || 'build'
               }
             >
@@ -498,7 +502,7 @@ export function InputToolbar({
               >
                 <AgentModeIcon name={selectedAgent || 'build'} color={currentAgent?.color} />
               </span>
-              <span className="text-[length:var(--fs-sm)] text-text-300 capitalize truncate">{selectedAgent || 'build'}</span>
+              <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{getAgentLabel(selectedAgent || 'build', t)}</span>
               <span className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}>
                 <ChevronDownIcon />
               </span>
@@ -523,7 +527,7 @@ export function InputToolbar({
                 {selectableAgents.map(agent => (
                   <MenuItem
                     key={agent.name}
-                    label={getAgentLabel(agent.name)}
+                    label={getAgentLabel(agent.name, t)}
                     description={getAgentDescription(agent, t)}
                     icon={
                       <span className="text-text-400">

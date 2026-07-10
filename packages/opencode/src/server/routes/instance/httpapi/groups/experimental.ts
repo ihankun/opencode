@@ -107,6 +107,33 @@ export const ToolListQuery = Schema.Struct({
   model: ModelV2.ID,
 })
 
+const GoalStatus = Schema.Literals(["active", "paused", "complete", "blocked"])
+const GoalHistoryEntry = Schema.Struct({
+  type: Schema.String,
+  detail: Schema.String,
+  timestamp: Schema.Number,
+}).annotate({ identifier: "GoalHistoryEntry" })
+const GoalInfo = Schema.Struct({
+  sessionID: Schema.String,
+  objective: Schema.String,
+  status: GoalStatus,
+  step: Schema.Number,
+  statusMessage: Schema.NullOr(Schema.String),
+  createdAt: Schema.Number,
+  updatedAt: Schema.Number,
+  pausedAt: Schema.NullOr(Schema.Number),
+  completedAt: Schema.NullOr(Schema.Number),
+  evidence: Schema.NullOr(Schema.String),
+  blocker: Schema.NullOr(Schema.String),
+  history: Schema.Array(GoalHistoryEntry),
+}).annotate({ identifier: "GoalInfo" })
+const GoalResponse = Schema.Struct({
+  goal: Schema.NullOr(GoalInfo),
+}).annotate({ identifier: "GoalResponse" })
+export const GoalStatusPayload = Schema.Struct({
+  status: Schema.Literals(["active", "paused"]),
+})
+
 const WorktreeList = Schema.Array(Schema.String)
 const WorktreeErrorName = Schema.Union([
   Schema.Literal("WorktreeNotGitError"),
@@ -147,6 +174,8 @@ export const ExperimentalPaths = {
   consoleSwitch: "/experimental/console/switch",
   tool: "/experimental/tool",
   toolIDs: "/experimental/tool/ids",
+  goal: "/experimental/goal/:sessionID",
+  goalStatus: "/experimental/goal/:sessionID/status",
   worktree: "/experimental/worktree",
   worktreeReset: "/experimental/worktree/reset",
   session: "/experimental/session",
@@ -294,6 +323,43 @@ export const ExperimentalApi = HttpApi.make("experimental")
             summary: "List tool IDs",
             description:
               "Get a list of all available tool IDs, including both built-in tools and dynamically registered tools.",
+          }),
+        ),
+        HttpApiEndpoint.get("goal", ExperimentalPaths.goal, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(GoalResponse, "Goal state"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.goal.get",
+            summary: "Get session goal",
+            description: "Get the durable goal state for a session.",
+          }),
+        ),
+        HttpApiEndpoint.post("goalStatus", ExperimentalPaths.goalStatus, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          payload: GoalStatusPayload,
+          success: described(GoalResponse, "Goal state"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.goal.status",
+            summary: "Update session goal status",
+            description: "Pause or resume the durable goal state for a session.",
+          }),
+        ),
+        HttpApiEndpoint.delete("goalClear", ExperimentalPaths.goal, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Boolean, "Goal cleared"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.goal.clear",
+            summary: "Clear session goal",
+            description: "Remove the durable goal state for a session.",
           }),
         ),
         HttpApiEndpoint.get("worktree", ExperimentalPaths.worktree, {

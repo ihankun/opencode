@@ -84,6 +84,8 @@ import {
   PackagePlus,
   Shield,
   Hammer,
+  Target,
+  Pause,
   Columns2,
   Rows2,
   GripVertical,
@@ -214,6 +216,8 @@ export const PackagePlusIcon = wrap(PackagePlus)
 export const ShieldIcon = wrap(Shield)
 export const BuildAgentIcon = wrap(Hammer)
 export const PlanAgentIcon = wrap(ListTodo)
+export const GoalAgentIcon = wrap(Target)
+export const PauseIcon = wrap(Pause)
 export const SplitHorizontalIcon = wrap(Columns2)
 export const SplitVerticalIcon = wrap(Rows2)
 export const GripVerticalIcon = wrap(GripVertical)

@@ -11,6 +11,8 @@ import { PermissionV2 } from "../permission"
 const TRUNCATION_GLOB = path.join(Global.Path.data, "tool-output", "*")
 const BUILD_SYSTEM =
   "You are an AI coding agent. Help the user accomplish software engineering tasks by inspecting the workspace, making targeted changes, and using tools according to the configured permissions."
+const GOAL_SYSTEM =
+  "You are the Goal mode agent for OpenCodex. Keep one explicit objective visible and durable across turns. Make concrete progress toward the goal, update progress with the goal tools after meaningful milestones, and only close the goal after verifying real evidence."
 
 const PROMPT_EXPLORE = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
@@ -149,6 +151,19 @@ export const Plugin = define({
               resource: path.relative(worktree, path.join(Global.Path.data, "plans", "*.md")),
               effect: "allow",
             },
+          ]),
+        )
+      })
+
+      draft.update(AgentV2.ID.make("goal"), (item) => {
+        item.description = "目标模式。围绕一个明确目标持续推进，并在完成前持续跟踪进度。"
+        item.system = GOAL_SYSTEM
+        item.mode = "primary"
+        item.color = "#f97316"
+        item.permissions.push(
+          ...PermissionV2.merge(defaults, [
+            { action: "question", resource: "*", effect: "allow" },
+            { action: "plan_enter", resource: "*", effect: "allow" },
           ]),
         )
       })

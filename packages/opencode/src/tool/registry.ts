@@ -2,6 +2,14 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { PlanExitTool } from "./plan"
+import {
+  ClearGoalTool,
+  CreateGoalTool,
+  GetGoalTool,
+  UpdateGoalProgressTool,
+  UpdateGoalStatusTool,
+  UpdateGoalTool,
+} from "./goal"
 import { Session } from "@/session/session"
 import { QuestionTool } from "./question"
 import { ShellTool } from "./shell"
@@ -100,6 +108,12 @@ const layer = Layer.effect(
     const todo = yield* TodoWriteTool
     const lsptool = yield* LspTool
     const plan = yield* PlanExitTool
+    const getGoal = yield* GetGoalTool
+    const createGoal = yield* CreateGoalTool
+    const updateGoalProgress = yield* UpdateGoalProgressTool
+    const updateGoalStatus = yield* UpdateGoalStatusTool
+    const updateGoal = yield* UpdateGoalTool
+    const clearGoal = yield* ClearGoalTool
     const webfetch = yield* WebFetchTool
     const websearch = yield* WebSearchTool
     const shell = yield* ShellTool
@@ -218,6 +232,12 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
+          getGoal: Tool.init(getGoal),
+          createGoal: Tool.init(createGoal),
+          updateGoalProgress: Tool.init(updateGoalProgress),
+          updateGoalStatus: Tool.init(updateGoalStatus),
+          updateGoal: Tool.init(updateGoal),
+          clearGoal: Tool.init(clearGoal),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -239,6 +259,12 @@ const layer = Layer.effect(
             tool.skill,
             tool.patch,
             ...(tool.execute ? [tool.execute] : []),
+            tool.getGoal,
+            tool.createGoal,
+            tool.updateGoalProgress,
+            tool.updateGoalStatus,
+            tool.updateGoal,
+            tool.clearGoal,
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
           ],

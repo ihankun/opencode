@@ -32,6 +32,10 @@ import { Reference } from "@opencode-ai/core/reference"
 import { Location } from "@opencode-ai/core/location"
 import { PluginV2 } from "@opencode-ai/core/plugin"
 
+const PROMPT_GOAL = `You are the Goal mode agent for OpenCodex. Keep one explicit objective visible and durable across turns.
+
+When the user explicitly starts a goal, create it with the native create_goal tool. Continue making concrete progress toward the goal, update goal progress after meaningful milestones, and only mark it complete after verifying real evidence. Mark it blocked only when meaningful progress cannot continue without user input or an external state change.`
+
 export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.optional(Schema.String),
@@ -173,6 +177,23 @@ const layer = Layer.effect(
                   [path.join(".opencode", "plans", "*.md")]: "allow",
                   [path.relative(ctx.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
                 },
+              }),
+              user,
+            ),
+            mode: "primary",
+            native: true,
+          },
+          goal: {
+            name: "goal",
+            description: "目标模式。围绕一个明确目标持续推进，并在完成前持续跟踪进度。",
+            prompt: PROMPT_GOAL,
+            color: "#f97316",
+            options: {},
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                question: "allow",
+                plan_enter: "allow",
               }),
               user,
             ),

@@ -13,6 +13,7 @@ import {
 } from '../mention'
 import { SlashCommandMenu, type SlashCommandMenuHandle } from '../slash-command'
 import { InputToolbar } from './input/InputToolbar'
+import { GoalStatusBar } from './input/GoalStatusBar'
 import type { ModelSelectorHandle } from './ModelSelector'
 import { FloatingActions, CollapsedCapsule } from './input/InputActions'
 import { useMobileCollapse } from './input/useMobileCollapse'
@@ -1415,6 +1416,8 @@ function InputBoxComponent({
               onSelect={handleSlashSelect}
               onClose={handleSlashClose}
             />
+
+            <GoalStatusBar sessionId={sessionId} rootPath={rootPath} isStreaming={isStreaming} />
 
             {/* Input Container */}
             <div

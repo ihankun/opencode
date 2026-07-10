@@ -5,6 +5,7 @@ import { BackgroundJob } from "@/background/job"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { clearGoal, getGoal, setGoalStatus } from "@/goal/state"
 import { MCP } from "@/mcp"
 import { Project } from "@/project/project"
 import { Session } from "@/session/session"
@@ -21,6 +22,7 @@ import {
   ConsoleLoginPayload,
   ConsoleLoginPollPayload,
   ConsoleSwitchPayload,
+  GoalStatusPayload,
   SessionListQuery,
   ToolListQuery,
   WorktreeApiError,
@@ -290,6 +292,30 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return yield* registry.ids()
     })
 
+    const goal = Effect.fn("ExperimentalHttpApi.goal")(function* (ctx: { params: { sessionID: SessionID } }) {
+      return yield* Effect.promise(() => getGoal(ctx.params.sessionID)).pipe(
+        Effect.map((item) => ({ goal: item })),
+        Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))),
+      )
+    })
+
+    const goalStatus = Effect.fn("ExperimentalHttpApi.goalStatus")(function* (ctx: {
+      params: { sessionID: SessionID }
+      payload: typeof GoalStatusPayload.Type
+    }) {
+      return yield* Effect.promise(() => setGoalStatus(ctx.params.sessionID, ctx.payload.status)).pipe(
+        Effect.map((item) => ({ goal: item })),
+        Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))),
+      )
+    })
+
+    const goalClear = Effect.fn("ExperimentalHttpApi.goalClear")(function* (ctx: { params: { sessionID: SessionID } }) {
+      return yield* Effect.promise(() => clearGoal(ctx.params.sessionID)).pipe(
+        Effect.map(() => true),
+        Effect.catch(() => Effect.fail(new HttpApiError.InternalServerError({}))),
+      )
+    })
+
     const worktree = Effect.fn("ExperimentalHttpApi.worktree")(function* () {
       const ctx = yield* InstanceState.context
       return yield* project.sandboxes(ctx.project.id)
@@ -370,6 +396,9 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("consoleSwitch", switchConsole)
       .handle("tool", tool)
       .handle("toolIDs", toolIDs)
+      .handle("goal", goal)
+      .handle("goalStatus", goalStatus)
+      .handle("goalClear", goalClear)
       .handle("worktree", worktree)
       .handle("worktreeCreate", worktreeCreate)
       .handle("worktreeRemove", worktreeRemove)
