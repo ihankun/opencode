@@ -11,6 +11,7 @@ import { normalizeFileDiffs } from '../types/api/file'
 import type { ApiSession, SessionListParams, FileDiff, ApiMessageWithParts, ApiUserMessage } from './types'
 import type { SessionStatusMap } from '../types/api/session'
 import type { TodoItem } from '../types/api/event'
+import type { SessionPermissionRule } from '../store/autoApproveStore'
 
 function normalizeSessionList(value: unknown): ApiSession[] {
   if (Array.isArray(value)) return value as ApiSession[]
@@ -125,7 +126,7 @@ export async function createSession(
  */
 export async function updateSession(
   sessionId: string,
-  params: { title?: string; time?: { archived?: number } },
+  params: { title?: string; permission?: SessionPermissionRule[]; time?: { archived?: number } },
   directory?: string,
 ): Promise<ApiSession> {
   const sdk = getSDKClient()

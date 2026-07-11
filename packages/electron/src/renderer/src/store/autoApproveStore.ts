@@ -8,6 +8,25 @@ import { serverStorage } from '../utils/perServerStorage'
 // Full Auto 模式：off / session / global
 export type FullAutoMode = 'off' | 'session' | 'global'
 export type AlwaysAllowMode = 'backend' | 'frontend'
+export type ApprovalMode = 'ask' | 'risk' | 'full'
+
+export type SessionPermissionRule = {
+  permission: string
+  pattern: string
+  action: 'allow' | 'ask' | 'deny'
+}
+
+export function approvalPermissionRules(mode: ApprovalMode): SessionPermissionRule[] {
+  if (mode === 'full') return [{ permission: '*', pattern: '*', action: 'allow' }]
+  if (mode === 'ask') {
+    return ['bash', 'edit', 'external_directory', 'webfetch', 'websearch'].map(permission => ({
+      permission,
+      pattern: '*',
+      action: 'ask' as const,
+    }))
+  }
+  return []
+}
 
 // Full Auto 状态变更回调
 // sourcePaneId 可选：表示这次切换是从哪个 pane 触发的。
@@ -64,6 +83,7 @@ class AutoApproveStore {
   /** per-pane Full Auto 模式（分屏模式下各 pane 独立控制） */
   private _paneFullAutoModes = new Map<string, FullAutoMode>()
   private _autoReplyRequestIds = new Set<string>()
+  private _approvalModes = new Map<string, ApprovalMode>()
 
   constructor() {
     // 从 localStorage 读取开关状态
@@ -99,6 +119,7 @@ class AutoApproveStore {
     this.rulesMap.clear()
     this._paneFullAutoModes.clear()
     this._autoReplyRequestIds.clear()
+    this._approvalModes.clear()
     if (this._fullAutoMode !== 'off') {
       this._fullAutoMode = 'off'
       this._fullAutoListeners.forEach(fn => fn('off'))
@@ -153,6 +174,19 @@ class AutoApproveStore {
     return () => {
       this._listeners.delete(listener)
     }
+  }
+
+  getApprovalMode(paneId: string): ApprovalMode {
+    return this._approvalModes.get(paneId) ?? 'risk'
+  }
+
+  setApprovalMode(paneId: string, mode: ApprovalMode): void {
+    if (mode !== 'full') {
+      this._paneFullAutoModes.delete(paneId)
+      if (this._fullAutoMode === 'global') this._fullAutoMode = 'off'
+    }
+    this._approvalModes.set(paneId, mode)
+    this.notify()
   }
 
   // ---- Full Auto 模式 ----

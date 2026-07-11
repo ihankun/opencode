@@ -108,6 +108,21 @@
       "plan": "Plan 模式。禁止使用所有编辑工具。",
       "goal": "目标模式。围绕一个明确目标持续推进，并跟踪当前进度。"
     },
+    "approvalMode": "审批模式",
+    "approvalModes": {
+      "ask": {
+        "label": "请求批准",
+        "description": "编辑文件、执行命令、访问外部目录或互联网时始终询问"
+      },
+      "risk": {
+        "label": "替我审批",
+        "description": "仅对系统检测到的外部目录和高风险操作请求批准"
+      },
+      "full": {
+        "label": "完全访问",
+        "description": "不经询问即可使用所有工具，请谨慎选择"
+      }
+    },
     "attachFile": "附加文件",
     "stopGeneration": "停止生成",
     "sendingMessage": "发送消息中",

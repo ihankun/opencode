@@ -108,6 +108,21 @@
       "plan": "Plan mode. Disallows all edit tools.",
       "goal": "Goal mode. Keeps one explicit objective active and tracks current progress."
     },
+    "approvalMode": "Approval mode",
+    "approvalModes": {
+      "ask": {
+        "label": "Ask for approval",
+        "description": "Always ask before editing files, running commands, or accessing external paths or the internet"
+      },
+      "risk": {
+        "label": "Approve for me",
+        "description": "Ask only for external directories and operations detected as risky"
+      },
+      "full": {
+        "label": "Full access",
+        "description": "Use all tools without asking; choose with care"
+      }
+    },
     "attachFile": "Attach file",
     "stopGeneration": "Stop generation",
     "sendingMessage": "Sending message",

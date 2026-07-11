@@ -1512,6 +1512,7 @@ function InputBoxComponent({
                   {/* Bottom Bar -> InputToolbar */}
                   <div ref={toolbarRef}>
                     <InputToolbar
+                      paneId={paneId}
                       agents={agents}
                       selectedAgent={selectedAgent}
                       onAgentChange={onAgentChange}

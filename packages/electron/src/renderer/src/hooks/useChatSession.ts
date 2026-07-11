@@ -12,6 +12,7 @@ import {
   useActiveSessionStore,
   type RevertHistoryItem,
 } from '../store'
+import { approvalPermissionRules } from '../store/autoApproveStore'
 import {
   useSessionManager,
   registerSessionConsumer,
@@ -709,6 +710,12 @@ export function useChatSession({
 
         messageStore.setStreaming(sessionId, true)
 
+        await updateSession(
+          sessionId,
+          { permission: approvalPermissionRules(autoApproveStore.getApprovalMode(paneId)) },
+          input.directory,
+        )
+
         // 记录发送前的消息数量，作为判断 SSE 是否推送新消息的基线
         const msgCountBeforeSend = messageStore.getSessionState(sessionId)?.messages.length ?? 0
 
@@ -767,7 +774,7 @@ export function useChatSession({
         return false
       }
     },
-    [routeSessionId, navigateToSession, createSession, routeDirectoryForSession],
+    [routeSessionId, navigateToSession, createSession, routeDirectoryForSession, paneId],
   )
 
   // Send message handler

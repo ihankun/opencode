@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -11,6 +11,9 @@ import {
   BuildAgentIcon,
   PlanAgentIcon,
   GoalAgentIcon,
+  HandIcon,
+  ShieldIcon,
+  PermissionListIcon,
 } from '../../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../components/ui'
 import { CircularProgress } from '../../../components/CircularProgress'
@@ -22,8 +25,10 @@ import { isTauri, isTauriMobile, extToMime } from '../../../utils/tauri'
 import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
 import type { SessionStats } from '../../../hooks'
+import { autoApproveStore, type ApprovalMode } from '../../../store/autoApproveStore'
 
 interface InputToolbarProps {
+  paneId: string
   agents: ApiAgent[]
   selectedAgent?: string
   onAgentChange?: (agentName: string) => void
@@ -52,6 +57,73 @@ interface InputToolbarProps {
   modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
   contextStats?: SessionStats
   hasMessages?: boolean
+}
+
+const approvalModes: ApprovalMode[] = ['ask', 'risk', 'full']
+
+function ApprovalModeIcon({ mode }: { mode: ApprovalMode }) {
+  if (mode === 'ask') return <HandIcon />
+  if (mode === 'full') return <ShieldIcon className="text-danger-100" />
+  return <PermissionListIcon className="text-accent-main-100" />
+}
+
+function ApprovalModeSelector({ paneId, disabled, inputContainerRef }: {
+  paneId: string
+  disabled: boolean
+  inputContainerRef?: React.RefObject<HTMLDivElement | null>
+}) {
+  const { t } = useTranslation('chat')
+  const mode = useSyncExternalStore(autoApproveStore.subscribe, () => autoApproveStore.getApprovalMode(paneId))
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (triggerRef.current?.contains(event.target as Node) || menuRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(value => !value)}
+        className="flex items-center gap-1.5 px-2 py-1.5 text-[length:var(--fs-base)] rounded-lg transition-all duration-150 hover:bg-bg-200 active:scale-95 disabled:opacity-50"
+        title={t(`inputToolbar.approvalModes.${mode}.description`)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <span className="text-text-400"><ApprovalModeIcon mode={mode} /></span>
+        <span className="text-[length:var(--fs-sm)] text-text-300">{t(`inputToolbar.approvalModes.${mode}.label`)}</span>
+        <span className="text-text-400"><ChevronDownIcon /></span>
+      </button>
+      <DropdownMenu triggerRef={triggerRef} isOpen={open} position="top" align="left" constrainToRef={inputContainerRef}>
+        <div ref={menuRef} role="menu" aria-label={t('inputToolbar.approvalMode')}>
+          {approvalModes.map(item => (
+            <MenuItem
+              key={item}
+              label={t(`inputToolbar.approvalModes.${item}.label`)}
+              description={t(`inputToolbar.approvalModes.${item}.description`)}
+              icon={<ApprovalModeIcon mode={item} />}
+              selected={mode === item}
+              selectionRole="menuitemradio"
+              onClick={() => {
+                autoApproveStore.setApprovalMode(paneId, item)
+                setOpen(false)
+              }}
+            />
+          ))}
+        </div>
+      </DropdownMenu>
+    </div>
+  )
 }
 
 function formatTitleCase(value: string) {
@@ -193,6 +265,7 @@ function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; h
 }
 
 export function InputToolbar({
+  paneId,
   agents,
   selectedAgent,
   onAgentChange,
@@ -546,6 +619,8 @@ export function InputToolbar({
             </DropdownMenu>
           </div>
         </AnimatedPresence>
+
+        <ApprovalModeSelector paneId={paneId} disabled={controlsDisabled} inputContainerRef={inputContainerRef} />
 
       </div>
 
