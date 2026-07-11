@@ -59,13 +59,16 @@ const McpPanel = lazy(() =>
 const PluginPanel = lazy(() =>
   import('./components/PluginPanel').then(module => ({ default: module.PluginPanel })),
 )
+const TaskPanel = lazy(() =>
+  import('./components/TaskPanel').then(module => ({ default: module.TaskPanel })),
+)
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
 const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
-type MainUtilityPage = 'skills' | 'plugins'
+type MainUtilityPage = 'skills' | 'plugins' | 'tasks'
 type PluginPageTab = 'plugins' | 'mcp'
 
 function ElectronSidebarToggle({
@@ -347,6 +350,7 @@ function App() {
     setPluginPageTab('plugins')
     openUtilityPage('plugins')
   }, [openUtilityPage])
+  const openTaskPage = useCallback(() => openUtilityPage('tasks'), [openUtilityPage])
   const getNearestMobilePage = useCallback(
     (scrollLeft: number): MobilePagerPage => {
       const leftDistance = Math.abs(scrollLeft)
@@ -979,7 +983,7 @@ function App() {
   const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
       <Suspense fallback={null}>
-        {utilityPage === 'plugins' ? (
+        {utilityPage === 'tasks' ? <TaskPanel /> : utilityPage === 'plugins' ? (
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 items-center gap-1 border-b border-border-200/60 px-5 py-2.5">
               <button
@@ -1071,6 +1075,7 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
+                    onOpenTasks={openTaskPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1163,6 +1168,7 @@ function App() {
                   onOpenSearch={() => setSessionSearchOpen(true)}
                   onOpenSkills={openSkillPage}
                   onOpenPlugins={openPluginPage}
+                  onOpenTasks={openTaskPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1185,6 +1191,7 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
+                    onOpenTasks={openTaskPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode

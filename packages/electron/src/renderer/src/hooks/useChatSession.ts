@@ -53,6 +53,7 @@ import { STORAGE_KEY_SELECTED_AGENT } from '../constants'
 import type { ChatAreaHandle } from '../features/chat'
 import { followupQueueStore, useFollowupQueue } from '../store/followupQueueStore'
 import { themeStore } from '../store/themeStore'
+import { createTaskFromCommand } from '../api/task'
 
 const handleError = createErrorHandler('session')
 
@@ -1015,6 +1016,17 @@ export function useChatSession({
         navigateHome()
         handleNewChat()
         return true
+      }
+
+      if (command === 'task') {
+        try {
+          const task = await createTaskFromCommand(args, effectiveDirectory)
+          void window.customOpenCode.sendNotification({ title: '定时任务已创建', body: `${task.title} · ${task.cron}` })
+          return true
+        } catch (err) {
+          handleError('create scheduled task', err)
+          return false
+        }
       }
 
       let sessionId = routeSessionId

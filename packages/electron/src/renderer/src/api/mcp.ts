@@ -25,6 +25,13 @@ export async function addMcpServer(name: string, config: McpServerConfig, direct
   await persistMcpServer(name, config, directory)
 }
 
+export async function removeMcpServer(name: string, directory?: string): Promise<void> {
+  const config = await getConfig(directory)
+  const next = { ...mcpConfig(config) }
+  delete next[name]
+  await updateConfig({ ...(config as unknown as Record<string, unknown>), mcp: next } as unknown as Config, directory)
+}
+
 async function persistMcpServer(name: string, server: McpServerConfig, directory?: string) {
   const config = await getConfig(directory)
   await updateConfig(
@@ -39,10 +46,10 @@ async function persistMcpServer(name: string, server: McpServerConfig, directory
   )
 }
 
-function mcpConfig(config: Config) {
+function mcpConfig(config: Config): Record<string, unknown> {
   const value = (config as unknown as { mcp?: unknown }).mcp
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  return value
+  return value as Record<string, unknown>
 }
 
 /**

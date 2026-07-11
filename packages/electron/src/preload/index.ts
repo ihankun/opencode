@@ -19,6 +19,21 @@ export type CustomOpenCodePluginSearchResult = {
   keywords: string[]
   publisher: string
   date: string
+  source: string
+  downloads: number
+  url: string
+}
+
+export type CustomOpenCodeMcpSearchResult = {
+  name: string
+  version: string
+  description: string
+  source: string
+  sourceUrl: string
+  downloads: number
+  publishedAt: string
+  requiredEnvironment: string[]
+  config: { type: "local"; command: string[] } | { type: "remote"; url: string }
 }
 
 export type CustomOpenCodePluginInstallResult = {
@@ -76,12 +91,36 @@ export type CustomOpenCodeConsoleLoginResult = {
 
 export type CustomOpenCodeLocationApp = { id: string; name: string; icon?: string }
 
+export type CustomOpenCodeScheduledTask = {
+  id: string
+  title: string
+  prompt: string
+  cron: string
+  timezone: string
+  directory: string
+  enabled: boolean
+  status: "enabled" | "paused" | "running" | "error"
+  lastRunAt: number | null
+  nextRunAt: number | null
+  lastError: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "directory" | "enabled">
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
+  searchMcpServers(query: string): Promise<CustomOpenCodeMcpSearchResult[]>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
+  listTasks(): Promise<CustomOpenCodeScheduledTask[]>
+  createTask(input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
+  updateTask(id: string, input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
+  removeTask(id: string): Promise<boolean>
+  runTask(id: string): Promise<CustomOpenCodeScheduledTask>
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
@@ -108,7 +147,13 @@ const api: CustomOpenCodeApi = {
     return () => ipcRenderer.removeListener("server:updated", listener)
   },
   searchPlugins: (query) => ipcRenderer.invoke("plugin:search", query),
+  searchMcpServers: (query) => ipcRenderer.invoke("mcp:search", query),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
+  listTasks: () => ipcRenderer.invoke("task:list"),
+  createTask: (input) => ipcRenderer.invoke("task:create", input),
+  updateTask: (id, input) => ipcRenderer.invoke("task:update", id, input),
+  removeTask: (id) => ipcRenderer.invoke("task:remove", id),
+  runTask: (id) => ipcRenderer.invoke("task:run", id),
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),

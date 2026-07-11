@@ -22,6 +22,7 @@ function getFrontendCommands(): Command[] {
   return [
     { name: 'new', description: i18n.t('commands:slashCommand.newSessionDesc'), source: 'frontend' },
     { name: 'compact', description: i18n.t('commands:slashCommand.compactDesc'), source: 'frontend' },
+    { name: 'task', description: '创建定时任务，例如 /task 每天18点总结今天修改的内容', source: 'frontend' },
   ]
 }
 

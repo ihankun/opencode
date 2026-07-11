@@ -23,6 +23,7 @@ import {
   ChevronRightIcon,
   PackagePlusIcon,
   TeachIcon,
+  ClockIcon,
 } from '../../../components/Icons'
 import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
@@ -59,6 +60,7 @@ interface SidePanelProps {
   onOpenSearch?: () => void
   onOpenSkills?: () => void
   onOpenPlugins?: () => void
+  onOpenTasks?: () => void
   isMobile?: boolean
   isExpanded?: boolean
   onOpenSettings?: () => void
@@ -118,6 +120,7 @@ export function SidePanel({
   onOpenSearch,
   onOpenSkills,
   onOpenPlugins,
+  onOpenTasks,
   isMobile = false,
   isExpanded = true,
   onOpenSettings,
@@ -1203,6 +1206,18 @@ export function SidePanel({
           >
             {t('sidebar.plugins')}
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenTasks}
+          aria-label={t('sidebar.tasks')}
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          style={{ width: showLabels ? '100%' : 32, paddingLeft: 6, paddingRight: 6 }}
+          title={t('sidebar.tasks')}
+        >
+          <span className="size-5 flex items-center justify-center shrink-0"><ClockIcon size={16} /></span>
+          <span className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300" style={{ opacity: showLabels ? 1 : 0 }}>{t('sidebar.tasks')}</span>
         </button>
 
         {showLabels && (

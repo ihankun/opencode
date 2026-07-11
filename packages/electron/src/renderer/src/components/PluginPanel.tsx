@@ -66,6 +66,16 @@ function pluginKind(spec: string) {
   return 'npm'
 }
 
+function pluginPackage(spec: string) {
+  if (spec.startsWith('@')) {
+    const slash = spec.indexOf('/')
+    const version = slash >= 0 ? spec.indexOf('@', slash) : -1
+    return version > 0 ? spec.slice(0, version) : spec
+  }
+  const version = spec.indexOf('@')
+  return version > 0 ? spec.slice(0, version) : spec
+}
+
 function withPlugins(config: Config, plugins: PluginEntry[]) {
   return {
     ...(config as unknown as Record<string, unknown>),
@@ -111,7 +121,7 @@ export const PluginPanel = memo(function PluginPanel() {
   const [installMessage, setInstallMessage] = useState<string | null>(null)
 
   const plugins = useMemo(() => readPlugins(config), [config])
-  const configuredSpecs = useMemo(() => new Set(plugins.map(plugin => pluginSpec(plugin))), [plugins])
+  const configuredSpecs = useMemo(() => new Set(plugins.map(plugin => pluginPackage(pluginSpec(plugin)))), [plugins])
   const canUseElectronInstaller = typeof window.customOpenCode?.searchPlugins === 'function'
 
   const loadPlugins = useCallback(async () => {
@@ -327,10 +337,11 @@ export const PluginPanel = memo(function PluginPanel() {
                   <PluginSearchRow
                     key={result.name}
                     result={result}
-                    installed={configuredSpecs.has(result.name)}
+                    installed={configuredSpecs.has(pluginPackage(result.name))}
                     installing={installingSpec === result.name}
                     disabled={Boolean(installingSpec)}
                     onInstall={() => void handleInstallSearchResult(result.name)}
+                    onRemove={() => void savePlugins(plugins.filter(plugin => pluginPackage(pluginSpec(plugin)) !== pluginPackage(result.name)))}
                   />
                 ))}
               </div>
@@ -410,12 +421,14 @@ function PluginSearchRow({
   installing,
   disabled,
   onInstall,
+  onRemove,
 }: {
   result: PluginSearchResult
   installed: boolean
   installing: boolean
   disabled: boolean
   onInstall: () => void
+  onRemove: () => void
 }) {
   const { t } = useTranslation(['components'])
 
@@ -432,11 +445,12 @@ function PluginSearchRow({
         <div className="mt-0.5 line-clamp-2 text-text-400 text-[length:var(--fs-xs)]">
           {result.description || t('pluginPanel.noDescription')}
         </div>
+        <div className="mt-1 flex gap-2 text-[length:var(--fs-xxs)] text-text-500"><span>来源：{result.source}</span><span>近 30 天 {result.downloads.toLocaleString()} 次下载</span>{result.publisher && <span>作者：{result.publisher}</span>}</div>
       </div>
       <button
         type="button"
-        onClick={onInstall}
-        disabled={disabled || installed}
+        onClick={installed ? onRemove : onInstall}
+        disabled={disabled}
         aria-label={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
         title={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-300 transition-colors hover:bg-bg-200 hover:text-text-100 disabled:opacity-50"
@@ -444,7 +458,7 @@ function PluginSearchRow({
         {installing ? (
           <SpinnerIcon size={13} className="animate-spin" />
         ) : installed ? (
-          <CheckIcon size={13} />
+          <TrashIcon size={13} />
         ) : (
           <DownloadIcon size={13} />
         )}

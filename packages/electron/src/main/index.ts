@@ -8,6 +8,7 @@ import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
+import { TaskScheduler } from "./scheduler"
 
 let mainWindow: BrowserWindow | undefined
 let server: SidecarHandle | undefined
@@ -18,6 +19,7 @@ let isStoppingForQuit = false
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const appId = "com.hankun.opencodex"
+const taskScheduler = new TaskScheduler(() => server?.state)
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -43,6 +45,7 @@ type NpmSearchPackage = {
   publisher?: {
     username?: string
   }
+  links?: { npm?: string; homepage?: string; repository?: string }
 }
 
 type NpmSearchResponse = {
@@ -281,7 +284,13 @@ function currentServerState() {
 ipcMain.handle("server:get", currentServerState)
 ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
+ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
+ipcMain.handle("task:list", () => taskScheduler.list())
+ipcMain.handle("task:create", (_event, input: Parameters<TaskScheduler["create"]>[0]) => taskScheduler.create(input))
+ipcMain.handle("task:update", (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => taskScheduler.update(String(id), input))
+ipcMain.handle("task:remove", (_event, id: unknown) => taskScheduler.remove(String(id)))
+ipcMain.handle("task:run", (_event, id: unknown) => taskScheduler.run(String(id)))
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
@@ -297,6 +306,7 @@ app.on("before-quit", (event) => {
   event.preventDefault()
   isQuitting = true
   isStoppingForQuit = true
+  taskScheduler.stop()
   void stopServer().finally(() => app.exit(0))
 })
 
@@ -309,6 +319,7 @@ void app.whenReady().then(() => {
   configureNotificationPermissionHandler()
   createTray()
   setDockIcon()
+  taskScheduler.start()
   return createWindow()
 }).catch((error: unknown) => {
   writeLog("main", "startup failed", error)
@@ -364,11 +375,66 @@ async function searchPlugins(raw: string) {
     : results
 
   const seen = new Set<string>()
-  return withExact.filter((item) => {
+  const unique = withExact.filter((item) => {
     if (seen.has(item.name)) return false
     seen.add(item.name)
     return true
   })
+  return Promise.all(unique.map(async (item) => ({
+    ...item,
+    source: "npm",
+    url: `https://www.npmjs.com/package/${item.name}`,
+    downloads: await npmDownloads(item.name),
+  })))
+}
+
+async function npmDownloads(name: string) {
+  const response = await fetch(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(name).replace("%2F", "%2f")}`).catch(() => undefined)
+  if (!response?.ok) return 0
+  const value = await response.json() as { downloads?: number }
+  return value.downloads ?? 0
+}
+
+async function searchMcpServers(raw: string) {
+  const query = raw.trim()
+  if (!query) return []
+  const url = new URL("https://registry.modelcontextprotocol.io/v0.1/servers")
+  url.searchParams.set("search", query)
+  url.searchParams.set("version", "latest")
+  url.searchParams.set("limit", "30")
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`MCP Registry search failed with ${response.status}`)
+  const data = await response.json() as { servers?: Array<{ server?: Record<string, unknown>; _meta?: Record<string, unknown> }> }
+  return Promise.all((data.servers ?? []).flatMap((entry) => {
+    const item = entry.server
+    if (!item || typeof item.name !== "string") return []
+    const packages = Array.isArray(item.packages) ? item.packages.filter(isRecord) : []
+    const npm = packages.find((pkg) => pkg.registryType === "npm" && typeof pkg.identifier === "string")
+    const remotes = Array.isArray(item.remotes) ? item.remotes.filter(isRecord) : []
+    const remote = remotes.find((value) => typeof value.url === "string")
+    const config = npm
+      ? { type: "local" as const, command: ["npx", "-y", `${String(npm.identifier)}@${String(npm.version ?? item.version ?? "latest")}`] }
+      : remote
+        ? { type: "remote" as const, url: String(remote.url) }
+        : undefined
+    if (!config) return []
+    const repository = isRecord(item.repository) ? item.repository : undefined
+    const environment = npm && Array.isArray(npm.environmentVariables) ? npm.environmentVariables.filter(isRecord) : []
+    const official = isRecord(entry._meta?.["io.modelcontextprotocol.registry/official"])
+      ? entry._meta?.["io.modelcontextprotocol.registry/official"] as Record<string, unknown>
+      : undefined
+    return [{ item, npm, repository, environment, official, config }]
+  }).map(async ({ item, npm, repository, environment, official, config }) => ({
+    name: String(item.name),
+    version: String(item.version ?? ""),
+    description: typeof item.description === "string" ? item.description : "",
+    source: repository?.source ? String(repository.source) : "Official MCP Registry",
+    sourceUrl: repository?.url ? String(repository.url) : "https://registry.modelcontextprotocol.io/",
+    downloads: npm ? await npmDownloads(String(npm.identifier)) : 0,
+    publishedAt: official?.publishedAt ? String(official.publishedAt) : "",
+    requiredEnvironment: environment.filter((value) => value.isRequired === true && typeof value.name === "string").map((value) => String(value.name)),
+    config,
+  })))
 }
 
 async function installPlugin(raw: string) {

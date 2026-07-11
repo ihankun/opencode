@@ -18,6 +18,9 @@ import {
   CloseIcon,
   ChevronRightIcon,
   ChevronDownIcon,
+  DownloadIcon,
+  SearchIcon,
+  TrashIcon,
 } from './Icons'
 import {
   getMcpStatus,
@@ -26,6 +29,7 @@ import {
   startMcpAuth,
   authenticateMcp,
   addMcpServer,
+  removeMcpServer,
 } from '../api/mcp'
 import type { MCPStatus, McpServerConfig } from '../types/api/mcp'
 import { useDirectory } from '../hooks'
@@ -58,6 +62,9 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [marketQuery, setMarketQuery] = useState('')
+  const [marketResults, setMarketResults] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>>([])
+  const [marketLoading, setMarketLoading] = useState(false)
 
   // 加载 MCP 状态
   const loadStatus = useCallback(async () => {
@@ -175,6 +182,43 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
     [currentDirectory, loadStatus],
   )
 
+  const handleMarketSearch = useCallback(async () => {
+    if (!marketQuery.trim()) return
+    setMarketLoading(true)
+    try {
+      setMarketResults(await window.customOpenCode.searchMcpServers(marketQuery))
+    } catch (err) {
+      apiErrorHandler('search MCP registry', err)
+    } finally {
+      setMarketLoading(false)
+    }
+  }, [marketQuery])
+
+  const handleMarketInstall = useCallback(async (item: Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>[number]) => {
+    setActionLoading(item.name)
+    try {
+      const environment = Object.fromEntries(item.requiredEnvironment.map(name => [name, window.prompt(`请输入 ${name}`) ?? '']))
+      if (item.requiredEnvironment.length > 0 && Object.values(environment).some(value => !value)) return
+      const config = item.config.type === 'local' && item.requiredEnvironment.length > 0 ? { ...item.config, environment } : item.config
+      await addMcpServer(item.name, config as McpServerConfig, currentDirectory)
+      await window.customOpenCode.restartServer()
+      await loadStatus()
+    } finally {
+      setActionLoading(null)
+    }
+  }, [currentDirectory, loadStatus])
+
+  const handleRemoveServer = useCallback(async (name: string) => {
+    setActionLoading(name)
+    try {
+      await removeMcpServer(name, currentDirectory)
+      await window.customOpenCode.restartServer()
+      await loadStatus()
+    } finally {
+      setActionLoading(null)
+    }
+  }, [currentDirectory, loadStatus])
+
   // ============================================
   // Render
   // ============================================
@@ -214,6 +258,20 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
+        <div className="border-b border-border-200/50 p-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1"><SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400" /><input value={marketQuery} onChange={event => setMarketQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void handleMarketSearch()} placeholder="搜索官方 MCP Registry..." className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pl-8 pr-2 text-[length:var(--fs-sm)] text-text-100 outline-none" /></div>
+            <button disabled={marketLoading || !marketQuery.trim()} onClick={() => void handleMarketSearch()} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-bg-200 px-3 text-[length:var(--fs-sm)] text-text-200 disabled:opacity-50">{marketLoading ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}搜索</button>
+          </div>
+          {marketResults.length > 0 && <div className="mt-3 space-y-1">{marketResults.map(item => {
+            const installed = servers.some(server => server.name === item.name)
+            return <div key={`${item.name}-${item.version}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 text-text-300"><PlugIcon size={15} /></div>
+              <div className="min-w-0 flex-1"><div className="flex gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{item.name}</span><span className="text-[length:var(--fs-xs)] text-text-400">v{item.version}</span></div><div className="line-clamp-2 text-[length:var(--fs-xs)] text-text-400">{item.description}</div><div className="mt-1 flex flex-wrap gap-x-2 text-[length:var(--fs-xxs)] text-text-500"><span>来源：{item.source}</span>{item.downloads > 0 && <span>近 30 天 {item.downloads.toLocaleString()} 次下载</span>}{item.requiredEnvironment.length > 0 && <span className="text-warning-100">需配置：{item.requiredEnvironment.join(', ')}</span>}</div></div>
+              <button disabled={Boolean(actionLoading)} onClick={() => void (installed ? handleRemoveServer(item.name) : handleMarketInstall(item))} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-300 hover:bg-bg-200 disabled:opacity-50">{actionLoading === item.name ? <SpinnerIcon size={13} className="animate-spin" /> : installed ? <TrashIcon size={13} /> : <DownloadIcon size={13} />}</button>
+            </div>
+          })}</div>}
+        </div>
         {/* Add Server Form */}
         {showAddForm && (
           <AddServerForm
@@ -262,6 +320,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
                 onAuth={handleAuth}
+                onRemove={handleRemoveServer}
               />
             ))}
           </div>
@@ -479,9 +538,10 @@ interface ServerItemProps {
   onConnect: (name: string) => void
   onDisconnect: (name: string) => void
   onAuth: (name: string) => void
+  onRemove: (name: string) => void
 }
 
-const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDisconnect, onAuth }: ServerItemProps) {
+const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDisconnect, onAuth, onRemove }: ServerItemProps) {
   const { t } = useTranslation(['components', 'common'])
   const { name, status } = server
   const [expanded, setExpanded] = useState(false)
@@ -622,7 +682,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0">{renderActions()}</div>
+        <div className="flex items-center gap-1 shrink-0">{renderActions()}<button onClick={e => { e.stopPropagation(); if (confirm(`移除 MCP 服务器“${name}”？`)) onRemove(name) }} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 opacity-0 transition-opacity hover:bg-danger-100/10 hover:text-danger-100 group-hover:opacity-100" title="卸载"><TrashIcon size={11} /></button></div>
       </div>
 
       {/* Expanded Error Details */}
