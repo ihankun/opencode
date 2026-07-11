@@ -19,7 +19,18 @@ import {
   CloseIcon,
   TrashIcon,
 } from './Icons'
-import { getSkills } from '../api/skill'
+import {
+  getMarketplaceDetail,
+  getMarketplaceInstalled,
+  getSkills,
+  installMarketplaceSkill,
+  removeMarketplaceSkill,
+  searchMarketplaceSkills,
+  type MarketplaceDetail,
+  type MarketplaceInstallation,
+  type MarketplaceScope,
+  type MarketplaceSummary,
+} from '../api/skill'
 import { reconnectSSE } from '../api/events'
 import { abortInFlightApiRequests, invalidateSDKClient } from '../api/sdk'
 import { notificationStore } from '../store'
@@ -43,6 +54,12 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
+  const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
+  const [marketSkills, setMarketSkills] = useState<ReadonlyArray<MarketplaceSummary>>([])
+  const [marketInstalled, setMarketInstalled] = useState<ReadonlyArray<MarketplaceInstallation>>([])
+  const [marketLoading, setMarketLoading] = useState(false)
+  const [marketError, setMarketError] = useState<string | null>(null)
+  const [marketDetail, setMarketDetail] = useState<MarketplaceSummary | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'create' | 'github' | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -93,6 +110,31 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
   useEffect(() => {
     loadSkills()
   }, [loadSkills])
+
+  const loadMarketplace = useCallback(async () => {
+    try {
+      setMarketLoading(true)
+      setMarketError(null)
+      const directory = currentDirectory || pathInfo?.directory
+      const [available, installed] = await Promise.all([
+        filter.trim() ? searchMarketplaceSkills(filter.trim(), directory) : Promise.resolve([]),
+        getMarketplaceInstalled(directory),
+      ])
+      setMarketSkills(available)
+      setMarketInstalled(installed)
+    } catch (err) {
+      apiErrorHandler('load skill marketplace', err)
+      setMarketError(t('skillPanel.marketplaceFailed'))
+    } finally {
+      setMarketLoading(false)
+    }
+  }, [currentDirectory, filter, pathInfo?.directory, t])
+
+  useEffect(() => {
+    if (tab !== 'marketplace') return
+    const timer = window.setTimeout(loadMarketplace, filter.trim() ? 300 : 0)
+    return () => window.clearTimeout(timer)
+  }, [filter, loadMarketplace, tab])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -151,6 +193,18 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
       )}
 
       {/* Search Bar */}
+      <div className="flex gap-1 border-b border-border-200/30 px-3 py-2">
+        {(['installed', 'marketplace'] as const).map(item => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => { setTab(item); setFilter('') }}
+            className={`rounded-md px-2.5 py-1 text-[length:var(--fs-xs)] transition-colors ${tab === item ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}
+          >
+            {t(`skillPanel.${item}`)}
+          </button>
+        ))}
+      </div>
       <div className="relative px-3 py-2">
         <div className="relative group">
           <input
@@ -158,8 +212,8 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
             name="skill-filter"
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            placeholder={t('skillPanel.filterPlaceholder')}
-            aria-label={t('skillPanel.filterPlaceholder')}
+            placeholder={t(tab === 'marketplace' ? 'skillPanel.marketplaceSearch' : 'skillPanel.filterPlaceholder')}
+            aria-label={t(tab === 'marketplace' ? 'skillPanel.marketplaceSearch' : 'skillPanel.filterPlaceholder')}
             autoComplete="off"
             className="w-full bg-bg-200/40 hover:bg-bg-200/60 focus:bg-bg-000 border border-transparent focus:border-border-200 rounded-md py-1.5 pl-[30px] pr-2 text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-400/70 focus-visible:ring-1 focus-visible:ring-border-200 focus-visible:ring-inset transition-all"
           />
@@ -170,7 +224,17 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {loading && skills.length === 0 ? (
+        {tab === 'marketplace' ? (
+          <MarketplaceList
+            skills={marketSkills}
+            installed={marketInstalled}
+            loading={marketLoading}
+            error={marketError}
+            hasQuery={filter.trim().length > 0}
+            onRetry={loadMarketplace}
+            onSelect={setMarketDetail}
+          />
+        ) : loading && skills.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-400 text-[length:var(--fs-base)] gap-2">
             <SpinnerIcon size={20} className="animate-spin opacity-50" />
             <span>{t('skillPanel.loadingSkills')}</span>
@@ -232,6 +296,17 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
             await loadSkills()
             showToast(t('skillPanel.importedSkill', { name }))
             setDialog(null)
+          }}
+        />
+      )}
+      {marketDetail && (
+        <MarketplaceDetailDialog
+          summary={marketDetail}
+          directory={currentDirectory || pathInfo?.directory}
+          installed={marketInstalled.filter(item => item.id === marketDetail.id)}
+          onClose={() => setMarketDetail(null)}
+          onChanged={async () => {
+            await Promise.all([loadMarketplace(), loadSkills()])
           }}
         />
       )}
@@ -299,6 +374,155 @@ function SkillPanelActions(props: {
       </div>
     </div>
   )
+}
+
+function MarketplaceList(props: {
+  skills: ReadonlyArray<MarketplaceSummary>
+  installed: ReadonlyArray<MarketplaceInstallation>
+  loading: boolean
+  error: string | null
+  hasQuery: boolean
+  onRetry: () => void
+  onSelect: (skill: MarketplaceSummary) => void
+}) {
+  const { t } = useTranslation(['components', 'common'])
+  if (props.loading && props.skills.length === 0) return <PanelStatus icon={<SpinnerIcon size={20} className="animate-spin" />} text={t('skillPanel.loadingMarketplace')} />
+  if (props.error) return <PanelStatus icon={<AlertCircleIcon size={20} className="text-danger-100" />} text={props.error} action={t('common:retry')} onAction={props.onRetry} />
+  if (!props.hasQuery) return <PanelStatus icon={<SearchIcon size={22} />} text={t('skillPanel.marketplaceSearchHint')} />
+  return (
+    <div className="p-2">
+      {props.loading && <SpinnerIcon size={12} className="mb-2 ml-auto animate-spin text-text-400" />}
+      {props.skills.length === 0 ? <PanelStatus icon={<TeachIcon size={22} />} text={t('skillPanel.noMarketplaceSkills')} /> : (
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+          {props.skills.map(skill => {
+            const installed = props.installed.filter(item => item.id === skill.id)
+            return (
+              <button key={skill.id} type="button" onClick={() => props.onSelect(skill)} className="rounded-md border border-border-200/50 bg-bg-000 p-3 text-left hover:border-border-100 hover:bg-bg-200/20">
+                <div className="flex items-start gap-2">
+                  <TeachIcon size={16} className="mt-0.5 shrink-0 text-accent-main-100" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{skill.name || skill.slug}</div>
+                    <div className="mt-1 truncate text-[length:var(--fs-xs)] text-text-300">{t('skillPanel.source')}: {skill.source}</div>
+                    <div className="mt-2 line-clamp-2 text-[length:var(--fs-xs)] leading-4 text-text-400">{skill.description}</div>
+                    <MarketplaceBadges skill={skill} />
+                  </div>
+                  {installed.length > 0 && <span className="rounded bg-success-100/10 px-1.5 py-0.5 text-[10px] text-success-100">{installed.some(item => item.updateAvailable) ? t('skillPanel.updateAvailable') : t('skillPanel.installed')}</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PanelStatus(props: { icon: ReactNode; text: string; action?: string; onAction?: () => void }) {
+  return <div className="flex h-full min-h-36 flex-col items-center justify-center gap-2 px-4 text-center text-[length:var(--fs-sm)] text-text-400">
+    {props.icon}<span>{props.text}</span>
+    {props.action && <button type="button" onClick={props.onAction} className="rounded-md bg-bg-200 px-3 py-1.5 text-text-200">{props.action}</button>}
+  </div>
+}
+
+function MarketplaceDetailDialog(props: {
+  summary: MarketplaceSummary
+  directory?: string
+  installed: ReadonlyArray<MarketplaceInstallation>
+  onClose: () => void
+  onChanged: () => void | Promise<void>
+}) {
+  const { t } = useTranslation(['components', 'common'])
+  const [detail, setDetail] = useState<MarketplaceDetail | null>(null)
+  const [scope, setScope] = useState<MarketplaceScope>(props.directory ? 'project' : 'global')
+  const [selectedFile, setSelectedFile] = useState('SKILL.md')
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getMarketplaceDetail(props.summary.id, props.directory)
+      .then(nextDetail => {
+        setDetail(nextDetail)
+        setSelectedFile(nextDetail.files.find(file => file.path === 'SKILL.md')?.path ?? nextDetail.files[0]?.path ?? '')
+      })
+      .catch(err => setError(err instanceof Error ? err.message : t('skillPanel.marketplaceFailed')))
+      .finally(() => setLoading(false))
+  }, [props.directory, props.summary.id, t])
+
+  const installed = props.installed.find(item => item.scope === scope)
+  const mutate = async (action: 'install' | 'remove', force = false) => {
+    try {
+      setSubmitting(true)
+      setError(null)
+      if (action === 'install') await installMarketplaceSkill(props.summary.id, scope, props.directory, force)
+      else await removeMarketplaceSkill(props.summary.id, scope, props.directory, force)
+      await restartElectronServer()
+      await props.onChanged()
+      if (action === 'remove') props.onClose()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!force && /conflict|local skill files have changes/i.test(message) && window.confirm(t('skillPanel.forceConflict'))) {
+        await mutate(action, true)
+        return
+      }
+      setError(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <SkillDialogFrame title={props.summary.name || props.summary.slug} onClose={props.onClose}>
+      {loading ? <PanelStatus icon={<SpinnerIcon size={18} className="animate-spin" />} text={t('skillPanel.loadingPreview')} /> : detail && (
+        <>
+          <div className="flex flex-wrap gap-2 text-[length:var(--fs-xs)] text-text-400">
+            <span>{t('skillPanel.source')}: {detail.source}</span><span className="font-mono" title={detail.hash}>#{detail.hash.slice(0, 10)}</span>
+          </div>
+          <MarketplaceBadges skill={detail} />
+          {detail.license && <div className="text-[length:var(--fs-xs)] text-text-400">{t('skillPanel.license')}: {detail.license}</div>}
+          <div className="rounded-md border border-border-200/50 bg-bg-100">
+            <div className="flex max-w-full gap-1 overflow-x-auto border-b border-border-200/50 p-1">
+              {detail.files.map(file => <button key={file.path} type="button" onClick={() => setSelectedFile(file.path)} className={`whitespace-nowrap rounded px-2 py-1 text-[10px] ${selectedFile === file.path ? 'bg-bg-200 text-text-100' : 'text-text-400'}`}>{file.path}</button>)}
+            </div>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-text-200">{detail.files.find(file => file.path === selectedFile)?.contents}</pre>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[length:var(--fs-xs)] text-text-400">{t('skillPanel.installScope')}</span>
+            <select value={scope} onChange={event => setScope(event.target.value as MarketplaceScope)} className="h-8 rounded-md border border-border-200/60 bg-bg-100 px-2 text-[length:var(--fs-xs)] text-text-100">
+              <option value="global">{t('skillPanel.globalScope')}</option>
+              <option value="project" disabled={!props.directory}>{t('skillPanel.projectScope')}</option>
+            </select>
+            {installed?.conflict && <span className="text-[length:var(--fs-xs)] text-warning-100">{t('skillPanel.localChanges')}</span>}
+          </div>
+        </>
+      )}
+      {error && <div className="rounded-md bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">{error}</div>}
+      <div className="flex justify-end gap-2">
+        {installed && <button type="button" disabled={submitting} onClick={() => mutate('remove')} className="inline-flex h-8 items-center justify-center rounded-md border border-danger-100/30 bg-danger-100/10 px-3 text-[length:var(--fs-sm)] font-medium text-danger-100 transition-colors hover:border-danger-100/50 hover:bg-danger-100/15 disabled:opacity-60">{t('skillPanel.uninstall')}</button>}
+        <button type="button" disabled={submitting || !detail} onClick={() => mutate('install')} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-main-100 px-3 text-[length:var(--fs-sm)] font-medium text-white disabled:opacity-60">
+          {submitting && <SpinnerIcon size={13} className="animate-spin" />}{installed ? t(installed.updateAvailable ? 'skillPanel.update' : 'skillPanel.reinstall') : t('skillPanel.install')}
+        </button>
+      </div>
+    </SkillDialogFrame>
+  )
+}
+
+function MarketplaceBadges(props: { skill: Pick<MarketplaceSummary, 'githubStars' | 'downloadCount' | 'isVerified' | 'securityScore' | 'securityStatus' | 'aiScore' | 'reviewStatus'> & { isFeatured?: boolean; qualityScore?: number | null } }) {
+  const { t } = useTranslation(['components'])
+  return <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-text-400">
+    {props.skill.isVerified && <span className="rounded bg-accent-main-100/10 px-1.5 py-0.5 text-accent-main-100">{t('skillPanel.verified')}</span>}
+    {props.skill.isFeatured && <span className="rounded bg-warning-100/10 px-1.5 py-0.5 text-warning-100">{t('skillPanel.featured')}</span>}
+    <span title={t('skillPanel.githubStars')}>★ {formatMarketplaceCount(props.skill.githubStars)}</span>
+    <span title={t('skillPanel.downloads')}>↓ {formatMarketplaceCount(props.skill.downloadCount)}</span>
+    {props.skill.aiScore !== null && <span>{t('skillPanel.aiScore')} {props.skill.aiScore}</span>}
+    {props.skill.qualityScore !== undefined && props.skill.qualityScore !== null && <span>{t('skillPanel.qualityScore')} {props.skill.qualityScore}</span>}
+    {(props.skill.securityStatus || props.skill.securityScore !== null) && <span className={props.skill.securityStatus === 'pass' ? 'text-success-100' : 'text-text-400'}>{t('skillPanel.security')}: {props.skill.securityStatus ?? props.skill.securityScore}{props.skill.securityStatus && props.skill.securityScore !== null ? ` ${props.skill.securityScore}` : ''}</span>}
+    {props.skill.reviewStatus && <span>{t('skillPanel.reviewed')}: {props.skill.reviewStatus}</span>}
+  </div>
+}
+
+function formatMarketplaceCount(value: number) {
+  return Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
 async function restartElectronServer() {

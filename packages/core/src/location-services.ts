@@ -28,6 +28,7 @@ import * as SessionRunnerLLM from "./session/runner/llm"
 import { SessionRunnerModel } from "./session/runner/model"
 import { SessionTodo } from "./session/todo"
 import { SkillV2 } from "./skill"
+import { SkillMarketplace } from "./skill/marketplace"
 import { SkillGuidance } from "./skill/guidance"
 import { Snapshot } from "./snapshot"
 import { SystemContextBuiltIns } from "./system-context/builtins"
@@ -58,6 +59,7 @@ export const locationServices = LayerNode.group([
   Watcher.node,
   Pty.node,
   SkillV2.node,
+  SkillMarketplace.node,
   SystemContextRegistry.node,
   SystemContextBuiltIns.node,
   LocationMutation.node,

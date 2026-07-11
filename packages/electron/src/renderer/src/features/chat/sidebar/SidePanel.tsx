@@ -7,13 +7,13 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { ActiveSessionItem } from './ActiveSessionItem'
 import { NotificationItem } from './NotificationItem'
 import { SidebarFooter } from './SidebarFooter'
-import { SessionSearchDialog } from './SessionSearchDialog'
 import { buildActiveSessionTree } from './activeSessionTree'
 import {
   FolderIcon,
   GlobeIcon,
   PlusIcon,
   TrashIcon,
+  NewChatIcon,
   SearchIcon,
   PencilIcon,
   CheckIcon,
@@ -21,6 +21,8 @@ import {
   SpinnerIcon,
   ChevronRightIcon,
   PackagePlusIcon,
+  PlugIcon,
+  TeachIcon,
 } from '../../../components/Icons'
 import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
@@ -54,7 +56,10 @@ interface SidePanelProps {
   onCloseMobile?: () => void
   selectedSessionId: string | null
   onAddProject: () => void
+  onOpenSearch?: () => void
+  onOpenSkills?: () => void
   onOpenPlugins?: () => void
+  onOpenMcp?: () => void
   isMobile?: boolean
   isExpanded?: boolean
   onOpenSettings?: () => void
@@ -111,7 +116,10 @@ export function SidePanel({
   onCloseMobile,
   selectedSessionId,
   onAddProject,
+  onOpenSearch,
+  onOpenSkills,
   onOpenPlugins,
+  onOpenMcp,
   isMobile = false,
   isExpanded = true,
   onOpenSettings,
@@ -154,7 +162,6 @@ export function SidePanel({
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
-  const [searchDialogOpen, setSearchDialogOpen] = useState(false)
 
   // ---- 编辑模式状态 ----
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1108,7 +1115,19 @@ export function SidePanel({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ===== Header ===== */}
-      <div className="mobile-safe-topbar-14 window-drag-region shrink-0" />
+      <div className="mobile-safe-topbar-14 window-drag-region relative shrink-0">
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            aria-label={t('sidebar.search')}
+            title={t('sidebar.search')}
+            className="window-no-drag absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-400 transition-colors hover:bg-bg-200/70 hover:text-text-100"
+          >
+            <SearchIcon size={16} />
+          </button>
+        )}
+      </div>
 
       {/* ===== Navigation - 图标位置固定 ===== */}
       <div className="flex flex-col gap-0 mx-2">
@@ -1126,7 +1145,7 @@ export function SidePanel({
           title={t('sidebar.newChat')}
         >
           <span className="size-5 flex items-center justify-center shrink-0">
-            <PlusIcon size={16} />
+            <NewChatIcon size={17} />
           </span>
           <span
             className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
@@ -1144,24 +1163,24 @@ export function SidePanel({
 
         <button
           type="button"
-          onClick={() => setSearchDialogOpen(true)}
-          aria-label={t('sidebar.search')}
+          onClick={onOpenSkills}
+          aria-label={t('sidebar.skills')}
           className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
             paddingRight: 6,
           }}
-          title={t('sidebar.search')}
+          title={t('sidebar.skills')}
         >
           <span className="size-5 flex items-center justify-center shrink-0">
-            <SearchIcon size={16} />
+            <TeachIcon size={16} />
           </span>
           <span
             className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
             style={{ opacity: showLabels ? 1 : 0 }}
           >
-            {t('sidebar.search')}
+            {t('sidebar.skills')}
           </span>
         </button>
 
@@ -1185,6 +1204,22 @@ export function SidePanel({
             style={{ opacity: showLabels ? 1 : 0 }}
           >
             {t('sidebar.plugins')}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenMcp}
+          aria-label={t('sidebar.mcpServers')}
+          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          style={{ width: showLabels ? '100%' : 32, paddingLeft: 6, paddingRight: 6 }}
+          title={t('sidebar.mcpServers')}
+        >
+          <span className="size-5 flex items-center justify-center shrink-0">
+            <PlugIcon size={16} />
+          </span>
+          <span className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300" style={{ opacity: showLabels ? 1 : 0 }}>
+            {t('sidebar.mcpServers')}
           </span>
         </button>
 
@@ -1556,12 +1591,6 @@ export function SidePanel({
         variant="warning"
       />
 
-      <SessionSearchDialog
-        isOpen={searchDialogOpen}
-        directory={currentDirectory}
-        onClose={() => setSearchDialogOpen(false)}
-        onSelectSession={handleSelect}
-      />
     </div>
   )
 }

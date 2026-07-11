@@ -11,7 +11,8 @@ import { ToastContainer } from './components/ToastContainer'
 import { RightPanel } from './components/RightPanel'
 import { BottomPanel } from './components/BottomPanel'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
-import { SidebarIcon } from './components/Icons'
+import { SearchIcon, SidebarIcon } from './components/Icons'
+import { SessionSearchDialog } from './features/chat/sidebar/SessionSearchDialog'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
 import { useCloseServiceDialog } from './hooks/useCloseServiceDialog'
@@ -65,7 +66,6 @@ const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
 type MainUtilityPage = 'skills' | 'mcp' | 'plugins'
-const MAIN_UTILITY_TABS: MainUtilityPage[] = ['skills', 'plugins', 'mcp']
 
 function ElectronSidebarToggle({
   expanded,
@@ -97,6 +97,15 @@ function ElectronSidebarToggle({
       className="electron-sidebar-toggle window-no-drag"
     >
       <SidebarIcon size={16} />
+    </button>,
+    document.body,
+  )
+}
+
+function ElectronSidebarSearch({ title, onOpen }: { title: string; onOpen: () => void }) {
+  return createPortal(
+    <button type="button" onClick={onOpen} aria-label={title} title={title} className="electron-sidebar-search window-no-drag">
+      <SearchIcon size={16} />
     </button>,
     document.body,
   )
@@ -138,6 +147,7 @@ function App() {
         : focusedController?.effectiveDirectory || currentDirectory
       : undefined
   const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
+  const [sessionSearchOpen, setSessionSearchOpen] = useState(false)
 
   useEffect(() => {
     const cleanup = initNotificationSound()
@@ -308,13 +318,17 @@ function App() {
     [getMobilePageScrollLeft],
   )
 
-  const openPluginPage = useCallback(() => {
-    setUtilityPage('skills')
+  const openUtilityPage = useCallback((page: MainUtilityPage) => {
+    setUtilityPage(page)
     if (isMobilePanelLayout) {
       scrollMobilePagerTo('chat')
       setSidebarExpanded(false)
     }
   }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
+
+  const openSkillPage = useCallback(() => openUtilityPage('skills'), [openUtilityPage])
+  const openPluginPage = useCallback(() => openUtilityPage('plugins'), [openUtilityPage])
+  const openMcpPage = useCallback(() => openUtilityPage('mcp'), [openUtilityPage])
 
   const getNearestMobilePage = useCallback(
     (scrollLeft: number): MobilePagerPage => {
@@ -947,26 +961,6 @@ function App() {
   )
   const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border-200/30 px-3">
-        {MAIN_UTILITY_TABS.map(tab => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setUtilityPage(tab)}
-            className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${
-              utilityPage === tab
-                ? 'bg-bg-200 text-text-100'
-                : 'text-text-400 hover:bg-bg-200/60 hover:text-text-100'
-            }`}
-          >
-            {tab === 'skills'
-              ? t('chat:sidebar.skills')
-              : tab === 'plugins'
-                ? t('chat:sidebar.plugins')
-                : t('chat:sidebar.mcpServers')}
-          </button>
-        ))}
-      </div>
       <Suspense fallback={null}>
         {utilityPage === 'mcp' ? (
           <McpPanel />
@@ -987,13 +981,16 @@ function App() {
     >
       <DesktopTitlebar />
       {showTitlebarSidebarButton && (
-        <ElectronSidebarToggle
-          expanded={sidebarExpanded}
-          title={sidebarExpanded ? t('chat:sidebar.collapseSidebar') : t('chat:sidebar.expandSidebar')}
-          onToggle={handleToggleSidebar}
-          onPreviewOpen={openSidebarPreview}
-          onPreviewClose={closeSidebarPreview}
-        />
+        <>
+          <ElectronSidebarToggle
+            expanded={sidebarExpanded}
+            title={sidebarExpanded ? t('chat:sidebar.collapseSidebar') : t('chat:sidebar.expandSidebar')}
+            onToggle={handleToggleSidebar}
+            onPreviewOpen={openSidebarPreview}
+            onPreviewClose={closeSidebarPreview}
+          />
+          <ElectronSidebarSearch title={t('chat:sidebar.search')} onOpen={() => setSessionSearchOpen(true)} />
+        </>
       )}
       <InternalDragLayer />
       <ChatViewportProvider value={chatViewport}>
@@ -1035,7 +1032,10 @@ function App() {
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
+                    onOpenSearch={() => setSessionSearchOpen(true)}
+                    onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
+                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1125,7 +1125,10 @@ function App() {
                   onOpen={handleOpenSidebar}
                   onClose={handleCloseSidebar}
                   onOpenSettings={openSettings}
+                  onOpenSearch={() => setSessionSearchOpen(true)}
+                  onOpenSkills={openSkillPage}
                   onOpenPlugins={openPluginPage}
+                  onOpenMcp={openMcpPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1145,7 +1148,10 @@ function App() {
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
+                    onOpenSearch={() => setSessionSearchOpen(true)}
+                    onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
+                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
@@ -1191,6 +1197,13 @@ function App() {
             commands={commands}
           />
         </Suspense>
+
+        <SessionSearchDialog
+          isOpen={sessionSearchOpen}
+          directory={currentDirectory}
+          onClose={() => setSessionSearchOpen(false)}
+          onSelectSession={handleSelectSession}
+        />
 
         <Suspense fallback={null}>
           <CloseServiceDialog

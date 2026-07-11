@@ -85,6 +85,16 @@ import type {
   CommandsListOutput,
   SkillsListInput,
   SkillsListOutput,
+  SkillsMarketplaceSearchInput,
+  SkillsMarketplaceSearchOutput,
+  SkillsMarketplaceDetailInput,
+  SkillsMarketplaceDetailOutput,
+  SkillsMarketplaceInstalledInput,
+  SkillsMarketplaceInstalledOutput,
+  SkillsMarketplaceInstallInput,
+  SkillsMarketplaceInstallOutput,
+  SkillsMarketplaceRemoveInput,
+  SkillsMarketplaceRemoveOutput,
   EventsSubscribeOutput,
   PtysListInput,
   PtysListOutput,
@@ -804,6 +814,68 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [401, 400],
             empty: false,
+          },
+          requestOptions,
+        ),
+      marketplaceSearch: (input: SkillsMarketplaceSearchInput, requestOptions?: RequestOptions) =>
+        request<SkillsMarketplaceSearchOutput>(
+          {
+            method: "GET",
+            path: `/api/skill/marketplace/search`,
+            query: { location: input["location"], q: input["q"], limit: input["limit"], page: input["page"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      marketplaceDetail: (input: SkillsMarketplaceDetailInput, requestOptions?: RequestOptions) =>
+        request<SkillsMarketplaceDetailOutput>(
+          {
+            method: "GET",
+            path: `/api/skill/marketplace/detail`,
+            query: { location: input["location"], id: input["id"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      marketplaceInstalled: (input?: SkillsMarketplaceInstalledInput, requestOptions?: RequestOptions) =>
+        request<SkillsMarketplaceInstalledOutput>(
+          {
+            method: "GET",
+            path: `/api/skill/marketplace/installed`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      marketplaceInstall: (input: SkillsMarketplaceInstallInput, requestOptions?: RequestOptions) =>
+        request<SkillsMarketplaceInstallOutput>(
+          {
+            method: "POST",
+            path: `/api/skill/marketplace/install`,
+            query: { location: input["location"] },
+            body: { id: input["id"], scope: input["scope"], force: input["force"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      marketplaceRemove: (input: SkillsMarketplaceRemoveInput, requestOptions?: RequestOptions) =>
+        request<SkillsMarketplaceRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/skill/marketplace/install`,
+            query: { location: input["location"] },
+            body: { id: input["id"], scope: input["scope"], force: input["force"] },
+            successStatus: 204,
+            declaredStatuses: [400, 401],
+            empty: true,
           },
           requestOptions,
         ),

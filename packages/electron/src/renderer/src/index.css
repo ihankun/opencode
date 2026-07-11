@@ -260,6 +260,43 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transform: scale(0.98);
 }
 
+.electron-sidebar-search {
+  position: fixed;
+  left: 144px;
+  top: 10px;
+  z-index: 10001;
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  pointer-events: auto;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.electron-sidebar-search:hover {
+  background: hsl(var(--bg-200) / 0.7);
+  color: hsl(var(--text-100));
+}
+
+.electron-sidebar-search:focus-visible {
+  outline: 2px solid hsl(var(--accent-main-100) / 0.55);
+  outline-offset: 2px;
+}
+
+.electron-sidebar-search:active {
+  transform: scale(0.98);
+}
+
 :root:not(.tauri-app) [data-sidebar-expanded='false'] [data-chat-header='true'] {
   padding-left: 172px;
 }

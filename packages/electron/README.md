@@ -23,3 +23,7 @@ bun electron:package
 ```
 
 This repository currently requires `bun@^1.3.14` for the opencode server build scripts.
+
+## Skill marketplace
+
+The skill marketplace uses SkillHub's public API for anonymous search and file downloads. It requires no account, token, or proxy service. Set `SKILLHUB_URL` only when developing against a compatible self-hosted SkillHub instance.

@@ -82,6 +82,13 @@ export type PermissionNotFoundError = {
 export const isPermissionNotFoundError = (value: unknown): value is PermissionNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PermissionNotFoundError"
 
+export type SkillMarketplaceError = {
+  readonly name: "SkillMarketplaceError"
+  readonly data: { readonly message: string; readonly conflict?: boolean | undefined }
+}
+export const isSkillMarketplaceError = (value: unknown): value is SkillMarketplaceError =>
+  typeof value === "object" && value !== null && "name" in value && value["name"] === "SkillMarketplaceError"
+
 export type PtyNotFoundError = { readonly _tag: "PtyNotFoundError"; readonly ptyID: string; readonly message: string }
 export const isPtyNotFoundError = (value: unknown): value is PtyNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PtyNotFoundError"
@@ -2537,6 +2544,175 @@ export type SkillsListOutput = {
     readonly content: string
   }>
 }
+
+export type SkillsMarketplaceSearchInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["location"]
+  readonly q: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["q"]
+  readonly limit?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["limit"]
+  readonly page?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["page"]
+}
+
+export type SkillsMarketplaceSearchOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly data: ReadonlyArray<{
+      readonly id: string
+      readonly slug: string
+      readonly name: string
+      readonly source: string
+      readonly description: string
+      readonly url: string
+      readonly githubStars: number | "Infinity" | "-Infinity" | "NaN"
+      readonly downloadCount: number | "Infinity" | "-Infinity" | "NaN"
+      readonly isVerified: boolean
+      readonly securityScore: number | "Infinity" | "-Infinity" | "NaN" | null
+      readonly securityStatus: string | null
+      readonly aiScore: number | "Infinity" | "-Infinity" | "NaN" | null
+      readonly reviewStatus: string | null
+    }>
+    readonly page: number | "Infinity" | "-Infinity" | "NaN"
+    readonly perPage: number | "Infinity" | "-Infinity" | "NaN"
+    readonly total: number | "Infinity" | "-Infinity" | "NaN"
+  }
+}
+
+export type SkillsMarketplaceDetailInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly id: string
+  }["location"]
+  readonly id: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly id: string
+  }["id"]
+}
+
+export type SkillsMarketplaceDetailOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly id: string
+    readonly source: string
+    readonly slug: string
+    readonly hash: string
+    readonly files: ReadonlyArray<{ readonly path: string; readonly contents: string }>
+    readonly githubStars: number | "Infinity" | "-Infinity" | "NaN"
+    readonly downloadCount: number | "Infinity" | "-Infinity" | "NaN"
+    readonly isVerified: boolean
+    readonly isFeatured: boolean
+    readonly securityScore: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly securityStatus: string | null
+    readonly qualityScore: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly aiScore: number | "Infinity" | "-Infinity" | "NaN" | null
+    readonly reviewStatus: string | null
+    readonly license: string | null
+  }
+}
+
+export type SkillsMarketplaceInstalledInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type SkillsMarketplaceInstalledOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly slug: string
+    readonly scope: "global" | "project"
+    readonly directory: string
+    readonly manifest: {
+      readonly id: string
+      readonly source: string
+      readonly slug: string
+      readonly hash: string | null
+      readonly scope: "global" | "project"
+      readonly installedAt: string
+      readonly updatedAt: string
+      readonly files: { readonly [x: string]: string }
+    }
+    readonly conflict: boolean
+    readonly updateAvailable: boolean
+  }>
+}
+
+export type SkillsMarketplaceInstallInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly id: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["id"]
+  readonly scope: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["scope"]
+  readonly force?: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["force"]
+}
+
+export type SkillsMarketplaceInstallOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly id: string
+    readonly slug: string
+    readonly scope: "global" | "project"
+    readonly directory: string
+    readonly manifest: {
+      readonly id: string
+      readonly source: string
+      readonly slug: string
+      readonly hash: string | null
+      readonly scope: "global" | "project"
+      readonly installedAt: string
+      readonly updatedAt: string
+      readonly files: { readonly [x: string]: string }
+    }
+    readonly conflict: boolean
+    readonly updateAvailable: boolean
+  }
+}
+
+export type SkillsMarketplaceRemoveInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly id: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["id"]
+  readonly scope: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["scope"]
+  readonly force?: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["force"]
+}
+
+export type SkillsMarketplaceRemoveOutput = void
 
 export type EventsSubscribeOutput = OpenCodeEventEncoded
 
