@@ -136,6 +136,7 @@ export type CustomOpenCodeApi = {
     directory?: string
   }): Promise<CustomOpenCodeNotificationSendResult>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
+  listDrives(): Promise<string[]>
   // Window controls
   windowMinimize(): Promise<void>
   windowMaximize(): Promise<void>
@@ -174,6 +175,7 @@ const api: CustomOpenCodeApi = {
     ipcRenderer.on("notification:clicked", listener)
     return () => ipcRenderer.removeListener("notification:clicked", listener)
   },
+  listDrives: () => ipcRenderer.invoke("drives:list"),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke("window:minimize"),
   windowMaximize: () => ipcRenderer.invoke("window:maximize"),

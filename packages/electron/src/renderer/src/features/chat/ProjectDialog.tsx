@@ -4,6 +4,7 @@ import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon } from '../../components
 import { listDirectory, getPath } from '../../api'
 import { fileErrorHandler } from '../../utils'
 import { Dialog } from '../../components/ui/Dialog'
+import { isElectron, getDesktopPlatform } from '../../utils/tauri'
 
 // ============================================
 // Types
@@ -64,14 +65,20 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
   const [inputValue, setInputValue] = useState('')
   const [items, setItems] = useState<FileItem[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedDriveIndex, setSelectedDriveIndex] = useState(-1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [drives, setDrives] = useState<string[]>([])
 
   // Refs
   const loadedPathRef = useRef<string>('')
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingSelectionRef = useRef<string | null>(null)
   const requestIdRef = useRef(0)
+
+  // Windows 盘符检测
+  const isWin = isElectron() && getDesktopPlatform() === 'windows'
+  const isWindowsDriveRoot = isWin && /^[a-zA-Z]:\/?$/.test(inputValue)
 
   // Computed
   const currentDir = useMemo(() => getDirectoryPath(inputValue), [inputValue])
@@ -125,6 +132,19 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
       clearTimeout(timer)
     }
   }, [isOpen, initialPath])
+
+  // ==========================================
+  // Load Windows Drives
+  // ==========================================
+
+  useEffect(() => {
+    if (!isOpen || !isWin) return
+    let cancelled = false
+    window.customOpenCode?.listDrives().then(d => {
+      if (!cancelled && d.length > 0) setDrives(d)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [isOpen, isWin])
 
   // ==========================================
   // Load Directory
@@ -342,7 +362,7 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
         ) : (
           <div className="space-y-0.5">
             {/* Go Up */}
-            {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && (
+            {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && !isWindowsDriveRoot && (
               <ListItem
                 id="project-item-up"
                 icon={<ArrowUpIcon className="w-3.5 h-3.5" />}
@@ -352,8 +372,46 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
                   handleGoBack()
                   inputRef.current?.focus()
                 }}
-                onMouseEnter={() => setSelectedIndex(-1)}
+                onMouseEnter={() => {
+                  setSelectedIndex(-1)
+                  setSelectedDriveIndex(-1)
+                }}
               />
+            )}
+
+            {/* Windows 盘符列表 */}
+            {isWindowsDriveRoot && drives.length > 0 && (
+              <>
+                <div
+                  className="text-[length:var(--fs-xxs)] text-text-400/60 font-medium"
+                  onMouseEnter={() => {
+                    setSelectedIndex(-1)
+                    setSelectedDriveIndex(-1)
+                  }}
+                >
+                  {t('projectDialog.drives', '盘符')}
+                </div>
+                {drives.map((drive, index) => {
+                  const currentDrive = inputValue.toLowerCase().replace(/\//g, '')
+                  const isCurrent = drive.toLowerCase() === currentDrive
+                  return (
+                    <ListItem
+                      key={drive}
+                      id={`project-drive-${drive}`}
+                      icon={<FolderIcon className="w-3.5 h-3.5" />}
+                      label={drive + (isCurrent ? ' ←' : '')}
+                      isSelected={!isCurrent && selectedDriveIndex === index}
+                      onClick={() => {
+                        if (!isCurrent) {
+                          setInputValue(drive + '/')
+                          inputRef.current?.focus()
+                        }
+                      }}
+                      onMouseEnter={() => setSelectedDriveIndex(index)}
+                    />
+                  )
+                })}
+              </>
             )}
 
             {/* Empty State */}
@@ -373,7 +431,10 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
                 label={item.name}
                 isSelected={index === selectedIndex}
                 onClick={() => handleItemClick(item)}
-                onMouseEnter={() => setSelectedIndex(index)}
+                onMouseEnter={() => {
+                  setSelectedIndex(index)
+                  setSelectedDriveIndex(-1)
+                }}
                 action={
                   index === selectedIndex && (
                     <button

@@ -331,6 +331,23 @@ ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogi
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
 
+// Windows 盘符列表
+ipcMain.handle("drives:list", async () => {
+  if (process.platform !== "win32") return []
+  const { execSync } = await import("node:child_process")
+  try {
+    const output = execSync("wmic logicaldisk get name", { encoding: "utf-8", timeout: 5000 })
+    const drives: string[] = []
+    for (const line of output.split("\n")) {
+      const match = line.trim().match(/^([A-Z]:)$/)
+      if (match) drives.push(match[1])
+    }
+    return drives
+  } catch {
+    return []
+  }
+})
+
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
   event.preventDefault()
