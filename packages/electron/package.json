@@ -1,7 +1,7 @@
 {
   "name": "@opencode-ai/opencodex",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.8.2",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
@@ -16,6 +16,8 @@
     "preview": "electron-vite preview",
     "prepackage": "bun run build",
     "package": "electron-builder --config electron-builder.config.ts",
+    "prepackage:win": "bun run build",
+    "package:win": "electron-builder --win --config electron-builder.config.ts",
     "package:mac": "electron-builder --mac --config electron-builder.config.ts"
   },
   "dependencies": {

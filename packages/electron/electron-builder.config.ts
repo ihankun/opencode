@@ -14,6 +14,19 @@ const config: Configuration = {
     category: "public.app-category.developer-tools",
     identity: process.env.CSC_IDENTITY ?? "-",
   },
+  win: {
+    icon: "assets/icon.ico",
+    target: ["nsis", "portable"],
+    artifactName: "${productName}-${version}-${arch}.${ext}",
+  },
+  nsis: {
+    artifactName: "${productName} Setup ${version}.${ext}",
+  },
+  linux: {
+    icon: "assets/opencode-icon.png",
+    target: ["AppImage", "deb", "rpm"],
+    category: "Development",
+  },
 }
 
 export default config

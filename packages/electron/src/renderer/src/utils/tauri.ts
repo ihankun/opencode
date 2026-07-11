@@ -10,6 +10,14 @@ export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 }
 
+/**
+ * 检测当前是否运行在 Electron 环境中
+ * 通过检查 window.customOpenCode 来判断
+ */
+export function isElectron(): boolean {
+  return typeof window !== 'undefined' && 'customOpenCode' in window
+}
+
 export function isTauriMobile(): boolean {
   if (!isTauri() || typeof navigator === 'undefined') return false
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -18,7 +26,7 @@ export function isTauriMobile(): boolean {
 export type DesktopPlatform = 'windows' | 'macos' | 'linux' | 'other'
 
 export function getDesktopPlatform(): DesktopPlatform {
-  if (!isTauri() || isTauriMobile() || typeof navigator === 'undefined') return 'other'
+  if (!isElectron() && !isTauri() || typeof navigator === 'undefined') return 'other'
 
   const ua = navigator.userAgent.toLowerCase()
   if (ua.includes('windows')) return 'windows'

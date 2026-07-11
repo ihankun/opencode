@@ -460,7 +460,7 @@
     },
     "packages/electron": {
       "name": "@opencode-ai/opencodex",
-      "version": "1.7.1",
+      "version": "1.8.0",
       "dependencies": {
         "@codemirror/commands": "^6.10.3",
         "@codemirror/search": "^6.7.0",
@@ -481,6 +481,7 @@
         "@xterm/xterm": "^6.0.0",
         "ajv": "^8.20.0",
         "clsx": "^2.1.1",
+        "croner": "^9.1.0",
         "diff": "^8.0.4",
         "i18next": "^26.0.1",
         "i18next-browser-languagedetector": "^8.2.1",
@@ -3601,6 +3602,8 @@
     "crc32-stream": ["crc32-stream@6.0.0", "", { "dependencies": { "crc-32": "^1.2.0", "readable-stream": "^4.0.0" } }, "sha512-piICUB6ei4IlTv1+653yq5+KoqfBYmj9bw6LqXoOneTMDXk5nM1qt12mFW1caG3LlJXEKW1Bp0WggEmIfQB34g=="],
 
     "crelt": ["crelt@1.0.7", "", {}, "sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA=="],
+
+    "croner": ["croner@9.1.0", "", {}, "sha512-p9nwwR4qyT5W996vBZhdvBCnMhicY5ytZkR4D1Xj0wuTDEiMnjwR57Q3RXYY/s0EpX6Ay3vgIcfaR+ewGHsi+g=="],
 
     "cross-dirname": ["cross-dirname@0.1.0", "", {}, "sha512-+R08/oI0nl3vfPcqftZRpytksBXDzOUveBq/NBVx0sUp1axwzPQrKinNx5yd5sxPu8j1wIy8AfnVQ+5eFdha6Q=="],
 

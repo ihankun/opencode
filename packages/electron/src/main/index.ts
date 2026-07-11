@@ -21,6 +21,27 @@ const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const appId = "com.hankun.opencodex"
 const taskScheduler = new TaskScheduler(() => server?.state)
 
+// Window control IPC handlers
+ipcMain.handle("window:minimize", () => {
+  mainWindow?.minimize()
+})
+
+ipcMain.handle("window:maximize", () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow?.maximize()
+  }
+})
+
+ipcMain.handle("window:close", () => {
+  mainWindow?.close()
+})
+
+ipcMain.handle("window:isMaximized", () => {
+  return mainWindow?.isMaximized() ?? false
+})
+
 type PluginInstallTarget = {
   kind: "server" | "tui"
   opts?: Record<string, unknown>
@@ -95,6 +116,9 @@ async function createWindow() {
   const url = rendererUrl()
   writeLog("main", "creating window", { url })
 
+  const isMac = process.platform === "darwin"
+  const isWin = process.platform === "win32"
+
   mainWindow = new BrowserWindow({
     title: "",
     width: 1180,
@@ -102,13 +126,13 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 580,
     show: false,
-    icon: iconPath("icon.icns"),
-    backgroundColor: process.platform === "darwin" ? "#00000000" : "#0f1115",
-    transparent: process.platform === "darwin",
-    vibrancy: process.platform === "darwin" ? "under-window" : undefined,
-    visualEffectState: process.platform === "darwin" ? "active" : undefined,
-    titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
-    trafficLightPosition: process.platform === "darwin" ? { x: 20, y: 18 } : undefined,
+    icon: iconPath(isMac ? "icon.icns" : "icon.ico"),
+    backgroundColor: isMac ? "#00000000" : "#0f1115",
+    transparent: isMac,
+    vibrancy: isMac ? "under-window" : undefined,
+    visualEffectState: isMac ? "active" : undefined,
+    titleBarStyle: isMac ? "hidden" : isWin ? "hidden" : "default",
+    trafficLightPosition: isMac ? { x: 20, y: 18 } : undefined,
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -121,6 +145,12 @@ async function createWindow() {
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault()
     mainWindow?.setTitle("")
+  })
+  mainWindow.on("maximize", () => {
+    mainWindow?.webContents.send("window:maximize-change", true)
+  })
+  mainWindow.on("unmaximize", () => {
+    mainWindow?.webContents.send("window:maximize-change", false)
   })
   mainWindow.on("close", (event) => {
     if (isQuitting) return

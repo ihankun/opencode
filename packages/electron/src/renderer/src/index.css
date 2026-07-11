@@ -260,6 +260,46 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transform: scale(0.98);
 }
 
+.electron-window-controls {
+  position: fixed;
+  left: 12px;
+  top: 10px;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.electron-window-controls button {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.electron-window-controls button:hover {
+  background: hsl(var(--bg-200) / 0.6);
+  color: hsl(var(--text-100));
+}
+
+.electron-window-controls button:active {
+  background: hsl(var(--bg-300) / 0.6);
+}
+
+.electron-window-controls .electron-window-close:hover {
+  background: hsl(var(--danger-100));
+  color: hsl(var(--always-white));
+}
+
 .electron-sidebar-search {
   position: fixed;
   left: 144px;

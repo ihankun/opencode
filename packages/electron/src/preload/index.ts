@@ -136,6 +136,12 @@ export type CustomOpenCodeApi = {
     directory?: string
   }): Promise<CustomOpenCodeNotificationSendResult>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
+  // Window controls
+  windowMinimize(): Promise<void>
+  windowMaximize(): Promise<void>
+  windowClose(): Promise<void>
+  windowIsMaximized(): Promise<boolean>
+  onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void
 }
 
 const api: CustomOpenCodeApi = {
@@ -167,6 +173,16 @@ const api: CustomOpenCodeApi = {
     const listener = (_event: unknown, data: { sessionId?: string; directory?: string }) => callback(data)
     ipcRenderer.on("notification:clicked", listener)
     return () => ipcRenderer.removeListener("notification:clicked", listener)
+  },
+  // Window controls
+  windowMinimize: () => ipcRenderer.invoke("window:minimize"),
+  windowMaximize: () => ipcRenderer.invoke("window:maximize"),
+  windowClose: () => ipcRenderer.invoke("window:close"),
+  windowIsMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+  onWindowMaximizeChange(callback) {
+    const listener = (_event: unknown, isMaximized: boolean) => callback(isMaximized)
+    ipcRenderer.on("window:maximize-change", listener)
+    return () => ipcRenderer.removeListener("window:maximize-change", listener)
   },
 }
 
