@@ -65,6 +65,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
   const [marketQuery, setMarketQuery] = useState('')
   const [marketResults, setMarketResults] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>>([])
   const [marketLoading, setMarketLoading] = useState(false)
+  const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
 
   // 加载 MCP 状态
   const loadStatus = useCallback(async () => {
@@ -232,7 +233,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
           {!loading && <span className="inline-flex h-4 items-center text-[length:var(--fs-xs)] leading-none text-text-400">({servers.length})</span>}
         </div>
         <div className="flex items-center gap-1">
-          <button
+          {tab === 'installed' && <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
@@ -241,8 +242,8 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
             title={t('common:refresh')}
           >
             <RetryIcon size={12} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
+          </button>}
+          {tab === 'installed' && <button
             type="button"
             onClick={() => setShowAddForm(true)}
             disabled={showAddForm}
@@ -251,14 +252,22 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
             title={t('mcpPanel.addServer')}
           >
             <PlusIcon size={12} />
-          </button>
+          </button>}
         </div>
         <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />
       </div>
 
+      <div className="flex gap-1 border-b border-border-200/30 px-3 py-2">
+        {(['installed', 'marketplace'] as const).map(item => (
+          <button key={item} type="button" onClick={() => { setTab(item); setMarketQuery(''); setMarketResults([]) }} className={`rounded-md px-2.5 py-1 text-[length:var(--fs-xs)] transition-colors ${tab === item ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>
+            {t(`mcpPanel.${item}`)}
+          </button>
+        ))}
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        <div className="border-b border-border-200/50 p-3">
+        {tab === 'marketplace' && <div className="border-b border-border-200/50 p-3">
           <div className="flex gap-2">
             <div className="relative flex-1"><SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400" /><input value={marketQuery} onChange={event => setMarketQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void handleMarketSearch()} placeholder="搜索官方 MCP Registry..." className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pl-8 pr-2 text-[length:var(--fs-sm)] text-text-100 outline-none" /></div>
             <button disabled={marketLoading || !marketQuery.trim()} onClick={() => void handleMarketSearch()} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-bg-200 px-3 text-[length:var(--fs-sm)] text-text-200 disabled:opacity-50">{marketLoading ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}搜索</button>
@@ -271,9 +280,9 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
               <button disabled={Boolean(actionLoading)} onClick={() => void (installed ? handleRemoveServer(item.name) : handleMarketInstall(item))} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-300 hover:bg-bg-200 disabled:opacity-50">{actionLoading === item.name ? <SpinnerIcon size={13} className="animate-spin" /> : installed ? <TrashIcon size={13} /> : <DownloadIcon size={13} />}</button>
             </div>
           })}</div>}
-        </div>
+        </div>}
         {/* Add Server Form */}
-        {showAddForm && (
+        {tab === 'installed' && showAddForm && (
           <AddServerForm
             onSubmit={handleAddServer}
             onCancel={() => setShowAddForm(false)}
@@ -281,7 +290,9 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
           />
         )}
 
-        {loading && servers.length === 0 ? (
+        {tab === 'marketplace' ? (
+          !marketLoading && marketResults.length === 0 ? <div className="flex flex-col items-center justify-center gap-2 py-20 text-text-400 text-[length:var(--fs-sm)]"><SearchIcon size={22} className="opacity-40" /><span>{t('mcpPanel.marketplaceHint')}</span></div> : null
+        ) : loading && servers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-400 text-[length:var(--fs-base)] gap-2">
             <SpinnerIcon size={20} className="animate-spin opacity-50" />
             <span>{t('mcpPanel.loadingServers')}</span>

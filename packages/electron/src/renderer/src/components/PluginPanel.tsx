@@ -119,6 +119,7 @@ export const PluginPanel = memo(function PluginPanel() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [installingSpec, setInstallingSpec] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
+  const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
 
   const plugins = useMemo(() => readPlugins(config), [config])
   const configuredSpecs = useMemo(() => new Set(plugins.map(plugin => pluginPackage(pluginSpec(plugin)))), [plugins])
@@ -275,7 +276,7 @@ export const PluginPanel = memo(function PluginPanel() {
           {!loading && <span className="inline-flex h-4 items-center text-[length:var(--fs-xs)] leading-none text-text-400">({plugins.length})</span>}
         </div>
         <div className="flex items-center gap-1">
-          <button
+          {tab === 'installed' && <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
@@ -284,8 +285,8 @@ export const PluginPanel = memo(function PluginPanel() {
             title={t('common:refresh')}
           >
             <RetryIcon size={12} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
+          </button>}
+          {tab === 'installed' && <button
             type="button"
             onClick={openAddDialog}
             disabled={saving}
@@ -294,13 +295,21 @@ export const PluginPanel = memo(function PluginPanel() {
             title={t('pluginPanel.addPlugin')}
           >
             <PlusIcon size={12} />
-          </button>
+          </button>}
         </div>
         <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />
       </div>
 
+      <div className="flex gap-1 border-b border-border-200/30 px-3 py-2">
+        {(['installed', 'marketplace'] as const).map(item => (
+          <button key={item} type="button" onClick={() => { setTab(item); setSearchDraft(''); setSearchResults([]) }} className={`rounded-md px-2.5 py-1 text-[length:var(--fs-xs)] transition-colors ${tab === item ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>
+            {t(`pluginPanel.${item}`)}
+          </button>
+        ))}
+      </div>
+
       <div className="flex-1 overflow-auto">
-        {canUseElectronInstaller && (
+        {tab === 'marketplace' && canUseElectronInstaller && (
           <div className="border-b border-border-200/50 p-3">
             <div className="flex items-center gap-2">
               <div className="relative min-w-0 flex-1">
@@ -349,7 +358,7 @@ export const PluginPanel = memo(function PluginPanel() {
           </div>
         )}
 
-        {dialog && (
+        {tab === 'installed' && dialog && (
           <PluginForm
             title={dialog.mode === 'edit' ? t('pluginPanel.editPlugin') : t('pluginPanel.addPlugin')}
             specDraft={specDraft}
@@ -363,7 +372,9 @@ export const PluginPanel = memo(function PluginPanel() {
           />
         )}
 
-        {loading && plugins.length === 0 ? (
+        {tab === 'marketplace' ? (
+          !searching && searchResults.length === 0 && !searchError ? <div className="flex flex-col items-center justify-center gap-2 py-20 text-text-400 text-[length:var(--fs-sm)]"><SearchIcon size={22} className="opacity-40" /><span>{t('pluginPanel.marketplaceHint')}</span></div> : null
+        ) : loading && plugins.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-text-400 text-[length:var(--fs-base)]">
             <SpinnerIcon size={20} className="animate-spin opacity-50" />
             <span>{t('pluginPanel.loadingPlugins')}</span>

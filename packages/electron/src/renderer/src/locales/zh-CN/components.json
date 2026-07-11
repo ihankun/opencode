@@ -78,6 +78,9 @@
     "split": "分栏"
   },
   "mcpPanel": {
+    "installed": "已安装",
+    "marketplace": "MCP 市场",
+    "marketplaceHint": "搜索官方 MCP 市场中的服务器",
     "title": "MCP",
     "addServer": "添加服务器",
     "loadingServers": "加载服务器中...",
@@ -165,6 +168,9 @@
     "uninstall": "卸载"
   },
   "pluginPanel": {
+    "installed": "已安装",
+    "marketplace": "插件市场",
+    "marketplaceHint": "搜索插件市场中的插件",
     "title": "插件",
     "loadingPlugins": "加载插件...",
     "failedToLoad": "加载插件失败",
