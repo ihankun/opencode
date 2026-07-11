@@ -604,8 +604,8 @@ export function FolderRecentList({
         }}
         title={t('sidebar.deleteChat')}
         description={t('sidebar.deleteChatConfirm')}
-        confirmText={t('common:delete')}
-        variant="danger"
+        confirmText={t('sidebar.deleteChat')}
+        variant="info"
       />
     </>
   )

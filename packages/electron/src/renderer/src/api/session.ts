@@ -78,7 +78,7 @@ export async function getLastTurnDiff(sessionId: string, directory?: string): Pr
  */
 export async function getSessions(params: SessionListParams = {}): Promise<ApiSession[]> {
   const sdk = getSDKClient()
-  const { directory, roots, start, search, limit } = params
+  const { directory, roots, start, search, limit, archived } = params
   return normalizeSessionList(
     unwrap(
       await sdk.session.list({
@@ -87,6 +87,7 @@ export async function getSessions(params: SessionListParams = {}): Promise<ApiSe
         start,
         search,
         limit,
+        archived,
       }),
     ),
   )
@@ -126,7 +127,7 @@ export async function createSession(
  */
 export async function updateSession(
   sessionId: string,
-  params: { title?: string; permission?: SessionPermissionRule[]; time?: { archived?: number } },
+  params: { title?: string; permission?: SessionPermissionRule[]; time?: { archived?: number }; unarchive?: boolean },
   directory?: string,
 ): Promise<ApiSession> {
   const sdk = getSDKClient()
@@ -137,6 +138,14 @@ export async function updateSession(
       ...params,
     }),
   )
+}
+
+export function archiveSession(sessionId: string, directory?: string) {
+  return updateSession(sessionId, { time: { archived: Date.now() } }, directory)
+}
+
+export function restoreSession(sessionId: string, directory?: string) {
+  return updateSession(sessionId, { unarchive: true }, directory)
 }
 
 /**

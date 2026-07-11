@@ -65,7 +65,8 @@ const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
-type MainUtilityPage = 'skills' | 'mcp' | 'plugins'
+type MainUtilityPage = 'skills' | 'plugins'
+type PluginPageTab = 'plugins' | 'mcp'
 
 function ElectronSidebarToggle({
   expanded,
@@ -147,6 +148,7 @@ function App() {
         : focusedController?.effectiveDirectory || currentDirectory
       : undefined
   const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
+  const [pluginPageTab, setPluginPageTab] = useState<PluginPageTab>('plugins')
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false)
 
   useEffect(() => {
@@ -327,9 +329,10 @@ function App() {
   }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
 
   const openSkillPage = useCallback(() => openUtilityPage('skills'), [openUtilityPage])
-  const openPluginPage = useCallback(() => openUtilityPage('plugins'), [openUtilityPage])
-  const openMcpPage = useCallback(() => openUtilityPage('mcp'), [openUtilityPage])
-
+  const openPluginPage = useCallback(() => {
+    setPluginPageTab('plugins')
+    openUtilityPage('plugins')
+  }, [openUtilityPage])
   const getNearestMobilePage = useCallback(
     (scrollLeft: number): MobilePagerPage => {
       const leftDistance = Math.abs(scrollLeft)
@@ -962,10 +965,28 @@ function App() {
   const utilityPageContent = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-100">
       <Suspense fallback={null}>
-        {utilityPage === 'mcp' ? (
-          <McpPanel />
-        ) : utilityPage === 'plugins' ? (
-          <PluginPanel />
+        {utilityPage === 'plugins' ? (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex shrink-0 items-center gap-1 border-b border-border-200/60 px-5 py-2.5">
+              <button
+                type="button"
+                onClick={() => setPluginPageTab('plugins')}
+                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'plugins' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
+              >
+                {t('chat:sidebar.plugins')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPluginPageTab('mcp')}
+                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'mcp' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
+              >
+                {t('chat:sidebar.mcpServers')}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {pluginPageTab === 'plugins' ? <PluginPanel /> : <McpPanel />}
+            </div>
+          </div>
         ) : (
           <SkillPanel />
         )}
@@ -1035,7 +1056,6 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
-                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1128,7 +1148,6 @@ function App() {
                   onOpenSearch={() => setSessionSearchOpen(true)}
                   onOpenSkills={openSkillPage}
                   onOpenPlugins={openPluginPage}
-                  onOpenMcp={openMcpPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1151,7 +1170,6 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
-                    onOpenMcp={openMcpPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode

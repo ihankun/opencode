@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useSyncExternalStore, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SearchIcon, PencilIcon, TrashIcon, ComposeIcon, CheckIcon, PinIcon } from '../../components/Icons'
+import { SearchIcon, PencilIcon, ArchiveIcon, ComposeIcon, CheckIcon, PinIcon } from '../../components/Icons'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { useInputCapabilities } from '../../hooks/useInputCapabilities'
@@ -304,8 +304,8 @@ export function SessionList({
         }}
         title={t('chat:sidebar.deleteChat')}
         description={t('chat:sidebar.deleteChatConfirm')}
-        confirmText={t('common:delete')}
-        variant="danger"
+        confirmText={t('chat:sidebar.deleteChat')}
+        variant="info"
       />
     </div>
   )
@@ -740,11 +740,11 @@ export function SessionListItem({
             <button
               type="button"
               onClick={handleDelete}
-              className="p-1 rounded hover:bg-danger-bg text-text-500 hover:text-danger-100 transition-colors focus-visible:ring-1 focus-visible:ring-danger-100/40 focus-visible:ring-inset"
-              title={t('common:delete')}
-              aria-label={t('common:delete')}
+              className="p-1 rounded hover:bg-bg-200 text-text-500 hover:text-text-100 transition-colors focus-visible:ring-1 focus-visible:ring-accent-main-100/40 focus-visible:ring-inset"
+              title={t('chat:sidebar.deleteChat')}
+              aria-label={t('chat:sidebar.deleteChat')}
             >
-              <TrashIcon className="w-3 h-3" />
+              <ArchiveIcon className="w-3 h-3" />
             </button>
           </div>
         )}
@@ -950,11 +950,11 @@ export function SessionListItem({
           <button
             type="button"
             onClick={handleDelete}
-            className="p-1.5 rounded-md hover:bg-danger-bg active:bg-danger-bg text-text-400 hover:text-danger-100 active:text-danger-100 transition-colors focus-visible:ring-1 focus-visible:ring-danger-100/40 focus-visible:ring-inset"
-            title={t('common:delete')}
-            aria-label={t('common:delete')}
+            className="p-1.5 rounded-md hover:bg-bg-200 active:bg-bg-200 text-text-400 hover:text-text-100 active:text-text-100 transition-colors focus-visible:ring-1 focus-visible:ring-accent-main-100/40 focus-visible:ring-inset"
+            title={t('chat:sidebar.deleteChat')}
+            aria-label={t('chat:sidebar.deleteChat')}
           >
-            <TrashIcon className="w-3.5 h-3.5" />
+            <ArchiveIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       )}

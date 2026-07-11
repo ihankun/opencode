@@ -33,11 +33,29 @@ import type {
   ExperimentalCapabilitiesGetResponses,
   ExperimentalConsoleGetErrors,
   ExperimentalConsoleGetResponses,
+  ExperimentalConsoleListAccountsErrors,
+  ExperimentalConsoleListAccountsResponses,
   ExperimentalConsoleListOrgsErrors,
   ExperimentalConsoleListOrgsResponses,
+  ExperimentalConsoleLoginErrors,
+  ExperimentalConsoleLoginPollErrors,
+  ExperimentalConsoleLoginPollResponses,
+  ExperimentalConsoleLoginResponses,
+  ExperimentalConsoleLoginWaitErrors,
+  ExperimentalConsoleLoginWaitResponses,
+  ExperimentalConsoleLogoutErrors,
+  ExperimentalConsoleLogoutResponses,
+  ExperimentalConsoleProfileErrors,
+  ExperimentalConsoleProfileResponses,
   ExperimentalConsoleSwitchOrgResponses,
   ExperimentalControlPlaneMoveSessionErrors,
   ExperimentalControlPlaneMoveSessionResponses,
+  ExperimentalGoalClearErrors,
+  ExperimentalGoalClearResponses,
+  ExperimentalGoalGetErrors,
+  ExperimentalGoalGetResponses,
+  ExperimentalGoalStatusErrors,
+  ExperimentalGoalStatusResponses,
   ExperimentalProjectCopyGenerateNameErrors,
   ExperimentalProjectCopyGenerateNameResponses,
   ExperimentalResourceListErrors,
@@ -175,6 +193,16 @@ import type {
   QuestionReplyErrors,
   QuestionReplyResponses,
   QuestionV2Reply,
+  ServerSkillSkillMarketplaceDetailErrors,
+  ServerSkillSkillMarketplaceDetailResponses,
+  ServerSkillSkillMarketplaceInstalledErrors,
+  ServerSkillSkillMarketplaceInstalledResponses,
+  ServerSkillSkillMarketplaceInstallErrors,
+  ServerSkillSkillMarketplaceInstallResponses,
+  ServerSkillSkillMarketplaceRemoveErrors,
+  ServerSkillSkillMarketplaceRemoveResponses,
+  ServerSkillSkillMarketplaceSearchErrors,
+  ServerSkillSkillMarketplaceSearchResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -223,6 +251,8 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  SkillMarketplaceInstallInput,
+  SkillMarketplaceRemoveInput,
   SubtaskPartInput,
   SyncHistoryListErrors,
   SyncHistoryListResponses,
@@ -763,6 +793,258 @@ export class Console extends HeyApiClient {
   }
 
   /**
+   * List Console accounts
+   *
+   * Get logged-in Console accounts, including the current active account.
+   */
+  public listAccounts<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalConsoleListAccountsResponses,
+      ExperimentalConsoleListAccountsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/accounts",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get Console profile
+   *
+   * Get the active Console account and org currently stored in local OpenCode state.
+   */
+  public profile<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalConsoleProfileResponses,
+      ExperimentalConsoleProfileErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/profile",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Start Console login
+   *
+   * Start a Console device authorization flow for the current local OpenCode state.
+   */
+  public login<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      url?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "url" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalConsoleLoginResponses,
+      ExperimentalConsoleLoginErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/login",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Poll Console login
+   *
+   * Poll a Console device authorization flow and persist the account when authorization succeeds.
+   */
+  public loginPoll<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      code?: string
+      user?: string
+      url?: string
+      server?: string
+      expiresInMs?: number
+      intervalMs?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "code" },
+            { in: "body", key: "user" },
+            { in: "body", key: "url" },
+            { in: "body", key: "server" },
+            { in: "body", key: "expiresInMs" },
+            { in: "body", key: "intervalMs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalConsoleLoginPollResponses,
+      ExperimentalConsoleLoginPollErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/login/poll",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Wait for Console login
+   *
+   * Wait for a Console device authorization flow to finish and persist the account when authorization succeeds.
+   */
+  public loginWait<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      code?: string
+      user?: string
+      url?: string
+      server?: string
+      expiresInMs?: number
+      intervalMs?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "code" },
+            { in: "body", key: "user" },
+            { in: "body", key: "url" },
+            { in: "body", key: "server" },
+            { in: "body", key: "expiresInMs" },
+            { in: "body", key: "intervalMs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalConsoleLoginWaitResponses,
+      ExperimentalConsoleLoginWaitErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/login/wait",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Log out of Console
+   *
+   * Remove a stored Console account from the current local OpenCode state.
+   */
+  public logout<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      accountID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "accountID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalConsoleLogoutResponses,
+      ExperimentalConsoleLogoutErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/console/logout",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Switch active Console org
    *
    * Persist a new active Console account/org selection for the current local OpenCode state.
@@ -791,6 +1073,119 @@ export class Console extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<ExperimentalConsoleSwitchOrgResponses, unknown, ThrowOnError>({
       url: "/experimental/console/switch",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Goal extends HeyApiClient {
+  /**
+   * Clear session goal
+   *
+   * Remove the durable goal state for a session.
+   */
+  public clear<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ExperimentalGoalClearResponses,
+      ExperimentalGoalClearErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/goal/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get session goal
+   *
+   * Get the durable goal state for a session.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalGoalGetResponses, ExperimentalGoalGetErrors, ThrowOnError>({
+      url: "/experimental/goal/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update session goal status
+   *
+   * Pause or resume the durable goal state for a session.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      status?: "active" | "paused"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "status" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalGoalStatusResponses,
+      ExperimentalGoalStatusErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/goal/{sessionID}/status",
       ...options,
       ...params,
       headers: {
@@ -1254,6 +1649,11 @@ export class Experimental extends HeyApiClient {
   private _console?: Console
   get console(): Console {
     return (this._console ??= new Console({ client: this.client }))
+  }
+
+  private _goal?: Goal
+  get goal(): Goal {
+    return (this._goal ??= new Goal({ client: this.client }))
   }
 
   private _session?: Session
@@ -3375,6 +3775,7 @@ export class Session2 extends HeyApiClient {
       start?: number
       search?: string
       limit?: number
+      archived?: "true" | "false"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3391,6 +3792,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "start" },
             { in: "query", key: "search" },
             { in: "query", key: "limit" },
+            { in: "query", key: "archived" },
           ],
         },
       ],
@@ -3569,6 +3971,7 @@ export class Session2 extends HeyApiClient {
       time?: {
         archived?: number
       }
+      unarchive?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3584,6 +3987,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "metadata" },
             { in: "body", key: "permission" },
             { in: "body", key: "time" },
+            { in: "body", key: "unarchive" },
           ],
         },
       ],
@@ -7074,6 +7478,185 @@ export class V2 extends HeyApiClient {
   }
 }
 
+export class Skill2 extends HeyApiClient {
+  public marketplaceSearch<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      q: string
+      limit?: string
+      page?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "query", key: "q" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "page" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ServerSkillSkillMarketplaceSearchResponses,
+      ServerSkillSkillMarketplaceSearchErrors,
+      ThrowOnError
+    >({
+      url: "/api/skill/marketplace/search",
+      ...options,
+      ...params,
+    })
+  }
+
+  public marketplaceDetail<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "query", key: "id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ServerSkillSkillMarketplaceDetailResponses,
+      ServerSkillSkillMarketplaceDetailErrors,
+      ThrowOnError
+    >({
+      url: "/api/skill/marketplace/detail",
+      ...options,
+      ...params,
+    })
+  }
+
+  public marketplaceInstalled<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "location" }] }])
+    return (options?.client ?? this.client).get<
+      ServerSkillSkillMarketplaceInstalledResponses,
+      ServerSkillSkillMarketplaceInstalledErrors,
+      ThrowOnError
+    >({
+      url: "/api/skill/marketplace/installed",
+      ...options,
+      ...params,
+    })
+  }
+
+  public marketplaceRemove<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      skillMarketplaceRemoveInput: SkillMarketplaceRemoveInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { key: "skillMarketplaceRemoveInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ServerSkillSkillMarketplaceRemoveResponses,
+      ServerSkillSkillMarketplaceRemoveErrors,
+      ThrowOnError
+    >({
+      url: "/api/skill/marketplace/install",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public marketplaceInstall<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      skillMarketplaceInstallInput: SkillMarketplaceInstallInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { key: "skillMarketplaceInstallInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ServerSkillSkillMarketplaceInstallResponses,
+      ServerSkillSkillMarketplaceInstallErrors,
+      ThrowOnError
+    >({
+      url: "/api/skill/marketplace/install",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Skill3 extends HeyApiClient {
+  private _skill?: Skill2
+  get skill(): Skill2 {
+    return (this._skill ??= new Skill2({ client: this.client }))
+  }
+}
+
+export class Server extends HeyApiClient {
+  private _skill?: Skill3
+  get skill(): Skill3 {
+    return (this._skill ??= new Skill3({ client: this.client }))
+  }
+}
+
 export class OpencodeClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<OpencodeClient>()
 
@@ -7215,5 +7798,10 @@ export class OpencodeClient extends HeyApiClient {
   private _v2?: V2
   get v2(): V2 {
     return (this._v2 ??= new V2({ client: this.client }))
+  }
+
+  private _server?: Server
+  get server(): Server {
+    return (this._server ??= new Server({ client: this.client }))
   }
 }

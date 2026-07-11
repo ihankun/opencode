@@ -14,6 +14,8 @@
     "agentDesc": "Permission approval, tool requests, and agent interaction behavior",
     "chat": "Chat",
     "chatDesc": "Message presentation, path formatting, and step metadata",
+    "archived": "Archived Chats",
+    "archivedDesc": "Restore or permanently delete archived chats",
     "workspace": "Workspace",
     "workspaceDesc": "Layout, sidebar, and code viewing preferences",
     "appearance": "Appearance",
@@ -32,6 +34,18 @@
   "groups": {
     "core": "Core",
     "advanced": "Advanced"
+  },
+  "archived": {
+    "title": "Archived Chats",
+    "description": "Archived chats are grouped by workspace. Restoring returns them to the sidebar; permanent deletion physically removes the session and its messages.",
+    "empty": "No archived chats",
+    "unknownWorkspace": "Unknown workspace",
+    "archivedAt": "Archived {{date}}",
+    "restore": "Restore",
+    "delete": "Delete",
+    "deleteTitle": "Permanently delete chat?",
+    "deleteWarning": "You are about to permanently delete “{{title}}”. Its session, messages, and parts will be physically removed and cannot be recovered.",
+    "deleteForever": "Delete forever"
   },
   "servers": {
     "connections": "Connections",

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getSessions,
   createSession,
-  deleteSession,
+  archiveSession,
   subscribeToEvents,
   type ApiSession,
   type SessionListParams,
@@ -205,6 +205,10 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       },
       onSessionUpdated: session => {
         if (session.parentID) return
+        if (session.time.archived) {
+          setSessions(prev => prev.filter(item => item.id !== session.id))
+          return
+        }
 
         if (searchRef.current) {
           if (matchesDirectory(session)) {
@@ -297,10 +301,10 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
     [normalizedDirectory],
   )
 
-  // 删除会话
+  // 归档会话
   const remove = useCallback(
     async (sessionId: string) => {
-      await deleteSession(sessionId, normalizedDirectory)
+      await archiveSession(sessionId, normalizedDirectory)
       pinnedSessionsStore.unpin(sessionId)
       setSessions(prev => prev.filter(s => s.id !== sessionId))
     },

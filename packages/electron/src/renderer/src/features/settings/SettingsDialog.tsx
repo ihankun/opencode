@@ -15,6 +15,7 @@ import {
   LayersIcon,
   QuestionIcon,
   CogIcon,
+  ArchiveIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
@@ -30,6 +31,7 @@ import { ServiceSettings } from './components/ServiceSettings'
 import { ServersSettings } from './components/ServersSettings'
 import { WorkspaceSettings } from './components/WorkspaceSettings'
 import { ConfigSettings } from './components/ConfigSettings'
+import { ArchivedSessionsSettings } from './components/ArchivedSessionsSettings'
 
 // ============================================
 // Types
@@ -47,6 +49,7 @@ export type SettingsTab =
   | 'servers'
   | 'keybindings'
   | 'workspace'
+  | 'archived'
   | 'about'
 
 interface SettingsDialogProps {
@@ -72,6 +75,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   config: <CogIcon size={15} />,
   keybindings: <KeyboardIcon size={15} />,
   about: <QuestionIcon size={15} />,
+  archived: <ArchiveIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
@@ -80,6 +84,7 @@ const TAB_IDS: SettingsTab[] = [
   'models',
   'agent',
   'chat',
+  'archived',
   'workspace',
   'appearance',
   'notifications',
@@ -102,6 +107,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   config: 'tabs.config',
   keybindings: 'tabs.shortcuts',
   about: 'tabs.about',
+  archived: 'tabs.archived',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
@@ -117,10 +123,11 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   config: 'tabs.configDesc',
   keybindings: 'tabs.shortcutsDesc',
   about: 'tabs.aboutDesc',
+  archived: 'tabs.archivedDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'workspace', 'appearance', 'notifications'] },
+  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'archived', 'workspace', 'appearance', 'notifications'] },
   { labelKey: 'groups.advanced', tabs: ['service', 'config', 'keybindings', 'about'] },
 ]
 
@@ -152,6 +159,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <KeybindingsSection />
     case 'workspace':
       return <WorkspaceSettings />
+    case 'archived':
+      return <ArchivedSessionsSettings />
     case 'about':
       return <AboutSettings />
     default:

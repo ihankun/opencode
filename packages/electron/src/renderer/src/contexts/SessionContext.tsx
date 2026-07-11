@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } fro
 import {
   getSessions,
   createSession as apiCreateSession,
-  deleteSession as apiDeleteSession,
+  archiveSession as apiArchiveSession,
   subscribeToEvents,
   type ApiSession,
   type SessionListParams,
@@ -181,6 +181,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       onSessionUpdated: session => {
         if (session.parentID) return
+        if (session.time.archived) {
+          setSessions(prev => prev.filter(item => item.id !== session.id))
+          return
+        }
 
         if (searchRef.current) {
           if (matchesCurrentDirectory(session)) {
@@ -272,7 +276,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const deleteSession = useCallback(
     async (id: string) => {
       const targetDir = effectiveDirectory
-      await apiDeleteSession(id, targetDir)
+      await apiArchiveSession(id, targetDir)
       pinnedSessionsStore.unpin(id)
       clearSessionRuntimeState(id)
       setSessions(prev => prev.filter(s => s.id !== id))

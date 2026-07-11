@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getSessionChildren, updateSession, deleteSession as apiDeleteSession, type ApiSession } from '../../../api'
+import { getSessionChildren, updateSession, archiveSession, type ApiSession } from '../../../api'
 import { SpinnerIcon } from '../../../components/Icons'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useInputCapabilities } from '../../../hooks/useInputCapabilities'
@@ -86,16 +86,16 @@ export function SessionChildrenSlot({
     if (!id) return
     setDeleteConfirm({ isOpen: false, sessionId: null })
     try {
-      await apiDeleteSession(id)
+      await archiveSession(id, parentSession.directory)
       pinnedSessionsStore.unpin(id)
       setFetched(prev => prev.filter(s => s.id !== id))
       if (selectedSessionId === id) onDeleteSelected?.()
     } catch (e) {
-      uiErrorHandler('delete session', e)
+      uiErrorHandler('archive session', e)
     }
-  }, [deleteConfirm.sessionId, selectedSessionId, onDeleteSelected])
+  }, [deleteConfirm.sessionId, parentSession.directory, selectedSessionId, onDeleteSelected])
 
-  const list = fetchAll ? fetched : givenChildren
+  const list = (fetchAll ? fetched : givenChildren)?.filter(child => !child.time.archived)
 
   if (!list?.length && !loading) return null
 
@@ -132,8 +132,8 @@ export function SessionChildrenSlot({
         onConfirm={handleDeleteConfirmed}
         title={t('sidebar.deleteChat')}
         description={t('sidebar.deleteChatConfirm')}
-        confirmText={t('common:delete')}
-        variant="danger"
+        confirmText={t('sidebar.deleteChat')}
+        variant="info"
       />
     </div>
   )

@@ -71,6 +71,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
         start: ctx.query.start,
         search: ctx.query.search,
         limit: ctx.query.limit,
+        archived: ctx.query.archived,
       })
     })
 
@@ -199,6 +200,9 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       }
       if (ctx.payload.time?.archived !== undefined) {
         yield* session.setArchived({ sessionID: ctx.params.sessionID, time: ctx.payload.time.archived })
+      }
+      if (ctx.payload.unarchive) {
+        yield* session.setArchived({ sessionID: ctx.params.sessionID })
       }
       return yield* requireSession(ctx.params.sessionID)
     })

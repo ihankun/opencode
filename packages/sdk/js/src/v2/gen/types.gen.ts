@@ -2145,6 +2145,31 @@ export type ToolList = Array<ToolListItem>
 
 export type ToolIds = Array<string>
 
+export type GoalHistoryEntry = {
+  type: string
+  detail: string
+  timestamp: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type GoalInfo = {
+  sessionID: string
+  objective: string
+  status: "active" | "paused" | "complete" | "blocked"
+  step: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  statusMessage: string
+  createdAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  updatedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  pausedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  evidence: string
+  blocker: string
+  history: Array<GoalHistoryEntry>
+}
+
+export type GoalResponse = {
+  goal: GoalInfo
+}
+
 export type WorktreeError = {
   name:
     | "WorktreeNotGitError"
@@ -2780,6 +2805,14 @@ export type ProviderNotFoundError = {
   _tag: "ProviderNotFoundError"
   providerID: string
   message: string
+}
+
+export type SkillMarketplaceError = {
+  name: "SkillMarketplaceError"
+  data: {
+    message: string
+    conflict?: boolean
+  }
 }
 
 export type OutputFormat1 =
@@ -5014,6 +5047,87 @@ export type SkillV2Info = {
   slash?: boolean
   location: string
   content: string
+}
+
+export type SkillMarketplaceSummary = {
+  id: string
+  slug: string
+  name: string
+  source: string
+  description: string
+  url: string
+  githubStars: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  downloadCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  isVerified: boolean
+  securityScore: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  securityStatus: string
+  aiScore: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  reviewStatus: string
+}
+
+export type SkillMarketplacePage = {
+  data: Array<SkillMarketplaceSummary>
+  page: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  perPage: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  total: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type SkillMarketplaceFile = {
+  path: string
+  contents: string
+}
+
+export type SkillMarketplaceDetail = {
+  id: string
+  source: string
+  slug: string
+  hash: string
+  files: Array<SkillMarketplaceFile>
+  githubStars: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  downloadCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  isVerified: boolean
+  isFeatured: boolean
+  securityScore: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  securityStatus: string
+  qualityScore: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  aiScore: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  reviewStatus: string
+  license: string
+}
+
+export type SkillMarketplaceManifest = {
+  id: string
+  source: string
+  slug: string
+  hash: string
+  scope: "global" | "project"
+  installedAt: string
+  updatedAt: string
+  files: {
+    [key: string]: string
+  }
+}
+
+export type SkillMarketplaceInstallation = {
+  id: string
+  slug: string
+  scope: "global" | "project"
+  directory: string
+  manifest: SkillMarketplaceManifest
+  conflict: boolean
+  updateAvailable: boolean
+}
+
+export type SkillMarketplaceInstallInput = {
+  id: string
+  scope: "global" | "project"
+  force?: boolean
+}
+
+export type SkillMarketplaceRemoveInput = {
+  id: string
+  scope: "global" | "project"
+  force?: boolean
 }
 
 export type ModelsDevRefreshed = {
@@ -7594,6 +7708,264 @@ export type ExperimentalConsoleListOrgsResponses = {
 export type ExperimentalConsoleListOrgsResponse =
   ExperimentalConsoleListOrgsResponses[keyof ExperimentalConsoleListOrgsResponses]
 
+export type ExperimentalConsoleListAccountsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/accounts"
+}
+
+export type ExperimentalConsoleListAccountsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleListAccountsError =
+  ExperimentalConsoleListAccountsErrors[keyof ExperimentalConsoleListAccountsErrors]
+
+export type ExperimentalConsoleListAccountsResponses = {
+  /**
+   * Console accounts
+   */
+  200: {
+    accounts: Array<{
+      accountID: string
+      accountEmail: string
+      accountUrl: string
+      active: boolean
+    }>
+  }
+}
+
+export type ExperimentalConsoleListAccountsResponse =
+  ExperimentalConsoleListAccountsResponses[keyof ExperimentalConsoleListAccountsResponses]
+
+export type ExperimentalConsoleProfileData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/profile"
+}
+
+export type ExperimentalConsoleProfileErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleProfileError = ExperimentalConsoleProfileErrors[keyof ExperimentalConsoleProfileErrors]
+
+export type ExperimentalConsoleProfileResponses = {
+  /**
+   * Console profile
+   */
+  200: {
+    account?: {
+      accountID: string
+      accountEmail: string
+      accountUrl: string
+      active: boolean
+    }
+    org?: {
+      orgID: string
+      orgName: string
+    }
+    accounts: Array<{
+      accountID: string
+      accountEmail: string
+      accountUrl: string
+      active: boolean
+    }>
+  }
+}
+
+export type ExperimentalConsoleProfileResponse =
+  ExperimentalConsoleProfileResponses[keyof ExperimentalConsoleProfileResponses]
+
+export type ExperimentalConsoleLoginData = {
+  body?: {
+    url?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/login"
+}
+
+export type ExperimentalConsoleLoginErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleLoginError = ExperimentalConsoleLoginErrors[keyof ExperimentalConsoleLoginErrors]
+
+export type ExperimentalConsoleLoginResponses = {
+  /**
+   * Console login device code
+   */
+  200: {
+    code: string
+    user: string
+    url: string
+    server: string
+    expiresInMs: number
+    intervalMs: number
+  }
+}
+
+export type ExperimentalConsoleLoginResponse =
+  ExperimentalConsoleLoginResponses[keyof ExperimentalConsoleLoginResponses]
+
+export type ExperimentalConsoleLoginPollData = {
+  body?: {
+    code: string
+    user: string
+    url: string
+    server: string
+    expiresInMs: number
+    intervalMs: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/login/poll"
+}
+
+export type ExperimentalConsoleLoginPollErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleLoginPollError =
+  ExperimentalConsoleLoginPollErrors[keyof ExperimentalConsoleLoginPollErrors]
+
+export type ExperimentalConsoleLoginPollResponses = {
+  /**
+   * Console login poll status
+   */
+  200: {
+    status: "success" | "pending" | "slow" | "expired" | "denied" | "error"
+    email?: string
+    message?: string
+  }
+}
+
+export type ExperimentalConsoleLoginPollResponse =
+  ExperimentalConsoleLoginPollResponses[keyof ExperimentalConsoleLoginPollResponses]
+
+export type ExperimentalConsoleLoginWaitData = {
+  body?: {
+    code: string
+    user: string
+    url: string
+    server: string
+    expiresInMs: number
+    intervalMs: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/login/wait"
+}
+
+export type ExperimentalConsoleLoginWaitErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleLoginWaitError =
+  ExperimentalConsoleLoginWaitErrors[keyof ExperimentalConsoleLoginWaitErrors]
+
+export type ExperimentalConsoleLoginWaitResponses = {
+  /**
+   * Console login final status
+   */
+  200: {
+    status: "success" | "pending" | "slow" | "expired" | "denied" | "error"
+    email?: string
+    message?: string
+  }
+}
+
+export type ExperimentalConsoleLoginWaitResponse =
+  ExperimentalConsoleLoginWaitResponses[keyof ExperimentalConsoleLoginWaitResponses]
+
+export type ExperimentalConsoleLogoutData = {
+  body?: {
+    accountID?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/console/logout"
+}
+
+export type ExperimentalConsoleLogoutErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalConsoleLogoutError = ExperimentalConsoleLogoutErrors[keyof ExperimentalConsoleLogoutErrors]
+
+export type ExperimentalConsoleLogoutResponses = {
+  /**
+   * Logout success
+   */
+  200: boolean
+}
+
+export type ExperimentalConsoleLogoutResponse =
+  ExperimentalConsoleLogoutResponses[keyof ExperimentalConsoleLogoutResponses]
+
 export type ExperimentalConsoleSwitchOrgData = {
   body?: {
     accountID: string
@@ -7674,6 +8046,110 @@ export type ToolIdsResponses = {
 }
 
 export type ToolIdsResponse = ToolIdsResponses[keyof ToolIdsResponses]
+
+export type ExperimentalGoalClearData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/goal/{sessionID}"
+}
+
+export type ExperimentalGoalClearErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalGoalClearError = ExperimentalGoalClearErrors[keyof ExperimentalGoalClearErrors]
+
+export type ExperimentalGoalClearResponses = {
+  /**
+   * Goal cleared
+   */
+  200: boolean
+}
+
+export type ExperimentalGoalClearResponse = ExperimentalGoalClearResponses[keyof ExperimentalGoalClearResponses]
+
+export type ExperimentalGoalGetData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/goal/{sessionID}"
+}
+
+export type ExperimentalGoalGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalGoalGetError = ExperimentalGoalGetErrors[keyof ExperimentalGoalGetErrors]
+
+export type ExperimentalGoalGetResponses = {
+  /**
+   * Goal state
+   */
+  200: GoalResponse
+}
+
+export type ExperimentalGoalGetResponse = ExperimentalGoalGetResponses[keyof ExperimentalGoalGetResponses]
+
+export type ExperimentalGoalStatusData = {
+  body?: {
+    status: "active" | "paused"
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/goal/{sessionID}/status"
+}
+
+export type ExperimentalGoalStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalGoalStatusError = ExperimentalGoalStatusErrors[keyof ExperimentalGoalStatusErrors]
+
+export type ExperimentalGoalStatusResponses = {
+  /**
+   * Goal state
+   */
+  200: GoalResponse
+}
+
+export type ExperimentalGoalStatusResponse = ExperimentalGoalStatusResponses[keyof ExperimentalGoalStatusResponses]
 
 export type WorktreeRemoveData = {
   body?: WorktreeRemoveInput
@@ -9443,6 +9919,7 @@ export type SessionListData = {
     start?: number
     search?: string
     limit?: number
+    archived?: "true" | "false"
   }
   url: "/session"
 }
@@ -9615,6 +10092,7 @@ export type SessionUpdateData = {
     time?: {
       archived?: number
     }
+    unarchive?: boolean
   }
   path: {
     sessionID: string
@@ -12959,6 +13437,202 @@ export type V2SkillListResponses = {
 }
 
 export type V2SkillListResponse = V2SkillListResponses[keyof V2SkillListResponses]
+
+export type ServerSkillSkillMarketplaceSearchData = {
+  body?: never
+  path?: never
+  query: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+    q: string
+    limit?: string
+    page?: string
+  }
+  url: "/api/skill/marketplace/search"
+}
+
+export type ServerSkillSkillMarketplaceSearchErrors = {
+  /**
+   * SkillMarketplaceError | InvalidRequestError
+   */
+  400: SkillMarketplaceError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type ServerSkillSkillMarketplaceSearchError =
+  ServerSkillSkillMarketplaceSearchErrors[keyof ServerSkillSkillMarketplaceSearchErrors]
+
+export type ServerSkillSkillMarketplaceSearchResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfo
+    data: SkillMarketplacePage
+  }
+}
+
+export type ServerSkillSkillMarketplaceSearchResponse =
+  ServerSkillSkillMarketplaceSearchResponses[keyof ServerSkillSkillMarketplaceSearchResponses]
+
+export type ServerSkillSkillMarketplaceDetailData = {
+  body?: never
+  path?: never
+  query: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+    id: string
+  }
+  url: "/api/skill/marketplace/detail"
+}
+
+export type ServerSkillSkillMarketplaceDetailErrors = {
+  /**
+   * SkillMarketplaceError | InvalidRequestError
+   */
+  400: SkillMarketplaceError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type ServerSkillSkillMarketplaceDetailError =
+  ServerSkillSkillMarketplaceDetailErrors[keyof ServerSkillSkillMarketplaceDetailErrors]
+
+export type ServerSkillSkillMarketplaceDetailResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfo
+    data: SkillMarketplaceDetail
+  }
+}
+
+export type ServerSkillSkillMarketplaceDetailResponse =
+  ServerSkillSkillMarketplaceDetailResponses[keyof ServerSkillSkillMarketplaceDetailResponses]
+
+export type ServerSkillSkillMarketplaceInstalledData = {
+  body?: never
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/skill/marketplace/installed"
+}
+
+export type ServerSkillSkillMarketplaceInstalledErrors = {
+  /**
+   * SkillMarketplaceError | InvalidRequestError
+   */
+  400: SkillMarketplaceError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type ServerSkillSkillMarketplaceInstalledError =
+  ServerSkillSkillMarketplaceInstalledErrors[keyof ServerSkillSkillMarketplaceInstalledErrors]
+
+export type ServerSkillSkillMarketplaceInstalledResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfo
+    data: Array<SkillMarketplaceInstallation>
+  }
+}
+
+export type ServerSkillSkillMarketplaceInstalledResponse =
+  ServerSkillSkillMarketplaceInstalledResponses[keyof ServerSkillSkillMarketplaceInstalledResponses]
+
+export type ServerSkillSkillMarketplaceRemoveData = {
+  body: SkillMarketplaceRemoveInput
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/skill/marketplace/install"
+}
+
+export type ServerSkillSkillMarketplaceRemoveErrors = {
+  /**
+   * SkillMarketplaceError | InvalidRequestError
+   */
+  400: SkillMarketplaceError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type ServerSkillSkillMarketplaceRemoveError =
+  ServerSkillSkillMarketplaceRemoveErrors[keyof ServerSkillSkillMarketplaceRemoveErrors]
+
+export type ServerSkillSkillMarketplaceRemoveResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type ServerSkillSkillMarketplaceRemoveResponse =
+  ServerSkillSkillMarketplaceRemoveResponses[keyof ServerSkillSkillMarketplaceRemoveResponses]
+
+export type ServerSkillSkillMarketplaceInstallData = {
+  body: SkillMarketplaceInstallInput
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/skill/marketplace/install"
+}
+
+export type ServerSkillSkillMarketplaceInstallErrors = {
+  /**
+   * SkillMarketplaceError | InvalidRequestError
+   */
+  400: SkillMarketplaceError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type ServerSkillSkillMarketplaceInstallError =
+  ServerSkillSkillMarketplaceInstallErrors[keyof ServerSkillSkillMarketplaceInstallErrors]
+
+export type ServerSkillSkillMarketplaceInstallResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfo
+    data: SkillMarketplaceInstallation
+  }
+}
+
+export type ServerSkillSkillMarketplaceInstallResponse =
+  ServerSkillSkillMarketplaceInstallResponses[keyof ServerSkillSkillMarketplaceInstallResponses]
 
 export type V2EventSubscribeData = {
   body?: never

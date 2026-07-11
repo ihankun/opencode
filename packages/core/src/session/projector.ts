@@ -71,7 +71,9 @@ function sessionRow(info: SessionV1.SessionInfo): typeof SessionTable.$inferInse
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
-    time_archived: info.time.archived,
+    // Drizzle ignores undefined fields in UPDATE statements. Unarchiving is
+    // represented by an absent timestamp, so persist it as SQL NULL explicitly.
+    time_archived: info.time.archived ?? null,
   }
 }
 

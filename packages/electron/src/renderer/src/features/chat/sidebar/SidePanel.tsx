@@ -13,6 +13,7 @@ import {
   GlobeIcon,
   PlusIcon,
   TrashIcon,
+  ArchiveIcon,
   NewChatIcon,
   SearchIcon,
   PencilIcon,
@@ -21,7 +22,6 @@ import {
   SpinnerIcon,
   ChevronRightIcon,
   PackagePlusIcon,
-  PlugIcon,
   TeachIcon,
 } from '../../../components/Icons'
 import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
@@ -33,7 +33,7 @@ import { pinnedSessionsStore } from '../../../store/pinnedSessionsStore'
 import type { NotificationEntry } from '../../../store/notificationStore'
 import {
   updateSession,
-  deleteSession as apiDeleteSession,
+  archiveSession as apiArchiveSession,
   getSession,
   getSessions,
   subscribeToConnectionState,
@@ -59,7 +59,6 @@ interface SidePanelProps {
   onOpenSearch?: () => void
   onOpenSkills?: () => void
   onOpenPlugins?: () => void
-  onOpenMcp?: () => void
   isMobile?: boolean
   isExpanded?: boolean
   onOpenSettings?: () => void
@@ -119,7 +118,6 @@ export function SidePanel({
   onOpenSearch,
   onOpenSkills,
   onOpenPlugins,
-  onOpenMcp,
   isMobile = false,
   isExpanded = true,
   onOpenSettings,
@@ -969,7 +967,7 @@ export function SidePanel({
         return
       }
 
-      await apiDeleteSession(sessionId, session.directory)
+      await apiArchiveSession(sessionId, session.directory)
       pinnedSessionsStore.unpin(sessionId)
       clearSessionRuntimeState(sessionId)
       setProjectSessions(prev =>
@@ -1013,7 +1011,7 @@ export function SidePanel({
 
   const handleDeleteFolderSession = useCallback(
     async (session: ApiSession) => {
-      await apiDeleteSession(session.id, session.directory)
+      await apiArchiveSession(session.id, session.directory)
       pinnedSessionsStore.unpin(session.id)
 
       if (!currentDirectory || isSameDirectory(currentDirectory, session.directory)) {
@@ -1042,13 +1040,13 @@ export function SidePanel({
         try {
           const s = sessionLookup.get(id)
           if (s) {
-            await apiDeleteSession(id, s.directory)
+            await apiArchiveSession(id, s.directory)
           } else {
-            await apiDeleteSession(id, currentDirectory || pathInfo?.directory)
+            await apiArchiveSession(id, currentDirectory || pathInfo?.directory)
           }
           pinnedSessionsStore.unpin(id)
         } catch (e) {
-          uiErrorHandler('batch delete session', e)
+          uiErrorHandler('batch archive session', e)
         }
       }),
     )
@@ -1204,22 +1202,6 @@ export function SidePanel({
             style={{ opacity: showLabels ? 1 : 0 }}
           >
             {t('sidebar.plugins')}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenMcp}
-          aria-label={t('sidebar.mcpServers')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
-          style={{ width: showLabels ? '100%' : 32, paddingLeft: 6, paddingRight: 6 }}
-          title={t('sidebar.mcpServers')}
-        >
-          <span className="size-5 flex items-center justify-center shrink-0">
-            <PlugIcon size={16} />
-          </span>
-          <span className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300" style={{ opacity: showLabels ? 1 : 0 }}>
-            {t('sidebar.mcpServers')}
           </span>
         </button>
 
@@ -1427,7 +1409,7 @@ export function SidePanel({
                   onClick={() => setBatchDeleteSessionConfirm(true)}
                   className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[length:var(--fs-xxs)] font-medium text-danger-100 bg-danger-100/10 hover:bg-danger-100/20 transition-colors"
                 >
-                  <TrashIcon size={11} />
+                  <ArchiveIcon size={11} />
                   {t('sidebar.deleteSessions', { count: selectedSessionIds.size })}
                 </button>
               )}
@@ -1575,8 +1557,8 @@ export function SidePanel({
             )}
           </>
         }
-        confirmText={t('common:delete')}
-        variant="danger"
+        confirmText={t('sidebar.deleteChat')}
+        variant="info"
         isLoading={isBatchDeleting}
       />
 

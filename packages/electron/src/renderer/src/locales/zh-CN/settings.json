@@ -14,6 +14,8 @@
     "agentDesc": "权限放行、工具请求和 agent 交互行为",
     "chat": "对话",
     "chatDesc": "消息呈现、路径显示和 step 元数据",
+    "archived": "已归档对话",
+    "archivedDesc": "恢复或永久删除已归档的对话",
     "workspace": "工作区",
     "workspaceDesc": "布局、侧边栏和代码查看偏好",
     "appearance": "外观",
@@ -32,6 +34,18 @@
   "groups": {
     "core": "核心",
     "advanced": "高级"
+  },
+  "archived": {
+    "title": "已归档对话",
+    "description": "归档对话按工作区归类。恢复后会重新出现在侧边栏；永久删除会物理移除会话及其消息数据。",
+    "empty": "暂无已归档对话",
+    "unknownWorkspace": "未知工作区",
+    "archivedAt": "归档于 {{date}}",
+    "restore": "取消归档",
+    "delete": "删除",
+    "deleteTitle": "永久删除对话？",
+    "deleteWarning": "即将永久删除“{{title}}”。对应的会话、消息和部件数据会被物理删除，无法恢复。",
+    "deleteForever": "永久删除"
   },
   "servers": {
     "connections": "连接",
