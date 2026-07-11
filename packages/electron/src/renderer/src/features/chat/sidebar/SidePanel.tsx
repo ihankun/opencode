@@ -156,6 +156,7 @@ export function SidePanel({
     [currentDirectory],
   )
   const [connectionState, setConnectionState] = useState<ConnectionInfo | null>(null)
+  const [enabledTaskCount, setEnabledTaskCount] = useState(0)
   const [projectDeleteConfirm, setProjectDeleteConfirm] = useState<{ isOpen: boolean; projectId: string | null }>({
     isOpen: false,
     projectId: null,
@@ -266,6 +267,18 @@ export function SidePanel({
 
   useEffect(() => {
     return subscribeToConnectionState(setConnectionState)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window.customOpenCode?.listTasks !== 'function') return
+    const load = () => void window.customOpenCode.listTasks().then(tasks => setEnabledTaskCount(tasks.filter(task => task.enabled).length)).catch(() => setEnabledTaskCount(0))
+    load()
+    const unsubscribe = window.customOpenCode.onTasksChanged?.(load)
+    window.addEventListener('focus', load)
+    return () => {
+      unsubscribe?.()
+      window.removeEventListener('focus', load)
+    }
   }, [])
 
   const { sessions, isLoading, isLoadingMore, hasMore, search, setSearch, loadMore, deleteSession, refresh } =
@@ -1218,6 +1231,7 @@ export function SidePanel({
         >
           <span className="size-5 flex items-center justify-center shrink-0"><ClockIcon size={16} /></span>
           <span className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300" style={{ opacity: showLabels ? 1 : 0 }}>{t('sidebar.tasks')}</span>
+          {showLabels && enabledTaskCount > 0 && <span className="ml-auto inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100" title={`${enabledTaskCount} 个已开启任务`}>{enabledTaskCount}</span>}
         </button>
 
         {showLabels && (

@@ -281,16 +281,36 @@ function currentServerState() {
   return { status: "starting" as const, error: serverError }
 }
 
+function notifyTasksChanged() {
+  BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("task:changed"))
+}
+
 ipcMain.handle("server:get", currentServerState)
 ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("task:list", () => taskScheduler.list())
-ipcMain.handle("task:create", (_event, input: Parameters<TaskScheduler["create"]>[0]) => taskScheduler.create(input))
-ipcMain.handle("task:update", (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => taskScheduler.update(String(id), input))
-ipcMain.handle("task:remove", (_event, id: unknown) => taskScheduler.remove(String(id)))
-ipcMain.handle("task:run", (_event, id: unknown) => taskScheduler.run(String(id)))
+ipcMain.handle("task:create", (_event, input: Parameters<TaskScheduler["create"]>[0]) => {
+  const task = taskScheduler.create(input)
+  notifyTasksChanged()
+  return task
+})
+ipcMain.handle("task:update", (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => {
+  const task = taskScheduler.update(String(id), input)
+  notifyTasksChanged()
+  return task
+})
+ipcMain.handle("task:remove", (_event, id: unknown) => {
+  const removed = taskScheduler.remove(String(id))
+  notifyTasksChanged()
+  return removed
+})
+ipcMain.handle("task:run", async (_event, id: unknown) => {
+  const task = await taskScheduler.run(String(id))
+  notifyTasksChanged()
+  return task
+})
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))

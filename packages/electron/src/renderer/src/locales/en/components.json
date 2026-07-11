@@ -79,6 +79,9 @@
     "split": "Split"
   },
   "mcpPanel": {
+    "installed": "Installed",
+    "marketplace": "MCP Marketplace",
+    "marketplaceHint": "Search servers in the official MCP marketplace",
     "title": "MCP",
     "addServer": "Add Server",
     "loadingServers": "Loading servers...",
@@ -166,6 +169,9 @@
     "uninstall": "Uninstall"
   },
   "pluginPanel": {
+    "installed": "Installed",
+    "marketplace": "Plugin Marketplace",
+    "marketplaceHint": "Search plugins in the marketplace",
     "title": "Plugins",
     "loadingPlugins": "Loading plugins...",
     "failedToLoad": "Failed to load plugins",

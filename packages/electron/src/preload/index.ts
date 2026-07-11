@@ -121,6 +121,7 @@ export type CustomOpenCodeApi = {
   updateTask(id: string, input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
   removeTask(id: string): Promise<boolean>
   runTask(id: string): Promise<CustomOpenCodeScheduledTask>
+  onTasksChanged(callback: () => void): () => void
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
@@ -154,6 +155,11 @@ const api: CustomOpenCodeApi = {
   updateTask: (id, input) => ipcRenderer.invoke("task:update", id, input),
   removeTask: (id) => ipcRenderer.invoke("task:remove", id),
   runTask: (id) => ipcRenderer.invoke("task:run", id),
+  onTasksChanged(callback) {
+    const listener = () => callback()
+    ipcRenderer.on("task:changed", listener)
+    return () => ipcRenderer.removeListener("task:changed", listener)
+  },
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),

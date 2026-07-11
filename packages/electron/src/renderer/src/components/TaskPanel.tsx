@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckIcon, ClockIcon, CloseIcon, PencilIcon, PlusIcon, RetryIcon, SpinnerIcon, TrashIcon } from './Icons'
 import { useDirectory } from '../hooks'
-import { parseNaturalTask } from '../api/task'
 
 type Task = Awaited<ReturnType<typeof window.customOpenCode.listTasks>>[number]
 type TaskInput = Parameters<typeof window.customOpenCode.createTask>[0]
@@ -54,7 +53,7 @@ export const TaskPanel = memo(function TaskPanel() {
         </div>
         <div className="flex gap-1.5">
           <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-300 hover:bg-bg-200" onClick={() => void load()} title="刷新"><RetryIcon size={14} className={loading ? 'animate-spin' : ''} /></button>
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-text-100 px-3 text-[length:var(--fs-sm)] text-bg-100" onClick={() => setEditing('new')}><PlusIcon size={13} />新建任务</button>
+          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent-main-100 px-3 text-[length:var(--fs-sm)] text-oncolor-100 transition-colors hover:bg-accent-main-200" onClick={() => setEditing('new')}><PlusIcon size={13} />新建任务</button>
         </div>
       </div>
       <div className="flex-1 overflow-auto px-6 py-5">
@@ -67,7 +66,7 @@ export const TaskPanel = memo(function TaskPanel() {
         {loading && !tasks.length ? <div className="flex justify-center py-20 text-text-400"><SpinnerIcon size={20} className="animate-spin" /></div> : null}
         {!loading && !visible.length ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border-200 py-20 text-text-400">
-            <ClockIcon size={28} /><div className="mt-3 text-text-200">还没有定时任务</div><div className="mt-1 text-[length:var(--fs-sm)]">新建一个，或用自然语言快速填写</div>
+            <ClockIcon size={28} /><div className="mt-3 text-text-200">还没有定时任务</div><div className="mt-1 text-[length:var(--fs-sm)]">点击“新建任务”设置一个执行计划</div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -111,15 +110,9 @@ function TaskDialog({ task, directory, onClose, onSaved }: { task?: Task; direct
   const [time, setTime] = useState(initial.time)
   const [day, setDay] = useState(initial.day)
   const [expression, setExpression] = useState(task?.cron ?? '0 18 * * *')
-  const [natural, setNatural] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const applyNatural = () => {
-    const parsed = parseNaturalTask(natural)
-    if (!parsed) return setError('暂时无法识别。示例：每天6点总结今天修改的内容；每周五 16:00 做周报')
-    setTitle(parsed.title); setPrompt(parsed.prompt); setFrequency(parsed.frequency); setTime(parsed.time); setDay(parsed.day); setError('')
-  }
   const save = async () => {
     const cron = frequency === 'advanced' ? expression : buildCron(frequency, time, day)
     setSaving(true); setError('')
@@ -134,13 +127,12 @@ function TaskDialog({ task, directory, onClose, onSaved }: { task?: Task; direct
     <div className="w-full max-w-xl rounded-2xl border border-border-200 bg-bg-100 shadow-2xl">
       <div className="flex items-center justify-between border-b border-border-200/60 px-5 py-4"><div className="font-semibold text-text-100">{task ? '编辑定时任务' : '新建定时任务'}</div><button onClick={onClose}><CloseIcon size={15} /></button></div>
       <div className="space-y-4 p-5">
-        {!task && <div><Label>用一句话创建</Label><div className="flex gap-2"><input value={natural} onChange={e => setNatural(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyNatural()} className={`${inputClass} h-9 flex-1`} placeholder="例如：每天6点总结今天修改的全部内容"/><button onClick={applyNatural} className="rounded-lg bg-bg-200 px-3 text-[length:var(--fs-sm)] text-text-200">智能填写</button></div></div>}
         <div><Label>名称</Label><input value={title} onChange={e => setTitle(e.target.value)} className={`${inputClass} h-9 w-full`} placeholder="每日修改总结" /></div>
         <div><Label>要执行的指令</Label><textarea value={prompt} onChange={e => setPrompt(e.target.value)} className={`${inputClass} min-h-24 w-full resize-y py-2`} placeholder="总结今天修改的全部内容" /></div>
         <div><Label>执行时间</Label><div className="grid grid-cols-[1fr_1fr] gap-2"><select value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} className={`${inputClass} h-9`}><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="advanced">高级（Cron）</option></select>{frequency === 'advanced' ? <input value={expression} onChange={e => setExpression(e.target.value)} className={`${inputClass} h-9 font-mono`} placeholder="0 18 * * *" /> : <div className="flex gap-2">{frequency === 'weekly' && <select value={day} onChange={e => setDay(e.target.value)} className={`${inputClass} h-9 flex-1`}>{weekdays.map(item => <option value={item[0]} key={item[0]}>周{item[1]}</option>)}</select>}<input type="time" value={time} onChange={e => setTime(e.target.value)} className={`${inputClass} h-9 flex-1`} /></div>}</div>{frequency === 'advanced' && <p className="mt-1 text-[length:var(--fs-xs)] text-text-400">支持标准五段 Cron 表达式，按当前时区执行。</p>}</div>
         {error && <div className="text-[length:var(--fs-xs)] text-danger-100">{error}</div>}
       </div>
-      <div className="flex justify-end gap-2 border-t border-border-200/60 px-5 py-4"><button onClick={onClose} className="rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300">取消</button><button disabled={saving || !title.trim() || !prompt.trim()} onClick={() => void save()} className="inline-flex items-center gap-1.5 rounded-lg bg-text-100 px-4 py-2 text-[length:var(--fs-sm)] text-bg-100 disabled:opacity-50">{saving ? <SpinnerIcon size={12} className="animate-spin" /> : <CheckIcon size={12} />}保存</button></div>
+      <div className="flex justify-end gap-2 border-t border-border-200/60 px-5 py-4"><button onClick={onClose} className="rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300">取消</button><button disabled={saving || !title.trim() || !prompt.trim()} onClick={() => void save()} className="inline-flex items-center gap-1.5 rounded-lg bg-accent-main-100 px-4 py-2 text-[length:var(--fs-sm)] text-oncolor-100 transition-colors hover:bg-accent-main-200 disabled:opacity-50">{saving ? <SpinnerIcon size={12} className="animate-spin" /> : <CheckIcon size={12} />}保存</button></div>
     </div>
   </div>
 }
