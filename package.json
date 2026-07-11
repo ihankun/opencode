@@ -140,6 +140,8 @@
     "electron"
   ],
   "overrides": {
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.6",
     "@opentui/core": "catalog:",
     "@opentui/keymap": "catalog:",
     "@opentui/solid": "catalog:",

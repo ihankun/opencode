@@ -90,7 +90,7 @@ async function importServerModule() {
 
 function prepareEnv(command: StartCommand) {
   Object.assign(process.env, {
-    OPENCODE_CLIENT: "opencodex-electron",
+    OPENCODE_CLIENT: "opencodex",
     OPENCODE_DISABLE_EMBEDDED_WEB_UI: "true",
     OPENCODE_EXPERIMENTAL_FILEWATCHER: "true",
     XDG_CACHE_HOME: join(command.userDataPath, "cache"),
