@@ -132,7 +132,7 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
 
   useEffect(() => {
     if (tab !== 'marketplace') return
-    const timer = window.setTimeout(loadMarketplace, filter.trim() ? 300 : 0)
+    const timer = window.setTimeout(loadMarketplace, filter.trim() ? 900 : 0)
     return () => window.clearTimeout(timer)
   }, [filter, loadMarketplace, tab])
 

@@ -11,7 +11,7 @@ import { ToastContainer } from './components/ToastContainer'
 import { RightPanel } from './components/RightPanel'
 import { BottomPanel } from './components/BottomPanel'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
-import { SearchIcon, SidebarIcon } from './components/Icons'
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './components/Icons'
 import { SessionSearchDialog } from './features/chat/sidebar/SessionSearchDialog'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
@@ -108,6 +108,20 @@ function ElectronSidebarSearch({ title, onOpen }: { title: string; onOpen: () =>
     <button type="button" onClick={onOpen} aria-label={title} title={title} className="electron-sidebar-search window-no-drag">
       <SearchIcon size={16} />
     </button>,
+    document.body,
+  )
+}
+
+function ElectronHistoryNavigation({ backTitle, forwardTitle }: { backTitle: string; forwardTitle: string }) {
+  return createPortal(
+    <div className="electron-history-navigation window-no-drag">
+      <button type="button" onClick={() => window.history.back()} aria-label={backTitle} title={backTitle}>
+        <ChevronLeftIcon size={18} />
+      </button>
+      <button type="button" onClick={() => window.history.forward()} aria-label={forwardTitle} title={forwardTitle}>
+        <ChevronRightIcon size={18} />
+      </button>
+    </div>,
     document.body,
   )
 }
@@ -1011,6 +1025,7 @@ function App() {
             onPreviewClose={closeSidebarPreview}
           />
           <ElectronSidebarSearch title={t('chat:sidebar.search')} onOpen={() => setSessionSearchOpen(true)} />
+          <ElectronHistoryNavigation backTitle={t('components:desktopTitlebar.goBack')} forwardTitle={t('components:desktopTitlebar.goForward')} />
         </>
       )}
       <InternalDragLayer />

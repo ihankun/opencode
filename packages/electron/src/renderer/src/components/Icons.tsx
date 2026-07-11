@@ -95,6 +95,7 @@ import {
   LogOut,
   ZoomIn,
   ZoomOut,
+  MoreHorizontal,
 } from 'lucide-react'
 
 export interface IconProps extends SVGProps<SVGSVGElement> {
@@ -168,6 +169,7 @@ export const AlertCircleIcon = wrap(CircleAlert)
 export const RetryIcon = wrap(RefreshCcw)
 export const ZoomInIcon = wrap(ZoomIn)
 export const ZoomOutIcon = wrap(ZoomOut)
+export const MoreIcon = wrap(MoreHorizontal)
 export const CpuIcon = wrap(Cpu)
 export const DollarSignIcon = wrap(DollarSign)
 export const LightbulbIcon = wrap(Lightbulb)

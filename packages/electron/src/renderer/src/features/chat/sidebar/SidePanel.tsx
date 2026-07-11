@@ -1143,7 +1143,7 @@ export function SidePanel({
           title={t('sidebar.newChat')}
         >
           <span className="size-5 flex items-center justify-center shrink-0">
-            <NewChatIcon size={17} />
+            <NewChatIcon size={14} />
           </span>
           <span
             className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"

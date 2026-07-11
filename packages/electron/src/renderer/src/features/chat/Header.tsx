@@ -8,16 +8,21 @@ import {
   SplitHorizontalIcon,
   MaximizeIcon,
   MinimizeIcon,
+  ArchiveIcon,
+  MoreIcon,
+  PinIcon,
+  PencilIcon,
 } from '../../components/Icons'
 import { IconButton } from '../../components/ui'
 import { ShareDialog } from './ShareDialog'
 import { messageStore, useMessageStore } from '../../store'
 import { useLayoutStore, layoutStore } from '../../store/layoutStore'
 import { useSessionContext } from '../../contexts/useSessionContext'
-import { updateSession } from '../../api'
+import { archiveSession, updateSession } from '../../api'
 import { useDirectory } from '../../contexts/useDirectory'
-import { uiErrorHandler } from '../../utils'
+import { isSameDirectory, uiErrorHandler } from '../../utils'
 import { useChatViewport } from './chatViewport'
+import { pinnedSessionsStore } from '../../store/pinnedSessionsStore'
 
 interface HeaderProps {
   onOpenSidebar?: () => void
@@ -115,16 +120,21 @@ export function Header({
   const { sessionId, sessionDirectory, sessionTitle: currentSessionTitle } = useMessageStore()
   const { rightPanelOpen, bottomPanelOpen } = useLayoutStore()
   const { refresh } = useSessionContext()
-  const { currentDirectory } = useDirectory()
+  const { currentDirectory, pathInfo } = useDirectory()
   const { presentation, interaction } = useChatViewport()
 
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
+  const [locationMenuOpen, setLocationMenuOpen] = useState(false)
+  const [locationApps, setLocationApps] = useState<Array<{ id: string; name: string; icon?: string }>>([])
+  const [selectedLocationApp, setSelectedLocationApp] = useState('vscode')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   const sessionTitle = currentSessionTitle || t('header.newChat')
   const isCompact = presentation.isCompact
+  const projectLocation = sessionDirectory && (!pathInfo?.directory || !isSameDirectory(sessionDirectory, pathInfo.directory))
 
   useEffect(() => {
     document.title = currentSessionTitle ? `${currentSessionTitle} - OpenCodex` : 'OpenCodex'
@@ -136,6 +146,11 @@ export function Header({
   useEffect(() => {
     setIsEditingTitle(false)
   }, [sessionId])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('opencodex.location-app')
+    if (saved) setSelectedLocationApp(saved)
+  }, [])
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -164,6 +179,67 @@ export function Header({
     } finally {
       setIsEditingTitle(false)
     }
+  }
+
+  const handlePin = () => {
+    if (!sessionId) return
+    const directory = sessionDirectory || currentDirectory
+    if (!directory) return
+    pinnedSessionsStore.pin({ sessionId, directory, title: sessionTitle })
+    setSessionMenuOpen(false)
+  }
+
+  const handleArchive = async () => {
+    if (!sessionId) return
+    try {
+      await archiveSession(sessionId, sessionDirectory || currentDirectory)
+      pinnedSessionsStore.unpin(sessionId)
+      await refresh()
+      setSessionMenuOpen(false)
+    } catch (error) {
+      uiErrorHandler('archive session', error)
+    }
+  }
+
+  const loadLocationApps = async () => {
+    if (!window.customOpenCode?.locationApps) return []
+    try {
+      const apps = await window.customOpenCode.locationApps()
+      setLocationApps(apps)
+      setSelectedLocationApp(current => (apps.some(app => app.id === current) ? current : (apps[0]?.id ?? 'default')))
+      return apps
+    } catch (error) {
+      uiErrorHandler('load installed applications', error)
+      return []
+    }
+  }
+
+  const toggleLocationMenu = async () => {
+    const nextOpen = !locationMenuOpen
+    setLocationMenuOpen(nextOpen)
+    if (nextOpen) await loadLocationApps()
+  }
+
+  const openLocation = async (appId: string) => {
+    const location = projectLocation ? sessionDirectory : undefined
+    if (!location) return
+    try {
+      await window.customOpenCode.openLocation({ path: location, appId })
+      setLocationMenuOpen(false)
+    } catch (error) {
+      uiErrorHandler('open location', error)
+    }
+  }
+
+  const openSelectedLocation = async () => {
+    const apps = locationApps.length > 0 ? locationApps : await loadLocationApps()
+    await openLocation(apps.some(app => app.id === selectedLocationApp) ? selectedLocationApp : (apps[0]?.id ?? 'default'))
+  }
+
+  const selectLocationApp = (appId: string) => {
+    setSelectedLocationApp(appId)
+    localStorage.setItem('opencodex.location-app', appId)
+    setLocationMenuOpen(false)
   }
 
   const titleControl = (
@@ -200,10 +276,41 @@ export function Header({
         )}
 
         <div className="min-w-0">{titleControl}</div>
+        {sessionId && (
+          <div className="relative">
+            <IconButton aria-label={t('header.sessionActions')} onClick={() => setSessionMenuOpen(open => !open)} className="text-text-400 hover:bg-bg-200/50 hover:text-text-100">
+              <MoreIcon size={18} />
+            </IconButton>
+            {sessionMenuOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
+                <button type="button" onClick={handlePin} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PinIcon size={14} />{t('header.pinSession')}</button>
+                <button type="button" onClick={() => { setSessionMenuOpen(false); handleStartEdit() }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PencilIcon size={14} />{t('header.renameSession')}</button>
+                <button type="button" onClick={() => void handleArchive()} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><ArchiveIcon size={14} />{t('header.archiveSession')}</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-1 pointer-events-auto shrink-0 z-20">
         <div className="flex items-center gap-0.5">
+          {projectLocation && (
+            <div className="relative">
+              <div className="inline-flex h-8 overflow-hidden rounded-lg border border-border-200/80 bg-bg-100 text-text-200 shadow-sm">
+                <button type="button" onClick={() => void openSelectedLocation()} className="inline-flex items-center px-2.5 text-[length:var(--fs-sm)] font-medium hover:bg-bg-200/50">
+                  {t('header.openLocation')}
+                </button>
+                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="border-l border-border-200/80 px-2 text-text-400 hover:bg-bg-200/50 hover:text-text-100">
+                  <ChevronDownIcon size={16} />
+                </button>
+              </div>
+              {locationMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-border-200 bg-bg-100 p-1.5 shadow-lg">
+                  {locationApps.map(app => <button key={app.id} type="button" onClick={() => selectLocationApp(app.id)} className={`flex w-full items-center rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] ${app.id === selectedLocationApp ? 'bg-bg-200 text-text-100' : 'text-text-200 hover:bg-bg-200/70'}`}>{app.name}</button>)}
+                </div>
+              )}
+            </div>
+          )}
           {onTogglePaneFullscreen && (
             <IconButton
               aria-label={isPaneFullscreen ? 'Exit fullscreen pane' : 'Fullscreen pane'}

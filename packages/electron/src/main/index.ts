@@ -1,7 +1,8 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol, session, shell } from "electron"
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
+import { spawn } from "node:child_process"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { initLogging, writeLog } from "./logging"
@@ -285,6 +286,8 @@ ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => w
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
 ipcMain.handle("browser:open-external", (_event, url: unknown) => openExternalUrl(String(url ?? "")))
+ipcMain.handle("location:apps", locationApps)
+ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
 ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
@@ -637,6 +640,71 @@ async function openExternalUrl(rawUrl: string) {
   const url = new URL(rawUrl)
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
   await shell.openExternal(url.toString())
+  return true
+}
+
+type LocationApp = { id: string; name: string; icon?: string }
+
+async function locationApps(): Promise<LocationApp[]> {
+  if (process.platform !== "darwin") return [{ id: "default", name: "默认应用" }]
+  const candidates = [
+    { id: "vscode", name: "VS Code", bundle: "Visual Studio Code" },
+    { id: "default", name: "Finder", path: "/System/Library/CoreServices/Finder.app" },
+    { id: "terminal", name: "Terminal", bundle: "Terminal" },
+    { id: "cursor", name: "Cursor", bundle: "Cursor" },
+    { id: "zed", name: "Zed", bundle: "Zed" },
+    { id: "intellij", name: "IntelliJ IDEA", bundle: "IntelliJ IDEA" },
+    { id: "sublime", name: "Sublime Text", bundle: "Sublime Text" },
+  ]
+  const installed = await Promise.all(
+    candidates.map(async ({ id, name, bundle, path }) => {
+      try {
+        const paths = path
+          ? [path]
+          : [join("/Applications", `${bundle}.app`), join(homedir(), "Applications", `${bundle}.app`)]
+        const location = await Promise.any(
+          paths.map(async candidate => {
+            await access(candidate)
+            return candidate
+          }),
+        )
+        const icon = (await app.getFileIcon(location, { size: "small" })).toDataURL()
+        return { id, name, icon }
+      } catch {
+        return undefined
+      }
+    }),
+  )
+  return installed.filter((item): item is LocationApp => !!item)
+}
+
+async function openLocation(input: unknown) {
+  if (!input || typeof input !== "object") throw new Error("Invalid location request")
+  const value = input as { path?: unknown; appId?: unknown }
+  if (typeof value.path !== "string" || !value.path) throw new Error("A location is required")
+  const appId = typeof value.appId === "string" ? value.appId : "default"
+  if (appId === "default") {
+    await shell.openPath(value.path)
+    return true
+  }
+  const apps = await locationApps()
+  const app = apps.find(item => item.id === appId)
+  if (!app) throw new Error("Selected application is not installed")
+  const bundles: Record<string, string> = {
+    vscode: "Visual Studio Code",
+    terminal: "Terminal",
+    cursor: "Cursor",
+    zed: "Zed",
+    intellij: "IntelliJ IDEA",
+    sublime: "Sublime Text",
+  }
+  const bundle = bundles[appId]
+  if (!bundle) throw new Error("Unsupported application")
+  await new Promise<void>((resolveOpen, rejectOpen) => {
+    const child = spawn("open", ["-a", bundle, value.path])
+    child.once("error", rejectOpen)
+    child.once("exit", code => (code === 0 ? resolveOpen() : rejectOpen(new Error("Failed to open location"))))
+  })
   return true
 }
 

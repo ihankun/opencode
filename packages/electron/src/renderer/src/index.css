@@ -297,6 +297,41 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transform: scale(0.98);
 }
 
+.electron-history-navigation {
+  position: fixed;
+  top: 10px;
+  left: 176px;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.electron-history-navigation button {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.electron-history-navigation button:hover {
+  background: hsl(var(--bg-200) / 0.7);
+  color: hsl(var(--text-100));
+}
+
+.electron-history-navigation button:active {
+  transform: scale(0.98);
+}
+
 :root:not(.tauri-app) [data-sidebar-expanded='false'] [data-chat-header='true'] {
   padding-left: 172px;
 }

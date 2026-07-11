@@ -74,6 +74,8 @@ export type CustomOpenCodeConsoleLoginResult = {
   message?: string
 }
 
+export type CustomOpenCodeLocationApp = { id: string; name: string; icon?: string }
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
@@ -84,6 +86,8 @@ export type CustomOpenCodeApi = {
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   openExternalUrl(url: string): Promise<boolean>
+  locationApps(): Promise<CustomOpenCodeLocationApp[]>
+  openLocation(input: { path: string; appId: string }): Promise<boolean>
   waitConsoleLogin(login: CustomOpenCodeConsoleLoginStart): Promise<CustomOpenCodeConsoleLoginResult>
   notificationPermission(): Promise<CustomOpenCodeNotificationPermission>
   sendNotification(input: {
@@ -109,6 +113,8 @@ const api: CustomOpenCodeApi = {
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
   openExternalUrl: (url) => ipcRenderer.invoke("browser:open-external", url),
+  locationApps: () => ipcRenderer.invoke("location:apps"),
+  openLocation: (input) => ipcRenderer.invoke("location:open", input),
   waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
