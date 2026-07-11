@@ -646,7 +646,6 @@ export function InputToolbar({
               >
                 <MenuItem
                   label={getVariantLabel(undefined, t)}
-                  icon={<ThinkingIcon />}
                   selected={!selectedVariant}
                   selectionRole="menuitemradio"
                   onClick={() => {
@@ -658,7 +657,6 @@ export function InputToolbar({
                   <MenuItem
                     key={variant}
                     label={getVariantLabel(variant, t)}
-                    icon={<ThinkingIcon />}
                     selected={selectedVariant === variant}
                     selectionRole="menuitemradio"
                     onClick={() => {

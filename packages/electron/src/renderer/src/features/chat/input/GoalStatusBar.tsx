@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon, GoalAgentIcon, PauseIcon, PlayIcon, TrashIcon } from '../../../components/Icons'
 import { clearGoal, getGoal, setGoalStatus, type GoalInfo } from '../../../api/goal'
+import { getSessionTodos } from '../../../api/session'
+import { todoStore, useCurrentTask, useTodoStats } from '../../../store'
 
 interface GoalStatusBarProps {
   sessionId?: string | null
@@ -26,8 +28,13 @@ export function GoalStatusBar({ sessionId, rootPath, isStreaming }: GoalStatusBa
   const [goal, setGoal] = useState<GoalInfo | null>(null)
   const [busy, setBusy] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const stats = useTodoStats(sessionId ?? null)
+  const currentTask = useCurrentTask(sessionId ?? null)
   const visible = shouldShowGoal(goal)
   const elapsed = useMemo(() => (goal ? formatElapsed(Date.now() - goal.createdAt * 1000) : ''), [goal, isStreaming])
+  const hasTodos = stats.total > 0
+  const progressLabel = hasTodos ? t('goalBar.tasks', { done: stats.completed, total: stats.total }) : t('goalBar.step', { step: goal?.step })
+  const statusLabel = currentTask?.content || goal?.statusMessage || t('goalBar.noStatus')
 
   const refreshGoal = useCallback(async () => {
     if (!sessionId) {
@@ -45,6 +52,14 @@ export function GoalStatusBar({ sessionId, rootPath, isStreaming }: GoalStatusBa
   useEffect(() => {
     void refreshGoal()
   }, [refreshGoal])
+
+  useEffect(() => {
+    if (!sessionId) return
+
+    void getSessionTodos(sessionId, rootPath)
+      .then(todos => todoStore.setTodos(sessionId, todos))
+      .catch(() => {})
+  }, [rootPath, sessionId])
 
   useEffect(() => {
     if (!sessionId) return
@@ -89,8 +104,8 @@ export function GoalStatusBar({ sessionId, rootPath, isStreaming }: GoalStatusBa
           {goal.status === 'paused' ? t('goalBar.paused') : t('goalBar.active')}
         </span>
         <span className="min-w-0 flex-1 truncate text-text-300">{goal.objective}</span>
-        {goal.statusMessage && <span className="hidden max-w-[18rem] truncate text-text-400 md:inline">{goal.statusMessage}</span>}
-        <span className="shrink-0 text-text-400">{t('goalBar.step', { step: goal.step })}</span>
+        <span className="hidden max-w-[18rem] truncate text-text-400 md:inline">{statusLabel}</span>
+        <span className="shrink-0 tabular-nums text-text-300">{progressLabel}</span>
         <span className="shrink-0 text-text-400">{elapsed}</span>
         <button
           type="button"
@@ -124,10 +139,10 @@ export function GoalStatusBar({ sessionId, rootPath, isStreaming }: GoalStatusBa
           <div className="absolute bottom-full right-2 mb-2 w-80 rounded-xl border border-border-200/70 bg-bg-000/98 p-3 text-[length:var(--fs-xs)] shadow-xl backdrop-blur-md">
             <div className="mb-1 font-semibold text-text-100">{goal.objective}</div>
             <div className="text-text-300">
-              {goal.statusMessage || t('goalBar.noStatus')}
+              {statusLabel}
             </div>
             <div className="mt-2 flex items-center justify-between text-text-500">
-              <span>{t('goalBar.step', { step: goal.step })}</span>
+              <span>{progressLabel}</span>
               <span>{t('goalBar.started', { elapsed })}</span>
             </div>
           </div>

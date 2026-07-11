@@ -133,6 +133,7 @@
     "active": "Active goal",
     "paused": "Paused goal",
     "step": "Step {{step}}",
+    "tasks": "{{done}}/{{total}}",
     "pause": "Pause goal",
     "resume": "Resume goal",
     "clear": "Clear goal",

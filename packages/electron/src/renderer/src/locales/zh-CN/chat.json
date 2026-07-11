@@ -101,7 +101,7 @@
       "high": "高"
     },
     "agents": {
-      "goal": "目标"
+      "goal": "Goal"
     },
     "agentDescriptions": {
       "build": "Build 默认模式。会根据已配置的权限执行工具。",
@@ -133,6 +133,7 @@
     "active": "进行中的目标",
     "paused": "已暂停的目标",
     "step": "第 {{step}} 步",
+    "tasks": "{{done}}/{{total}}",
     "pause": "暂停目标",
     "resume": "继续目标",
     "clear": "清除目标",
