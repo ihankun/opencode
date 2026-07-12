@@ -53,6 +53,7 @@ import { STORAGE_KEY_SELECTED_AGENT } from '../constants'
 import type { ChatAreaHandle } from '../features/chat'
 import { followupQueueStore, useFollowupQueue } from '../store/followupQueueStore'
 import { themeStore } from '../store/themeStore'
+import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
 import { createTaskFromCommand } from '../api/task'
 
 const handleError = createErrorHandler('session')
@@ -87,6 +88,7 @@ interface UseChatSessionOptions {
   paneId: string
   chatAreaRef: React.RefObject<ChatAreaHandle | null>
   currentModel: ModelInfo | undefined
+  selectedVariant?: string
   refetchModels: () => Promise<void>
   sessionId: string | null
   navigateToSession: (sessionId: string, directory?: string) => void
@@ -129,6 +131,7 @@ export function useChatSession({
   paneId,
   chatAreaRef,
   currentModel,
+  selectedVariant,
   refetchModels,
   sessionId: routeSessionId,
   navigateToSession,
@@ -1020,7 +1023,7 @@ export function useChatSession({
 
       if (command === 'task') {
         try {
-          const task = await createTaskFromCommand(args, effectiveDirectory)
+          const task = await createTaskFromCommand(args, effectiveDirectory, currentModel, selectedVariant)
           void window.customOpenCode.sendNotification({ title: '定时任务已创建', body: `${task.title} · ${task.cron}` })
           return true
         } catch (err) {
@@ -1085,6 +1088,7 @@ export function useChatSession({
       navigateToSession,
       routeDirectoryForSession,
       currentModel,
+      selectedVariant,
       navigateHome,
       handleNewChat,
     ],
@@ -1130,6 +1134,8 @@ export function useChatSession({
     if (!routeSessionId) return
     try {
       await updateSession(routeSessionId, { time: { archived: Date.now() } }, effectiveDirectory)
+      if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(routeSessionId, true)
+      pinnedSessionsStore.unpin(routeSessionId)
       navigateHome()
       handleNewChat()
     } catch (error) {

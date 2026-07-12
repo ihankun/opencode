@@ -295,6 +295,7 @@ export const ChatPane = memo(function ChatPane({
     paneId,
     chatAreaRef,
     currentModel,
+    selectedVariant,
     refetchModels,
     sessionId,
     navigateToSession,
@@ -782,6 +783,7 @@ export const ChatPane = memo(function ChatPane({
               onSplitPane={onSplitPane}
               isPaneFullscreen={isPaneFullscreen}
               onTogglePaneFullscreen={onTogglePaneFullscreen}
+              onArchiveSession={handleArchiveSession}
             />
           </div>
         </div>

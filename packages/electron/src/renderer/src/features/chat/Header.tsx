@@ -30,6 +30,7 @@ interface HeaderProps {
   onSplitPane?: () => void
   isPaneFullscreen?: boolean
   onTogglePaneFullscreen?: () => void
+  onArchiveSession?: () => Promise<void> | void
 }
 
 interface SessionTitleControlProps {
@@ -115,6 +116,7 @@ export function Header({
   onSplitPane,
   isPaneFullscreen = false,
   onTogglePaneFullscreen,
+  onArchiveSession,
 }: HeaderProps) {
   const { t } = useTranslation('chat')
   const { sessionId, sessionDirectory, sessionTitle: currentSessionTitle } = useMessageStore()
@@ -192,8 +194,12 @@ export function Header({
   const handleArchive = async () => {
     if (!sessionId) return
     try {
-      await archiveSession(sessionId, sessionDirectory || currentDirectory)
-      pinnedSessionsStore.unpin(sessionId)
+      if (onArchiveSession) {
+        await onArchiveSession()
+      } else {
+        await archiveSession(sessionId, sessionDirectory || currentDirectory)
+        pinnedSessionsStore.unpin(sessionId)
+      }
       await refresh()
       setSessionMenuOpen(false)
     } catch (error) {

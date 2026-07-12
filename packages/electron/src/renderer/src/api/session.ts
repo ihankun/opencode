@@ -18,6 +18,10 @@ function normalizeSessionList(value: unknown): ApiSession[] {
   throw new Error('Invalid OpenCode session list response')
 }
 
+export function isScheduledTaskSession(session: Pick<ApiSession, 'title'>) {
+  return session.title.startsWith('[定时任务] ')
+}
+
 // ============================================
 // Session Status & Diff
 // ============================================

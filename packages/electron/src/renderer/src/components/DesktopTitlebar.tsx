@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react'
 import {
-  DESKTOP_MACOS_TRAFFIC_LIGHTS_WIDTH,
   DESKTOP_TITLEBAR_HEIGHT,
   DESKTOP_TITLEBAR_Z_INDEX,
 } from '../constants'
@@ -14,8 +13,9 @@ export function DesktopTitlebar() {
 
   useEffect(() => {
     if (!isDesktopChrome) return
-    // Windows 上窗口控制按钮通过 fixed 定位，不占布局空间，高度设为 0
-    const height = platform === 'windows' ? 0 : DESKTOP_TITLEBAR_HEIGHT
+    // Windows controls and macOS traffic lights overlay the existing app headers.
+    // Both platforms must avoid adding a second titlebar row to the document flow.
+    const height = platform === 'windows' || platform === 'macos' ? 0 : DESKTOP_TITLEBAR_HEIGHT
     document.documentElement.style.setProperty('--desktop-titlebar-height', `${height}px`)
     return () => {
       document.documentElement.style.removeProperty('--desktop-titlebar-height')
@@ -44,15 +44,12 @@ export function DesktopTitlebar() {
 
   if (!isDesktopChrome) return null
 
-  // Windows 上窗口控制按钮通过 fixed 定位渲染，不需要标题栏占位
-  if (platform === 'windows') return null
+  if (platform === 'windows' || platform === 'macos') return null
 
   return (
     <header
       className="desktop-titlebar desktop-titlebar-surface window-drag-region relative shrink-0"
       style={{ height: DESKTOP_TITLEBAR_HEIGHT, zIndex: DESKTOP_TITLEBAR_Z_INDEX }}
-    >
-      <div className="h-full shrink-0" style={{ width: DESKTOP_MACOS_TRAFFIC_LIGHTS_WIDTH }} />
-    </header>
+    />
   )
 }

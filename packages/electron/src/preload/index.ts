@@ -98,6 +98,9 @@ export type CustomOpenCodeScheduledTask = {
   cron: string
   timezone: string
   directory: string
+  modelProviderID: string
+  modelID: string
+  variant: string
   enabled: boolean
   status: "enabled" | "paused" | "running" | "error"
   lastRunAt: number | null
@@ -107,7 +110,22 @@ export type CustomOpenCodeScheduledTask = {
   updatedAt: number
 }
 
-export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "directory" | "enabled">
+export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "directory" | "modelProviderID" | "modelID" | "variant" | "enabled">
+
+export type CustomOpenCodeScheduledTaskRun = {
+  id: string
+  taskID: string
+  taskTitle: string
+  prompt: string
+  sessionID: string
+  directory: string
+  modelProviderID: string
+  modelID: string
+  variant: string
+  status: "running" | "submitted" | "failed"
+  error: string | null
+  createdAt: number
+}
 
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
@@ -117,6 +135,8 @@ export type CustomOpenCodeApi = {
   searchMcpServers(query: string): Promise<CustomOpenCodeMcpSearchResult[]>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   listTasks(): Promise<CustomOpenCodeScheduledTask[]>
+  listTaskRuns(taskID?: string): Promise<CustomOpenCodeScheduledTaskRun[]>
+  setTaskRunArchived(sessionID: string, archived: boolean): Promise<void>
   createTask(input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
   updateTask(id: string, input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
   removeTask(id: string): Promise<boolean>
@@ -158,6 +178,8 @@ const api: CustomOpenCodeApi = {
   searchMcpServers: (query) => ipcRenderer.invoke("mcp:search", query),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   listTasks: () => ipcRenderer.invoke("task:list"),
+  listTaskRuns: (taskID) => ipcRenderer.invoke("task:run-list", taskID),
+  setTaskRunArchived: (sessionID, archived) => ipcRenderer.invoke("task:run-archive", sessionID, archived),
   createTask: (input) => ipcRenderer.invoke("task:create", input),
   updateTask: (id, input) => ipcRenderer.invoke("task:update", id, input),
   removeTask: (id) => ipcRenderer.invoke("task:remove", id),

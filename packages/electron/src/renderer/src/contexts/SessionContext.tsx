@@ -4,6 +4,7 @@ import {
   createSession as apiCreateSession,
   archiveSession as apiArchiveSession,
   subscribeToEvents,
+  isScheduledTaskSession,
   type ApiSession,
   type SessionListParams,
 } from '../api'
@@ -31,6 +32,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const isFetchingRef = useRef(false) // 防止 onReconnected 密集触发时重复请求
   const queuedReconnectRefreshRef = useRef(false)
   const retryTimerRef = useRef<number | null>(null)
+  const scheduledSessionIdsRef = useRef(new Set<string>())
   const effectiveDirectoryRef = useRef<string | undefined>(undefined)
   const fetchSessionsRef = useRef<
     (params?: SessionListParams & { append?: boolean; retryAttempt?: number }) => Promise<void>
@@ -76,13 +78,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        const data = await getSessions({
-          roots: true,
-          limit: currentLimitRef.current,
-          directory: targetDir,
-          search: search || undefined,
-          ...queryParams,
-        })
+        const [sessionData, taskRuns] = await Promise.all([
+          getSessions({
+            roots: true,
+            limit: currentLimitRef.current,
+            directory: targetDir,
+            search: search || undefined,
+            ...queryParams,
+          }),
+          typeof window.customOpenCode?.listTaskRuns === 'function' ? window.customOpenCode.listTaskRuns() : Promise.resolve([]),
+        ])
+        scheduledSessionIdsRef.current = new Set(taskRuns.map(run => run.sessionID))
+        const data = sessionData.filter(session => !isScheduledTaskSession(session) && !scheduledSessionIdsRef.current.has(session.id))
 
         if (requestId !== requestIdRef.current) return
 
@@ -101,7 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } else {
           setSessions(data)
         }
-        setHasMore(data.length >= currentLimitRef.current)
+        setHasMore(sessionData.length >= currentLimitRef.current)
       } catch (e) {
         if (requestId === requestIdRef.current && !append) {
           if (retryAttempt < 3) {
@@ -163,6 +170,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = subscribeToEvents({
       onSessionCreated: session => {
+        if (isScheduledTaskSession(session) || scheduledSessionIdsRef.current.has(session.id)) return
         // 忽略子 session（有 parentID 的是子 agent 创建的）
         if (session.parentID) return
 
@@ -180,6 +188,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         })
       },
       onSessionUpdated: session => {
+        if (isScheduledTaskSession(session) || scheduledSessionIdsRef.current.has(session.id)) {
+          if (typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(session.id, Boolean(session.time.archived))
+          setSessions(prev => prev.filter(item => item.id !== session.id))
+          return
+        }
         if (session.parentID) return
         if (session.time.archived) {
           setSessions(prev => prev.filter(item => item.id !== session.id))
@@ -215,6 +228,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         todoStore.setTodos(data.sessionID, data.todos)
       },
       onSessionDeleted: sessionId => {
+        if (scheduledSessionIdsRef.current.has(sessionId) && typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(sessionId, true)
         clearSessionRuntimeState(sessionId)
         setSessions(prev => prev.filter(s => s.id !== sessionId))
       },
@@ -231,6 +245,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     return unsubscribe
   }, [matchesCurrentDirectory])
+
+  useEffect(() => {
+    if (typeof window.customOpenCode?.listTaskRuns !== 'function') return
+    const refreshScheduledSessions = () => void window.customOpenCode.listTaskRuns().then(runs => {
+      scheduledSessionIdsRef.current = new Set(runs.map(run => run.sessionID))
+      setSessions(prev => prev.filter(session => !scheduledSessionIdsRef.current.has(session.id)))
+    })
+    refreshScheduledSessions()
+    return window.customOpenCode.onTasksChanged(refreshScheduledSessions)
+  }, [])
 
   useEffect(() => {
     return serverStore.onServerChange(() => {
@@ -277,6 +301,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const targetDir = effectiveDirectory
       await apiArchiveSession(id, targetDir)
+      if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(id, true)
       pinnedSessionsStore.unpin(id)
       clearSessionRuntimeState(id)
       setSessions(prev => prev.filter(s => s.id !== id))

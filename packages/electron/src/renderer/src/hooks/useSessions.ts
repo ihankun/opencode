@@ -4,6 +4,7 @@ import {
   createSession,
   archiveSession,
   subscribeToEvents,
+  isScheduledTaskSession,
   type ApiSession,
   type SessionListParams,
 } from '../api'
@@ -117,7 +118,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
           autoDetectPathStyle(data[0].directory)
         }
 
-        setSessions(data)
+        setSessions(data.filter(session => !isScheduledTaskSession(session)))
         setHasMore(data.length >= currentLimitRef.current)
       } catch (e) {
         if (requestId !== requestIdRef.current) return
@@ -190,6 +191,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
 
     const unsubscribe = subscribeToEvents({
       onSessionCreated: session => {
+        if (isScheduledTaskSession(session)) return
         if (session.parentID) return
         if (!matchesDirectory(session)) return
 
@@ -204,6 +206,11 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         })
       },
       onSessionUpdated: session => {
+        if (isScheduledTaskSession(session)) {
+          if (typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(session.id, Boolean(session.time.archived))
+          setSessions(prev => prev.filter(item => item.id !== session.id))
+          return
+        }
         if (session.parentID) return
         if (session.time.archived) {
           setSessions(prev => prev.filter(item => item.id !== session.id))
@@ -235,6 +242,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         })
       },
       onSessionDeleted: sessionId => {
+        if (typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(sessionId, true)
         setSessions(prev => prev.filter(item => item.id !== sessionId))
       },
       onReconnected: reason => {
@@ -305,6 +313,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
   const remove = useCallback(
     async (sessionId: string) => {
       await archiveSession(sessionId, normalizedDirectory)
+      if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(sessionId, true)
       pinnedSessionsStore.unpin(sessionId)
       setSessions(prev => prev.filter(s => s.id !== sessionId))
     },

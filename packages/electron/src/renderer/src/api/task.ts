@@ -21,10 +21,11 @@ export function parseNaturalTask(text: string): ParsedNaturalTask | undefined {
   return { title: prompt.slice(0, 24) || '定时任务', prompt: prompt || value, frequency, time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`, day }
 }
 
-export async function createTaskFromCommand(text: string, directory?: string) {
+export async function createTaskFromCommand(text: string, directory: string | undefined, model: { providerId: string; id: string } | undefined, variant?: string) {
   const parsed = parseNaturalTask(text)
   if (!parsed) throw new Error('无法识别任务时间。示例：/task 每天18点总结今天修改的内容')
+  if (!model) throw new Error('当前对话没有可用模型，无法创建定时任务')
   const [hour, minute] = parsed.time.split(':')
   const cron = parsed.frequency === 'weekdays' ? `${minute} ${hour} * * 1-5` : parsed.frequency === 'weekly' ? `${minute} ${hour} * * ${parsed.day}` : `${minute} ${hour} * * *`
-  return window.customOpenCode.createTask({ title: parsed.title, prompt: parsed.prompt, cron, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, directory: directory ?? '', enabled: true })
+  return window.customOpenCode.createTask({ title: parsed.title, prompt: parsed.prompt, cron, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, directory: directory ?? '', modelProviderID: model.providerId, modelID: model.id, variant: variant ?? '', enabled: true })
 }

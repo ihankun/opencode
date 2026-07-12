@@ -19,7 +19,7 @@ let isStoppingForQuit = false
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const appId = "com.hankun.opencodex"
-const taskScheduler = new TaskScheduler(() => server?.state)
+const taskScheduler = new TaskScheduler(() => server?.state, notifyTasksChanged)
 
 // Window control IPC handlers
 ipcMain.handle("window:minimize", () => {
@@ -321,6 +321,11 @@ ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String
 ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("task:list", () => taskScheduler.list())
+ipcMain.handle("task:run-list", (_event, taskID: unknown) => taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined))
+ipcMain.handle("task:run-archive", (_event, sessionID: unknown, archived: unknown) => {
+  taskScheduler.setRunArchived(String(sessionID), Boolean(archived))
+  notifyTasksChanged()
+})
 ipcMain.handle("task:create", (_event, input: Parameters<TaskScheduler["create"]>[0]) => {
   const task = taskScheduler.create(input)
   notifyTasksChanged()
