@@ -16,7 +16,7 @@ import { serviceStore } from './store/serviceStore'
 import { reconnectSSE } from './api/events'
 import { abortInFlightApiRequests, getSDKClientAsync, invalidateSDKClient } from './api/sdk'
 import { resetPathModeCache } from './utils/directoryUtils'
-import { isTauri, isTauriMobile } from './utils/tauri'
+import { isTauri, isTauriMobile, getDesktopPlatform } from './utils/tauri'
 import { apiErrorHandler, globalErrorHandler } from './utils/errorHandling'
 import { applyLocalServiceUrl } from './utils/localServiceUrl'
 
@@ -93,6 +93,9 @@ interface StartOpencodeServiceResult {
 function configureNativeShell() {
   if ('customOpenCode' in window) {
     document.documentElement.classList.add('electron-app')
+    const platform = getDesktopPlatform()
+    document.documentElement.setAttribute('data-platform', platform)
+    console.log('[Shell] platform:', platform, 'html data-platform:', document.documentElement.getAttribute('data-platform'))
   }
 
   if (!isNativeTauri) return
