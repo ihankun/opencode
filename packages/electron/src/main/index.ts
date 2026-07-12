@@ -38,7 +38,7 @@ ipcMain.handle("window:close", () => {
   mainWindow?.close()
 })
 
-ipcMain.handle("window:isMaximized", () => {
+ipcMain.handle("window:is-maximized", () => {
   return mainWindow?.isMaximized() ?? false
 })
 
