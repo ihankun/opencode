@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon } from '../../components/Icons'
+import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon, ChevronDownIcon } from '../../components/Icons'
 import { listDirectory, getPath } from '../../api'
 import { fileErrorHandler } from '../../utils'
 import { Dialog } from '../../components/ui/Dialog'
@@ -65,7 +65,6 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
   const [inputValue, setInputValue] = useState('')
   const [items, setItems] = useState<FileItem[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [selectedDriveIndex, setSelectedDriveIndex] = useState(-1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [drives, setDrives] = useState<string[]>([])
@@ -78,7 +77,13 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
 
   // Windows 盘符检测
   const isWin = isElectron() && getDesktopPlatform() === 'windows'
-  const isWindowsDriveRoot = isWin && /^[a-zA-Z]:\/?$/.test(inputValue)
+
+  // 当前盘符（从 inputValue 提取，不含冒号）
+  const currentDrive = useMemo(() => {
+    if (!isWin) return ''
+    const match = inputValue.match(/^([a-zA-Z]):/i)
+    return match ? match[1].toUpperCase() : (drives[0]?.replace(':', '') ?? '')
+  }, [inputValue, isWin, drives])
 
   // Computed
   const currentDir = useMemo(() => getDirectoryPath(inputValue), [inputValue])
@@ -333,23 +338,49 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
     >
       {/* Header */}
       <div className="p-4 pb-2 shrink-0">
-        <div className="relative bg-bg-000/40 rounded-lg border border-border-200/60 focus-within:border-accent-main-100/50 transition-colors flex items-center px-3 py-2.5">
-          <FolderIcon className="text-text-400 w-4 h-4 shrink-0 mr-2.5" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={e => {
-              setInputValue(e.target.value)
-              setSelectedIndex(0)
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={t('projectDialog.typePath')}
-            className="flex-1 bg-transparent border-none outline-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400 font-mono"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {isLoading && <SpinnerIcon className="animate-spin text-text-400 w-4 h-4" size={16} />}
+        <div className="flex items-center gap-2">
+          {/* Drive selector (Windows only) */}
+          {isWin && drives.length > 0 && (
+            <div className="relative shrink-0">
+              <select
+                value={currentDrive}
+                onChange={e => {
+                  const drive = e.target.value
+                  if (drive) {
+                    setInputValue(drive + ':/')
+                    inputRef.current?.focus()
+                  }
+                }}
+                className="appearance-none h-[38px] pl-3 pr-7 bg-bg-000/40 rounded-lg border border-border-200/60 text-[length:var(--fs-base)] text-text-100 outline-none focus:border-accent-main-100/50 transition-colors cursor-pointer"
+              >
+                {drives.map(d => {
+                  const letter = d.replace(':', '')
+                  return <option key={letter} value={letter}>{letter}</option>
+                })}
+              </select>
+              <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-400 pointer-events-none" size={14} />
+            </div>
+          )}
+
+          {/* Path input */}
+          <div className="relative flex-1 bg-bg-000/40 rounded-lg border border-border-200/60 focus-within:border-accent-main-100/50 transition-colors flex items-center px-3 py-2.5">
+            <FolderIcon className="text-text-400 w-4 h-4 shrink-0 mr-2.5" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={e => {
+                setInputValue(e.target.value)
+                setSelectedIndex(0)
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={t('projectDialog.typePath')}
+              className="flex-1 bg-transparent border-none outline-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400 font-mono"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {isLoading && <SpinnerIcon className="animate-spin text-text-400 w-4 h-4" size={16} />}
+          </div>
         </div>
       </div>
 
@@ -362,7 +393,7 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
         ) : (
           <div className="space-y-0.5">
             {/* Go Up */}
-            {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && !isWindowsDriveRoot && (
+            {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && !(isWin && /^[a-zA-Z]:\/?$/.test(inputValue)) && (
               <ListItem
                 id="project-item-up"
                 icon={<ArrowUpIcon className="w-3.5 h-3.5" />}
@@ -372,46 +403,8 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
                   handleGoBack()
                   inputRef.current?.focus()
                 }}
-                onMouseEnter={() => {
-                  setSelectedIndex(-1)
-                  setSelectedDriveIndex(-1)
-                }}
+                onMouseEnter={() => setSelectedIndex(-1)}
               />
-            )}
-
-            {/* Windows 盘符列表 */}
-            {isWindowsDriveRoot && drives.length > 0 && (
-              <>
-                <div
-                  className="text-[length:var(--fs-xxs)] text-text-400/60 font-medium"
-                  onMouseEnter={() => {
-                    setSelectedIndex(-1)
-                    setSelectedDriveIndex(-1)
-                  }}
-                >
-                  {t('projectDialog.drives', '盘符')}
-                </div>
-                {drives.map((drive, index) => {
-                  const currentDrive = inputValue.toLowerCase().replace(/\//g, '')
-                  const isCurrent = drive.toLowerCase() === currentDrive
-                  return (
-                    <ListItem
-                      key={drive}
-                      id={`project-drive-${drive}`}
-                      icon={<FolderIcon className="w-3.5 h-3.5" />}
-                      label={drive + (isCurrent ? ' ←' : '')}
-                      isSelected={!isCurrent && selectedDriveIndex === index}
-                      onClick={() => {
-                        if (!isCurrent) {
-                          setInputValue(drive + '/')
-                          inputRef.current?.focus()
-                        }
-                      }}
-                      onMouseEnter={() => setSelectedDriveIndex(index)}
-                    />
-                  )
-                })}
-              </>
             )}
 
             {/* Empty State */}
@@ -431,10 +424,7 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
                 label={item.name}
                 isSelected={index === selectedIndex}
                 onClick={() => handleItemClick(item)}
-                onMouseEnter={() => {
-                  setSelectedIndex(index)
-                  setSelectedDriveIndex(-1)
-                }}
+                onMouseEnter={() => setSelectedIndex(index)}
                 action={
                   index === selectedIndex && (
                     <button

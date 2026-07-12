@@ -776,10 +776,19 @@ async function openExternalUrl(rawUrl: string) {
   return true
 }
 
-type LocationApp = { id: string; name: string; icon?: string }
+type LocationApp = { id: string; name: string; icon?: string; exe?: string }
 
 async function locationApps(): Promise<LocationApp[]> {
-  if (process.platform !== "darwin") return [{ id: "default", name: "默认应用" }]
+  if (process.platform === "darwin") {
+    return locationAppsMac()
+  }
+  if (process.platform === "win32") {
+    return locationAppsWin()
+  }
+  return [{ id: "default", name: "默认应用" }]
+}
+
+async function locationAppsMac(): Promise<LocationApp[]> {
   const candidates = [
     { id: "vscode", name: "VS Code", bundle: "Visual Studio Code" },
     { id: "default", name: "Finder", path: "/System/Library/CoreServices/Finder.app" },
@@ -811,6 +820,118 @@ async function locationApps(): Promise<LocationApp[]> {
   return installed.filter((item): item is LocationApp => !!item)
 }
 
+async function locationAppsWin(): Promise<LocationApp[]> {
+  const { execSync } = await import("node:child_process")
+  const { readdir } = await import("node:fs/promises")
+
+  const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
+
+  // Known editors: match by DisplayName in registry
+  const knownApps: Array<{ id: string; name: string; patterns: RegExp[]; exeName: string }> = [
+    { id: "vscode", name: "VS Code", patterns: [/Visual Studio Code/i], exeName: "Code.exe" },
+    { id: "cursor", name: "Cursor", patterns: [/^Cursor$/i, /Cursor Editor/i], exeName: "Cursor.exe" },
+    { id: "intellij", name: "IntelliJ IDEA", patterns: [/IntelliJ IDEA/i], exeName: "idea64.exe" },
+    { id: "webstorm", name: "WebStorm", patterns: [/^WebStorm$/i], exeName: "ws64.exe" },
+    { id: "sublime", name: "Sublime Text", patterns: [/Sublime Text/i], exeName: "sublime_text.exe" },
+  ]
+
+  const found = new Map<string, { name: string; exe: string }>()
+
+  // Single recursive query per registry root — much faster than per-subkey queries
+  const regRoots = [
+    'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+    'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+    'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  ]
+
+  for (const root of regRoots) {
+    try {
+      const output = execSync(
+        `reg query "${root}" /s 2>nul`,
+        { encoding: "utf-8", timeout: 8000, windowsHide: true, maxBuffer: 1024 * 1024 },
+      )
+
+      let currentDisplayName = ""
+      let currentInstallLocation = ""
+
+      const flush = () => {
+        if (currentDisplayName && currentInstallLocation) {
+          for (const app of knownApps) {
+            if (!found.has(app.id) && app.patterns.some(p => p.test(currentDisplayName))) {
+              const exePath = join(currentInstallLocation, app.exeName)
+              found.set(app.id, { name: app.name, exe: exePath })
+            }
+          }
+        }
+        currentDisplayName = ""
+        currentInstallLocation = ""
+      }
+
+      for (const line of output.split("\n")) {
+        // New subkey header resets current state
+        if (line.match(/^HK/)) {
+          flush()
+          continue
+        }
+
+        const nameMatch = line.match(/DisplayName\s+REG_SZ\s+(.+)/i)
+        if (nameMatch) {
+          currentDisplayName = nameMatch[1].trim()
+          continue
+        }
+
+        const locMatch = line.match(/InstallLocation\s+REG_SZ\s+(.+)/i)
+        if (locMatch) {
+          currentInstallLocation = locMatch[1].trim().replace(/\\+$/, "")
+        }
+      }
+      flush()
+    } catch {
+      // registry root not available
+    }
+  }
+
+  // JetBrains Toolbox fallback
+  try {
+    const toolboxBase = join(localAppData, "JetBrains", "Toolbox", "apps")
+    const toolboxApps = [
+      { id: "intellij", name: "IntelliJ IDEA", pattern: /IDEA/i, exe: "idea64.exe" },
+      { id: "webstorm", name: "WebStorm", pattern: /WebStorm/i, exe: "ws64.exe" },
+    ]
+    const categories = await readdir(toolboxBase)
+    for (const category of categories) {
+      try {
+        const apps = await readdir(join(toolboxBase, category))
+        for (const appDir of apps) {
+          for (const tb of toolboxApps) {
+            if (!found.has(tb.id) && tb.pattern.test(appDir)) {
+              const exePath = join(toolboxBase, category, appDir, "current", "bin", tb.exe)
+              try {
+                await access(exePath)
+                found.set(tb.id, { name: tb.name, exe: exePath })
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // Build result
+  const result: LocationApp[] = []
+  for (const [id, { name, exe }] of found) {
+    try {
+      await access(exe)
+      const icon = (await app.getFileIcon(exe, { size: "small" })).toDataURL()
+      result.push({ id, name, icon, exe })
+    } catch {}
+  }
+
+  result.push({ id: "default", name: "文件管理器" })
+  writeLog("main", "locationAppsWin: result", { count: result.length, ids: result.map(r => r.id) })
+  return result
+}
+
 async function openLocation(input: unknown) {
   if (!input || typeof input !== "object") throw new Error("Invalid location request")
   const value = input as { path?: unknown; appId?: unknown }
@@ -820,7 +941,23 @@ async function openLocation(input: unknown) {
     await shell.openPath(value.path)
     return true
   }
-  const apps = await locationApps()
+
+  if (process.platform === "win32") {
+    // Windows: use the exe path directly
+    const apps = await locationAppsWin()
+    const app = apps.find(item => item.id === appId)
+    if (!app?.exe) throw new Error("Selected application is not installed")
+    await new Promise<void>((resolveOpen, rejectOpen) => {
+      const child = spawn(app.exe!, [value.path], { detached: true, stdio: "ignore" })
+      child.unref()
+      child.once("error", rejectOpen)
+      child.once("exit", code => (code === 0 ? resolveOpen() : rejectOpen(new Error("Failed to open location"))))
+    })
+    return true
+  }
+
+  // macOS
+  const apps = await locationAppsMac()
   const app = apps.find(item => item.id === appId)
   if (!app) throw new Error("Selected application is not installed")
   const bundles: Record<string, string> = {

@@ -454,7 +454,7 @@ export function useGlobalEvents(directories?: string[]) {
       onSessionError: error => {
         const isAbort = error.name === 'MessageAbortedError' || error.name === 'AbortError'
         if (!isAbort && import.meta.env.DEV) {
-          console.warn('[GlobalEvents] Session error:', JSON.stringify({ name: error.name, sessionID: error.sessionID, data: error.data }))
+          console.warn('[GlobalEvents] Session error:', error)
         }
         if (error.sessionID == null || error.sessionID.length < 1) {
           return // Don't handle errors with no sessionID

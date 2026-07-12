@@ -95,7 +95,6 @@ function configureNativeShell() {
     document.documentElement.classList.add('electron-app')
     const platform = getDesktopPlatform()
     document.documentElement.setAttribute('data-platform', platform)
-    console.log('[Shell] platform:', platform, 'html data-platform:', document.documentElement.getAttribute('data-platform'))
   }
 
   if (!isNativeTauri) return
