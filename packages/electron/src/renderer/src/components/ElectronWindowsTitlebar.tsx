@@ -1,0 +1,165 @@
+import { useCallback, useEffect, useState } from 'react'
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './Icons'
+import { DESKTOP_TITLEBAR_HEIGHT, DESKTOP_TITLEBAR_Z_INDEX } from '../constants/desktopWindow'
+
+interface ElectronWindowsTitlebarProps {
+  sidebarExpanded: boolean
+  onToggleSidebar: () => void
+  onOpenSidebarPreview: () => void
+  onCloseSidebarPreview: () => void
+  onOpenSearch: () => void
+  sidebarTitle: string
+  searchTitle: string
+  backTitle: string
+  forwardTitle: string
+}
+
+export function ElectronWindowsTitlebar({
+  sidebarExpanded,
+  onToggleSidebar,
+  onOpenSidebarPreview,
+  onCloseSidebarPreview,
+  onOpenSearch,
+  sidebarTitle,
+  searchTitle,
+  backTitle,
+  forwardTitle,
+}: ElectronWindowsTitlebarProps) {
+  const [isMaximized, setIsMaximized] = useState(false)
+
+  useEffect(() => {
+    const checkMaximized = async () => {
+      if (window.customOpenCode) {
+        const maximized = await window.customOpenCode.windowIsMaximized()
+        setIsMaximized(maximized)
+      }
+    }
+    checkMaximized()
+
+    const handleMaximize = () => setIsMaximized(true)
+    const handleUnmaximize = () => setIsMaximized(false)
+    window.addEventListener('electron:window-maximize', handleMaximize)
+    window.addEventListener('electron:window-unmaximize', handleUnmaximize)
+
+    return () => {
+      window.removeEventListener('electron:window-maximize', handleMaximize)
+      window.removeEventListener('electron:window-unmaximize', handleUnmaximize)
+    }
+  }, [])
+
+  const handleMinimize = useCallback(async () => {
+    if (window.customOpenCode) await window.customOpenCode.windowMinimize()
+  }, [])
+
+  const handleMaximizeToggle = useCallback(async () => {
+    if (window.customOpenCode) await window.customOpenCode.windowMaximize()
+  }, [])
+
+  const handleClose = useCallback(async () => {
+    if (window.customOpenCode) await window.customOpenCode.windowClose()
+  }, [])
+
+  return (
+    <header
+      className="electron-windows-titlebar window-drag-region relative flex shrink-0 items-center"
+      style={{ height: DESKTOP_TITLEBAR_HEIGHT, zIndex: DESKTOP_TITLEBAR_Z_INDEX }}
+    >
+      <div className="flex items-center gap-0.5 pl-3">
+        <button
+          type="button"
+          onPointerEnter={onOpenSidebarPreview}
+          onPointerLeave={onCloseSidebarPreview}
+          onPointerDownCapture={event => event.stopPropagation()}
+          onMouseDownCapture={event => event.stopPropagation()}
+          onClickCapture={event => {
+            event.stopPropagation()
+            onToggleSidebar()
+          }}
+          aria-label={sidebarTitle}
+          aria-pressed={sidebarExpanded}
+          title={sidebarTitle}
+          className="electron-windows-titlebar-btn window-no-drag"
+        >
+          <SidebarIcon size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label={searchTitle}
+          title={searchTitle}
+          className="electron-windows-titlebar-btn window-no-drag"
+        >
+          <SearchIcon size={16} />
+        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            aria-label={backTitle}
+            title={backTitle}
+            className="electron-windows-titlebar-btn window-no-drag"
+          >
+            <ChevronLeftIcon size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => window.history.forward()}
+            aria-label={forwardTitle}
+            title={forwardTitle}
+            className="electron-windows-titlebar-btn window-no-drag"
+          >
+            <ChevronRightIcon size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="flex items-stretch h-full window-no-drag">
+        <button
+          type="button"
+          onClick={handleMinimize}
+          title="最小化"
+          aria-label="最小化"
+          className="electron-windows-titlebar-ctrl-btn window-no-drag"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={handleMaximizeToggle}
+          title={isMaximized ? '还原' : '最大化'}
+          aria-label={isMaximized ? '还原' : '最大化'}
+          className="electron-windows-titlebar-ctrl-btn window-no-drag"
+        >
+          {isMaximized ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="2.5" y="3" width="6" height="6" stroke="currentColor" strokeWidth="1.2" fill="none" />
+              <line x1="2.5" y1="3.5" x2="2.5" y2="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="2.5" y1="1.5" x2="9.5" y2="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="9.5" y1="1.5" x2="9.5" y2="3" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="2" y="2" width="8" height="8" stroke="currentColor" strokeWidth="1.2" fill="none" />
+            </svg>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={handleClose}
+          title="关闭"
+          aria-label="关闭"
+          className="electron-windows-titlebar-ctrl-btn electron-windows-titlebar-close window-no-drag"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+            <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
+        </button>
+      </div>
+    </header>
+  )
+}

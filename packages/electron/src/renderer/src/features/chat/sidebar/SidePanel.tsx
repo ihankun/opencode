@@ -44,6 +44,7 @@ import {
 import { getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
 import { clearSessionRuntimeState } from '../../../utils/sessionLifecycle'
 import { uiErrorHandler } from '../../../utils'
+import { isElectron, getDesktopPlatform } from '../../../utils/tauri'
 
 // 侧边栏设计模式：
 // - 按钮结构统一，不因 expanded/collapsed 改变 DOM
@@ -1129,19 +1130,23 @@ export function SidePanel({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ===== Header ===== */}
-      <div className="mobile-safe-topbar-14 window-drag-region relative shrink-0">
-        {isMobile && (
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            aria-label={t('sidebar.search')}
-            title={t('sidebar.search')}
-            className="window-no-drag absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-400 transition-colors hover:bg-bg-200/70 hover:text-text-100"
-          >
-            <SearchIcon size={16} />
-          </button>
-        )}
-      </div>
+      {isMobile || !(isElectron() && getDesktopPlatform() === 'windows') ? (
+        <div className="mobile-safe-topbar-14 window-drag-region relative shrink-0">
+          {isMobile && (
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              aria-label={t('sidebar.search')}
+              title={t('sidebar.search')}
+              className="window-no-drag absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-400 transition-colors hover:bg-bg-200/70 hover:text-text-100"
+            >
+              <SearchIcon size={16} />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="shrink-0" style={{ height: 12 }} />
+      )}
 
       {/* ===== Navigation - 图标位置固定 ===== */}
       <div className="flex flex-col gap-0 mx-2">

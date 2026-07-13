@@ -372,8 +372,103 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transform: scale(0.98);
 }
 
-:root:not(.tauri-app) [data-sidebar-expanded='false'] [data-chat-header='true'] {
+:root:not(.tauri-app):not([data-platform='windows']) [data-sidebar-expanded='false'] [data-chat-header='true'] {
   padding-left: 172px;
+}
+
+/* ============================================
+ * Windows Title Bar (Electron)
+ * ============================================ */
+
+.electron-windows-titlebar {
+  background-color: hsl(var(--chat-bg));
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+html[data-platform='windows'][data-theme-preset='codex'] .electron-windows-titlebar {
+  background-color: hsl(var(--sidebar-bg));
+}
+
+html.electron-app[data-theme-preset='codex'][data-glass] .electron-windows-titlebar {
+  background-color: hsl(var(--sidebar-bg));
+}
+
+.electron-windows-titlebar-btn {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.electron-windows-titlebar-btn:hover {
+  background: hsl(var(--bg-200) / 0.7);
+  color: hsl(var(--text-100));
+}
+
+.electron-windows-titlebar-btn:focus-visible {
+  outline: 2px solid hsl(var(--accent-main-100) / 0.55);
+  outline-offset: 2px;
+}
+
+.electron-windows-titlebar-btn:active {
+  transform: scale(0.98);
+}
+
+.electron-windows-titlebar-ctrl-btn {
+  display: flex;
+  width: 46px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.electron-windows-titlebar-ctrl-btn:hover {
+  background: hsl(var(--bg-200) / 0.6);
+  color: hsl(var(--text-100));
+}
+
+.electron-windows-titlebar-ctrl-btn:active {
+  background: hsl(var(--bg-300) / 0.6);
+}
+
+.electron-windows-titlebar-close:hover {
+  background: hsl(var(--danger-100));
+  color: hsl(var(--always-white));
+}
+
+/* Windows: reduce chat header height and compact inner dropdowns */
+html[data-platform='windows'] [data-chat-header='true'] {
+  height: 2.25rem;
+}
+
+html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > button,
+html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > input {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
 }
 
 /* Browser/PWA: keyboard inset via visualViewport (Tauri uses native insets) */

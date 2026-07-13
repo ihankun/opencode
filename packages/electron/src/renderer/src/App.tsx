@@ -11,6 +11,7 @@ import { ToastContainer } from './components/ToastContainer'
 import { RightPanel } from './components/RightPanel'
 import { BottomPanel } from './components/BottomPanel'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
+import { ElectronWindowsTitlebar } from './components/ElectronWindowsTitlebar'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './components/Icons'
 import { SessionSearchDialog } from './features/chat/sidebar/SessionSearchDialog'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
@@ -123,82 +124,6 @@ function ElectronHistoryNavigation({ backTitle, forwardTitle }: { backTitle: str
       </button>
       <button type="button" onClick={() => window.history.forward()} aria-label={forwardTitle} title={forwardTitle}>
         <ChevronRightIcon size={18} />
-      </button>
-    </div>,
-    document.body,
-  )
-}
-
-function WinMinimizeIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
-      <line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function WinMaximizeIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
-      <rect x="2" y="2" width="8" height="8" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function WinCloseIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
-      <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function ElectronWindowControls() {
-  const [isMaximized, setIsMaximized] = useState(false)
-
-  useEffect(() => {
-    const checkMaximized = async () => {
-      if (window.customOpenCode) {
-        const maximized = await window.customOpenCode.windowIsMaximized()
-        setIsMaximized(maximized)
-      }
-    }
-    checkMaximized()
-
-    const handleMaximize = () => setIsMaximized(true)
-    const handleUnmaximize = () => setIsMaximized(false)
-    window.addEventListener('electron:window-maximize', handleMaximize)
-    window.addEventListener('electron:window-unmaximize', handleUnmaximize)
-
-    return () => {
-      window.removeEventListener('electron:window-maximize', handleMaximize)
-      window.removeEventListener('electron:window-unmaximize', handleUnmaximize)
-    }
-  }, [])
-
-  const handleMinimize = useCallback(async () => {
-    if (window.customOpenCode) await window.customOpenCode.windowMinimize()
-  }, [])
-
-  const handleMaximizeToggle = useCallback(async () => {
-    if (window.customOpenCode) await window.customOpenCode.windowMaximize()
-  }, [])
-
-  const handleClose = useCallback(async () => {
-    if (window.customOpenCode) await window.customOpenCode.windowClose()
-  }, [])
-
-  return createPortal(
-    <div className="electron-window-controls window-no-drag">
-      <button type="button" onClick={handleMinimize} title="最小化" aria-label="最小化">
-        <WinMinimizeIcon size={16} />
-      </button>
-      <button type="button" onClick={handleMaximizeToggle} title={isMaximized ? '还原' : '最大化'} aria-label={isMaximized ? '还原' : '最大化'}>
-        <WinMaximizeIcon size={16} />
-      </button>
-      <button type="button" onClick={handleClose} className="electron-window-close" title="关闭" aria-label="关闭">
-        <WinCloseIcon size={16} />
       </button>
     </div>,
     document.body,
@@ -1100,8 +1025,19 @@ function App() {
       style={appShellStyle}
     >
       <DesktopTitlebar />
-      {isElectron() && getDesktopPlatform() === 'windows' && <ElectronWindowControls />}
-      {showTitlebarSidebarButton && (
+      {isElectron() && getDesktopPlatform() === 'windows' ? (
+        <ElectronWindowsTitlebar
+          sidebarExpanded={sidebarExpanded}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenSidebarPreview={openSidebarPreview}
+          onCloseSidebarPreview={closeSidebarPreview}
+          onOpenSearch={() => setSessionSearchOpen(true)}
+          sidebarTitle={sidebarExpanded ? t('chat:sidebar.collapseSidebar') : t('chat:sidebar.expandSidebar')}
+          searchTitle={t('chat:sidebar.search')}
+          backTitle={t('components:desktopTitlebar.goBack')}
+          forwardTitle={t('components:desktopTitlebar.goForward')}
+        />
+      ) : showTitlebarSidebarButton ? (
         <>
           <ElectronSidebarToggle
             expanded={sidebarExpanded}
@@ -1113,7 +1049,7 @@ function App() {
           <ElectronSidebarSearch title={t('chat:sidebar.search')} onOpen={() => setSessionSearchOpen(true)} />
           <ElectronHistoryNavigation backTitle={t('components:desktopTitlebar.goBack')} forwardTitle={t('components:desktopTitlebar.goForward')} />
         </>
-      )}
+      ) : null}
       <InternalDragLayer />
       <ChatViewportProvider value={chatViewport}>
         <div className="relative flex min-h-0 flex-1 overflow-hidden">

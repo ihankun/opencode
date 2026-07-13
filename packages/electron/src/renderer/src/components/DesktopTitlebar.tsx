@@ -13,9 +13,8 @@ export function DesktopTitlebar() {
 
   useEffect(() => {
     if (!isDesktopChrome) return
-    // Windows controls and macOS traffic lights overlay the existing app headers.
-    // Both platforms must avoid adding a second titlebar row to the document flow.
-    const height = platform === 'windows' || platform === 'macos' ? 0 : DESKTOP_TITLEBAR_HEIGHT
+    // Windows has a custom title bar row; macOS uses traffic lights overlay.
+    const height = platform === 'macos' ? 0 : DESKTOP_TITLEBAR_HEIGHT
     document.documentElement.style.setProperty('--desktop-titlebar-height', `${height}px`)
     return () => {
       document.documentElement.style.removeProperty('--desktop-titlebar-height')

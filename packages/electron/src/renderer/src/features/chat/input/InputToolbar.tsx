@@ -555,7 +555,7 @@ export function InputToolbar({
   const currentAgentDescription = currentAgent ? getAgentDescription(currentAgent, t) : undefined
 
   return (
-    <div className="flex items-center justify-between px-3 pb-3 relative">
+    <div className="flex items-center justify-between px-3 pt-2 pb-1.5 relative">
       {/* Left side: Agent selector */}
       <div className={`flex items-center min-w-0 ${isCompact ? 'gap-1' : 'gap-2'}`}>
         {/* 浏览器模式下的隐藏文件输入 */}
