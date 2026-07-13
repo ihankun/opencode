@@ -239,7 +239,7 @@ function InputBoxComponent({
   homeMode = false,
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
-  const { currentDirectory, setCurrentDirectory, savedDirectories } = useDirectory()
+  const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
   const fileCaps: FileCapabilities = useMemo(
     () =>
@@ -455,19 +455,22 @@ function InputBoxComponent({
   const inputDisabled = !!disabled
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !inputDisabled
   const projectOptions = useMemo(() => {
-    if (!currentDirectory || savedDirectories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
-      return savedDirectories
+    const directories = [...savedDirectories].toSorted(
+      (a, b) => (recentProjects[b.path] ?? b.addedAt) - (recentProjects[a.path] ?? a.addedAt),
+    )
+    if (!currentDirectory || directories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
+      return directories
     }
 
     return [
-      ...savedDirectories,
+      ...directories,
       {
         path: currentDirectory,
         name: getDirectoryName(currentDirectory) || currentDirectory,
         addedAt: Date.now(),
       },
     ]
-  }, [currentDirectory, savedDirectories])
+  }, [currentDirectory, recentProjects, savedDirectories])
   const selectedProjectName = currentDirectory
     ? projectOptions.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
       getDirectoryName(currentDirectory) ||
@@ -791,6 +794,37 @@ function InputBoxComponent({
       }
     },
     [handleHistoryChange],
+  )
+
+  const insertComposerTrigger = useCallback(
+    (trigger: '@' | '/') => {
+      const textarea = textareaRef.current
+      const start = textarea?.selectionStart ?? text.length
+      const end = textarea?.selectionEnd ?? start
+      const needsSpace = start > 0 && !/\s/.test(text[start - 1])
+      const nextText = `${text.slice(0, start)}${needsSpace ? ' ' : ''}${trigger}${text.slice(end)}`
+      const triggerIndex = start + Number(needsSpace)
+
+      setText(nextText)
+      handleHistoryChange(nextText)
+      if (trigger === '@') {
+        setMentionQuery('')
+        setMentionStartIndex(triggerIndex)
+        setMentionOpen(true)
+        setSlashOpen(false)
+      } else {
+        setSlashQuery('')
+        setSlashStartIndex(triggerIndex)
+        setSlashOpen(true)
+        setMentionOpen(false)
+      }
+
+      requestAnimationFrame(() => {
+        textarea?.focus()
+        textarea?.setSelectionRange(triggerIndex + 1, triggerIndex + 1)
+      })
+    },
+    [handleHistoryChange, text],
   )
 
   const handleCompositionStart = useCallback(() => {
@@ -1521,6 +1555,8 @@ function InputBoxComponent({
                       onVariantChange={onVariantChange}
                       fileCapabilities={fileCaps}
                       onFilesSelected={handleFilesSelected}
+                      onAddReference={() => insertComposerTrigger('@')}
+                      onAddCommand={() => insertComposerTrigger('/')}
                       isStreaming={isStreaming}
                       isSending={isSubmitting}
                       onAbort={onAbort}
@@ -1560,6 +1596,9 @@ function InputBoxComponent({
                     role="menu"
                     className="absolute bottom-full left-4 z-50 mb-2 max-h-64 min-w-56 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl"
                   >
+                    <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+                      {t('emptyState.workingDirectory')}
+                    </div>
                     <button
                       type="button"
                       role="menuitemradio"

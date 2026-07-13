@@ -464,12 +464,15 @@ export function useGlobalEvents(directories?: string[]) {
         if (!isAbort) {
           // 从 Working 列表移除
           activeSessionStore.updateStatus(error.sessionID, { type: 'idle' })
-          // 通知（跳过当前 session family）
-          if (!belongsToCurrentSession(error.sessionID)) {
-            const meta = activeSessionStore.getSessionMeta(error.sessionID)
-            const sessionLabel = meta?.title || error.sessionID.slice(0, 8)
-            notificationStore.push('error', sessionLabel, '会话执行出错', error.sessionID, meta?.directory)
-          } else if (isSessionDirectlyOpen(error.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
+          const meta = activeSessionStore.getSessionMeta(error.sessionID)
+          const sessionLabel = meta?.title || error.sessionID.slice(0, 8)
+          const detail =
+            typeof error.data === 'string' && error.data.trim()
+              ? error.data.trim()
+              : error.name || '请查看会话详情后重试。'
+          // 当前会话也要显示错误；否则用户只能看到发送后没有回复。
+          notificationStore.push('error', sessionLabel, detail, error.sessionID, meta?.directory)
+          if (belongsToCurrentSession(error.sessionID) && isSessionDirectlyOpen(error.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
             playNotificationSoundDeduped('error')
           }
         }

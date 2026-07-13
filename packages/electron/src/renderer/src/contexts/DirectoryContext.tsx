@@ -3,9 +3,9 @@
 // ============================================
 
 import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { getPath, type ApiPath } from '../api'
+import { getCurrentProject, getPath, type ApiPath } from '../api'
 import { useRouter } from '../hooks/useRouter'
-import { handleError, normalizeToForwardSlash, getDirectoryName, isSameDirectory, serverStorage } from '../utils'
+import { handleError, normalizeToForwardSlash, getDirectoryName, isMissingDirectoryError, isSameDirectory, serverStorage } from '../utils'
 import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { serverStore } from '../store/serverStore'
 import { isTauri } from '../utils/tauri'
@@ -98,6 +98,39 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     },
     [setUrlDirectory],
   )
+
+  // 项目可能在应用关闭期间被移动或删除。只移除明确不存在的目录，网络或服务端异常则保留，
+  // 避免远程 Server 短暂离线时误删用户的项目列表。
+  useEffect(() => {
+    if (savedDirectories.length === 0) return
+
+    let disposed = false
+    const directories = savedDirectories.map(directory => directory.path)
+
+    void Promise.all(
+      directories.map(async directory => {
+        try {
+          await getCurrentProject(directory)
+          return directory
+        } catch (error) {
+          return isMissingDirectoryError(error) ? undefined : directory
+        }
+      }),
+    ).then(validDirectories => {
+      if (disposed) return
+      const valid = validDirectories.filter((directory): directory is string => !!directory)
+      if (valid.length === directories.length) return
+
+      const isValid = (directory: string) => valid.some(item => isSameDirectory(item, directory))
+      setSavedDirectories(current => current.filter(directory => isValid(directory.path)))
+      setRecentProjects(current => Object.fromEntries(Object.entries(current).filter(([directory]) => isValid(directory))))
+      if (urlDirectory && !isValid(urlDirectory)) setCurrentDirectory(undefined)
+    })
+
+    return () => {
+      disposed = true
+    }
+  }, [savedDirectories, urlDirectory, setCurrentDirectory])
 
   // 添加目录
   const addDirectory = useCallback(

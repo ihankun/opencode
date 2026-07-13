@@ -224,6 +224,12 @@ export function normalizeToForwardSlash(dir: string | undefined | null): string 
     .replace(/\/+$/, '') // 移除末尾斜杠
 }
 
+/** Returns whether a server error means the requested project directory no longer exists. */
+export function isMissingDirectoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /(?:ENOENT|notfound|not found|no such file|realPath)/i.test(message)
+}
+
 /**
  * 规范化目录路径用于比较
  * - 统一使用正斜杠

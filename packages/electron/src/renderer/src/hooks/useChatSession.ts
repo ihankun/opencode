@@ -22,8 +22,10 @@ import {
 import { usePermissions, usePermissionHandler, useMessageAnimation, useDirectory, useSessionContext } from '../hooks'
 import { useNotification } from './useNotification'
 import { notificationEventSettingsStore } from '../store/notificationEventSettingsStore'
+import { notificationStore } from '../store/notificationStore'
 import {
   sendMessageAsync,
+  getCurrentProject,
   getSessionMessages,
   abortSession,
   getSelectableAgents,
@@ -46,7 +48,7 @@ import {
   type SessionErrorPayload,
 } from '../api'
 import { getMessageText, isUserMessage, type AssistantMessageInfo, type Message as UIMessage } from '../types/message'
-import { clipboardErrorHandler, copyTextToClipboard, createErrorHandler, isSameDirectory } from '../utils'
+import { clipboardErrorHandler, copyTextToClipboard, createErrorHandler, isMissingDirectoryError, isSameDirectory } from '../utils'
 import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
 import { serverStorage } from '../utils/perServerStorage'
 import { STORAGE_KEY_SELECTED_AGENT } from '../constants'
@@ -701,6 +703,26 @@ export function useChatSession({
       let rollbackSnapshot = sessionId ? messageStore.createSendRollbackSnapshot(sessionId) : null
 
       try {
+        // 在创建或继续会话前确认目录仍然可被当前 Server 访问。否则 promptAsync 会异步失败，
+        // 用户只能看到“没有回复”，而无法知道项目目录已经被删除或移动。
+        if (input.directory) {
+          try {
+            await getCurrentProject(input.directory)
+          } catch (error) {
+            const missing = isMissingDirectoryError(error)
+            notificationStore.push(
+              'error',
+              missing ? '项目目录不可用' : '无法访问项目目录',
+              missing
+                ? `“${input.directory}”已不存在或已被移动，请重新选择项目文件夹。`
+                : error instanceof Error ? error.message : '请检查当前 Server 与项目目录是否可访问。',
+              sessionId ?? '',
+              input.directory,
+            )
+            return false
+          }
+        }
+
         if (!sessionId) {
           if (!input.allowCreateSession) return false
           const newSession = await createSession()

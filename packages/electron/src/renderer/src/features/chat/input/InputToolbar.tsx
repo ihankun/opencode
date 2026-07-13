@@ -6,6 +6,8 @@ import {
   SendIcon,
   StopIcon,
   PaperclipIcon,
+  PlusIcon,
+  LinkIcon,
   AgentIcon,
   ThinkingIcon,
   BuildAgentIcon,
@@ -39,6 +41,8 @@ interface InputToolbarProps {
 
   fileCapabilities?: FileCapabilities
   onFilesSelected: (files: File[]) => void
+  onAddReference?: () => void
+  onAddCommand?: () => void
 
   isStreaming?: boolean
   isSending?: boolean
@@ -274,6 +278,8 @@ export function InputToolbar({
   onVariantChange,
   fileCapabilities,
   onFilesSelected,
+  onAddReference,
+  onAddCommand,
   isStreaming,
   isSending = false,
   onAbort,
@@ -334,6 +340,7 @@ export function InputToolbar({
   // State for menus
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [variantMenuOpen, setVariantMenuOpen] = useState(false)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
 
   // Refs
   const agentTriggerRef = useRef<HTMLButtonElement>(null)
@@ -341,6 +348,8 @@ export function InputToolbar({
   const variantTriggerRef = useRef<HTMLButtonElement>(null)
   const variantMenuRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const addTriggerRef = useRef<HTMLButtonElement>(null)
+  const addMenuRef = useRef<HTMLDivElement>(null)
   const agentMenuFocusRef = useRef<'selected' | 'first' | 'last'>('selected')
   const variantMenuFocusRef = useRef<'selected' | 'first' | 'last'>('selected')
   const agentMenuId = 'input-toolbar-agent-menu'
@@ -512,10 +521,17 @@ export function InputToolbar({
           variantTriggerRef.current?.focus()
         }
       }
+      if (
+        addMenuOpen &&
+        !addMenuRef.current?.contains(e.target as Node) &&
+        !addTriggerRef.current?.contains(e.target as Node)
+      ) {
+        setAddMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [agentMenuOpen, variantMenuOpen, isFocusableElement])
+  }, [addMenuOpen, agentMenuOpen, variantMenuOpen, isFocusableElement])
 
   useEffect(() => {
     if (!agentMenuOpen) return
@@ -541,6 +557,69 @@ export function InputToolbar({
     <div className="flex items-center justify-between px-3 pb-3 relative">
       {/* Left side: Agent selector */}
       <div className={`flex items-center min-w-0 ${isCompact ? 'gap-1' : 'gap-2'}`}>
+        {/* 浏览器模式下的隐藏文件输入 */}
+        {useBrowserFileInput && supportsAnyFile && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={acceptString}
+            multiple
+            className="hidden"
+            onChange={e => {
+              onFilesSelected(Array.from(e.target.files ?? []))
+              e.currentTarget.value = ''
+            }}
+          />
+        )}
+        <div className="relative shrink-0">
+          <IconButton
+            ref={addTriggerRef}
+            aria-label={t('inputToolbar.addContent')}
+            disabled={controlsDisabled}
+            onClick={() => setAddMenuOpen(value => !value)}
+          >
+            <PlusIcon />
+          </IconButton>
+          <DropdownMenu
+            triggerRef={addTriggerRef}
+            isOpen={addMenuOpen}
+            position="top"
+            align="left"
+            constrainToRef={inputContainerRef}
+          >
+            <div ref={addMenuRef} role="menu" aria-label={t('inputToolbar.addContent')}>
+              <MenuItem
+                label={t('inputToolbar.attachFile')}
+                description={t('inputToolbar.attachFileDesc')}
+                icon={<PaperclipIcon />}
+                disabled={!supportsAnyFile}
+                onClick={() => {
+                  setAddMenuOpen(false)
+                  void handleFileClick()
+                }}
+              />
+              <MenuItem
+                label={t('inputToolbar.addReference')}
+                description={t('inputToolbar.addReferenceDesc')}
+                icon={<LinkIcon />}
+                onClick={() => {
+                  onAddReference?.()
+                  closeMenuToComposer(() => setAddMenuOpen(false))
+                }}
+              />
+              <MenuItem
+                label={t('inputToolbar.addCommand')}
+                description={t('inputToolbar.addCommandDesc')}
+                icon={<ChevronDownIcon className="-rotate-90" />}
+                onClick={() => {
+                  onAddCommand?.()
+                  closeMenuToComposer(() => setAddMenuOpen(false))
+                }}
+              />
+            </div>
+          </DropdownMenu>
+        </div>
+
         {/* Agent Selector */}
         <AnimatedPresence show={selectableAgents.length > 1} className={isCompact ? 'shrink-0' : ''}>
           <div className="relative">
@@ -626,31 +705,6 @@ export function InputToolbar({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-1 min-w-0">
-        <AnimatedPresence show>
-          <>
-            {/* 浏览器模式下的隐藏文件输入 */}
-            {useBrowserFileInput && supportsAnyFile && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={acceptString}
-                multiple
-                className="hidden"
-                onChange={e => {
-                  onFilesSelected(Array.from(e.target.files ?? []))
-                  e.currentTarget.value = ''
-                }}
-              />
-            )}
-            <IconButton
-              aria-label={t('inputToolbar.attachFile')}
-              disabled={controlsDisabled || !supportsAnyFile}
-              onClick={handleFileClick}
-            >
-              <PaperclipIcon />
-            </IconButton>
-          </>
-        </AnimatedPresence>
         <ContextUsageIndicator stats={contextStats} hasMessages={hasMessages} />
         {onModelChange && (
           <div className="min-w-0 max-w-[180px]">

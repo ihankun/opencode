@@ -41,6 +41,11 @@
     "replyToAgentMobile": "回复 Agent...",
     "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令）"
   },
+  "providerSetup": {
+    "title": "连接模型提供商后即可开始",
+    "description": "添加 API Key 或登录一个 Provider，模型会自动出现在选择器中。",
+    "action": "配置 Provider"
+  },
   "modelSelector": {
     "selectModel": "选择模型",
     "searchModels": "搜索模型...",
@@ -84,7 +89,8 @@
     "typePath": "输入路径...",
     "parent": "..（上级目录）",
     "noMatchingFolders": "没有匹配的文件夹",
-    "addCurrent": "添加当前目录"
+    "addCurrent": "添加当前目录",
+    "recentProjects": "最近项目"
   },
   "inputToolbar": {
     "default": "默认",
@@ -117,7 +123,13 @@
         "description": "不经询问即可使用所有工具，请谨慎选择"
       }
     },
+    "addContent": "添加内容",
     "attachFile": "附加文件",
+    "attachFileDesc": "上传图片、PDF、音频或视频",
+    "addReference": "引用文件或 Agent",
+    "addReferenceDesc": "在输入框中插入 @ 并选择上下文",
+    "addCommand": "插入命令",
+    "addCommandDesc": "在输入框中插入 / 并选择命令",
     "stopGeneration": "停止生成",
     "sendingMessage": "发送消息中",
     "sendMessage": "发送消息"

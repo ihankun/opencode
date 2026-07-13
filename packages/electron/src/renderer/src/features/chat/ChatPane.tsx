@@ -10,6 +10,7 @@ import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredVal
 import { Trans, useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
+import { PlugIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
@@ -27,7 +28,7 @@ import { messageStore, paneControllerStore, useHiddenModelKeys } from '../../sto
 import { restoreModelSelection } from '../../utils/sessionHelpers'
 import { findModelByKey, getModelKey } from '../../utils/modelUtils'
 import { useTheme } from '../../hooks/useTheme'
-import type { Attachment } from '../../api'
+import { getProviders, type Attachment } from '../../api'
 import type { MessageError } from '../../types/message'
 import { getInternalDragSnapshot, subscribeInternalDrag, subscribeInternalDrop } from '../../lib/internalDragCore'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
@@ -42,6 +43,7 @@ interface ChatPaneProps {
   onOpenSidebar?: () => void
   onToggleRightPanel?: () => void
   onOpenSettings?: () => void
+  onOpenProviderSettings?: () => void
   showSidebarButton?: boolean
   onSplitPane?: () => void
   onTogglePaneFullscreen?: () => void
@@ -128,6 +130,7 @@ export const ChatPane = memo(function ChatPane({
   onOpenSidebar,
   onToggleRightPanel,
   onOpenSettings,
+  onOpenProviderSettings,
   showSidebarButton = false,
   onSplitPane,
   onTogglePaneFullscreen,
@@ -160,6 +163,21 @@ export const ChatPane = memo(function ChatPane({
     () => models.filter(model => !hiddenModelKeys.includes(getModelKey(model))),
     [models, hiddenModelKeys],
   )
+  const [hasConnectedProvider, setHasConnectedProvider] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    void getProviders()
+      .then(result => {
+        if (!disposed) setHasConnectedProvider(result.connected.length > 0)
+      })
+      .catch(() => {
+        if (!disposed) setHasConnectedProvider(null)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [models])
   const {
     selectedModelKey,
     selectedVariant,
@@ -768,6 +786,7 @@ export const ChatPane = memo(function ChatPane({
       }
     : undefined
   const homeComposer = !routeSessionId
+  const showProviderSetupTip = homeComposer && !modelsLoading && hasConnectedProvider === false && !!onOpenProviderSettings
 
   // ============================================
   // Render
@@ -837,6 +856,24 @@ export const ChatPane = memo(function ChatPane({
             : 'absolute bottom-0 left-0 right-0 z-10 pointer-events-none'
         }
       >
+        {showProviderSetupTip && (
+          <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">
+            <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-accent-main-100/20 bg-bg-000/95 px-3 py-2.5 shadow-lg backdrop-blur-md">
+              <PlugIcon size={18} className="shrink-0 text-accent-main-100" />
+              <div className="min-w-0">
+                <div className="text-[length:var(--fs-sm)] font-medium text-text-100">{t('providerSetup.title')}</div>
+                <div className="text-[length:var(--fs-xs)] text-text-400">{t('providerSetup.description')}</div>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenProviderSettings}
+                className="shrink-0 rounded-md bg-accent-main-100 px-2.5 py-1.5 text-[length:var(--fs-xs)] font-medium text-oncolor-100 transition-colors hover:bg-accent-main-200"
+              >
+                {t('providerSetup.action')}
+              </button>
+            </div>
+          </div>
+        )}
         {(showCancelHint || (fullAutoHint && !showCancelHint)) && (
           <div className="absolute bottom-full inset-x-0 flex justify-center pb-2 pointer-events-none z-20">
             <div className="px-3 py-1.5 glass border border-border-200/60 rounded-lg shadow-lg text-[length:var(--fs-sm)] text-text-300 animate-in fade-in slide-in-from-bottom-2 duration-150">

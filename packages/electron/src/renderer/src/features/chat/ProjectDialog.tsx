@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon, ChevronDownIcon } from '../../components/Icons'
+import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon, ChevronDownIcon, ClockIcon } from '../../components/Icons'
 import { listDirectory, getPath } from '../../api'
-import { fileErrorHandler } from '../../utils'
+import { fileErrorHandler, getDirectoryName } from '../../utils'
 import { Dialog } from '../../components/ui/Dialog'
 import { isElectron, getDesktopPlatform } from '../../utils/tauri'
+import { useDirectory } from '../../contexts/useDirectory'
 
 // ============================================
 // Types
@@ -61,6 +62,7 @@ function getFilterText(path: string): string {
 
 export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: ProjectDialogProps) {
   const { t } = useTranslation(['chat', 'common'])
+  const { savedDirectories, recentProjects } = useDirectory()
   // State
   const [inputValue, setInputValue] = useState('')
   const [items, setItems] = useState<FileItem[]>([])
@@ -94,6 +96,14 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
     const lower = filterText.toLowerCase()
     return items.filter(item => item.name.toLowerCase().startsWith(lower))
   }, [items, filterText])
+
+  const recentDirectories = useMemo(
+    () =>
+      [...savedDirectories]
+        .toSorted((a, b) => (recentProjects[b.path] ?? b.addedAt) - (recentProjects[a.path] ?? a.addedAt))
+        .slice(0, 5),
+    [recentProjects, savedDirectories],
+  )
 
   // ==========================================
   // Initialize
@@ -392,6 +402,26 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
           </div>
         ) : (
           <div className="space-y-0.5">
+            {!filterText && recentDirectories.length > 0 && (
+              <div className="mb-2 rounded-lg border border-border-200/45 bg-bg-100/35 p-1.5">
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+                  <ClockIcon size={12} />
+                  {t('projectDialog.recentProjects')}
+                </div>
+                {recentDirectories.map(directory => (
+                  <button
+                    key={directory.path}
+                    type="button"
+                    onClick={() => handleSelectFolder(directory.path)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-bg-200/60"
+                    title={directory.path}
+                  >
+                    <FolderIcon size={14} className="shrink-0 text-text-400" />
+                    <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)] text-text-200">{directory.name || getDirectoryName(directory.path) || directory.path}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {/* Go Up */}
             {inputValue.split(PATH_SEP).filter(Boolean).length > 0 && !(isWin && /^[a-zA-Z]:\/?$/.test(inputValue)) && (
               <ListItem

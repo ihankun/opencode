@@ -683,6 +683,9 @@ function App() {
   const openSettings = useCallback(() => {
     openSettingsTab('servers')
   }, [openSettingsTab])
+  const openProviderSettings = useCallback(() => {
+    openSettingsTab('providers')
+  }, [openSettingsTab])
   const openAboutSettings = useCallback(() => {
     openSettingsTab('about')
   }, [openSettingsTab])
@@ -704,6 +707,7 @@ function App() {
         onSplitPane={splitPaneEnabled && !paneLayout.fullscreenPaneId ? handleEnterSplitMode : undefined}
         onTogglePaneFullscreen={paneLayout.isSplit ? handleToggleFocusedPaneFullscreen : undefined}
         onOpenSettings={openSettings}
+        onOpenProviderSettings={openProviderSettings}
         navigatePaneToSession={navigatePaneToSession}
         navigatePaneHome={navigatePaneHome}
       />
@@ -720,6 +724,7 @@ function App() {
       handleEnterSplitMode,
       handleToggleFocusedPaneFullscreen,
       openSettings,
+      openProviderSettings,
       navigatePaneToSession,
       navigatePaneHome,
     ],

@@ -41,6 +41,11 @@
     "replyToAgentMobile": "Reply to Agent...",
     "replyToAgent": "Reply to Agent (type @ to mention, / for commands)"
   },
+  "providerSetup": {
+    "title": "Connect a model provider to get started",
+    "description": "Add an API key or sign in to a provider. Its models will appear automatically.",
+    "action": "Set up provider"
+  },
   "modelSelector": {
     "selectModel": "Select model",
     "searchModels": "Search models...",
@@ -84,7 +89,8 @@
     "typePath": "Type path...",
     "parent": ".. (Parent)",
     "noMatchingFolders": "No matching folders",
-    "addCurrent": "Add current"
+    "addCurrent": "Add current",
+    "recentProjects": "Recent projects"
   },
   "inputToolbar": {
     "default": "Default",
@@ -117,7 +123,13 @@
         "description": "Use all tools without asking; choose with care"
       }
     },
+    "addContent": "Add content",
     "attachFile": "Attach file",
+    "attachFileDesc": "Upload an image, PDF, audio, or video",
+    "addReference": "Reference a file or Agent",
+    "addReferenceDesc": "Insert @ and choose context in the composer",
+    "addCommand": "Insert a command",
+    "addCommandDesc": "Insert / and choose a command",
     "stopGeneration": "Stop generation",
     "sendingMessage": "Sending message",
     "sendMessage": "Send message"
