@@ -295,7 +295,7 @@ async function restartServer() {
 }
 
 function allowedOrigins(url: string) {
-  const defaults = ["custom-opencode://renderer", "http://localhost:46237", "http://127.0.0.1:46237"]
+  const defaults = ["opencodex://renderer", "http://localhost:46237", "http://127.0.0.1:46237"]
   try {
     const origin = new URL(url).origin
     if (origin === "null") return defaults
@@ -324,7 +324,7 @@ process.on("unhandledRejection", (error) => {
 
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: "custom-opencode",
+    scheme: "opencodex",
     privileges: {
       standard: true,
       secure: true,

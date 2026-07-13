@@ -51,6 +51,7 @@ export function path() {
     process.env.OPENCODE_DISABLE_CHANNEL_DB === "true"
   )
     return join(Global.Path.data, "opencode.db")
+  if (Flag.OPENCODE_CLIENT === "opencodex") return join(Global.Path.data, "opencodex.db")
   return join(Global.Path.data, `opencode-${InstallationChannel.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
 }
 
