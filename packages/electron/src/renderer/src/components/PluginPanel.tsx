@@ -23,6 +23,7 @@ import type { Config } from '../types/api/config'
 type PluginOptions = Record<string, unknown>
 type PluginEntry = string | [string, PluginOptions]
 type PluginSearchResult = Awaited<ReturnType<typeof window.customOpenCode.searchPlugins>>[number]
+type PluginMetadata = Awaited<ReturnType<typeof window.customOpenCode.inspectPlugins>>[number]
 
 type PluginDialog =
   | {
@@ -119,6 +120,7 @@ export const PluginPanel = memo(function PluginPanel() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [installingSpec, setInstallingSpec] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
+  const [pluginMetadata, setPluginMetadata] = useState<Record<string, PluginMetadata>>({})
   const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
 
   const plugins = useMemo(() => readPlugins(config), [config])
@@ -141,6 +143,20 @@ export const PluginPanel = memo(function PluginPanel() {
     setLoading(true)
     void loadPlugins()
   }, [loadPlugins])
+
+  useEffect(() => {
+    if (typeof window.customOpenCode?.inspectPlugins !== 'function') return
+    let disposed = false
+    void window.customOpenCode.inspectPlugins(plugins.map(pluginSpec)).then(items => {
+      if (disposed) return
+      setPluginMetadata(Object.fromEntries(items.map(item => [item.spec, item])))
+    }).catch(() => {
+      if (!disposed) setPluginMetadata({})
+    })
+    return () => {
+      disposed = true
+    }
+  }, [plugins])
 
   const handleRefresh = useCallback(() => {
     setLoading(true)
@@ -237,6 +253,24 @@ export const PluginPanel = memo(function PluginPanel() {
     async (index: number) => {
       try {
         await savePlugins(plugins.filter((_, pluginIndex) => pluginIndex !== index))
+      } catch {
+        setError(t('pluginPanel.failedToSave'))
+      }
+    },
+    [plugins, savePlugins, t],
+  )
+
+  const handleUpdate = useCallback(
+    async (index: number, metadata: PluginMetadata) => {
+      if (!metadata.latestVersion) return
+      const plugin = plugins[index]
+      if (!plugin) return
+      const options = pluginOptions(plugin)
+      const nextSpec = `${metadata.packageName}@${metadata.latestVersion}`
+      const nextPlugin: PluginEntry = hasOptions(options) ? [nextSpec, options] : nextSpec
+      try {
+        await savePlugins(plugins.map((item, itemIndex) => (itemIndex === index ? nextPlugin : item)))
+        setInstallMessage(t('pluginPanel.updatedTo', { version: metadata.latestVersion }))
       } catch {
         setError(t('pluginPanel.failedToSave'))
       }
@@ -413,8 +447,13 @@ export const PluginPanel = memo(function PluginPanel() {
                 <PluginRow
                   key={`${pluginSpec(plugin)}-${index}`}
                   plugin={plugin}
+                  metadata={pluginMetadata[pluginSpec(plugin)]}
                   disabled={saving}
                   onEdit={() => openEditDialog(index)}
+                  onUpdate={() => {
+                    const metadata = pluginMetadata[pluginSpec(plugin)]
+                    if (metadata) void handleUpdate(index, metadata)
+                  }}
                   onRemove={() => void handleRemove(index)}
                 />
               ))}
@@ -480,13 +519,17 @@ function PluginSearchRow({
 
 function PluginRow({
   plugin,
+  metadata,
   disabled,
   onEdit,
+  onUpdate,
   onRemove,
 }: {
   plugin: PluginEntry
+  metadata?: PluginMetadata
   disabled: boolean
   onEdit: () => void
+  onUpdate: () => void
   onRemove: () => void
 }) {
   const { t } = useTranslation(['components'])
@@ -505,8 +548,28 @@ function PluginRow({
           <span className="h-1 w-1 rounded-full bg-text-400/60" />
           <span>{hasOptions(options) ? t('pluginPanel.optionsEnabled') : t('pluginPanel.noOptions')}</span>
         </div>
+        {metadata?.source === 'npm' && (
+          <div className="mt-0.5 flex items-center gap-1.5 text-text-500 text-[length:var(--fs-xxs)]">
+            <span>{metadata.configuredVersion ? `v${metadata.configuredVersion}` : t('pluginPanel.followLatest')}</span>
+            {metadata.latestVersion && <span>{t('pluginPanel.latestVersion', { version: metadata.latestVersion })}</span>}
+            {metadata.updateAvailable && <span className="text-warning-100">{t('pluginPanel.updateAvailable')}</span>}
+          </div>
+        )}
+        {metadata?.source === 'local' && <div className="mt-0.5 truncate text-text-500 text-[length:var(--fs-xxs)]">{t('pluginPanel.localPath')}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {metadata?.updateAvailable && (
+          <button
+            type="button"
+            onClick={onUpdate}
+            disabled={disabled}
+            aria-label={t('pluginPanel.updatePlugin')}
+            title={t('pluginPanel.updatePlugin')}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-warning-100 transition-colors hover:bg-bg-200 hover:text-text-100 disabled:opacity-50"
+          >
+            <RetryIcon size={13} />
+          </button>
+        )}
         <button
           type="button"
           onClick={onEdit}

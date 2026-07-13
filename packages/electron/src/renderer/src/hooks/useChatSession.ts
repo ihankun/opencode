@@ -104,6 +104,22 @@ interface LiveRetryStatus {
   next: number
 }
 
+interface ModelRecovery {
+  failedModel: string
+}
+
+function isUnavailableModelError(error: unknown) {
+  const data =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string'
+          ? error.message
+          : ''
+  return /(?:unknown|invalid|unavailable|retired|inactive|disabled|not found|does not exist).{0,80}(?:model|provider)|(?:model|provider).{0,80}(?:unknown|invalid|unavailable|retired|inactive|disabled|not found|does not exist)/i.test(data)
+}
+
 function buildCompletedNotificationBody(messages: UIMessage[]) {
   const lastAssistant = [...messages].reverse().find(message => message.info.role === 'assistant')
   const text = lastAssistant ? getMessageText(lastAssistant).replace(/\s+/g, ' ').trim() : ''
@@ -148,6 +164,7 @@ export function useChatSession({
     () => serverStorage.get(`${STORAGE_KEY_SELECTED_AGENT}:${paneId}`) || '',
   )
   const [restoredContent, setRestoredContent] = useState<{ sessionId: string; content: RevertHistoryItem } | null>(null)
+  const [modelRecovery, setModelRecovery] = useState<ModelRecovery | null>(null)
 
   const setSelectedAgent = useCallback(
     (agentName: string) => {
@@ -755,6 +772,8 @@ export function useChatSession({
           directory: input.directory,
         })
 
+        setModelRecovery(null)
+
         // 兜底：等待短暂时间后检查 SSE 是否已推送用户消息，
         // 若未收到则主动拉取补齐，避免 SSE 断流导致用户消息不显示
         const pullSessionId = sessionId
@@ -788,6 +807,17 @@ export function useChatSession({
         return true
       } catch (error) {
         handleError('send message', error)
+        if (isUnavailableModelError(error)) {
+          setModelRecovery({ failedModel: `${input.model.providerID}/${input.model.modelID}` })
+          notificationStore.push(
+            'error',
+            '所选模型不可用',
+            `“${input.model.providerID}/${input.model.modelID}”无法继续使用。模型列表已刷新，原消息仍保留在输入框中。`,
+            sessionId ?? '',
+            input.directory,
+          )
+          void refetchModels()
+        }
         if (sessionId) {
           if (rollbackSnapshot) {
             messageStore.restoreSendRollback(sessionId, rollbackSnapshot)
@@ -800,7 +830,7 @@ export function useChatSession({
         return false
       }
     },
-    [routeSessionId, navigateToSession, createSession, routeDirectoryForSession, paneId],
+    [routeSessionId, navigateToSession, createSession, routeDirectoryForSession, paneId, refetchModels],
   )
 
   // Send message handler
@@ -1249,6 +1279,7 @@ export function useChatSession({
     loadError,
     hasMoreHistory,
     retryStatus,
+    modelRecovery,
     agents,
     selectedAgent,
     setSelectedAgent,
@@ -1269,6 +1300,7 @@ export function useChatSession({
     loadMoreHistory,
     handleRedoAll,
     clearRevert: clearRestoredContent,
+    clearModelRecovery: () => setModelRecovery(null),
 
     // Animation
     registerMessage,

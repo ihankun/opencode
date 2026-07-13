@@ -8,7 +8,7 @@ import { serverStorage } from '../utils/perServerStorage'
 // Full Auto 模式：off / session / global
 export type FullAutoMode = 'off' | 'session' | 'global'
 export type AlwaysAllowMode = 'backend' | 'frontend'
-export type ApprovalMode = 'ask' | 'risk' | 'full'
+export type ApprovalMode = 'ask' | 'writes' | 'risk' | 'full'
 
 export type SessionPermissionRule = {
   permission: string
@@ -24,6 +24,30 @@ export function approvalPermissionRules(mode: ApprovalMode): SessionPermissionRu
       pattern: '*',
       action: 'ask' as const,
     }))
+  }
+  if (mode === 'writes') {
+    return [
+      { permission: 'edit', pattern: '*', action: 'ask' },
+      { permission: 'bash', pattern: '*', action: 'ask' },
+      ...[
+        'ls*',
+        'pwd',
+        'git status*',
+        'git diff*',
+        'git log*',
+        'git show*',
+        'git branch*',
+        'git remote*',
+        'git rev-parse*',
+        'cat *',
+        'head *',
+        'tail *',
+        'sed -n *',
+        'rg *',
+        'find *',
+        'which *',
+      ].map(pattern => ({ permission: 'bash', pattern, action: 'allow' as const })),
+    ]
   }
   return []
 }

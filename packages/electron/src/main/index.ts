@@ -353,6 +353,7 @@ ipcMain.handle("security:set", async (_event, value: unknown) => {
   return config
 })
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
+ipcMain.handle("plugin:inspect", (_event, specs: unknown) => inspectPlugins(specs))
 ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("task:list", () => taskScheduler.list())
@@ -494,6 +495,37 @@ async function searchPlugins(raw: string) {
     url: `https://www.npmjs.com/package/${item.name}`,
     downloads: await npmDownloads(item.name),
   })))
+}
+
+async function inspectPlugins(value: unknown) {
+  const specs = Array.isArray(value) ? value.filter(isString).slice(0, 50) : []
+  return Promise.all(specs.map(async (spec) => {
+    if (isPathPluginSpec(spec)) {
+      return {
+        spec,
+        packageName: spec,
+        configuredVersion: "",
+        latestVersion: "",
+        source: "local" as const,
+        url: "",
+        updateAvailable: false,
+      }
+    }
+
+    const parsed = parseNpmSpecifier(spec)
+    const latest = await readNpmManifest(parsed.name).catch(() => undefined)
+    const configuredVersion = parsed.version === "latest" ? "" : parsed.version
+    const latestVersion = latest?.version ?? ""
+    return {
+      spec,
+      packageName: parsed.name,
+      configuredVersion,
+      latestVersion,
+      source: "npm" as const,
+      url: `https://www.npmjs.com/package/${parsed.name}`,
+      updateAvailable: Boolean(configuredVersion && latestVersion && configuredVersion !== latestVersion),
+    }
+  }))
 }
 
 async function npmDownloads(name: string) {

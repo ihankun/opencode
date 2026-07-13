@@ -63,11 +63,12 @@ interface InputToolbarProps {
   hasMessages?: boolean
 }
 
-const approvalModes: ApprovalMode[] = ['ask', 'risk', 'full']
+const approvalModes: ApprovalMode[] = ['ask', 'writes', 'risk', 'full']
 
 function ApprovalModeIcon({ mode }: { mode: ApprovalMode }) {
   if (mode === 'ask') return <HandIcon />
   if (mode === 'full') return <ShieldIcon className="text-danger-100" />
+  if (mode === 'writes') return <ShieldIcon className="text-warning-100" />
   return <PermissionListIcon className="text-accent-main-100" />
 }
 

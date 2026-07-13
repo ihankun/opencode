@@ -24,6 +24,16 @@ export type CustomOpenCodePluginSearchResult = {
   url: string
 }
 
+export type CustomOpenCodePluginMetadata = {
+  spec: string
+  packageName: string
+  configuredVersion: string
+  latestVersion: string
+  source: 'npm' | 'local'
+  url: string
+  updateAvailable: boolean
+}
+
 export type CustomOpenCodeMcpSearchResult = {
   name: string
   version: string
@@ -153,6 +163,7 @@ export type CustomOpenCodeApi = {
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
+  inspectPlugins(specs: string[]): Promise<CustomOpenCodePluginMetadata[]>
   searchMcpServers(query: string): Promise<CustomOpenCodeMcpSearchResult[]>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   listTasks(): Promise<CustomOpenCodeScheduledTask[]>
@@ -198,6 +209,7 @@ const api: CustomOpenCodeApi = {
     return () => ipcRenderer.removeListener("server:updated", listener)
   },
   searchPlugins: (query) => ipcRenderer.invoke("plugin:search", query),
+  inspectPlugins: (specs) => ipcRenderer.invoke("plugin:inspect", specs),
   searchMcpServers: (query) => ipcRenderer.invoke("mcp:search", query),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   listTasks: () => ipcRenderer.invoke("task:list"),

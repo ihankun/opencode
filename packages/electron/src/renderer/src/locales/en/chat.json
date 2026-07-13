@@ -46,6 +46,11 @@
     "description": "Add an API key or sign in to a provider. Its models will appear automatically.",
     "action": "Set up provider"
   },
+  "modelRecovery": {
+    "title": "Selected model is unavailable",
+    "description": "{{model}} can no longer be used. The model list was refreshed and your message remains in the composer.",
+    "action": "Choose model"
+  },
   "modelSelector": {
     "selectModel": "Select model",
     "searchModels": "Search models...",
@@ -113,6 +118,10 @@
       "ask": {
         "label": "Ask for approval",
         "description": "Always ask before editing files, running commands, or accessing external paths or the internet"
+      },
+      "writes": {
+        "label": "Confirm writes",
+        "description": "Reads and common read-only commands run automatically; edits and other commands still ask"
       },
       "risk": {
         "label": "Approve for me",

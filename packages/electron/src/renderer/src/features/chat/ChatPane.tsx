@@ -10,7 +10,7 @@ import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredVal
 import { Trans, useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
-import { PlugIcon } from '../../components/Icons'
+import { AlertCircleIcon, CloseIcon, PlugIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
@@ -280,6 +280,7 @@ export const ChatPane = memo(function ChatPane({
     loadError,
     hasMoreHistory,
     retryStatus,
+    modelRecovery,
     effectiveDirectory,
 
     pendingPermissionRequests,
@@ -292,6 +293,7 @@ export const ChatPane = memo(function ChatPane({
     loadMoreHistory,
     handleRedoAll,
     clearRevert,
+    clearModelRecovery,
 
     registerMessage,
     registerInputBox,
@@ -856,6 +858,32 @@ export const ChatPane = memo(function ChatPane({
             : 'absolute bottom-0 left-0 right-0 z-10 pointer-events-none'
         }
       >
+        {modelRecovery && (
+          <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">
+            <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-warning-100/30 bg-bg-000/95 px-3 py-2.5 shadow-lg backdrop-blur-md">
+              <AlertCircleIcon size={18} className="shrink-0 text-warning-100" />
+              <div className="min-w-0">
+                <div className="text-[length:var(--fs-sm)] font-medium text-text-100">{t('modelRecovery.title')}</div>
+                <div className="text-[length:var(--fs-xs)] text-text-400">{t('modelRecovery.description', { model: modelRecovery.failedModel })}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => modelSelectorRef.current?.openMenu()}
+                className="shrink-0 rounded-md bg-bg-200 px-2.5 py-1.5 text-[length:var(--fs-xs)] font-medium text-text-200 transition-colors hover:bg-bg-300"
+              >
+                {t('modelRecovery.action')}
+              </button>
+              <button
+                type="button"
+                onClick={clearModelRecovery}
+                aria-label={t('common:dismiss')}
+                className="shrink-0 text-text-400 transition-colors hover:text-text-200"
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
+          </div>
+        )}
         {showProviderSetupTip && (
           <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">
             <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-accent-main-100/20 bg-bg-000/95 px-3 py-2.5 shadow-lg backdrop-blur-md">

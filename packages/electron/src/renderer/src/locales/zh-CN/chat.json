@@ -46,6 +46,11 @@
     "description": "添加 API Key 或登录一个 Provider，模型会自动出现在选择器中。",
     "action": "配置 Provider"
   },
+  "modelRecovery": {
+    "title": "所选模型不可用",
+    "description": "{{model}} 已无法使用。模型列表已刷新，原消息仍保留在输入框中。",
+    "action": "选择模型"
+  },
   "modelSelector": {
     "selectModel": "选择模型",
     "searchModels": "搜索模型...",
@@ -113,6 +118,10 @@
       "ask": {
         "label": "请求批准",
         "description": "编辑文件、执行命令、访问外部目录或互联网时始终询问"
+      },
+      "writes": {
+        "label": "仅确认写入",
+        "description": "读取与常见只读命令自动执行；编辑文件及其他命令仍会请求批准"
       },
       "risk": {
         "label": "替我审批",
