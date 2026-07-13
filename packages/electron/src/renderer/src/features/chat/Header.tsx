@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   PanelRightIcon,
@@ -9,12 +9,10 @@ import {
   MaximizeIcon,
   MinimizeIcon,
   ArchiveIcon,
-  MoreIcon,
   PinIcon,
   PencilIcon,
 } from '../../components/Icons'
 import { IconButton } from '../../components/ui'
-import { ShareDialog } from './ShareDialog'
 import { messageStore, useMessageStore } from '../../store'
 import { useLayoutStore, layoutStore } from '../../store/layoutStore'
 import { useSessionContext } from '../../contexts/useSessionContext'
@@ -43,9 +41,17 @@ interface SessionTitleControlProps {
   setIsEditingTitle: (value: boolean) => void
   handleRename: () => void
   handleStartEdit: () => void
-  onShare: () => void
+  sessionId: string | null
+  sessionMenuOpen: boolean
+  onToggleSessionMenu: () => void
+  onPin: () => void
+  onArchive: () => void
   clickToRenameTitle: string
-  shareTitle: string
+  sessionActionsTitle: string
+  pinTitle: string
+  renameTitle: string
+  archiveTitle: string
+  menuRef: RefObject<HTMLDivElement | null>
 }
 
 function SessionTitleControl({
@@ -58,9 +64,17 @@ function SessionTitleControl({
   setIsEditingTitle,
   handleRename,
   handleStartEdit,
-  onShare,
+  sessionId,
+  sessionMenuOpen,
+  onToggleSessionMenu,
+  onPin,
+  onArchive,
   clickToRenameTitle,
-  shareTitle,
+  sessionActionsTitle,
+  pinTitle,
+  renameTitle,
+  archiveTitle,
+  menuRef,
 }: SessionTitleControlProps) {
   const inputClass = compact
     ? 'px-2 py-1.5 text-[length:var(--fs-base)] font-medium text-text-100 bg-transparent border-none outline-none w-[160px] h-full'
@@ -71,12 +85,13 @@ function SessionTitleControl({
   const dividerClass = compact
     ? 'w-[1.5px] h-3 bg-border-200/50 mx-0.5 shrink-0'
     : 'w-[1.5px] h-3 bg-border-200/50 mx-0.5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(any-pointer:coarse)]:opacity-100 transition-opacity'
-  const shareButtonClass = compact
+  const menuButtonClass = compact
     ? 'p-1 text-text-400 hover:text-text-100 transition-colors rounded-md hover:bg-bg-300/50 shrink-0'
     : 'p-1 text-text-400 hover:text-text-100 transition-colors rounded-md hover:bg-bg-300/50 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(any-pointer:coarse)]:opacity-100 shrink-0'
 
   return (
     <div
+      ref={menuRef}
       className={`flex items-center group ${isEditingTitle ? 'bg-bg-200/50 ring-1 ring-accent-main-100' : 'bg-transparent hover:bg-bg-200/50 border border-transparent hover:border-border-200/50'} rounded-lg transition-all duration-200 p-0.5 min-w-0 shrink`}
     >
       {isEditingTitle ? (
@@ -98,12 +113,21 @@ function SessionTitleControl({
           </button>
       )}
 
-      {!isEditingTitle && (
+      {!isEditingTitle && sessionId && (
         <>
           <div className={dividerClass} />
-          <button type="button" className={shareButtonClass} title={shareTitle} aria-label={shareTitle} onClick={onShare}>
-            <ChevronDownIcon size={12} />
-          </button>
+          <div className="relative shrink-0">
+            <button type="button" className={menuButtonClass} title={sessionActionsTitle} aria-label={sessionActionsTitle} onClick={onToggleSessionMenu}>
+              <ChevronDownIcon size={12} />
+            </button>
+            {sessionMenuOpen && (
+              <div className="absolute left-0 top-full z-[70] mt-1 w-40 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
+                <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PinIcon size={14} />{pinTitle}</button>
+                <button type="button" onClick={() => { onToggleSessionMenu(); handleStartEdit() }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PencilIcon size={14} />{renameTitle}</button>
+                <button type="button" onClick={onArchive} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><ArchiveIcon size={14} />{archiveTitle}</button>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -125,7 +149,6 @@ export function Header({
   const { currentDirectory, pathInfo } = useDirectory()
   const { presentation, interaction } = useChatViewport()
 
-  const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
   const [locationMenuOpen, setLocationMenuOpen] = useState(false)
   const [locationApps, setLocationApps] = useState<Array<{ id: string; name: string; icon?: string }>>([])
@@ -133,6 +156,7 @@ export function Header({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const sessionMenuRef = useRef<HTMLDivElement>(null)
 
   const sessionTitle = currentSessionTitle || t('header.newChat')
   const isCompact = presentation.isCompact
@@ -160,6 +184,22 @@ export function Header({
       titleInputRef.current.select()
     }
   }, [isEditingTitle])
+
+  useEffect(() => {
+    if (!sessionMenuOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (event.target instanceof Node && !sessionMenuRef.current?.contains(event.target)) setSessionMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSessionMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [sessionMenuOpen])
 
   const handleStartEdit = () => {
     if (!sessionId) return
@@ -259,18 +299,26 @@ export function Header({
       setIsEditingTitle={setIsEditingTitle}
       handleRename={handleRename}
       handleStartEdit={handleStartEdit}
-      onShare={() => setShareDialogOpen(true)}
+      sessionId={sessionId}
+      sessionMenuOpen={sessionMenuOpen}
+      onToggleSessionMenu={() => setSessionMenuOpen(open => !open)}
+      onPin={handlePin}
+      onArchive={() => void handleArchive()}
       clickToRenameTitle={t('header.clickToRename')}
-      shareTitle={t('header.shareSession')}
+      sessionActionsTitle={t('header.sessionActions')}
+      pinTitle={t('header.pinSession')}
+      renameTitle={t('header.renameSession')}
+      archiveTitle={t('header.archiveSession')}
+      menuRef={sessionMenuRef}
     />
   )
 
   return (
     <div
       data-chat-header="true"
-      className={`mobile-safe-topbar-14 window-drag-region flex justify-between items-center z-20 bg-[hsl(var(--chat-bg))] transition-colors duration-200 relative ${isCompact ? 'px-2' : 'px-4'}`}
+      className={`mobile-safe-topbar-14 window-drag-region flex justify-between items-center z-[60] bg-[hsl(var(--chat-bg))] transition-colors duration-200 relative ${isCompact ? 'px-2' : 'px-4'}`}
     >
-      <div className="flex items-center gap-2 min-w-0 shrink-1 z-20">
+      <div className="flex items-center gap-2 min-w-0 shrink-1 z-[60]">
         {interaction.sidebarBehavior === 'overlay' && onOpenSidebar && (
           <IconButton
             aria-label={t('header.openSidebar')}
@@ -282,23 +330,9 @@ export function Header({
         )}
 
         <div className="min-w-0">{titleControl}</div>
-        {sessionId && (
-          <div className="relative">
-            <IconButton aria-label={t('header.sessionActions')} onClick={() => setSessionMenuOpen(open => !open)} className="text-text-400 hover:bg-bg-200/50 hover:text-text-100">
-              <MoreIcon size={18} />
-            </IconButton>
-            {sessionMenuOpen && (
-              <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
-                <button type="button" onClick={handlePin} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PinIcon size={14} />{t('header.pinSession')}</button>
-                <button type="button" onClick={() => { setSessionMenuOpen(false); handleStartEdit() }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PencilIcon size={14} />{t('header.renameSession')}</button>
-                <button type="button" onClick={() => void handleArchive()} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><ArchiveIcon size={14} />{t('header.archiveSession')}</button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      <div className="flex items-center gap-1 pointer-events-auto shrink-0 z-20">
+      <div className="flex items-center gap-1 pointer-events-auto shrink-0 z-[60]">
         <div className="flex items-center gap-0.5">
           {projectLocation && (
             <div className="relative">
@@ -358,8 +392,6 @@ export function Header({
           </IconButton>
         </div>
       </div>
-
-      <ShareDialog isOpen={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
 
       <div className="absolute top-full left-0 right-0 h-8 bg-gradient-to-b from-bg-100 to-transparent pointer-events-none z-10" />
     </div>

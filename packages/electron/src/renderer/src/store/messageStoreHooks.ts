@@ -26,7 +26,6 @@ function createSnapshot(): MessageStoreSnapshot {
     hasMoreHistory: messageStore.getHasMoreHistory(sessionId),
     sessionDirectory: messageStore.getSessionDirectory(sessionId),
     sessionTitle: messageStore.getSessionTitle(sessionId),
-    shareUrl: messageStore.getShareUrl(sessionId),
     canUndo: messageStore.canUndo(sessionId),
     canRedo: messageStore.canRedo(sessionId),
     redoSteps: messageStore.getRedoSteps(sessionId),

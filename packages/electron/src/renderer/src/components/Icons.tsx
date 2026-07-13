@@ -43,7 +43,6 @@ import {
   Eye,
   Maximize,
   Minimize,
-  Share,
   Link,
   Globe,
   MessageSquare,
@@ -156,7 +155,6 @@ export const ReturnIcon = wrap(CornerDownLeft)
 export const EyeIcon = wrap(Eye)
 export const MaximizeIcon = wrap(Maximize)
 export const MinimizeIcon = wrap(Minimize)
-export const ShareIcon = wrap(Share)
 export const LinkIcon = wrap(Link)
 export const ExternalLinkIcon = wrap(ExternalLink)
 export const GlobeIcon = wrap(Globe)

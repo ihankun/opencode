@@ -118,7 +118,6 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
               ...(messagesResult.ok ? { hasMoreHistory: messagesResult.messages.length >= INITIAL_MESSAGE_LIMIT } : {}),
               directory: sessionInfo?.directory ?? dir ?? '',
               title: sessionInfo?.title,
-              shareUrl: sessionInfo?.share?.url,
             })
           })
           .catch(() => {
@@ -159,7 +158,6 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
             directory: sessionInfo?.directory ?? dir ?? '',
             title: sessionInfo?.title,
             loadState: 'loaded',
-            shareUrl: sessionInfo?.share?.url,
           })
           onLoadComplete?.()
           cursorRef.current.set(sid, Math.max(INITIAL_MESSAGE_LIMIT, apiMessages.length))
@@ -174,7 +172,6 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
           title: sessionInfo?.title,
           hasMoreHistory: apiMessages.length >= INITIAL_MESSAGE_LIMIT,
           revertState: sessionInfo?.revert ?? null,
-          shareUrl: sessionInfo?.share?.url,
         })
 
         cursorRef.current.set(sid, Math.max(INITIAL_MESSAGE_LIMIT, apiMessages.length))

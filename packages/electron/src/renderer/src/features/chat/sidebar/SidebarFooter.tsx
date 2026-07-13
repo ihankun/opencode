@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import { ShareDialog } from '../ShareDialog'
 import {
   CogIcon,
   SunIcon,
   MoonIcon,
   SystemIcon,
-  ShareIcon,
 } from '../../../components/Icons'
 import { useTheme } from '../../../hooks'
 
@@ -43,7 +41,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
-  const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -217,17 +214,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
             <button
               onClick={() => {
                 closeMenu()
-                setShareDialogOpen(true)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-            >
-              <ShareIcon size={14} />
-              <span>{t('sidebar.shareChat')}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                closeMenu()
                 onOpenSettings?.()
               }}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
@@ -278,7 +264,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
       </div>
 
       {floatingMenu}
-      <ShareDialog isOpen={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
     </div>
   )
 }

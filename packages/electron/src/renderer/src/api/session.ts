@@ -203,22 +203,6 @@ export async function unrevertSession(sessionId: string, directory?: string): Pr
 }
 
 /**
- * 分享 session
- */
-export async function shareSession(sessionId: string, directory?: string): Promise<ApiSession> {
-  const sdk = getSDKClient()
-  return unwrap(await sdk.session.share({ sessionID: sessionId, directory: formatPathForApi(directory) }))
-}
-
-/**
- * 取消分享 session
- */
-export async function unshareSession(sessionId: string, directory?: string): Promise<ApiSession> {
-  const sdk = getSDKClient()
-  return unwrap(await sdk.session.unshare({ sessionID: sessionId, directory: formatPathForApi(directory) }))
-}
-
-/**
  * Fork session
  */
 export async function forkSession(sessionId: string, messageId?: string, directory?: string): Promise<ApiSession> {

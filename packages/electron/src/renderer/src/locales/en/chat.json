@@ -4,7 +4,6 @@
     "newChat": "New Chat",
     "openSidebar": "Open sidebar",
     "clickToRename": "Click to rename",
-    "shareSession": "Share session",
     "sessionActions": "Chat options",
     "pinSession": "Pin chat",
     "renameSession": "Rename chat",
@@ -58,17 +57,6 @@
   "retryStatus": {
     "retrying": "Retrying (attempt {{attempt}})",
     "nextIn": "next in {{label}}"
-  },
-  "shareDialog": {
-    "title": "Share Chat",
-    "publicLink": "Public Link",
-    "publicLinkDesc": "Anyone with this link can view this chat session.",
-    "failedCreate": "Failed to create share link",
-    "failedRemove": "Failed to remove share link",
-    "copyLink": "Copy link",
-    "stopSharing": "Stop sharing",
-    "createPublicLink": "Create public link",
-    "creatingLink": "Creating link..."
   },
   "questionDialog": {
     "title": "Question",
@@ -204,7 +192,6 @@
       "error": "Connection error",
       "unknown": "Unknown"
     },
-    "shareChat": "Share Chat",
     "settings": "Settings",
     "noProjectFoldersYet": "No project folders yet",
     "addProjectDesc": "Add a project to browse recent chats by folder.",
