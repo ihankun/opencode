@@ -21,6 +21,7 @@ import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
+import { sandboxCommand, sandboxRisks } from "@/security"
 
 export { Parameters } from "./shell/prompt"
 
@@ -79,6 +80,16 @@ type Scan = {
 type Chunk = {
   text: string
   size: number
+}
+
+type RunInput = {
+  shell: string
+  command: string
+  displayCommand?: string
+  hostCommand?: string
+  cwd: string
+  env: NodeJS.ProcessEnv
+  timeout: number
 }
 
 const resolveWasm = (asset: string) => {
@@ -425,14 +436,8 @@ export const ShellTool = Tool.define(
       }
     })
 
-    const run = Effect.fn("ShellTool.run")(function* (
-      input: {
-        shell: string
-        command: string
-        cwd: string
-        env: NodeJS.ProcessEnv
-        timeout: number
-      },
+    const run: (input: RunInput, ctx: Tool.Context) => Effect.Effect<Tool.ExecuteResult> = Effect.fn("ShellTool.run")(function* (
+      input: RunInput,
       ctx: Tool.Context,
     ) {
       const limits = yield* trunc.limits()
@@ -566,6 +571,15 @@ export const ShellTool = Tool.define(
       }
       if (aborted) meta.push("User aborted the command")
       const raw = list.map((item) => item.text).join("")
+      if (input.hostCommand && sandboxViolation(raw)) {
+        yield* ctx.ask({
+          permission: "sandbox",
+          patterns: [`command:${input.hostCommand}`],
+          always: [`command:${input.hostCommand}`],
+          metadata: { command: input.hostCommand, reason: "sandbox_violation" },
+        })
+        return yield* run({ ...input, command: input.hostCommand, hostCommand: undefined }, ctx)
+      }
       const end = tail(raw, limits.maxLines, limits.maxBytes)
       if (end.cut) cut = true
       if (!file && end.cut) {
@@ -583,7 +597,7 @@ export const ShellTool = Tool.define(
         output += "\n\n<shell_metadata>\n" + meta.join("\n") + "\n</shell_metadata>"
       }
       return {
-        title: input.command,
+        title: input.displayCommand ?? input.command,
         metadata: {
           output: last || preview(output),
           exit: code,
@@ -617,7 +631,7 @@ export const ShellTool = Tool.define(
               }
               const timeout = params.timeout ?? defaultTimeoutMs
               const ps = Shell.ps(shell)
-              yield* Effect.scoped(
+              const bypassSandbox = yield* Effect.scoped(
                 Effect.gen(function* () {
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
@@ -625,13 +639,37 @@ export const ShellTool = Tool.define(
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   yield* ask(ctx, scan, params)
+                  const risks = yield* Effect.promise(() => sandboxRisks(params.command))
+                  if (risks.length) {
+                    yield* ctx.ask({
+                      permission: "sandbox",
+                      patterns: risks,
+                      always: risks,
+                      metadata: { command: params.command, risks },
+                    })
+                  }
+                  return scan.dirs.size > 0 || risks.length > 0
                 }),
               )
+
+              const sandbox = yield* Effect.promise(() =>
+                sandboxCommand(params.command, cwd, instanceCtx.worktree, shell, bypassSandbox),
+              )
+              if (sandbox.unavailable) {
+                yield* ctx.ask({
+                  permission: "sandbox",
+                  patterns: ["runtime:unavailable"],
+                  always: [],
+                  metadata: { command: params.command, reason: "sandbox_unavailable" },
+                })
+              }
 
               return yield* run(
                 {
                   shell,
-                  command: params.command,
+                  command: sandbox.command,
+                  displayCommand: params.command,
+                  hostCommand: sandbox.sandboxed ? params.command : undefined,
                   cwd,
                   env: yield* shellEnv(ctx, cwd),
                   timeout,
@@ -643,3 +681,7 @@ export const ShellTool = Tool.define(
       })
   }),
 )
+
+function sandboxViolation(output: string) {
+  return /sandbox|operation not permitted|permission denied|read-only file system|connection blocked by network allowlist/i.test(output)
+}

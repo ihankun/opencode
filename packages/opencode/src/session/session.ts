@@ -45,6 +45,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
+import { auditMessage } from "@/security"
 
 const parentTitlePrefix = "New session - "
 const childTitlePrefix = "Child session - "
@@ -633,6 +634,14 @@ const layer: Layer.Layer<
     const updateMessage = <T extends SessionV1.Info>(msg: T): Effect.Effect<T> =>
       Effect.gen(function* () {
         yield* events.publish(SessionV1.Event.MessageUpdated, { sessionID: msg.sessionID, info: msg })
+        if (msg.role === "user" || (msg.role === "assistant" && msg.time.completed)) {
+          yield* Effect.promise(() => auditMessage({
+            sessionID: msg.sessionID,
+            messageID: msg.id,
+            role: msg.role,
+            data: msg,
+          }))
+        }
         return msg
       }).pipe(Effect.withSpan("Session.updateMessage"))
 

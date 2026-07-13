@@ -21,6 +21,25 @@ const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const appId = "com.hankun.opencodex"
 const taskScheduler = new TaskScheduler(() => server?.state, notifyTasksChanged)
 
+type SecurityConfig = {
+  sandbox: {
+    enabled: boolean
+    denyRead: string[]
+    allowRead: string[]
+    allowWrite: string[]
+    denyWrite: string[]
+    allowedDomains: string[]
+    deniedDomains: string[]
+    allowUnixSockets: string[]
+    allowAllUnixSockets: boolean
+    allowLocalBinding: boolean
+  }
+  audit: {
+    enabled: boolean
+    directory: string
+  }
+}
+
 // Window control IPC handlers
 ipcMain.handle("window:minimize", () => {
   mainWindow?.minimize()
@@ -137,7 +156,7 @@ async function createWindow() {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   })
@@ -171,6 +190,15 @@ async function createWindow() {
   })
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     writeLog("renderer", "render-process-gone", details)
+  })
+  mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+    void openExternalUrl(target).catch((error) => writeLog("security", "blocked window open", { target, error }))
+    return { action: "deny" }
+  })
+  mainWindow.webContents.on("will-navigate", (event, target) => {
+    if (target === url) return
+    event.preventDefault()
+    writeLog("security", "blocked renderer navigation", { target })
   })
   setTimeout(() => {
     if (!mainWindow || mainWindow.isVisible()) return
@@ -317,6 +345,13 @@ function notifyTasksChanged() {
 
 ipcMain.handle("server:get", currentServerState)
 ipcMain.handle("server:restart", restartServer)
+ipcMain.handle("security:get", readSecurityConfig)
+ipcMain.handle("security:set", async (_event, value: unknown) => {
+  const config = normalizeSecurityConfig(value)
+  await writeSecurityConfig(config)
+  await restartServer()
+  return config
+})
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
@@ -386,8 +421,9 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") return
 })
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   writeLog("main", "app ready")
+  await ensureSecurityIntegration().catch((error) => writeLog("security", "failed to initialize security plugins", error))
   configureNotificationPermissionHandler()
   createTray()
   setDockIcon()
@@ -538,6 +574,93 @@ async function installPlugin(raw: string) {
 
 function pluginConfigDir() {
   return join(app.getPath("userData"), "config", "opencode")
+}
+
+function securityConfigFile() {
+  return join(app.getPath("userData"), "security.json")
+}
+
+function defaultSecurityConfig(): SecurityConfig {
+  return {
+    sandbox: {
+      enabled: true,
+      denyRead: ["~/.ssh", "~/.gnupg", "~/.aws/credentials", "~/.azure", "~/.config/gcloud", "~/.config/gh", "~/.kube", "~/.docker/config.json", "~/.npmrc", "~/.netrc", "~/.env"],
+      allowRead: [],
+      allowWrite: [],
+      denyWrite: [],
+      allowedDomains: ["registry.npmjs.org", "*.npmjs.org", "registry.yarnpkg.com", "pypi.org", "*.pypi.org", "crates.io", "*.crates.io", "github.com", "*.github.com", "gitlab.com", "*.gitlab.com", "bitbucket.org", "*.bitbucket.org", "api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com", "*.googleapis.com"],
+      deniedDomains: [],
+      allowUnixSockets: [],
+      allowAllUnixSockets: false,
+      allowLocalBinding: false,
+    },
+    audit: {
+      enabled: false,
+      directory: join(app.getPath("userData"), "audit"),
+    },
+  }
+}
+
+async function readSecurityConfig() {
+  const value = await readFile(securityConfigFile(), "utf8").then(JSON.parse, () => undefined)
+  return normalizeSecurityConfig(value)
+}
+
+function normalizeSecurityConfig(value: unknown): SecurityConfig {
+  const defaults = defaultSecurityConfig()
+  if (!isRecord(value)) return defaults
+  const sandbox = isRecord(value.sandbox) ? value.sandbox : {}
+  const audit = isRecord(value.audit) ? value.audit : {}
+  const strings = (input: unknown, fallback: string[]) => Array.isArray(input) ? input.filter(isString) : fallback
+  return {
+    sandbox: {
+      enabled: typeof sandbox.enabled === "boolean" ? sandbox.enabled : defaults.sandbox.enabled,
+      denyRead: strings(sandbox.denyRead, defaults.sandbox.denyRead),
+      allowRead: strings(sandbox.allowRead, defaults.sandbox.allowRead),
+      allowWrite: strings(sandbox.allowWrite, defaults.sandbox.allowWrite),
+      denyWrite: strings(sandbox.denyWrite, defaults.sandbox.denyWrite),
+      allowedDomains: strings(sandbox.allowedDomains, defaults.sandbox.allowedDomains),
+      deniedDomains: strings(sandbox.deniedDomains, defaults.sandbox.deniedDomains),
+      allowUnixSockets: strings(sandbox.allowUnixSockets, defaults.sandbox.allowUnixSockets),
+      allowAllUnixSockets: typeof sandbox.allowAllUnixSockets === "boolean" ? sandbox.allowAllUnixSockets : defaults.sandbox.allowAllUnixSockets,
+      allowLocalBinding: typeof sandbox.allowLocalBinding === "boolean" ? sandbox.allowLocalBinding : defaults.sandbox.allowLocalBinding,
+    },
+    audit: {
+      enabled: typeof audit.enabled === "boolean" ? audit.enabled : defaults.audit.enabled,
+      directory: typeof audit.directory === "string" && audit.directory.trim() ? resolve(audit.directory) : defaults.audit.directory,
+    },
+  }
+}
+
+async function ensureSecurityIntegration() {
+  const config = await readSecurityConfig()
+  await removeLegacySecurityPlugins()
+  await rm(join(pluginConfigDir(), "logger.json"), { force: true })
+  await rm(join(app.getPath("userData"), "config", "opencode-sandbox"), { recursive: true, force: true })
+  await writeSecurityConfig(config)
+}
+
+async function removeLegacySecurityPlugins() {
+  const file = await pluginConfigFile(pluginConfigDir(), "server")
+  const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return
+    throw error
+  })
+  if (!text) return
+  const errors: ParseError[] = []
+  const parsed = parseJsonc(text, errors, { allowTrailingComma: true }) as { plugin?: unknown[] }
+  if (errors.length || !Array.isArray(parsed.plugin)) return
+  const plugins = parsed.plugin.filter((item) => {
+    const spec = pluginEntrySpec(item)
+    return spec !== "opencode-sandbox" && spec !== "@frankhommers/opencode-plugin-logger"
+  })
+  if (plugins.length === parsed.plugin.length) return
+  await writeFile(file, applyEdits(text, modify(text, ["plugin"], plugins, { formattingOptions: { insertSpaces: true, tabSize: 2 } })))
+}
+
+async function writeSecurityConfig(config: SecurityConfig) {
+  await mkdir(dirname(securityConfigFile()), { recursive: true })
+  await writeFile(securityConfigFile(), JSON.stringify(config, null, 2))
 }
 
 function pluginCacheDir() {

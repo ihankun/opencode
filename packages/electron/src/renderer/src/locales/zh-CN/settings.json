@@ -16,6 +16,8 @@
     "chatDesc": "消息呈现、路径显示和 step 元数据",
     "archived": "已归档对话",
     "archivedDesc": "恢复或永久删除已归档的对话",
+    "security": "安全",
+    "securityDesc": "沙箱边界、网络访问与 Agent 审计日志",
     "workspace": "工作区",
     "workspaceDesc": "布局、侧边栏和代码查看偏好",
     "appearance": "外观",

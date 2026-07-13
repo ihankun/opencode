@@ -16,6 +16,8 @@
     "chatDesc": "Message presentation, path formatting, and step metadata",
     "archived": "Archived Chats",
     "archivedDesc": "Restore or permanently delete archived chats",
+    "security": "Security",
+    "securityDesc": "Sandbox boundaries, network access, and agent audit logs",
     "workspace": "Workspace",
     "workspaceDesc": "Layout, sidebar, and code viewing preferences",
     "appearance": "Appearance",

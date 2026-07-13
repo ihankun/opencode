@@ -97,6 +97,7 @@ function prepareEnv(command: StartCommand) {
     XDG_CONFIG_HOME: join(command.userDataPath, "config"),
     XDG_DATA_HOME: join(command.userDataPath, "data"),
     XDG_STATE_HOME: join(command.userDataPath, "state"),
+    OPENCODE_SECURITY_CONFIG: join(command.userDataPath, "security.json"),
   })
 
   if (command.password) {

@@ -16,6 +16,7 @@ import {
   QuestionIcon,
   CogIcon,
   ArchiveIcon,
+  ShieldIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
@@ -32,6 +33,7 @@ import { ServersSettings } from './components/ServersSettings'
 import { WorkspaceSettings } from './components/WorkspaceSettings'
 import { ConfigSettings } from './components/ConfigSettings'
 import { ArchivedSessionsSettings } from './components/ArchivedSessionsSettings'
+import { SecuritySettings } from './components/SecuritySettings'
 
 // ============================================
 // Types
@@ -50,6 +52,7 @@ export type SettingsTab =
   | 'keybindings'
   | 'workspace'
   | 'archived'
+  | 'security'
   | 'about'
 
 interface SettingsDialogProps {
@@ -76,6 +79,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   keybindings: <KeyboardIcon size={15} />,
   about: <QuestionIcon size={15} />,
   archived: <ArchiveIcon size={15} />,
+  security: <ShieldIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
@@ -85,6 +89,7 @@ const TAB_IDS: SettingsTab[] = [
   'agent',
   'chat',
   'archived',
+  'security',
   'workspace',
   'appearance',
   'notifications',
@@ -108,6 +113,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   keybindings: 'tabs.shortcuts',
   about: 'tabs.about',
   archived: 'tabs.archived',
+  security: 'tabs.security',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
@@ -124,11 +130,12 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   keybindings: 'tabs.shortcutsDesc',
   about: 'tabs.aboutDesc',
   archived: 'tabs.archivedDesc',
+  security: 'tabs.securityDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
   { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'archived', 'workspace', 'appearance', 'notifications'] },
-  { labelKey: 'groups.advanced', tabs: ['service', 'config', 'keybindings', 'about'] },
+  { labelKey: 'groups.advanced', tabs: ['security', 'service', 'config', 'keybindings', 'about'] },
 ]
 
 // ============================================
@@ -161,6 +168,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <WorkspaceSettings />
     case 'archived':
       return <ArchivedSessionsSettings />
+    case 'security':
+      return <SecuritySettings />
     case 'about':
       return <AboutSettings />
     default:

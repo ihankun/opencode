@@ -23,6 +23,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { auditTool } from "@/security"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -108,7 +109,22 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
               { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
               { args },
             )
-            const result = yield* item.execute(args, ctx)
+            yield* Effect.promise(() => auditTool({
+              event: "tool_execute_before",
+              sessionID: ctx.sessionID,
+              callID: ctx.callID ?? options.toolCallId,
+              tool: item.id,
+              data: { args },
+            }))
+            const result = yield* item.execute(args, ctx).pipe(
+              Effect.tapError((error) => Effect.promise(() => auditTool({
+                event: "tool_execute_error",
+                sessionID: ctx.sessionID,
+                callID: ctx.callID ?? options.toolCallId,
+                tool: item.id,
+                data: { args, error: String(error) },
+              }))),
+            )
             const output = {
               ...result,
               attachments: result.attachments?.map((attachment) => ({
@@ -123,6 +139,13 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
               { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
               output,
             )
+            yield* Effect.promise(() => auditTool({
+              event: "tool_execute_after",
+              sessionID: ctx.sessionID,
+              callID: ctx.callID ?? options.toolCallId,
+              tool: item.id,
+              data: { args, output },
+            }))
             if (options.abortSignal?.aborted) {
               yield* input.processor.completeToolCall(options.toolCallId, output)
             }

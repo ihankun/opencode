@@ -127,9 +127,30 @@ export type CustomOpenCodeScheduledTaskRun = {
   createdAt: number
 }
 
+export type CustomOpenCodeSecurityConfig = {
+  sandbox: {
+    enabled: boolean
+    denyRead: string[]
+    allowRead: string[]
+    allowWrite: string[]
+    denyWrite: string[]
+    allowedDomains: string[]
+    deniedDomains: string[]
+    allowUnixSockets: string[]
+    allowAllUnixSockets: boolean
+    allowLocalBinding: boolean
+  }
+  audit: {
+    enabled: boolean
+    directory: string
+  }
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
+  security(): Promise<CustomOpenCodeSecurityConfig>
+  updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   searchMcpServers(query: string): Promise<CustomOpenCodeMcpSearchResult[]>
@@ -169,6 +190,8 @@ export type CustomOpenCodeApi = {
 const api: CustomOpenCodeApi = {
   server: () => ipcRenderer.invoke("server:get"),
   restartServer: () => ipcRenderer.invoke("server:restart"),
+  security: () => ipcRenderer.invoke("security:get"),
+  updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
   onServerUpdated(callback) {
     const listener = (_event: unknown, state: CustomOpenCodeServerState) => callback(state)
     ipcRenderer.on("server:updated", listener)
