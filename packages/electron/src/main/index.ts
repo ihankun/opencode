@@ -904,7 +904,16 @@ async function openExternalUrl(rawUrl: string) {
   return true
 }
 
-type LocationApp = { id: string; name: string; icon?: string; exe?: string }
+type LocationApp = { id: string; name: string; icon?: string; exe?: string; appPath?: string }
+
+function sortLocationApps(apps: LocationApp[]) {
+  const priority = ["vscode", "intellij", "cursor", "terminal", "default"]
+  return apps.sort((left, right) => {
+    const leftIndex = left.id === "default" ? priority.length + 1 : priority.indexOf(left.id)
+    const rightIndex = right.id === "default" ? priority.length + 1 : priority.indexOf(right.id)
+    return (leftIndex < 0 ? priority.length : leftIndex) - (rightIndex < 0 ? priority.length : rightIndex)
+  })
+}
 
 async function locationApps(): Promise<LocationApp[]> {
   if (process.platform === "darwin") {
@@ -918,20 +927,15 @@ async function locationApps(): Promise<LocationApp[]> {
 
 async function locationAppsMac(): Promise<LocationApp[]> {
   const candidates = [
-    { id: "vscode", name: "VS Code", bundle: "Visual Studio Code" },
-    { id: "default", name: "Finder", path: "/System/Library/CoreServices/Finder.app" },
-    { id: "terminal", name: "Terminal", bundle: "Terminal" },
-    { id: "cursor", name: "Cursor", bundle: "Cursor" },
-    { id: "zed", name: "Zed", bundle: "Zed" },
-    { id: "intellij", name: "IntelliJ IDEA", bundle: "IntelliJ IDEA" },
-    { id: "sublime", name: "Sublime Text", bundle: "Sublime Text" },
+    { id: "vscode", name: "VS Code", paths: [join("/Applications", "Visual Studio Code.app"), join(homedir(), "Applications", "Visual Studio Code.app")] },
+    { id: "intellij", name: "IntelliJ IDEA", paths: [join("/Applications", "IntelliJ IDEA.app"), join("/Applications", "IntelliJ IDEA CE.app"), join(homedir(), "Applications", "IntelliJ IDEA.app"), join(homedir(), "Applications", "IntelliJ IDEA CE.app")] },
+    { id: "cursor", name: "Cursor", paths: [join("/Applications", "Cursor.app"), join(homedir(), "Applications", "Cursor.app")] },
+    { id: "terminal", name: "Terminal", paths: ["/System/Applications/Utilities/Terminal.app", "/Applications/Utilities/Terminal.app"] },
+    { id: "default", name: "Finder", paths: ["/System/Library/CoreServices/Finder.app"] },
   ]
   const installed = await Promise.all(
-    candidates.map(async ({ id, name, bundle, path }) => {
+    candidates.map(async ({ id, name, paths }) => {
       try {
-        const paths = path
-          ? [path]
-          : [join("/Applications", `${bundle}.app`), join(homedir(), "Applications", `${bundle}.app`)]
         const location = await Promise.any(
           paths.map(async candidate => {
             await access(candidate)
@@ -939,13 +943,13 @@ async function locationAppsMac(): Promise<LocationApp[]> {
           }),
         )
         const icon = (await app.getFileIcon(location, { size: "small" })).toDataURL()
-        return { id, name, icon }
+        return { id, name, icon, appPath: location }
       } catch {
         return undefined
       }
     }),
   )
-  return installed.filter((item): item is LocationApp => !!item)
+  return sortLocationApps(installed.flatMap(item => item ? [item] : []))
 }
 
 async function locationAppsWin(): Promise<LocationApp[]> {
@@ -960,7 +964,6 @@ async function locationAppsWin(): Promise<LocationApp[]> {
     { id: "cursor", name: "Cursor", patterns: [/^Cursor$/i, /Cursor Editor/i], exeName: "Cursor.exe" },
     { id: "intellij", name: "IntelliJ IDEA", patterns: [/IntelliJ IDEA/i], exeName: "idea64.exe" },
     { id: "webstorm", name: "WebStorm", patterns: [/^WebStorm$/i], exeName: "ws64.exe" },
-    { id: "sublime", name: "Sublime Text", patterns: [/Sublime Text/i], exeName: "sublime_text.exe" },
   ]
 
   const found = new Map<string, { name: string; exe: string }>()
@@ -1057,7 +1060,7 @@ async function locationAppsWin(): Promise<LocationApp[]> {
 
   result.push({ id: "default", name: "文件管理器" })
   writeLog("main", "locationAppsWin: result", { count: result.length, ids: result.map(r => r.id) })
-  return result
+  return sortLocationApps(result)
 }
 
 async function openLocation(input: unknown) {
@@ -1087,19 +1090,9 @@ async function openLocation(input: unknown) {
   // macOS
   const apps = await locationAppsMac()
   const app = apps.find(item => item.id === appId)
-  if (!app) throw new Error("Selected application is not installed")
-  const bundles: Record<string, string> = {
-    vscode: "Visual Studio Code",
-    terminal: "Terminal",
-    cursor: "Cursor",
-    zed: "Zed",
-    intellij: "IntelliJ IDEA",
-    sublime: "Sublime Text",
-  }
-  const bundle = bundles[appId]
-  if (!bundle) throw new Error("Unsupported application")
+  if (!app?.appPath) throw new Error("Selected application is not installed")
   await new Promise<void>((resolveOpen, rejectOpen) => {
-    const child = spawn("open", ["-a", bundle, value.path])
+    const child = spawn("open", [app.appPath, value.path])
     child.once("error", rejectOpen)
     child.once("exit", code => (code === 0 ? resolveOpen() : rejectOpen(new Error("Failed to open location"))))
   })

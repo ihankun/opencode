@@ -21,6 +21,26 @@ import { useDirectory } from '../../contexts/useDirectory'
 import { isSameDirectory, uiErrorHandler } from '../../utils'
 import { useChatViewport } from './chatViewport'
 import { pinnedSessionsStore } from '../../store/pinnedSessionsStore'
+import vscodeIcon from '../../../../../assets/app-vscode.png'
+import finderIcon from '../../../../../assets/app-finder.png'
+import terminalIcon from '../../../../../assets/app-terminal.png'
+import intellijIdeaIcon from '../../../../../assets/app-intellij-idea.png'
+import cursorIcon from '../../../../../assets/app-cursor.png'
+
+type LocationApp = { id: string; name: string; icon?: string }
+
+const locationAppIcons: Record<string, string> = {
+  vscode: vscodeIcon,
+  intellij: intellijIdeaIcon,
+  cursor: cursorIcon,
+  terminal: terminalIcon,
+}
+
+function LocationAppIcon({ app, className }: { app: LocationApp; className: string }) {
+  const icon = app.name === 'Finder' ? finderIcon : locationAppIcons[app.id] ?? app.icon
+  if (!icon) return null
+  return <img src={icon} alt="" aria-hidden="true" className={className} />
+}
 
 interface HeaderProps {
   onOpenSidebar?: () => void
@@ -151,16 +171,18 @@ export function Header({
 
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
   const [locationMenuOpen, setLocationMenuOpen] = useState(false)
-  const [locationApps, setLocationApps] = useState<Array<{ id: string; name: string; icon?: string }>>([])
+  const [locationApps, setLocationApps] = useState<LocationApp[]>([])
   const [selectedLocationApp, setSelectedLocationApp] = useState('vscode')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
   const sessionMenuRef = useRef<HTMLDivElement>(null)
+  const locationMenuRef = useRef<HTMLDivElement>(null)
 
   const sessionTitle = currentSessionTitle || t('header.newChat')
   const isCompact = presentation.isCompact
   const projectLocation = sessionDirectory && (!pathInfo?.directory || !isSameDirectory(sessionDirectory, pathInfo.directory))
+  const selectedLocationAppDetails = locationApps.find(app => app.id === selectedLocationApp)
 
   useEffect(() => {
     document.title = currentSessionTitle ? `${currentSessionTitle} - OpenCodex` : 'OpenCodex'
@@ -200,6 +222,22 @@ export function Header({
       document.removeEventListener('keydown', closeOnEscape)
     }
   }, [sessionMenuOpen])
+
+  useEffect(() => {
+    if (!locationMenuOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (event.target instanceof Node && !locationMenuRef.current?.contains(event.target)) setLocationMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLocationMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [locationMenuOpen])
 
   const handleStartEdit = () => {
     if (!sessionId) return
@@ -259,6 +297,10 @@ export function Header({
       return []
     }
   }
+
+  useEffect(() => {
+    void loadLocationApps()
+  }, [])
 
   const toggleLocationMenu = async () => {
     const nextOpen = !locationMenuOpen
@@ -335,18 +377,25 @@ export function Header({
       <div className="flex items-center gap-1 pointer-events-auto shrink-0 z-[60]">
         <div className="flex items-center gap-0.5">
           {projectLocation && (
-            <div className="relative">
-              <div className="inline-flex h-8 overflow-hidden rounded-lg border border-border-200/80 bg-bg-100 text-text-200 shadow-sm">
-                <button type="button" onClick={() => void openSelectedLocation()} className="inline-flex items-center px-2.5 text-[length:var(--fs-sm)] font-medium hover:bg-bg-200/50">
+            <div ref={locationMenuRef} className="relative">
+              <div className="flex items-center group rounded-lg border border-transparent bg-transparent p-0.5 transition-all duration-200 hover:border-border-200/50 hover:bg-bg-200/50">
+                <button type="button" onClick={() => void openSelectedLocation()} className="inline-flex items-center px-2 py-1.5 text-[length:var(--fs-base)] font-medium text-text-200 transition-colors hover:text-text-100">
+                  {selectedLocationAppDetails && <LocationAppIcon app={selectedLocationAppDetails} className="mr-1.5 size-4 object-contain" />}
                   {t('header.openLocation')}
                 </button>
-                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="border-l border-border-200/80 px-2 text-text-400 hover:bg-bg-200/50 hover:text-text-100">
-                  <ChevronDownIcon size={16} />
+                <div className="mx-0.5 h-3 w-[1.5px] shrink-0 bg-border-200/50" />
+                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="shrink-0 rounded-md p-1 text-text-400 transition-colors hover:bg-bg-300/50 hover:text-text-100">
+                  <ChevronDownIcon size={12} />
                 </button>
               </div>
               {locationMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-border-200 bg-bg-100 p-1.5 shadow-lg">
-                  {locationApps.map(app => <button key={app.id} type="button" onClick={() => selectLocationApp(app.id)} className={`flex w-full items-center rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] ${app.id === selectedLocationApp ? 'bg-bg-200 text-text-100' : 'text-text-200 hover:bg-bg-200/70'}`}>{app.name}</button>)}
+                <div className="absolute right-0 top-full z-[70] mt-1 w-48 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
+                  {locationApps.map(app => (
+                    <button key={app.id} type="button" onClick={() => selectLocationApp(app.id)} className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] ${app.id === selectedLocationApp ? 'bg-bg-200 text-text-100' : 'text-text-200 hover:bg-bg-200'}`}>
+                      <LocationAppIcon app={app} className="size-5 shrink-0 object-contain" />
+                      {app.name}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
