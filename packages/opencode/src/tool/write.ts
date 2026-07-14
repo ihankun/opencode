@@ -14,6 +14,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { trimDiff } from "./edit"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import * as Bom from "@/util/bom"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 const MAX_PROJECT_DIAGNOSTICS_FILES = 5
 
@@ -42,6 +43,15 @@ export const WriteTool = Tool.define(
             ? params.filePath
             : path.join(instance.directory, params.filePath)
           yield* assertExternalDirectoryEffect(ctx, filepath)
+          yield* assertSandboxFilesystemEffect(
+            ctx,
+            [
+              { path: filepath, access: "read" },
+              { path: filepath, access: "write" },
+            ],
+            instance.directory,
+            instance.worktree,
+          )
 
           const exists = yield* fs.existsSafe(filepath)
           const source = exists ? yield* Bom.readFile(fs, filepath) : { bom: false, text: "" }

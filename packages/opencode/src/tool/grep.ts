@@ -6,6 +6,7 @@ import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import DESCRIPTION from "./grep.txt"
 import * as Tool from "./tool"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 export const Parameters = Schema.Struct({
   pattern: Schema.String.annotate({ description: "The regex pattern to search for in file contents" }),
@@ -51,6 +52,12 @@ export const GrepTool = Tool.define(
           const requested = path.isAbsolute(params.path ?? ins.directory)
             ? (params.path ?? ins.directory)
             : path.join(ins.directory, params.path ?? ".")
+          yield* assertSandboxFilesystemEffect(
+            ctx,
+            [{ path: requested, access: "read", tree: true }],
+            ins.directory,
+            ins.worktree,
+          )
           const requestedInfo = yield* fs.stat(requested).pipe(Effect.catch(() => Effect.succeed(undefined)))
           yield* assertExternalDirectoryEffect(ctx, requested, {
             bypass: false,

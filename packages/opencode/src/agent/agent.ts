@@ -122,6 +122,7 @@ const layer = Layer.effect(
 
         const defaults = Permission.fromConfig({
           "*": "allow",
+          sandbox: "ask",
           doom_loop: "ask",
           external_directory: {
             "*": "ask",

@@ -19,6 +19,7 @@ import { resetPathModeCache } from './utils/directoryUtils'
 import { isTauri, isTauriMobile, getDesktopPlatform } from './utils/tauri'
 import { apiErrorHandler, globalErrorHandler } from './utils/errorHandling'
 import { applyLocalServiceUrl } from './utils/localServiceUrl'
+import { initializeModels } from './hooks/useModels'
 
 // Polyfill: randomUUID 在非 HTTPS 环境可能缺失（如局域网 HTTP）
 // 统一补齐，避免业务层 scattered fallback。
@@ -215,6 +216,7 @@ function bootstrap() {
 async function startApp() {
   await initializeElectronService()
 
+  void initializeModels()
   bootstrap()
 
   void initializeNativeDesktopService()

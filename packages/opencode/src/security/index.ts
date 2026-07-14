@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises"
+import { appendFile, mkdir, readFile, realpath } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime"
@@ -54,6 +54,63 @@ export async function sandboxRisks(command: string) {
   return [
     ...deniedPaths.map((item) => `filesystem:${item}`),
     ...deniedHosts.map((item) => `network:${item}`),
+  ]
+}
+
+export type SandboxFilesystemRequest = {
+  path: string
+  access: "read" | "write"
+  tree?: boolean
+}
+
+export type SandboxFilesystemPolicy = Pick<
+  Config["sandbox"],
+  "enabled" | "denyRead" | "allowRead" | "allowWrite" | "denyWrite"
+>
+
+export async function sandboxFilesystemRisks(requests: SandboxFilesystemRequest[], cwd: string, worktree: string) {
+  const current = await load()
+  return evaluateSandboxFilesystemRisks(current.sandbox, requests, cwd, worktree)
+}
+
+export async function evaluateSandboxFilesystemRisks(
+  policy: SandboxFilesystemPolicy,
+  requests: SandboxFilesystemRequest[],
+  cwd: string,
+  worktree: string,
+) {
+  if (!policy.enabled) return []
+
+  const allowRead = await Promise.all(policy.allowRead.map(canonical))
+  const denyRead = await Promise.all(policy.denyRead.map(canonical))
+  const allowWrite = await Promise.all(
+    (policy.allowWrite.length ? policy.allowWrite : [...new Set([cwd, worktree, os.tmpdir()])]).map(
+      canonical,
+    ),
+  )
+  const denyWrite = await Promise.all(policy.denyWrite.map(canonical))
+  const targets = await Promise.all(
+    requests.map(async (request) => ({ ...request, path: await canonical(request.path) })),
+  )
+
+  return [
+    ...new Set(
+      targets.flatMap((request) => {
+        if (request.access === "write") {
+          const denied = denyWrite.filter((item) => contains(item, request.path))
+          if (denied.length) return denied.map((item) => `filesystem:${item}`)
+          if (!allowWrite.some((item) => contains(item, request.path))) return [`filesystem:${request.path}`]
+          return []
+        }
+
+        const denied = denyRead.filter(
+          (item) =>
+            (contains(item, request.path) || (request.tree && contains(request.path, item))) &&
+            !allowRead.some((allowed) => contains(allowed, request.path) || contains(allowed, item)),
+        )
+        return denied.map((item) => `filesystem:${item}`)
+      }),
+    ),
   ]
 }
 
@@ -152,6 +209,29 @@ function matches(host: string, pattern: string) {
   const normalized = pattern.toLowerCase()
   if (normalized.startsWith("*.")) return host === normalized.slice(2) || host.endsWith(normalized.slice(1))
   return host === normalized
+}
+
+async function canonical(value: string) {
+  const full = path.resolve(value.replace(/^~(?=$|[/\\])/, os.homedir()))
+  const suffix: string[] = []
+  let current = full
+  while (true) {
+    const resolved = await realpath(current).catch(() => undefined)
+    if (resolved) return path.join(resolved, ...suffix.reverse())
+    const parent = path.dirname(current)
+    if (parent === current) return full
+    suffix.push(path.basename(current))
+    current = parent
+  }
+}
+
+function contains(parent: string, target: string) {
+  const relative = path.relative(normalize(parent), normalize(target))
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
+}
+
+function normalize(value: string) {
+  return process.platform === "win32" ? value.toLowerCase() : value
 }
 
 function safe(value: string) {

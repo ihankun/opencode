@@ -52,6 +52,12 @@ export function PermissionDialog({
 
   // 判断是否是文件编辑类权限
   const isFileEdit = request.permission === 'edit' || request.permission === 'write'
+  const permissionLabel = t(`permissionDialog.permissionTypes.${request.permission}.label`, {
+    defaultValue: request.permission,
+  })
+  const permissionDescription = t(`permissionDialog.permissionTypes.${request.permission}.description`, {
+    defaultValue: '',
+  })
 
   // 判断是否来自子 session
   const isFromChildSession = currentSessionId && request.sessionID !== currentSessionId
@@ -80,18 +86,32 @@ export function PermissionDialog({
           <div className="bg-bg-000 rounded-t-[14px]">
             {/* Header */}
             <div className="flex items-center justify-between py-3 px-4">
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-start gap-2">
                 <div className="flex items-center justify-center text-text-100 w-5 h-5">
                   <PermissionListIcon size={20} />
                 </div>
-                <h3 className="text-[length:var(--fs-base)] leading-none font-medium text-text-100">
-                  {t('permissionDialog.permission', { permission: request.permission })}
-                </h3>
-                {queueLength > 1 && (
-                  <span className="text-[length:var(--fs-sm)] text-text-400 bg-bg-200 px-1.5 py-0.5 rounded">
-                    {t('permissionDialog.moreCount', { count: queueLength - 1 })}
-                  </span>
-                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[length:var(--fs-base)] leading-none font-medium text-text-100">
+                      {t('permissionDialog.permission', { permission: permissionLabel })}
+                    </h3>
+                    {permissionLabel !== request.permission && (
+                      <code className="truncate rounded bg-bg-200 px-1.5 py-0.5 text-[length:var(--fs-xs)] text-text-400">
+                        {request.permission}
+                      </code>
+                    )}
+                    {queueLength > 1 && (
+                      <span className="text-[length:var(--fs-sm)] text-text-400 bg-bg-200 px-1.5 py-0.5 rounded">
+                        {t('permissionDialog.moreCount', { count: queueLength - 1 })}
+                      </span>
+                    )}
+                  </div>
+                  {permissionDescription && (
+                    <p className="mt-1.5 text-[length:var(--fs-sm)] leading-snug text-text-400">
+                      {permissionDescription}
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => onCollapsedChange?.(true)}

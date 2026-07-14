@@ -76,6 +76,64 @@
   },
   "permissionDialog": {
     "permission": "权限：{{permission}}",
+    "permissionTypes": {
+      "read": {
+        "label": "读取文件",
+        "description": "Agent 请求读取指定文件或目录。"
+      },
+      "edit": {
+        "label": "修改文件",
+        "description": "Agent 请求创建、编辑、移动或删除文件。"
+      },
+      "write": {
+        "label": "写入文件",
+        "description": "Agent 请求向指定文件写入内容。"
+      },
+      "glob": {
+        "label": "查找文件",
+        "description": "Agent 请求按文件名模式搜索目录。"
+      },
+      "grep": {
+        "label": "搜索文件内容",
+        "description": "Agent 请求在文件中搜索匹配内容。"
+      },
+      "bash": {
+        "label": "执行终端命令",
+        "description": "Agent 请求在本机终端中运行命令。"
+      },
+      "external_directory": {
+        "label": "访问项目外目录",
+        "description": "目标位于当前项目或 worktree 之外，需要额外授权。"
+      },
+      "sandbox": {
+        "label": "突破沙箱限制",
+        "description": "当前操作命中了文件系统、网络或沙箱运行时边界，需要额外授权。"
+      },
+      "webfetch": {
+        "label": "访问网页",
+        "description": "Agent 请求读取指定网页的内容。"
+      },
+      "websearch": {
+        "label": "联网搜索",
+        "description": "Agent 请求通过互联网搜索信息。"
+      },
+      "task": {
+        "label": "启动子 Agent",
+        "description": "Agent 请求创建子任务并交给另一个 Agent 执行。"
+      },
+      "lsp": {
+        "label": "使用语言服务器",
+        "description": "Agent 请求执行代码跳转、引用查询等语言服务器操作。"
+      },
+      "skill": {
+        "label": "加载技能",
+        "description": "Agent 请求读取并使用指定技能的说明和资源。"
+      },
+      "doom_loop": {
+        "label": "继续重复操作",
+        "description": "系统检测到相同工具调用重复出现，需要确认是否继续。"
+      }
+    },
     "moreCount": "还有 {{count}} 个",
     "minimize": "最小化",
     "fromSubtask": "来自 Subtask：{{title}}",

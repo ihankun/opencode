@@ -19,7 +19,7 @@ export type SessionPermissionRule = {
 export function approvalPermissionRules(mode: ApprovalMode): SessionPermissionRule[] {
   if (mode === 'full') return [{ permission: '*', pattern: '*', action: 'allow' }]
   if (mode === 'ask') {
-    return ['bash', 'edit', 'external_directory', 'webfetch', 'websearch'].map(permission => ({
+    return ['bash', 'edit', 'external_directory', 'sandbox', 'webfetch', 'websearch'].map(permission => ({
       permission,
       pattern: '*',
       action: 'ask' as const,
@@ -29,6 +29,7 @@ export function approvalPermissionRules(mode: ApprovalMode): SessionPermissionRu
     return [
       { permission: 'edit', pattern: '*', action: 'ask' },
       { permission: 'bash', pattern: '*', action: 'ask' },
+      { permission: 'sandbox', pattern: '*', action: 'ask' },
       ...[
         'ls*',
         'pwd',
@@ -49,7 +50,7 @@ export function approvalPermissionRules(mode: ApprovalMode): SessionPermissionRu
       ].map(pattern => ({ permission: 'bash', pattern, action: 'allow' as const })),
     ]
   }
-  return []
+  return [{ permission: 'sandbox', pattern: '*', action: 'ask' }]
 }
 
 // Full Auto 状态变更回调

@@ -37,14 +37,14 @@ export function SecuritySettings() {
   return (
     <div>
       <SettingsSection title="沙箱">
-        <SettingRow label="启用 Agent 沙箱" description="限制 Agent 执行的 bash 命令可读写的路径和可访问的网络；默认开启。">
+        <SettingRow label="启用 Agent 沙箱" description="限制 Agent 文件工具和 bash 命令可读写的路径，并限制命令可访问的网络；默认开启。">
           <Toggle enabled={config.sandbox.enabled} onChange={() => setSandbox({ enabled: !config.sandbox.enabled })} />
         </SettingRow>
         <div className="rounded-lg border border-border-200/60 bg-bg-050 px-3 py-2 text-[length:var(--fs-sm)] text-text-300">
-          {config.sandbox.enabled ? '已启用：项目目录、Git worktree 与临时目录默认可写，凭证目录默认不可读，网络仅允许白名单域名。' : '已关闭：命令直接在当前用户权限下运行，不再施加额外的文件系统和网络边界。'}
+          {config.sandbox.enabled ? '已启用：Agent 的文件工具与命令共享路径限制；命令额外使用操作系统沙箱限制文件系统和网络。' : '已关闭：Agent 工具与命令不再施加这套额外的文件系统和网络边界。'}
         </div>
         <div className="rounded-lg border border-accent-main-100/25 bg-accent-main-100/5 px-3 py-2 text-[length:var(--fs-sm)] text-text-300">
-          命中限制时会先通过对话中的权限弹窗申请授权。批准后只对该次命令放行；拒绝后命令不会脱离沙箱执行。
+          命中限制时会先通过对话中的权限弹窗申请授权。“允许一次”只放行本次操作；拒绝后不会越过沙箱边界执行。
         </div>
         {listField('禁止读取', '每行一个绝对路径或 ~ 路径。允许读取规则优先于禁止读取。', config.sandbox.denyRead, denyRead => setSandbox({ denyRead }))}
         {listField('额外允许读取', '只添加确实需要暴露给 Agent 的路径。', config.sandbox.allowRead, allowRead => setSandbox({ allowRead }))}

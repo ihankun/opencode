@@ -6,6 +6,7 @@ import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import DESCRIPTION from "./glob.txt"
 import * as Tool from "./tool"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 export const Parameters = Schema.Struct({
   pattern: Schema.String.annotate({ description: "The glob pattern to match files against" }),
@@ -37,6 +38,12 @@ export const GlobTool = Tool.define(
 
           let search = params.path ?? ins.directory
           search = path.isAbsolute(search) ? search : path.resolve(ins.directory, search)
+          yield* assertSandboxFilesystemEffect(
+            ctx,
+            [{ path: search, access: "read", tree: true }],
+            ins.directory,
+            ins.worktree,
+          )
           const info = yield* fs.stat(search).pipe(Effect.catch(() => Effect.succeed(undefined)))
           if (info?.type === "File") {
             throw new Error(`glob path must be a directory: ${search}`)

@@ -22,6 +22,7 @@ let _state: ModelsState = { models: [], isLoading: true, error: null }
 let _fetchPromise: Promise<void> | null = null
 let _fetchGeneration = 0
 const _listeners = new Set<Listener>()
+const FETCH_RETRY_DELAYS = [0, 500, 1500]
 
 function _notify() {
   for (const fn of _listeners) fn()
@@ -39,15 +40,31 @@ async function _fetchModels(force = false) {
 
   _fetchPromise = (async () => {
     _setState({ isLoading: true, error: null })
+
     try {
-      await getSDKClientAsync()
-      const data = await getActiveModels()
-      if (generation === _fetchGeneration) {
-        _setState({ models: data, isLoading: false })
-      }
-    } catch (e) {
-      if (generation === _fetchGeneration) {
-        _setState({ error: e instanceof Error ? e : new Error('Failed to fetch models'), isLoading: false })
+      for (const [index, delay] of FETCH_RETRY_DELAYS.entries()) {
+        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+        if (generation !== _fetchGeneration) return
+
+        try {
+          await getSDKClientAsync()
+          const data = await getActiveModels()
+          if (data.length === 0) throw new Error('Server returned no active models')
+          if (generation === _fetchGeneration) {
+            _setState({ models: data, isLoading: false })
+          }
+          return
+        } catch (error) {
+          if (generation !== _fetchGeneration) return
+          const normalizedError = error instanceof Error ? error : new Error('Failed to fetch models')
+          const finalAttempt = index === FETCH_RETRY_DELAYS.length - 1
+          if (finalAttempt) {
+            console.error('[models] Failed to fetch models after retries:', normalizedError)
+            _setState({ error: normalizedError, isLoading: false })
+            return
+          }
+          console.warn(`[models] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalizedError)
+        }
       }
     } finally {
       if (generation === _fetchGeneration) {
@@ -63,11 +80,14 @@ export function refreshModels() {
   return _fetchModels(true)
 }
 
-// First fetch on module load — models are ready before any component mounts.
-_fetchModels()
+export function initializeModels() {
+  return _fetchModels()
+}
 
 serverStore.onServerChange(() => {
-  void refreshModels()
+  // Other server-change listeners abort stale requests and invalidate the SDK client.
+  // Start the model refresh after all synchronous listeners have completed.
+  queueMicrotask(() => void refreshModels())
 })
 
 function _subscribe(listener: Listener) {

@@ -18,6 +18,7 @@ import { Snapshot } from "@/snapshot"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Bom from "@/util/bom"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -81,6 +82,15 @@ export const EditTool = Tool.define(
             ? params.filePath
             : path.join(instance.directory, params.filePath)
           yield* assertExternalDirectoryEffect(ctx, filePath)
+          yield* assertSandboxFilesystemEffect(
+            ctx,
+            [
+              { path: filePath, access: "read" },
+              { path: filePath, access: "write" },
+            ],
+            instance.directory,
+            instance.worktree,
+          )
 
           let diff = ""
           let contentOld = ""

@@ -14,6 +14,7 @@ import DESCRIPTION from "./apply_patch.txt"
 import { FileSystem } from "@opencode-ai/core/filesystem"
 import { Format } from "../format"
 import * as Bom from "@/util/bom"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 export const Parameters = Schema.Struct({
   patchText: Schema.String.annotate({ description: "The full patch text that describes all changes to be made" }),
@@ -72,6 +73,19 @@ export const ApplyPatchTool = Tool.define(
       for (const hunk of hunks) {
         const filePath = path.resolve(instance.directory, hunk.path)
         yield* assertExternalDirectoryEffect(ctx, filePath)
+        const movePath =
+          hunk.type === "update" && hunk.move_path ? path.resolve(instance.directory, hunk.move_path) : undefined
+        yield* assertExternalDirectoryEffect(ctx, movePath)
+        yield* assertSandboxFilesystemEffect(
+          ctx,
+          [
+            ...(hunk.type === "add" ? [] : [{ path: filePath, access: "read" as const }]),
+            { path: filePath, access: "write" },
+            ...(movePath ? [{ path: movePath, access: "write" as const }] : []),
+          ],
+          instance.directory,
+          instance.worktree,
+        )
 
         switch (hunk.type) {
           case "add": {
@@ -138,9 +152,6 @@ export const ApplyPatchTool = Tool.define(
               if (change.added) additions += change.count || 0
               if (change.removed) deletions += change.count || 0
             }
-
-            const movePath = hunk.move_path ? path.resolve(instance.directory, hunk.move_path) : undefined
-            yield* assertExternalDirectoryEffect(ctx, movePath)
 
             fileChanges.push({
               filePath,

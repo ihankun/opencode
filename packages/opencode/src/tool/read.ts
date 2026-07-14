@@ -9,6 +9,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
+import { assertSandboxFilesystemEffect } from "./sandbox-filesystem"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -240,13 +241,19 @@ export const ReadTool = Tool.define<
       }
       const title = path.relative(instance.worktree, filepath)
 
+      yield* assertSandboxFilesystemEffect(
+        ctx,
+        [{ path: filepath, access: "read", tree: true }],
+        instance.directory,
+        instance.worktree,
+      )
+
       const stat = yield* fs.stat(filepath).pipe(
         Effect.catchIf(
           (err) => "reason" in err && err.reason._tag === "NotFound",
           () => Effect.succeed(undefined),
         ),
       )
-
       yield* assertExternalDirectoryEffect(ctx, filepath, {
         bypass: Boolean(ctx.extra?.["bypassCwdCheck"]),
         kind: stat?.type === "Directory" ? "directory" : "file",

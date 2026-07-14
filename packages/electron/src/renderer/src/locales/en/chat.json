@@ -76,6 +76,64 @@
   },
   "permissionDialog": {
     "permission": "Permission: {{permission}}",
+    "permissionTypes": {
+      "read": {
+        "label": "Read files",
+        "description": "The agent wants to read the specified file or directory."
+      },
+      "edit": {
+        "label": "Modify files",
+        "description": "The agent wants to create, edit, move, or delete files."
+      },
+      "write": {
+        "label": "Write files",
+        "description": "The agent wants to write content to the specified file."
+      },
+      "glob": {
+        "label": "Find files",
+        "description": "The agent wants to search a directory by file name pattern."
+      },
+      "grep": {
+        "label": "Search file contents",
+        "description": "The agent wants to search files for matching content."
+      },
+      "bash": {
+        "label": "Run terminal commands",
+        "description": "The agent wants to run commands in a local terminal."
+      },
+      "external_directory": {
+        "label": "Access an external directory",
+        "description": "The target is outside the current project or worktree and needs additional approval."
+      },
+      "sandbox": {
+        "label": "Leave the sandbox",
+        "description": "This operation crosses a filesystem, network, or sandbox runtime boundary and needs additional approval."
+      },
+      "webfetch": {
+        "label": "Access a web page",
+        "description": "The agent wants to read content from the specified web page."
+      },
+      "websearch": {
+        "label": "Search the web",
+        "description": "The agent wants to search for information on the internet."
+      },
+      "task": {
+        "label": "Start a sub-agent",
+        "description": "The agent wants to create a subtask for another agent."
+      },
+      "lsp": {
+        "label": "Use the language server",
+        "description": "The agent wants to use code navigation, references, or other language server actions."
+      },
+      "skill": {
+        "label": "Load a skill",
+        "description": "The agent wants to read and use the selected skill instructions and resources."
+      },
+      "doom_loop": {
+        "label": "Continue repeated actions",
+        "description": "The same tool call has repeated and needs confirmation before continuing."
+      }
+    },
     "moreCount": "+{{count}} more",
     "minimize": "Minimize",
     "fromSubtask": "From subtask: {{title}}",
