@@ -460,13 +460,27 @@ html.electron-app[data-theme-preset='codex'][data-glass] .electron-windows-title
   color: hsl(var(--always-white));
 }
 
+/* Windows: sidebar slightly lighter than chat bg in codex dark mode */
+:root:root[data-platform='windows'][data-theme-preset='codex'][data-mode='dark'] {
+  --sidebar-bg: 0 0% 10%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:root[data-platform='windows'][data-theme-preset='codex']:not([data-mode]) {
+    --sidebar-bg: 0 0% 10%;
+  }
+}
+
 /* Windows: reduce chat header height and compact inner dropdowns */
-html[data-platform='windows'] [data-chat-header='true'] {
+html[data-platform='windows'] [data-chat-header='true'],
+html[data-platform='macos'] [data-chat-header='true'] {
   height: 2.25rem;
 }
 
 html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > button,
-html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > input {
+html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > input,
+html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > button,
+html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
   padding-top: 0.125rem;
   padding-bottom: 0.125rem;
 }
