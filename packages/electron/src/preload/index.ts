@@ -195,6 +195,7 @@ export type CustomOpenCodeApi = {
   windowMaximize(): Promise<void>
   windowClose(): Promise<void>
   windowIsMaximized(): Promise<boolean>
+  windowSetTheme(theme: "system" | "light" | "dark"): Promise<void>
   onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void
 }
 
@@ -244,6 +245,7 @@ const api: CustomOpenCodeApi = {
   windowMaximize: () => ipcRenderer.invoke("window:maximize"),
   windowClose: () => ipcRenderer.invoke("window:close"),
   windowIsMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+  windowSetTheme: (theme) => ipcRenderer.invoke("window:set-theme", theme),
   onWindowMaximizeChange(callback) {
     const listener = (_event: unknown, isMaximized: boolean) => callback(isMaximized)
     ipcRenderer.on("window:maximize-change", listener)

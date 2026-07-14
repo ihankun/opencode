@@ -27,6 +27,7 @@ interface SidebarProps {
   onOpenSkills?: () => void
   onOpenPlugins?: () => void
   onOpenTasks?: () => void
+  activeUtilityPage?: 'skills' | 'plugins' | 'tasks' | null
   projectDialogOpen?: boolean
   onProjectDialogClose?: () => void
   mobileInline?: boolean
@@ -45,6 +46,7 @@ export const Sidebar = memo(function Sidebar({
   onOpenSkills,
   onOpenPlugins,
   onOpenTasks,
+  activeUtilityPage,
   projectDialogOpen,
   onProjectDialogClose,
   mobileInline = false,
@@ -57,6 +59,7 @@ export const Sidebar = memo(function Sidebar({
   const isOverlay = interaction.sidebarBehavior === 'overlay'
   const touchCapable = interaction.touchCapable
   const isProjectDialogVisible = isProjectDialogOpen || !!projectDialogOpen
+  const activeNavigation = activeUtilityPage ?? (selectedSessionId ? null : 'new')
 
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -273,6 +276,7 @@ export const Sidebar = memo(function Sidebar({
               onOpenSkills={onOpenSkills}
               onOpenPlugins={onOpenPlugins}
               onOpenTasks={onOpenTasks}
+              activeNavigation={activeNavigation}
             />
           </div>
 
@@ -330,6 +334,7 @@ export const Sidebar = memo(function Sidebar({
             onOpenSkills={onOpenSkills}
             onOpenPlugins={onOpenPlugins}
             onOpenTasks={onOpenTasks}
+            activeNavigation={activeNavigation}
           />
         </div>
 
@@ -369,6 +374,7 @@ export const Sidebar = memo(function Sidebar({
           onOpenSkills={onOpenSkills}
           onOpenPlugins={onOpenPlugins}
           onOpenTasks={onOpenTasks}
+          activeNavigation={activeNavigation}
         />
 
         {isOpen && !previewMode && (

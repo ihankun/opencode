@@ -24,6 +24,11 @@ export function DesktopTitlebar() {
   useEffect(() => {
     if (!isDesktopChrome) return
 
+    if (typeof window.customOpenCode?.windowSetTheme === 'function') {
+      void window.customOpenCode.windowSetTheme(mode)
+      return
+    }
+
     let cancelled = false
     const theme = mode === 'system' ? null : resolvedTheme
 

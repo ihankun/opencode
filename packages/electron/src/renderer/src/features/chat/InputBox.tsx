@@ -1360,7 +1360,7 @@ function InputBoxComponent({
   //   公式：max(0, env - 2rem) → 总缓冲 = Footer + padding = max(32px, env)
   const bottomDockPadding = isCollapsed
     ? 'max(12px, var(--safe-area-inset-bottom, 0px))'
-    : 'max(6px, var(--safe-area-inset-bottom, 0px))'
+    : 'max(14px, var(--safe-area-inset-bottom, 0px))'
 
   return (
     <div className="w-full">
@@ -1369,7 +1369,7 @@ function InputBoxComponent({
         style={{ paddingBottom: bottomDockPadding }}
       >
         {homeMode && (
-          <h1 className="mb-10 truncate text-center text-[1.75rem] font-normal leading-tight text-text-100 md:text-[2rem]">
+          <h1 className={`truncate text-center text-[1.75rem] font-normal leading-tight text-text-100 md:text-[2rem] ${isCompact ? 'mb-10' : 'mb-[clamp(5rem,16vh,10rem)]'}`}>
             {homeTitle}
           </h1>
         )}
@@ -1453,135 +1453,15 @@ function InputBoxComponent({
 
             <GoalStatusBar sessionId={sessionId} rootPath={rootPath} isStreaming={isStreaming} />
 
-            {/* Input Container */}
-            <div
-              ref={inputContainerRef}
-              data-input-box
-              data-pane-id={paneId}
-              onPointerDown={handleContainerPointerDown}
-              onDragEnter={handleDragEnter}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`glass rounded-2xl relative overflow-hidden focus-within:outline-none shadow-lg ${
-                isDragging || isInternalFileDragging
-                  ? 'border border-accent-main-100 ring-2 ring-accent-main-100/30'
-                  : isStreaming
-                    ? 'border border-accent-main-100/50 animate-border-pulse'
-                    : 'border border-border-200/60'
-              }`}
-              style={{ maxHeight: inputContainerMaxHeight }}
-            >
-              {/* Drop overlay */}
-              {(isDragging || isInternalFileDragging) && (
-                <div className="absolute inset-0 z-50 rounded-2xl bg-accent-main-100/5 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                  <span className="text-[length:var(--fs-base)] text-accent-main-100 font-medium">{t('inputBox.dropFilesHere')}</span>
-                </div>
-              )}
-
-              <div className="relative">
-                <div className="overflow-hidden">
-                  {/* Attachments Preview - 显示在输入框上方 */}
-                  <div
-                    ref={attachmentSectionRef}
-                    className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-                      attachments.length > 0 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                    }`}
-                  >
-                    <div className="overflow-hidden">
-                      <div className="px-4 pt-3 pb-1">
-                        <div className="relative">
-                          <div
-                            ref={attachmentRailRef}
-                            onScroll={syncAttachmentRailState}
-                            onWheel={handleAttachmentRailWheel}
-                            className="overflow-x-auto overflow-y-hidden overscroll-x-contain no-scrollbar touch-pan-x"
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                          >
-                            <AttachmentPreview
-                              attachments={attachments}
-                              onRemove={handleRemoveAttachment}
-                              variant="rail"
-                              className={isSubmitting ? 'pr-4 pointer-events-none opacity-70' : 'pr-4'}
-                            />
-                          </div>
-
-                          {attachmentsOverflowing && showAttachmentLeftFade && (
-                            <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-bg-000/50 to-transparent" />
-                          )}
-
-                          {attachmentsOverflowing && showAttachmentRightFade && (
-                            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-bg-000/50 to-transparent" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Text Input - 简单的 textarea，直接显示文本 */}
-                  <div className="pt-4 pb-2">
-                    <textarea
-                      ref={textareaRef}
-                      value={text}
-                      onChange={handleChange}
-                      onKeyDown={handleKeyDown}
-                      onCompositionStart={handleCompositionStart}
-                      onCompositionEnd={handleCompositionEnd}
-                      onPaste={handlePaste}
-                      onScroll={handleScroll}
-                      onFocus={handleFocus}
-                      onBlur={handleBlur}
-                      disabled={inputDisabled}
-                      placeholder={homeMode ? t('emptyState.promptPlaceholder') : isCompact ? t('inputBox.replyToAgentMobile') : t('inputBox.replyToAgent')}
-                      className={`w-full resize-none focus:outline-none focus:ring-0 bg-transparent text-text-100 placeholder:text-text-400 custom-scrollbar ${isCompact ? 'px-3' : 'px-4'}`}
-                      style={{
-                        ...TEXT_STYLE,
-                        minHeight: '24px',
-                        maxHeight: textareaMaxHeight,
-                      }}
-                      rows={1}
-                    />
-                  </div>
-
-                  {/* Bottom Bar -> InputToolbar */}
-                  <div ref={toolbarRef}>
-                    <InputToolbar
-                      paneId={paneId}
-                      agents={agents}
-                      selectedAgent={selectedAgent}
-                      onAgentChange={onAgentChange}
-                      variants={variants}
-                      selectedVariant={selectedVariant}
-                      onVariantChange={onVariantChange}
-                      fileCapabilities={fileCaps}
-                      onFilesSelected={handleFilesSelected}
-                      onAddReference={() => insertComposerTrigger('@')}
-                      onAddCommand={() => insertComposerTrigger('/')}
-                      isStreaming={isStreaming}
-                      isSending={isSubmitting}
-                      onAbort={onAbort}
-                      canSend={canSend || false}
-                      onSend={handleSend}
-                      models={models}
-                      selectedModelKey={selectedModelKey}
-                      onModelChange={onModelChange}
-                      modelsLoading={modelsLoading}
-                      inputContainerRef={inputContainerRef}
-                      modelSelectorRef={modelSelectorRef}
-                      contextStats={contextStats}
-                      hasMessages={hasMessages}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {!sessionId && (
-              <div className="relative mt-1 px-4 pb-1" ref={projectMenuRef}>
+              <div
+                className="relative z-0 -mb-3 flex min-h-12 items-start rounded-t-2xl border border-b-0 border-border-200/55 bg-bg-100/95 px-3 pb-4 pt-2 shadow-sm"
+                ref={projectMenuRef}
+              >
                 <button
                   type="button"
                   onClick={() => setProjectMenuOpen(value => !value)}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[length:var(--fs-sm)] text-text-300 transition-colors hover:bg-bg-200/70 hover:text-text-100"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-bg-200/80 px-2.5 py-1.5 text-[length:var(--fs-sm)] font-medium text-text-100 transition-colors hover:bg-bg-300/70"
                   aria-haspopup="menu"
                   aria-expanded={projectMenuOpen}
                   title={currentDirectory || '不选择工作目录时，对话会归到下面的对话列表'}
@@ -1594,7 +1474,7 @@ function InputBoxComponent({
                 {projectMenuOpen && (
                   <div
                     role="menu"
-                    className="absolute bottom-full left-4 z-50 mb-2 max-h-64 min-w-56 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl"
+                    className="absolute bottom-full left-3 z-50 mb-2 max-h-64 min-w-56 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl"
                   >
                     <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
                       {t('emptyState.workingDirectory')}
@@ -1640,6 +1520,130 @@ function InputBoxComponent({
                 )}
               </div>
             )}
+
+            {/* Input Container */}
+            <div
+              ref={inputContainerRef}
+              data-input-box
+              data-pane-id={paneId}
+              onPointerDown={handleContainerPointerDown}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`glass rounded-2xl relative flex flex-col overflow-hidden focus-within:outline-none shadow-lg ${
+                isDragging || isInternalFileDragging
+                  ? 'border border-accent-main-100 ring-2 ring-accent-main-100/30'
+                  : isStreaming
+                    ? 'border border-accent-main-100/50 animate-border-pulse'
+                    : 'border border-border-200/60'
+              }`}
+              style={{ maxHeight: inputContainerMaxHeight }}
+            >
+              {/* Drop overlay */}
+              {(isDragging || isInternalFileDragging) && (
+                <div className="absolute inset-0 z-50 rounded-2xl bg-accent-main-100/5 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+                  <span className="text-[length:var(--fs-base)] text-accent-main-100 font-medium">{t('inputBox.dropFilesHere')}</span>
+                </div>
+              )}
+
+              <div className="relative flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  {/* Attachments Preview - 显示在输入框上方 */}
+                  <div
+                    ref={attachmentSectionRef}
+                    className={`grid shrink-0 transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                      attachments.length > 0 ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="px-4 pt-3 pb-1">
+                        <div className="relative">
+                          <div
+                            ref={attachmentRailRef}
+                            onScroll={syncAttachmentRailState}
+                            onWheel={handleAttachmentRailWheel}
+                            className="overflow-x-auto overflow-y-hidden overscroll-x-contain no-scrollbar touch-pan-x"
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                          >
+                            <AttachmentPreview
+                              attachments={attachments}
+                              onRemove={handleRemoveAttachment}
+                              variant="rail"
+                              className={isSubmitting ? 'pr-4 pointer-events-none opacity-70' : 'pr-4'}
+                            />
+                          </div>
+
+                          {attachmentsOverflowing && showAttachmentLeftFade && (
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-bg-000/50 to-transparent" />
+                          )}
+
+                          {attachmentsOverflowing && showAttachmentRightFade && (
+                            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-bg-000/50 to-transparent" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Text Input - 简单的 textarea，直接显示文本 */}
+                  <div className="min-h-0 flex-1 overflow-hidden pt-4 pb-2">
+                    <textarea
+                      ref={textareaRef}
+                      value={text}
+                      onChange={handleChange}
+                      onKeyDown={handleKeyDown}
+                      onCompositionStart={handleCompositionStart}
+                      onCompositionEnd={handleCompositionEnd}
+                      onPaste={handlePaste}
+                      onScroll={handleScroll}
+                      onFocus={handleFocus}
+                      onBlur={handleBlur}
+                      disabled={inputDisabled}
+                      placeholder={homeMode ? t('emptyState.promptPlaceholder') : isCompact ? t('inputBox.replyToAgentMobile') : t('inputBox.replyToAgent')}
+                      className={`block w-full resize-none focus:outline-none focus:ring-0 bg-transparent text-text-100 placeholder:text-text-400 custom-scrollbar ${isCompact ? 'px-3' : 'px-4'}`}
+                      style={{
+                        ...TEXT_STYLE,
+                        minHeight: '24px',
+                        maxHeight: textareaMaxHeight,
+                      }}
+                      rows={1}
+                    />
+                  </div>
+
+                  {/* Bottom Bar -> InputToolbar */}
+                  <div ref={toolbarRef} className="relative z-10 shrink-0">
+                    <InputToolbar
+                      paneId={paneId}
+                      agents={agents}
+                      selectedAgent={selectedAgent}
+                      onAgentChange={onAgentChange}
+                      variants={variants}
+                      selectedVariant={selectedVariant}
+                      onVariantChange={onVariantChange}
+                      fileCapabilities={fileCaps}
+                      onFilesSelected={handleFilesSelected}
+                      onAddReference={() => insertComposerTrigger('@')}
+                      onAddCommand={() => insertComposerTrigger('/')}
+                      isStreaming={isStreaming}
+                      isSending={isSubmitting}
+                      onAbort={onAbort}
+                      canSend={canSend || false}
+                      onSend={handleSend}
+                      models={models}
+                      selectedModelKey={selectedModelKey}
+                      onModelChange={onModelChange}
+                      modelsLoading={modelsLoading}
+                      inputContainerRef={inputContainerRef}
+                      modelSelectorRef={modelSelectorRef}
+                      contextStats={contextStats}
+                      hasMessages={hasMessages}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 

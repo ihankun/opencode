@@ -737,6 +737,16 @@ html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > input {
   --chat-bg: 0 0% 100%;
 }
 
+:root:root[data-theme-preset='codex'][data-mode='light'] {
+  --sidebar-bg: 0 0% 99%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:root[data-theme-preset='codex']:not([data-mode]) {
+    --sidebar-bg: 0 0% 99%;
+  }
+}
+
 :root:root[data-theme-preset='codex'][data-mode='dark'] {
   --sidebar-bg: 0 0% 24%;
   --sidebar-selected-bg: 0 0% 36%;
@@ -753,6 +763,24 @@ html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > input {
 
 .sidebar-surface {
   background-color: hsl(var(--sidebar-bg));
+}
+
+:root[data-theme-preset='codex'][data-mode='light'] .sidebar-surface {
+  --text-100: 0 0% 0%;
+  --text-200: 0 0% 0%;
+  --text-300: 0 0% 0%;
+  --text-400: 0 0% 30%;
+  --text-500: 0 0% 48%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme-preset='codex']:not([data-mode]) .sidebar-surface {
+    --text-100: 0 0% 0%;
+    --text-200: 0 0% 0%;
+    --text-300: 0 0% 0%;
+    --text-400: 0 0% 30%;
+    --text-500: 0 0% 48%;
+  }
 }
 
 .app-shell,
@@ -795,26 +823,28 @@ html.electron-app[data-theme-preset='codex'][data-platform="linux"][data-glass] 
 }
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.18);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  backdrop-filter: blur(40px) saturate(200%);
+  background-color: hsl(var(--sidebar-bg) / 0.42);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
 }
 
-:root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.18);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  backdrop-filter: blur(40px) saturate(200%);
+@media (prefers-color-scheme: light) {
+  :root[data-theme-preset='codex'][data-glass]:not([data-mode]) .sidebar-surface {
+    background-color: hsl(var(--sidebar-bg) / 0.42);
+    -webkit-backdrop-filter: blur(40px) saturate(150%);
+    backdrop-filter: blur(40px) saturate(150%);
+  }
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-surface {
-  background-color: hsl(var(--sidebar-bg) / 0.16);
+  background-color: hsl(0 0% 8% / 0.32);
   -webkit-backdrop-filter: blur(44px) saturate(210%);
   backdrop-filter: blur(44px) saturate(210%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-surface {
-    background-color: hsl(var(--sidebar-bg) / 0.16);
+    background-color: hsl(0 0% 8% / 0.32);
     -webkit-backdrop-filter: blur(44px) saturate(210%);
     backdrop-filter: blur(44px) saturate(210%);
   }
@@ -832,6 +862,10 @@ html.electron-app[data-theme-preset='codex'][data-platform="linux"][data-glass] 
 
 .sidebar-selected-row {
   background-color: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.96);
+}
+
+.sidebar-hover-row:hover {
+  background-color: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
 }
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-selected-row,

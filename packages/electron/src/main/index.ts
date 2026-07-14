@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, Notification, protocol, session, shell } from "electron"
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
@@ -59,6 +59,12 @@ ipcMain.handle("window:close", () => {
 
 ipcMain.handle("window:is-maximized", () => {
   return mainWindow?.isMaximized() ?? false
+})
+
+ipcMain.handle("window:set-theme", (_event, value: unknown) => {
+  if (value !== "system" && value !== "light" && value !== "dark") return
+  if (nativeTheme.themeSource === value) return
+  nativeTheme.themeSource = value
 })
 
 type PluginInstallTarget = {
@@ -148,7 +154,7 @@ async function createWindow() {
     icon: iconPath(isMac ? "icon.icns" : "icon.ico"),
     backgroundColor: isMac ? "#00000000" : "#0f1115",
     transparent: isMac,
-    vibrancy: isMac ? "under-window" : undefined,
+    vibrancy: isMac ? "sidebar" : undefined,
     visualEffectState: isMac ? "active" : undefined,
     titleBarStyle: isMac ? "hidden" : isWin ? "hidden" : "default",
     trafficLightPosition: isMac ? { x: 20, y: 18 } : undefined,

@@ -653,7 +653,7 @@ function PinnedFolderSection({
 
   return (
     <div className="relative transition-all duration-150 group/folder">
-      <div className="relative flex w-full items-center rounded-md hover:bg-bg-200/40 transition-colors duration-150 select-none">
+      <div className="sidebar-hover-row relative flex w-full items-center rounded-md transition-colors duration-150 select-none">
         <button
           onClick={() => setIsExpanded(value => !value)}
           className="flex flex-1 min-w-0 items-center gap-2 pl-2 pr-2 py-1.5 text-left cursor-default select-none"
@@ -883,7 +883,7 @@ function FolderRecentSection({
         }`}
       >
         {/* 文件夹行 */}
-        <div className="relative flex w-full items-center rounded-md hover:bg-bg-200/40 transition-colors duration-150 select-none">
+        <div className="sidebar-hover-row relative flex w-full items-center rounded-md transition-colors duration-150 select-none">
           {/* 选中左侧色条 */}
           {showProjectCheckbox && isProjectChecked && (
             <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-accent-main-100" />

@@ -852,11 +852,7 @@ export const ChatPane = memo(function ChatPane({
 
       <div
         ref={inputBoxWrapperRef}
-        className={
-          homeComposer
-            ? 'absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 pointer-events-none'
-            : 'absolute bottom-0 left-0 right-0 z-10 pointer-events-none'
-        }
+        className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
         {modelRecovery && (
           <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">

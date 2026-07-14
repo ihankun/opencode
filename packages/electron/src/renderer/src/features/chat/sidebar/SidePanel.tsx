@@ -10,6 +10,7 @@ import { SidebarFooter } from './SidebarFooter'
 import { buildActiveSessionTree } from './activeSessionTree'
 import {
   FolderIcon,
+  FolderOpenIcon,
   GlobeIcon,
   PlusIcon,
   TrashIcon,
@@ -62,9 +63,18 @@ interface SidePanelProps {
   onOpenSkills?: () => void
   onOpenPlugins?: () => void
   onOpenTasks?: () => void
+  activeNavigation?: 'new' | 'skills' | 'plugins' | 'tasks' | null
   isMobile?: boolean
   isExpanded?: boolean
   onOpenSettings?: () => void
+}
+
+function navigationItemClass(active: boolean) {
+  return `h-7 flex items-center rounded-lg active:scale-[0.98] transition-all duration-300 overflow-hidden ${
+    active
+      ? 'sidebar-selected-row text-text-100'
+      : 'sidebar-hover-row text-text-300 hover:text-text-100'
+  }`
 }
 
 interface ProjectItem {
@@ -122,6 +132,7 @@ export function SidePanel({
   onOpenSkills,
   onOpenPlugins,
   onOpenTasks,
+  activeNavigation,
   isMobile = false,
   isExpanded = true,
   onOpenSettings,
@@ -1155,7 +1166,7 @@ export function SidePanel({
           type="button"
           onClick={onNewSession}
           aria-label={t('sidebar.newChat')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 group overflow-hidden"
+          className={`${navigationItemClass(activeNavigation === 'new')} group`}
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1184,7 +1195,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenSkills}
           aria-label={t('sidebar.skills')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className={navigationItemClass(activeNavigation === 'skills')}
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1207,7 +1218,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenPlugins}
           aria-label={t('sidebar.plugins')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className={navigationItemClass(activeNavigation === 'plugins')}
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1230,7 +1241,7 @@ export function SidePanel({
           type="button"
           onClick={onOpenTasks}
           aria-label={t('sidebar.tasks')}
-          className="h-7 flex items-center rounded-lg text-text-300 hover:text-text-100 hover:bg-bg-200/70 active:scale-[0.98] transition-all duration-300 overflow-hidden"
+          className={navigationItemClass(activeNavigation === 'tasks')}
           style={{ width: showLabels ? '100%' : 32, paddingLeft: 6, paddingRight: 6 }}
           title={t('sidebar.tasks')}
         >
@@ -1295,7 +1306,7 @@ export function SidePanel({
                       className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors ${
                         isActive
                           ? 'sidebar-selected-row text-text-100'
-                          : 'text-text-300 hover:text-text-100 hover:bg-bg-200/45'
+                          : 'sidebar-hover-row text-text-300 hover:text-text-100'
                       }`}
                     >
                       <button
@@ -1303,6 +1314,7 @@ export function SidePanel({
                         onClick={e => {
                           e.stopPropagation()
                           handleSelectProject(project.id)
+                          if (!isGlobal) handleToggleProject(project.id)
                         }}
                         aria-current={isActive ? 'true' : undefined}
                         className="min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0"
@@ -1311,6 +1323,8 @@ export function SidePanel({
                         <span className="flex size-5 shrink-0 items-center justify-center">
                           {isGlobal ? (
                             <GlobeIcon size={14} className="text-accent-main-100" />
+                          ) : isExpanded ? (
+                            <FolderOpenIcon size={14} />
                           ) : (
                             <FolderIcon size={14} />
                           )}

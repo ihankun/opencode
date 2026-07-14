@@ -8,6 +8,11 @@ import type { ReasoningDisplayMode, DiffStyle, ToolCardStyle, CompletedAtFormat,
 // 保持向后兼容的类型别名
 export type ThemeMode = ColorMode
 
+function syncNativeTheme(mode: ThemeMode) {
+  if (typeof window.customOpenCode?.windowSetTheme !== 'function') return Promise.resolve()
+  return window.customOpenCode.windowSetTheme(mode).catch(() => undefined)
+}
+
 export function useTheme() {
   // 订阅 themeStore 变化
   const state = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
@@ -18,22 +23,27 @@ export function useTheme() {
   // ---- Color Mode (日夜模式) ----
 
   const setTheme = useCallback((newMode: ThemeMode) => {
-    skipNextTransitionRef.current = true
-    themeStore.setColorMode(newMode)
+    void syncNativeTheme(newMode).then(() => {
+      skipNextTransitionRef.current = true
+      themeStore.setColorMode(newMode)
+    })
   }, [])
 
   const toggleTheme = useCallback(() => {
-    skipNextTransitionRef.current = true
     const current = themeStore.colorMode
-    if (current === 'system') themeStore.setColorMode('dark')
-    else if (current === 'dark') themeStore.setColorMode('light')
-    else themeStore.setColorMode('system')
+    const newMode = current === 'system' ? 'dark' : current === 'dark' ? 'light' : 'system'
+    void syncNativeTheme(newMode).then(() => {
+      skipNextTransitionRef.current = true
+      themeStore.setColorMode(newMode)
+    })
   }, [])
 
   const setThemeWithAnimation = useCallback((newMode: ThemeMode, event?: React.MouseEvent) => {
     if (!document.startViewTransition || !event) {
-      skipNextTransitionRef.current = true
-      themeStore.setColorMode(newMode)
+      void syncNativeTheme(newMode).then(() => {
+        skipNextTransitionRef.current = true
+        themeStore.setColorMode(newMode)
+      })
       return
     }
 
@@ -44,7 +54,8 @@ export function useTheme() {
     const root = document.documentElement
     root.setAttribute('data-theme-transition', 'off')
 
-    const transition = document.startViewTransition(() => {
+    const transition = document.startViewTransition(async () => {
+      await syncNativeTheme(newMode)
       skipNextTransitionRef.current = true
       flushSync(() => {
         themeStore.setColorMode(newMode)

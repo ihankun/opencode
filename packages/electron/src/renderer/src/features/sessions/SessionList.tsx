@@ -572,7 +572,7 @@ export function SessionListItem({
             ? 'sidebar-selected-row text-text-100'
             : isEditMode && isChecked
               ? 'text-text-100'
-              : 'text-text-300 hover:bg-bg-200/35 hover:text-text-200'
+              : 'sidebar-hover-row text-text-300 hover:text-text-100'
         } ${showActions && !isEditMode ? 'bg-bg-200/35' : ''}`}
       >
         {/* 选中左侧色条 */}
@@ -763,7 +763,7 @@ export function SessionListItem({
       onTouchMove={!isEditMode ? handleTouchMove : undefined}
       onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
       className={`group relative flex items-start ${itemPaddingClass} rounded-lg cursor-default transition-all duration-200 border border-transparent select-none ${
-        isSelected && !isEditMode ? 'bg-bg-000 shadow-sm ring-1 ring-border-200/50' : 'hover:bg-bg-200/50'
+        isSelected && !isEditMode ? 'sidebar-selected-row shadow-sm ring-1 ring-border-200/50' : 'sidebar-hover-row'
       } ${showActions && !isEditMode ? 'bg-bg-200/50' : ''}`}
     >
       {/* 选中左侧色条 */}

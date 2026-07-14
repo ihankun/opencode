@@ -1094,6 +1094,7 @@ function App() {
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
+                    activeUtilityPage={utilityPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1187,6 +1188,7 @@ function App() {
                   onOpenSkills={openSkillPage}
                   onOpenPlugins={openPluginPage}
                   onOpenTasks={openTaskPage}
+                  activeUtilityPage={utilityPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1210,6 +1212,7 @@ function App() {
                     onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
+                    activeUtilityPage={utilityPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
