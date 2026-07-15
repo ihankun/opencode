@@ -1,6 +1,6 @@
 import { getSDKClient, unwrap } from './sdk'
 import { formatPathForApi } from '../utils/directoryUtils'
-import type { Auth, Provider, ProviderAuthMethod } from '@opencode-ai/sdk/v2/client'
+import type { Auth, Provider, ProviderAuthAuthorization, ProviderAuthMethod } from '@opencode-ai/sdk/v2/client'
 
 export interface ProviderListResult {
   all: Provider[]
@@ -26,4 +26,38 @@ export async function setProviderAuth(providerID: string, auth: Auth): Promise<b
 export async function removeProviderAuth(providerID: string): Promise<boolean> {
   const sdk = getSDKClient()
   return unwrap(await sdk.auth.remove({ providerID }))
+}
+
+export async function authorizeProviderOAuth(
+  providerID: string,
+  method: number,
+  inputs?: Record<string, string>,
+  directory?: string,
+): Promise<ProviderAuthAuthorization> {
+  const sdk = getSDKClient()
+  return unwrap(
+    await sdk.provider.oauth.authorize({
+      providerID,
+      method,
+      inputs,
+      directory: formatPathForApi(directory),
+    }),
+  )
+}
+
+export async function completeProviderOAuth(
+  providerID: string,
+  method: number,
+  code?: string,
+  directory?: string,
+): Promise<boolean> {
+  const sdk = getSDKClient()
+  return unwrap(
+    await sdk.provider.oauth.callback({
+      providerID,
+      method,
+      code,
+      directory: formatPathForApi(directory),
+    }),
+  )
 }

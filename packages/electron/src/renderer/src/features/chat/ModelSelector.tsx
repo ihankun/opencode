@@ -7,9 +7,19 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo, forwardRef, useImperativeHandle } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDownIcon, SearchIcon, ThinkingIcon, EyeIcon, CheckIcon, PinIcon } from '../../components/Icons'
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  SearchIcon,
+  ThinkingIcon,
+  EyeIcon,
+  CheckIcon,
+  PinIcon,
+  PlugIcon,
+} from '../../components/Icons'
 import { DropdownMenu } from '../../components/ui'
-import type { ModelInfo } from '../../api'
+import { getProviders, type ModelInfo, type ProviderListResult } from '../../api'
+import { useCurrentDirectory } from '../../contexts/useDirectory'
 import { useInputCapabilities } from '../../hooks/useInputCapabilities'
 import {
   getModelKey,
@@ -20,6 +30,7 @@ import {
   isModelPinned,
   toggleModelPin,
 } from '../../utils/modelUtils'
+import { QuickProviderConnectDialog } from './QuickProviderConnectDialog'
 
 // ============================================
 // Public types
@@ -110,7 +121,6 @@ function useFlatList(
 // ============================================
 
 interface ModelListPanelProps {
-  menuRef: React.RefObject<HTMLDivElement | null>
   searchInputRef: React.RefObject<HTMLInputElement | null>
   listRef: React.RefObject<HTMLDivElement | null>
   searchQuery: string
@@ -141,7 +151,6 @@ interface ModelListPanelProps {
 }
 
 const ModelListPanel = memo(function ModelListPanel({
-  menuRef,
   searchInputRef,
   listRef,
   searchQuery,
@@ -171,7 +180,7 @@ const ModelListPanel = memo(function ModelListPanel({
   unpinLabel,
 }: ModelListPanelProps) {
   return (
-    <div ref={menuRef} className="flex flex-col min-h-0 pt-1.5">
+    <div className="flex flex-1 flex-col min-h-0 pt-1.5">
       {/* 搜索栏 */}
       <div className="shrink-0 px-2 pb-1.5">
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-bg-200/40 transition-colors focus-within:bg-bg-200/60">
@@ -356,10 +365,14 @@ export const ModelSelector = memo(
   ) {
     const { t } = useTranslation('chat')
     const { preferTouchUi } = useInputCapabilities()
+    const directory = useCurrentDirectory()
     const [isOpen, setIsOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [highlightedIndex, setHighlightedIndex] = useState(0)
     const [refreshTrigger, setRefreshTrigger] = useState(0)
+    const [providerCatalog, setProviderCatalog] = useState<ProviderListResult | null>(null)
+    const [providersLoading, setProvidersLoading] = useState(false)
+    const [providerDialogOpen, setProviderDialogOpen] = useState(false)
 
     const containerRef = useRef<HTMLDivElement>(null)
     const triggerRef = useRef<HTMLButtonElement>(null)
@@ -573,6 +586,25 @@ export const ModelSelector = memo(
 
       return () => clearTimeout(timerId)
     }, [isOpen, focusItemAtInteractiveIndex])
+
+    useEffect(() => {
+      if (!isOpen) return
+      let cancelled = false
+      setProvidersLoading(true)
+      void getProviders(directory)
+        .then(result => {
+          if (!cancelled) setProviderCatalog(result)
+        })
+        .catch(() => {
+          if (!cancelled) setProviderCatalog(null)
+        })
+        .finally(() => {
+          if (!cancelled) setProvidersLoading(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }, [directory, isOpen])
 
     useEffect(() => {
       if (!isOpen) return
@@ -837,6 +869,11 @@ export const ModelSelector = memo(
     const dropdownMaxH = position === 'top' ? 'max-h-[min(360px,45vh)]' : 'max-h-[min(600px,70vh)]'
     const listMaxH = position === 'top' ? 'max-h-[min(320px,40vh)]' : 'max-h-[min(500px,60vh)]'
 
+    const openProviderDialog = () => {
+      closeMenu({ focusTrigger: false })
+      setProviderDialogOpen(true)
+    }
+
     // ---- Render ----
 
     return (
@@ -859,37 +896,72 @@ export const ModelSelector = memo(
           constrainToRef={constrainToRef}
           className={`!p-0 overflow-hidden flex flex-col ${dropdownMaxH}`}
         >
-          <ModelListPanel
-            menuRef={menuRef}
-            searchInputRef={searchInputRef}
-            listRef={listRef}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            setHighlightedIndex={setHighlightedIndex}
-            handleSearchKeyDown={handleSearchKeyDown}
-            handleItemKeyDown={handleItemKeyDown}
-            flatList={flatList}
-            itemIndices={itemIndices}
-            highlightedIndex={highlightedIndex}
-            selectedModelKey={selectedModelKey}
-            onItemClick={handleItemClick}
-            onTogglePin={handleTogglePin}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            handlePinKeyDown={handlePinKeyDown}
-            ignoreMouseRef={ignoreMouseRef}
-            lastMousePosRef={lastMousePosRef}
-            idPrefix={idPrefix}
-            listboxId={listboxId}
-            maxListHeight={listMaxH}
-            searchPlaceholder={t('modelSelector.searchModels')}
-            noResultsText={t('modelSelector.noModelsFound')}
-            noResultsHint={t('modelSelector.tryDifferentKeyword')}
-            preferTouchUi={preferTouchUi}
-            pinLabel={t('modelSelector.pinToTop')}
-            unpinLabel={t('modelSelector.unpin')}
-          />
+          <div ref={menuRef} className="flex min-h-0 flex-1 flex-col">
+            <ModelListPanel
+              searchInputRef={searchInputRef}
+              listRef={listRef}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              setHighlightedIndex={setHighlightedIndex}
+              handleSearchKeyDown={handleSearchKeyDown}
+              handleItemKeyDown={handleItemKeyDown}
+              flatList={flatList}
+              itemIndices={itemIndices}
+              highlightedIndex={highlightedIndex}
+              selectedModelKey={selectedModelKey}
+              onItemClick={handleItemClick}
+              onTogglePin={handleTogglePin}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              handlePinKeyDown={handlePinKeyDown}
+              ignoreMouseRef={ignoreMouseRef}
+              lastMousePosRef={lastMousePosRef}
+              idPrefix={idPrefix}
+              listboxId={listboxId}
+              maxListHeight={listMaxH}
+              searchPlaceholder={t('modelSelector.searchModels')}
+              noResultsText={t('modelSelector.noModelsFound')}
+              noResultsHint={t('modelSelector.tryDifferentKeyword')}
+              preferTouchUi={preferTouchUi}
+              pinLabel={t('modelSelector.pinToTop')}
+              unpinLabel={t('modelSelector.unpin')}
+            />
+
+            {!searchQuery && (providersLoading || !!providerCatalog?.all.length) && (
+              <div className="shrink-0 border-t border-border-200/50 bg-bg-100/70 p-1.5">
+                <button
+                  type="button"
+                  onClick={openProviderDialog}
+                  disabled={providersLoading}
+                  className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[length:var(--fs-sm)] text-text-400 transition-colors hover:bg-bg-200/70 hover:text-text-100 disabled:cursor-wait"
+                >
+                  <PlugIcon size={15} className="shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {providersLoading ? t('modelSelector.loadingProviders') : t('modelSelector.addProviders')}
+                  </span>
+                  <ChevronRightIcon size={13} className="shrink-0 text-text-500" />
+                </button>
+              </div>
+            )}
+          </div>
         </DropdownMenu>
+
+        <QuickProviderConnectDialog
+          isOpen={providerDialogOpen}
+          providers={providerCatalog?.all ?? []}
+          connected={providerCatalog?.connected ?? []}
+          initialProviderID={null}
+          directory={directory}
+          onClose={() => setProviderDialogOpen(false)}
+          onConnected={provider => {
+            setProviderCatalog(current =>
+              current
+                ? { ...current, connected: [...new Set([...current.connected, provider.id])] }
+                : current,
+            )
+            setProviderDialogOpen(false)
+          }}
+        />
       </div>
     )
   }),
