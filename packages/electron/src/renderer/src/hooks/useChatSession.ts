@@ -624,7 +624,7 @@ export function useChatSession({
       attachments: Attachment[]
       directory: string
       model: { providerID: string; modelID: string }
-      options?: { agent?: string; variant?: string }
+      options?: { agent?: string; variant?: string; delivery?: 'steer' | 'queue' }
       allowCreateSession?: boolean
     }) => {
       let sessionId = input.sessionId ?? routeSessionId
@@ -689,6 +689,7 @@ export function useChatSession({
           model: input.model,
           agent: input.options?.agent,
           variant: input.options?.variant,
+          delivery: input.options?.delivery,
           directory: input.directory,
         })
 
@@ -819,7 +820,7 @@ export function useChatSession({
   )
 
   const sendQueuedFollowup = useCallback(
-    async (draftId: string, sessionId: string) => {
+    async (draftId: string, sessionId: string, delivery?: 'steer') => {
       const draft = followupQueueStore.getItem(sessionId, draftId)
       if (!draft) return false
       if (!followupQueueStore.startSending(draft.sessionId, draft.id)) return false
@@ -835,6 +836,7 @@ export function useChatSession({
         options: {
           agent: draft.agent,
           variant: draft.variant,
+          delivery,
         },
         directory: draft.directory,
       })
@@ -891,7 +893,7 @@ export function useChatSession({
   const handleQueuedFollowupSteer = useCallback(
     (draftId: string) => {
       if (!routeSessionId) return Promise.resolve(false)
-      return sendQueuedFollowup(draftId, routeSessionId)
+      return sendQueuedFollowup(draftId, routeSessionId, 'steer')
     },
     [routeSessionId, sendQueuedFollowup],
   )

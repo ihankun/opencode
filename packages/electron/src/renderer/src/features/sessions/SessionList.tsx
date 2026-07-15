@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo, useSyncExternalStore, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SearchIcon, PencilIcon, ArchiveIcon, ComposeIcon, CheckIcon, PinIcon } from '../../components/Icons'
+import { SearchIcon, PencilIcon, ArchiveIcon, ComposeIcon, CheckIcon, PinIcon, GripVerticalIcon } from '../../components/Icons'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { useInputCapabilities } from '../../hooks/useInputCapabilities'
@@ -10,6 +10,8 @@ import { SessionChildrenSlot } from '../chat/sidebar/SessionChildrenSlot'
 import type { ApiSession } from '../../api'
 import { startInternalDrag } from '../../lib/internalDragCore'
 import { pinnedSessionsStore } from '../../store/pinnedSessionsStore'
+import { sessionOrderStore } from '../../store/sessionOrderStore'
+import { useReorderableList } from '../../hooks/useReorderableList'
 
 interface SessionListProps {
   sessions: ApiSession[]
@@ -36,6 +38,8 @@ interface SessionListProps {
   onSelectChildSession?: (session: ApiSession) => void
   pinnedDividerAfterIds?: Set<string>
   embedded?: boolean
+  /** 同一 scope 下持久化用户手动调整的会话顺序 */
+  reorderScope?: string
   // ---- 编辑模式 ----
   isEditMode?: boolean
   selectedSessionIds?: Set<string>
@@ -70,6 +74,7 @@ export function SessionList({
   onSelectChildSession,
   pinnedDividerAfterIds,
   embedded = false,
+  reorderScope,
   isEditMode = false,
   selectedSessionIds,
   onToggleSessionSelection,
@@ -140,6 +145,50 @@ export function SessionList({
 
   // 只有非搜索状态才显示分组
   const showGroups = !search && grouped
+  const sessionOrderVersion = useSyncExternalStore(
+    sessionOrderStore.subscribe,
+    sessionOrderStore.getVersion,
+    sessionOrderStore.getVersion,
+  )
+  const pinnedEntries = useSyncExternalStore(
+    pinnedSessionsStore.subscribe,
+    pinnedSessionsStore.getSnapshot,
+    pinnedSessionsStore.getSnapshot,
+  )
+  const pinnedSessionIds = useMemo(
+    () => new Set(pinnedEntries.map(entry => entry.sessionId)),
+    [pinnedEntries],
+  )
+  const flatSessions = useMemo(() => {
+    if (!reorderScope) return sessions
+    const pinned = sessions.filter(session => pinnedSessionIds.has(session.id))
+    const reorderable = sessions.filter(session => !pinnedSessionIds.has(session.id))
+    return [...pinned, ...sessionOrderStore.order(reorderScope, reorderable)]
+  }, [pinnedSessionIds, reorderScope, sessionOrderVersion, sessions])
+  const flatSessionById = useMemo(
+    () => new Map(flatSessions.map(session => [session.id, session])),
+    [flatSessions],
+  )
+  const reorderEnabled = Boolean(reorderScope) && !search && !showGroups && !isEditMode
+  const {
+    draggedId,
+    displayOrder,
+    handlePointerStart: handleReorderPointerStart,
+    handleTouchStart: handleReorderTouchStart,
+    handleTouchMove: handleReorderTouchMove,
+    handleTouchEnd: handleReorderTouchEnd,
+    registerRef: registerReorderRef,
+  } = useReorderableList({
+    ids: flatSessions.map(session => session.id),
+    canDrag: id => reorderEnabled && !pinnedSessionIds.has(id),
+    onCommit: (_draggedId, _targetId, order) => {
+      if (reorderScope) sessionOrderStore.set(reorderScope, order.filter(id => !pinnedSessionIds.has(id)))
+    },
+  })
+  const displayedFlatSessions = displayOrder.flatMap(id => {
+    const session = flatSessionById.get(id)
+    return session ? [session] : []
+  })
 
   return (
     <div className={`flex flex-col ${embedded ? '' : 'h-full'}`}>
@@ -177,6 +226,9 @@ export function SessionList({
       {/* Session List */}
       <div
         ref={listRef}
+        onTouchMove={reorderEnabled ? handleReorderTouchMove : undefined}
+        onTouchEnd={reorderEnabled ? handleReorderTouchEnd : undefined}
+        onTouchCancel={reorderEnabled ? handleReorderTouchEnd : undefined}
         className={`${embedded ? 'max-h-52' : 'flex-1'} overflow-y-auto custom-scrollbar px-2 ${
           isCompact ? 'pb-2 space-y-0.5' : 'pb-4 space-y-4'
         }`}
@@ -244,29 +296,51 @@ export function SessionList({
         ) : (
           // Flat View
           <div className="space-y-0 mt-0.5">
-            {sessions.map(session => {
+            {displayedFlatSessions.map(session => {
               const inlineChildren = inlineChildSessions?.get(session.id)
               const shouldFetchAll = expandedChildSessionIds?.has(session.id)
               const hasChildren = shouldFetchAll || (inlineChildren && inlineChildren.length > 0)
               const showPinnedDivider = pinnedDividerAfterIds?.has(session.id)
               return (
                 <div key={session.id}>
-                  <SessionListItem
-                    session={session}
-                    isSelected={session.id === selectedId}
-                    onSelect={() => onSelect(session)}
-                    onDelete={() => setDeleteConfirm({ isOpen: true, sessionId: session.id })}
-                    onRename={newTitle => onRename(session.id, newTitle)}
-                    preferTouchUi={preferTouchUi}
-                    density={density}
-                    showStats={showStats}
-                    showDirectory={showDirectory}
-                    isEditMode={isEditMode}
-                    isChecked={selectedSessionIds?.has(session.id)}
-                    onToggleCheck={
-                      onToggleSessionSelection ? options => onToggleSessionSelection(session.id, options) : undefined
+                  <div
+                    ref={element => registerReorderRef(session.id, element)}
+                    data-reorder-preview
+                    className={
+                      draggedId === session.id
+                        ? 'relative z-10 rounded-md bg-bg-100 shadow-lg ring-1 ring-inset ring-accent-main-100/30'
+                        : ''
                     }
-                  />
+                  >
+                    <SessionListItem
+                      session={session}
+                      isSelected={session.id === selectedId}
+                      onSelect={() => onSelect(session)}
+                      onDelete={() => setDeleteConfirm({ isOpen: true, sessionId: session.id })}
+                      onRename={newTitle => onRename(session.id, newTitle)}
+                      preferTouchUi={preferTouchUi}
+                      density={density}
+                      showStats={showStats}
+                      showDirectory={showDirectory}
+                      isEditMode={isEditMode}
+                      isChecked={selectedSessionIds?.has(session.id)}
+                      onToggleCheck={
+                        onToggleSessionSelection
+                          ? options => onToggleSessionSelection(session.id, options)
+                          : undefined
+                      }
+                      onReorderPointerDown={
+                        reorderEnabled && !pinnedSessionIds.has(session.id)
+                          ? event => handleReorderPointerStart(session.id, event)
+                          : undefined
+                      }
+                      onReorderTouchStart={
+                        reorderEnabled && !pinnedSessionIds.has(session.id)
+                          ? event => handleReorderTouchStart(session.id, event)
+                          : undefined
+                      }
+                    />
+                  </div>
                   {hasChildren && onSelectChildSession && (
                     <SessionChildrenSlot
                       parentSession={session}
@@ -329,6 +403,8 @@ export interface SessionListItemProps {
   isEditMode?: boolean
   isChecked?: boolean
   onToggleCheck?: (options?: { shiftKey?: boolean }) => void
+  onReorderPointerDown?: (event: React.PointerEvent) => void
+  onReorderTouchStart?: (event: React.TouchEvent) => void
 }
 
 export function SessionListItem({
@@ -344,6 +420,8 @@ export function SessionListItem({
   isEditMode = false,
   isChecked = false,
   onToggleCheck,
+  onReorderPointerDown,
+  onReorderTouchStart,
 }: SessionListItemProps) {
   const { t } = useTranslation(['commands', 'common', 'chat'])
   const [isEditing, setIsEditing] = useState(false)
@@ -564,7 +642,7 @@ export function SessionListItem({
       <div
         ref={itemRef}
         onClick={!isEditMode ? handleClick : undefined}
-        onTouchStart={!isEditMode ? handleTouchStart : undefined}
+        onTouchStart={!isEditMode && !onReorderTouchStart ? handleTouchStart : undefined}
         onTouchMove={!isEditMode ? handleTouchMove : undefined}
         onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
         className={`group relative flex items-center gap-2 px-2 py-1 rounded-md cursor-default transition-colors duration-150 select-none ${
@@ -646,7 +724,8 @@ export function SessionListItem({
         ) : (
           <button
             type="button"
-            onPointerDown={isDraggable ? handleSessionPointerDown : undefined}
+            onPointerDown={onReorderPointerDown ?? (isDraggable ? handleSessionPointerDown : undefined)}
+            onTouchStart={onReorderTouchStart}
             onClick={e => {
               e.stopPropagation()
               handleClick()
@@ -715,6 +794,18 @@ export function SessionListItem({
                 : 'opacity-0 group-hover:opacity-100 peer-focus-visible:opacity-100 focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto peer-focus-visible:pointer-events-auto focus-within:pointer-events-auto'
             }`}
           >
+            {onReorderPointerDown && (
+              <span
+                onPointerDown={onReorderPointerDown}
+                onTouchStart={onReorderTouchStart}
+                className="flex cursor-grab touch-none items-center justify-center rounded p-1 text-text-500 hover:bg-bg-300 hover:text-text-200 active:cursor-grabbing"
+                title={t('chat:sidebar.dragToReorder', { defaultValue: 'Drag to reorder' })}
+                role="button"
+                aria-label={t('chat:sidebar.dragToReorder', { defaultValue: 'Drag to reorder' })}
+              >
+                <GripVerticalIcon className="h-3 w-3" />
+              </span>
+            )}
             <button
               type="button"
               onClick={handlePin}
@@ -759,7 +850,7 @@ export function SessionListItem({
     <div
       ref={itemRef}
       onClick={!isEditMode ? handleClick : undefined}
-      onTouchStart={!isEditMode ? handleTouchStart : undefined}
+      onTouchStart={!isEditMode && !onReorderTouchStart ? handleTouchStart : undefined}
       onTouchMove={!isEditMode ? handleTouchMove : undefined}
       onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
       className={`group relative flex items-start ${itemPaddingClass} rounded-lg cursor-default transition-all duration-200 border border-transparent select-none ${
@@ -841,7 +932,8 @@ export function SessionListItem({
       ) : (
         <button
           type="button"
-          onPointerDown={isDraggable ? handleSessionPointerDown : undefined}
+          onPointerDown={onReorderPointerDown ?? (isDraggable ? handleSessionPointerDown : undefined)}
+          onTouchStart={onReorderTouchStart}
           onClick={e => {
             e.stopPropagation()
             handleClick()
@@ -849,7 +941,15 @@ export function SessionListItem({
           className="peer flex min-w-0 flex-1 items-start bg-transparent border-none p-0 text-left select-none"
         >
           <div
-            className={`flex-1 min-w-0 transition-[padding] duration-200 ${showActions ? 'pr-[88px]' : 'pr-1 group-hover:pr-[88px]'}`}
+            className={`flex-1 min-w-0 transition-[padding] duration-200 ${
+              onReorderPointerDown
+                ? showActions
+                  ? 'pr-[116px]'
+                  : 'pr-1 group-hover:pr-[116px]'
+                : showActions
+                  ? 'pr-[88px]'
+                  : 'pr-1 group-hover:pr-[88px]'
+            }`}
           >
             {/* Row 1: Title */}
             <div className="flex min-w-0 items-center gap-1.5">
@@ -925,6 +1025,18 @@ export function SessionListItem({
               : 'opacity-0 group-hover:opacity-100 peer-focus-visible:opacity-100 focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto peer-focus-visible:pointer-events-auto focus-within:pointer-events-auto'
           }`}
         >
+          {onReorderPointerDown && (
+            <span
+              onPointerDown={onReorderPointerDown}
+              onTouchStart={onReorderTouchStart}
+              className="flex cursor-grab touch-none items-center justify-center rounded-md p-1.5 text-text-400 hover:bg-bg-300 hover:text-text-100 active:cursor-grabbing"
+              title={t('chat:sidebar.dragToReorder', { defaultValue: 'Drag to reorder' })}
+              role="button"
+              aria-label={t('chat:sidebar.dragToReorder', { defaultValue: 'Drag to reorder' })}
+            >
+              <GripVerticalIcon className="h-3.5 w-3.5" />
+            </span>
+          )}
           <button
             type="button"
             onClick={handlePin}

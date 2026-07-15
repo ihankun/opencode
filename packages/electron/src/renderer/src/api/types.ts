@@ -58,6 +58,7 @@ export interface SendMessageParams {
   }
   agent?: string
   variant?: string
+  delivery?: 'steer' | 'queue'
   directory?: string
 }
 

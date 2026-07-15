@@ -143,6 +143,7 @@ const layer = Layer.effect(
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
     const { db } = database
+    const steering = new Map<SessionID, number>()
     const ops = Effect.fn("SessionPrompt.ops")(function* () {
       return {
         cancel: (sessionID: SessionID) => cancel(sessionID),
@@ -1080,6 +1081,18 @@ const layer = Layer.effect(
       }
 
       if (input.noReply === true) return message
+      if (input.delivery === "steer") {
+        steering.set(input.sessionID, (steering.get(input.sessionID) ?? 0) + 1)
+        yield* state.interrupt(input.sessionID).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              const remaining = (steering.get(input.sessionID) ?? 1) - 1
+              if (remaining === 0) steering.delete(input.sessionID)
+              else steering.set(input.sessionID, remaining)
+            }),
+          ),
+        )
+      }
       return yield* loop({ sessionID: input.sessionID })
     })
 
@@ -1236,6 +1249,7 @@ const layer = Layer.effect(
               assistantMessage: msg,
               sessionID,
               model,
+              interruption: () => ((steering.get(sessionID) ?? 0) > 0 ? "steer" : "abort"),
             })
             .pipe(Effect.onInterrupt(() => finalizeInterruptedAssistant))
 
@@ -1536,6 +1550,7 @@ export const PromptInput = Schema.Struct({
   format: Schema.optional(SessionV1.Format),
   system: Schema.optional(Schema.String),
   variant: Schema.optional(Schema.String),
+  delivery: Schema.optional(Schema.Literals(["steer", "queue"])),
   parts: Schema.Array(
     Schema.Union([
       SessionV1.TextPartInput,

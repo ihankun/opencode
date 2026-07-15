@@ -1428,6 +1428,68 @@ it.instance("prompt submitted during an active run is included in the next LLM i
   }),
 )
 
+it.instance("steer interrupts the active provider turn and immediately continues with the new prompt", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const gate = yield* Deferred.make<void>()
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Steer" })
+
+    yield* llm.hold("obsolete", deferredAsPromise(gate))
+    yield* llm.text("redirected")
+
+    const initial = yield* prompt
+      .prompt({
+        sessionID: chat.id,
+        agent: "build",
+        model: ref,
+        parts: [{ type: "text", text: "first direction" }],
+      })
+      .pipe(Effect.forkChild)
+
+    yield* llm.wait(1)
+    yield* waitForBusy(chat.id)
+
+    const steered = yield* awaitWithTimeout(
+      prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        model: ref,
+        delivery: "steer",
+        parts: [{ type: "text", text: "change direction now" }],
+      }),
+      "steer did not interrupt the active provider turn",
+      "2 seconds",
+    )
+
+    expect(steered.info.role).toBe("assistant")
+    expect(steered.parts.some((part) => part.type === "text" && part.text === "redirected")).toBe(true)
+    expect(yield* llm.calls).toBe(2)
+
+    const inputs = yield* llm.inputs
+    const messages = inputs.at(-1)?.messages
+    if (!Array.isArray(messages)) throw new Error("expected LLM messages")
+    expect(messages.at(-1)).toEqual({ role: "user", content: "change direction now" })
+
+    const history = yield* sessions.messages({ sessionID: chat.id })
+    const first = history.find(
+      (message) =>
+        message.info.role === "user" &&
+        message.parts.some((part) => part.type === "text" && part.text === "first direction"),
+    )
+    if (!first) throw new Error("expected first user message")
+    const interrupted = history.find(
+      (message) => message.info.role === "assistant" && message.info.parentID === first.info.id,
+    )
+    if (!interrupted || interrupted.info.role !== "assistant") throw new Error("expected interrupted assistant")
+    expect(interrupted.info.error).toBeUndefined()
+    expect(interrupted.info.time.completed).toBeNumber()
+
+    yield* Fiber.await(initial)
+  }),
+)
+
 it.instance("assertNotBusy fails with BusyError when loop running", () =>
   Effect.gen(function* () {
     const { llm } = yield* useServerConfig(providerCfg)

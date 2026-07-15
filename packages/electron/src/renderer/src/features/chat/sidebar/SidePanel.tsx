@@ -26,7 +26,7 @@ import {
   TeachIcon,
   ClockIcon,
 } from '../../../components/Icons'
-import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useVcsInfo } from '../../../hooks'
+import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList, useVcsInfo } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
 import { useLayoutStore, childSessionStore } from '../../../store'
 import { useBusySessions } from '../../../store/activeSessionStore'
@@ -145,7 +145,6 @@ export function SidePanel({
     removeDirectory,
     addDirectory,
     reorderDirectories,
-    recentProjects,
     pathInfo,
   } = useDirectory()
   const catalogDirectories = useMemo(
@@ -550,16 +549,6 @@ export function SidePanel({
     return buildProjectGroups(savedDirectories)
   }, [buildProjectGroups, savedDirectories])
 
-  const selectorProjectGroups = useMemo<ProjectItem[]>(() => {
-    const sortedDirectories = [...savedDirectories].sort((a, b) => {
-      const aTime = recentProjects[a.path] || a.addedAt
-      const bTime = recentProjects[b.path] || b.addedAt
-      return bTime - aTime
-    })
-
-    return buildProjectGroups(sortedDirectories)
-  }, [buildProjectGroups, recentProjects, savedDirectories])
-
   const globalProject = useMemo<ProjectItem>(
     () => ({
       id: 'global',
@@ -570,8 +559,8 @@ export function SidePanel({
   )
 
   const projects = useMemo<ProjectItem[]>(() => {
-    return selectorProjectGroups
-  }, [selectorProjectGroups])
+    return folderProjectGroups
+  }, [folderProjectGroups])
 
   const currentProject = useMemo<ProjectItem>(() => {
     if (!currentDirectory) return globalProject
@@ -883,6 +872,39 @@ export function SidePanel({
     },
     [folderProjects, reorderDirectories],
   )
+
+  const projectById = useMemo(
+    () => new Map(displayedProjects.map(project => [project.id, project])),
+    [displayedProjects],
+  )
+  const expandedProjectsBeforeDragRef = useRef<string[] | null>(null)
+  const {
+    draggedId: draggedProjectId,
+    displayOrder: displayedProjectOrder,
+    handlePointerStart: handleProjectPointerStart,
+    handleTouchStart: handleProjectTouchStart,
+    handleTouchMove: handleProjectTouchMove,
+    handleTouchEnd: handleProjectTouchEnd,
+    registerRef: registerProjectRef,
+  } = useReorderableList({
+    ids: displayedProjects.map(project => project.id),
+    canDrag: id => !!projectById.get(id)?.canReorder && !isEditMode,
+    onCommit: (draggedId, targetId) => {
+      const draggedProject = projectById.get(draggedId)
+      const targetProject = projectById.get(targetId)
+      if (!draggedProject?.canReorder || !targetProject?.canReorder) return
+      handleReorderProjectGroup(draggedProject.worktree, targetProject.worktree)
+    },
+    onDragActivated: () => {
+      expandedProjectsBeforeDragRef.current = expandedProjectIds
+      setExpandedProjectIds([])
+    },
+    onDragFinished: () => {
+      if (!expandedProjectsBeforeDragRef.current) return
+      setExpandedProjectIds(expandedProjectsBeforeDragRef.current)
+      expandedProjectsBeforeDragRef.current = null
+    },
+  })
 
   const handleSelect = useCallback(
     (session: ApiSession) => {
@@ -1272,8 +1294,16 @@ export function SidePanel({
                 <PlusIcon size={13} />
               </button>
             </div>
-            <div ref={projectsDropdownRef} className="overflow-y-auto custom-scrollbar">
-              {displayedProjects.map(project => {
+            <div
+              ref={projectsDropdownRef}
+              onTouchMove={handleProjectTouchMove}
+              onTouchEnd={handleProjectTouchEnd}
+              onTouchCancel={handleProjectTouchEnd}
+              className="overflow-y-auto custom-scrollbar"
+            >
+              {displayedProjectOrder.map(projectId => {
+                const project = projectById.get(projectId)
+                if (!project) return null
                 const isGlobal = project.id === 'global'
                 const isActive = currentProject?.id === project.id
                 const isExpanded = expandedProjectIds.includes(project.id)
@@ -1300,10 +1330,23 @@ export function SidePanel({
                     ? currentProjectLabel
                     : project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (
-                  <div key={project.id}>
+                  <div
+                    key={project.id}
+                  >
                     <div
+                      ref={element => registerProjectRef(project.id, element)}
+                      data-reorder-preview
                       onClick={() => handleSelectProject(project.id)}
-                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors ${
+                      onTouchStart={
+                        project.canReorder && !isEditMode
+                          ? event => handleProjectTouchStart(project.id, event)
+                          : undefined
+                      }
+                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-all ${
+                        draggedProjectId === project.id
+                          ? 'relative z-10 bg-bg-100 shadow-lg ring-1 ring-inset ring-accent-main-100/30'
+                          : ''
+                      } ${
                         isActive
                           ? 'sidebar-selected-row text-text-100'
                           : 'sidebar-hover-row text-text-300 hover:text-text-100'
@@ -1311,13 +1354,20 @@ export function SidePanel({
                     >
                       <button
                         type="button"
+                        onPointerDown={
+                          project.canReorder && !isEditMode
+                            ? event => handleProjectPointerStart(project.id, event)
+                            : undefined
+                        }
                         onClick={e => {
                           e.stopPropagation()
                           handleSelectProject(project.id)
                           if (!isGlobal) handleToggleProject(project.id)
                         }}
                         aria-current={isActive ? 'true' : undefined}
-                        className="min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0"
+                        className={`min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0 ${
+                          project.canReorder && !isEditMode ? 'cursor-grab active:cursor-grabbing' : ''
+                        }`}
                         title={project.worktree}
                       >
                         <span className="flex size-5 shrink-0 items-center justify-center">
@@ -1395,6 +1445,7 @@ export function SidePanel({
                             isEditMode={isEditMode}
                             selectedSessionIds={selectedSessionIds}
                             onToggleSessionSelection={toggleSessionSelection}
+                            reorderScope={`project:${normalizeToForwardSlash(project.worktree)}`}
                           />
                         </div>
                       )}
@@ -1501,6 +1552,11 @@ export function SidePanel({
                 isEditMode={isEditMode}
                 selectedSessionIds={selectedSessionIds}
                 onToggleSessionSelection={toggleSessionSelection}
+                reorderScope={`conversation:${
+                  currentProject.id === 'global'
+                    ? 'global'
+                    : normalizeToForwardSlash(pathInfo?.directory ?? '') || 'default'
+                }`}
               />
             </div>
           )}

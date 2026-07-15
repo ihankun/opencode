@@ -51,6 +51,7 @@ type Input = {
   assistantMessage: SessionV1.Assistant
   sessionID: SessionID
   model: Provider.Model
+  interruption?: () => "abort" | "steer"
 }
 
 export interface Interface {
@@ -648,6 +649,7 @@ const layer = Layer.effect(
             Effect.onInterrupt(() =>
               Effect.gen(function* () {
                 aborted = true
+                if (input.interruption?.() === "steer") return
                 if (!ctx.assistantMessage.error) {
                   yield* halt(new DOMException("Aborted", "AbortError"))
                 }

@@ -164,7 +164,7 @@ function toFileUrl(path: string): string {
  * 构建 SDK 发送消息所需的参数
  */
 function buildPromptParams(params: SendMessageParams): PromptParams {
-  const { sessionId, text, attachments, model, agent, variant, directory } = params
+  const { sessionId, text, attachments, model, agent, variant, delivery, directory } = params
 
   const parts: NonNullable<PromptParams['parts']> = []
 
@@ -225,6 +225,7 @@ function buildPromptParams(params: SendMessageParams): PromptParams {
     model,
     agent,
     variant,
+    delivery,
   }
 }
 
