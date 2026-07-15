@@ -382,7 +382,7 @@ export const PluginPanel = memo(function PluginPanel() {
                     result={result}
                     installed={configuredSpecs.has(pluginPackage(result.name))}
                     installing={installingSpec === result.name}
-                    disabled={Boolean(installingSpec)}
+                    disabled={Boolean(installingSpec) || result.compatibility === 'unsupported'}
                     onInstall={() => void handleInstallSearchResult(result.name)}
                     onRemove={() => void savePlugins(plugins.filter(plugin => pluginPackage(pluginSpec(plugin)) !== pluginPackage(result.name)))}
                   />
@@ -481,16 +481,22 @@ function PluginSearchRow({
   onRemove: () => void
 }) {
   const { t } = useTranslation(['components'])
+  const unsupported = result.compatibility === 'unsupported'
 
   return (
     <div className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 text-text-300">
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 ${unsupported ? 'text-danger-100' : 'text-text-300'}`}>
         <PackagePlusIcon size={15} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="truncate font-medium text-text-100 text-[length:var(--fs-sm)]">{result.name}</div>
+          <div className={`truncate font-medium text-[length:var(--fs-sm)] ${unsupported ? 'text-danger-100' : 'text-text-100'}`}>{result.name}</div>
           {result.version && <div className="shrink-0 text-text-400 text-[length:var(--fs-xs)]">v{result.version}</div>}
+          {unsupported && (
+            <div className="shrink-0 rounded bg-danger-100/10 px-1.5 py-0.5 text-danger-100 text-[length:var(--fs-xxs)]">
+              {t('pluginPanel.notOpenCodePlugin')}
+            </div>
+          )}
         </div>
         <div className="mt-0.5 line-clamp-2 text-text-400 text-[length:var(--fs-xs)]">
           {result.description || t('pluginPanel.noDescription')}
@@ -501,8 +507,8 @@ function PluginSearchRow({
         type="button"
         onClick={installed ? onRemove : onInstall}
         disabled={disabled}
-        aria-label={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
-        title={installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
+        aria-label={unsupported ? t('pluginPanel.notOpenCodePlugin') : installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
+        title={unsupported ? t('pluginPanel.notOpenCodePlugin') : installed ? t('pluginPanel.installed') : t('pluginPanel.installPlugin')}
         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-300 transition-colors hover:bg-bg-200 hover:text-text-100 disabled:opacity-50"
       >
         {installing ? (

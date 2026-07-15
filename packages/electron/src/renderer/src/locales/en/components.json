@@ -182,6 +182,7 @@
     "search": "Search",
     "searchPlaceholder": "Search npm plugins or paste a package name...",
     "searchFailed": "Failed to search npm plugins",
+    "notOpenCodePlugin": "Not an OpenCode plugin",
     "installPlugin": "Install plugin",
     "installFailed": "Failed to install plugin",
     "installed": "Installed",

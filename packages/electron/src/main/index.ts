@@ -19,6 +19,7 @@ let isQuitting = false
 let isStoppingForQuit = false
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
+const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
 const appId = "com.hankun.opencodex"
 const taskScheduler = new TaskScheduler(() => server?.state, notifyTasksChanged)
 
@@ -505,12 +506,34 @@ async function searchPlugins(raw: string) {
     seen.add(item.name)
     return true
   })
-  return Promise.all(unique.map(async (item) => ({
-    ...item,
-    source: "npm",
-    url: `https://www.npmjs.com/package/${item.name}`,
-    downloads: await npmDownloads(item.name),
-  })))
+  return Promise.all(unique.map(async (item) => {
+    const [downloads, compatibility] = await Promise.all([
+      npmDownloads(item.name),
+      inspectPluginCompatibility(item.name, item.version, exact),
+    ])
+    return {
+      ...item,
+      source: "npm",
+      url: `https://www.npmjs.com/package/${item.name}`,
+      downloads,
+      compatibility,
+    }
+  }))
+}
+
+async function inspectPluginCompatibility(name: string, version: string, exact?: NpmPackageManifest) {
+  const key = `${name}@${version || "latest"}`
+  const cached = pluginCompatibilityCache.get(key)
+  if (cached) return cached
+
+  const manifest = exact?.name === name && exact.version === version
+    ? exact
+    : await readNpmManifest(key).catch(() => undefined)
+  if (!manifest) return "unknown" as const
+
+  const compatibility = pluginTargets(manifest).length ? "supported" as const : "unsupported" as const
+  pluginCompatibilityCache.set(key, compatibility)
+  return compatibility
 }
 
 async function inspectPlugins(value: unknown) {

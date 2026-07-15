@@ -991,7 +991,7 @@ function App() {
       <Suspense fallback={null}>
         {utilityPage === 'tasks' ? <TaskPanel onOpenSession={(sessionID, directory) => handleSelectSession({ id: sessionID, directory })} /> : utilityPage === 'plugins' ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 items-center gap-1 border-b border-border-200/60 px-5 py-2.5">
+            <div className="window-drag-region flex shrink-0 items-center gap-1 border-b border-border-200/60 px-5 py-2.5">
               <button
                 type="button"
                 onClick={() => setPluginPageTab('plugins')}
@@ -1012,7 +1012,7 @@ function App() {
             </div>
           </div>
         ) : (
-          <SkillPanel />
+          <SkillPanel windowDraggableHeader />
         )}
       </Suspense>
     </div>

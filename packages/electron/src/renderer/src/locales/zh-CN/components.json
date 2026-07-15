@@ -181,6 +181,7 @@
     "search": "搜索",
     "searchPlaceholder": "搜索 npm 插件或输入包名...",
     "searchFailed": "搜索 npm 插件失败",
+    "notOpenCodePlugin": "不是 OpenCode 插件",
     "installPlugin": "安装插件",
     "installFailed": "安装插件失败",
     "installed": "已安装",

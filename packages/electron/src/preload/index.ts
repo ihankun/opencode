@@ -22,6 +22,7 @@ export type CustomOpenCodePluginSearchResult = {
   source: string
   downloads: number
   url: string
+  compatibility: "supported" | "unsupported" | "unknown"
 }
 
 export type CustomOpenCodePluginMetadata = {

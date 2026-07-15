@@ -45,9 +45,14 @@ import { apiErrorHandler, getDirectoryName } from '../utils'
 interface SkillPanelProps {
   isResizing?: boolean
   showHeader?: boolean
+  windowDraggableHeader?: boolean
 }
 
-export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, showHeader = true }: SkillPanelProps) {
+export const SkillPanel = memo(function SkillPanel({
+  isResizing: _isResizing,
+  showHeader = true,
+  windowDraggableHeader = false,
+}: SkillPanelProps) {
   const { t } = useTranslation(['components', 'common'])
   const { currentDirectory, pathInfo, savedDirectories } = useDirectory()
   const [skills, setSkills] = useState<Skill[]>([])
@@ -168,7 +173,7 @@ export const SkillPanel = memo(function SkillPanel({ isResizing: _isResizing, sh
   return (
     <div className="relative flex flex-col h-full bg-bg-100">
       {showHeader && (
-        <div className="relative flex h-10 items-center justify-between px-3">
+        <div className={`relative flex h-10 items-center justify-between px-3 ${windowDraggableHeader ? 'window-drag-region' : ''}`}>
           <div className="flex h-6 min-w-0 items-center gap-1.5 text-text-100 text-[length:var(--fs-xs)] font-medium">
             <span>{t('skillPanel.title')}</span>
             {!loading && <span className="inline-flex h-4 items-center text-[length:var(--fs-xs)] leading-none text-text-400">({skills.length})</span>}
