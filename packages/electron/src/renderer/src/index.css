@@ -472,9 +472,12 @@ html.electron-app[data-theme-preset='codex'][data-glass] .electron-windows-title
 }
 
 /* Windows: reduce chat header height and compact inner dropdowns */
-html[data-platform='windows'] [data-chat-header='true'],
-html[data-platform='macos'] [data-chat-header='true'] {
+html[data-platform='windows'] [data-chat-header='true'] {
   height: 2.25rem;
+}
+
+html[data-platform='macos'] [data-chat-header='true'] {
+  height: 2.5rem;
 }
 
 html[data-platform='windows'] [data-chat-header='true'] .rounded-lg > button,
@@ -950,6 +953,30 @@ body {
   will-change: clip-path;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+html[data-theme-switch-mask]::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: auto;
+  cursor: wait;
+  opacity: 0;
+  background: rgb(128 128 128 / 0.16);
+  -webkit-backdrop-filter: blur(30px) saturate(135%);
+  backdrop-filter: blur(30px) saturate(135%);
+  transition: opacity 100ms ease-out;
+}
+
+html[data-theme-switch-mask='active']::after {
+  opacity: 1;
+}
+
+html[data-theme-switch-mask='leaving']::after {
+  opacity: 0;
+  transition-duration: 180ms;
+  transition-timing-function: ease-in;
 }
 
 /* Utility classes */

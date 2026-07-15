@@ -114,6 +114,42 @@ class FollowupQueueStore {
     })
   }
 
+  update(sessionId: string, id: string, text: string) {
+    const current = this.state.itemsBySession[sessionId] ?? EMPTY_ITEMS
+    const trimmed = text.trim()
+    if (!trimmed) return false
+    const index = current.findIndex(item => item.id === id)
+    if (index === -1) return false
+
+    this.setState({
+      ...this.state,
+      itemsBySession: {
+        ...this.state.itemsBySession,
+        [sessionId]: current.map(item => (item.id === id ? { ...item, text: trimmed } : item)),
+      },
+    })
+    return true
+  }
+
+  move(sessionId: string, id: string, direction: -1 | 1) {
+    const current = this.state.itemsBySession[sessionId] ?? EMPTY_ITEMS
+    const index = current.findIndex(item => item.id === id)
+    const target = index + direction
+    if (index === -1 || target < 0 || target >= current.length) return
+
+    const next = [...current]
+    const item = next[index]
+    next[index] = next[target]
+    next[target] = item
+    this.setState({
+      ...this.state,
+      itemsBySession: {
+        ...this.state.itemsBySession,
+        [sessionId]: next,
+      },
+    })
+  }
+
   markFailed(sessionId: string, id: string | undefined) {
     const nextFailedBySession = { ...this.state.failedBySession }
     if (!id) delete nextFailedBySession[sessionId]

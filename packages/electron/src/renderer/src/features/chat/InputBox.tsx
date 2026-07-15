@@ -30,9 +30,20 @@ import {
 } from './input/inputUtils'
 import { keybindingStore, matchesKeybinding } from '../../store/keybindingStore'
 import { themeStore } from '../../store/themeStore'
+import type { QueuedFollowupDraft } from '../../store/followupQueueStore'
 import { useChatViewport } from './chatViewport'
 import { useDirectory } from '../../contexts/useDirectory'
-import { ChevronDownIcon, FolderIcon, GlobeIcon } from '../../components/Icons'
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  FolderIcon,
+  GlobeIcon,
+  PencilIcon,
+  ReturnIcon,
+  TrashIcon,
+} from '../../components/Icons'
 import type { ApiAgent } from '../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
@@ -150,7 +161,7 @@ export interface InputBoxProps {
   onSend: (
     text: string,
     attachments: Attachment[],
-    options?: { agent?: string; variant?: string },
+    options?: { agent?: string; variant?: string; delivery?: 'steer' | 'queue' },
   ) => Promise<boolean> | boolean
   onAbort?: () => void
   onCommand?: (command: string) => Promise<boolean> | boolean // 斜杠命令回调，接收完整命令字符串如 "/help"
@@ -175,6 +186,12 @@ export interface InputBoxProps {
   hasMessages?: boolean
   rootPath?: string
   sessionId?: string | null
+  queuedFollowups?: QueuedFollowupDraft[]
+  queuedFollowupSendingId?: string
+  onQueuedFollowupRemove?: (id: string) => void
+  onQueuedFollowupUpdate?: (id: string, text: string) => boolean
+  onQueuedFollowupMove?: (id: string, direction: -1 | 1) => void
+  onQueuedFollowupSteer?: (id: string) => Promise<boolean> | boolean
   // Undo/Redo
   revertedText?: string
   revertedAttachments?: Attachment[]
@@ -192,6 +209,136 @@ export interface InputBoxProps {
   collapsedPermission?: CollapsedDialogInfo
   collapsedQuestion?: CollapsedDialogInfo
   homeMode?: boolean
+}
+
+function FollowupQueue({
+  items,
+  sendingId,
+  isStreaming,
+  onRemove,
+  onUpdate,
+  onMove,
+  onSteer,
+}: {
+  items: QueuedFollowupDraft[]
+  sendingId?: string
+  isStreaming?: boolean
+  onRemove?: (id: string) => void
+  onUpdate?: (id: string, text: string) => boolean
+  onMove?: (id: string, direction: -1 | 1) => void
+  onSteer?: (id: string) => Promise<boolean> | boolean
+}) {
+  const { t } = useTranslation('chat')
+  const [editingId, setEditingId] = useState<string>()
+  const [editingText, setEditingText] = useState('')
+
+  useEffect(() => {
+    if (!editingId || items.some(item => item.id === editingId)) return
+    setEditingId(undefined)
+    setEditingText('')
+  }, [editingId, items])
+
+  const saveEdit = () => {
+    if (!editingId || !onUpdate?.(editingId, editingText)) return
+    setEditingId(undefined)
+    setEditingText('')
+  }
+
+  return (
+    <div className="relative z-0 -mb-3 rounded-t-2xl border border-b-0 border-border-200/55 bg-bg-100/95 px-3 pb-4 pt-2 shadow-sm">
+      <div className="mb-1.5 flex items-center justify-between text-[length:var(--fs-xs)] text-text-400">
+        <span>{t('followupQueue.title', { count: items.length })}</span>
+        <span>{t('followupQueue.shortcut')}</span>
+      </div>
+      <div className="space-y-1.5">
+        {items.map((item, index) => {
+          const sending = sendingId === item.id
+          const editing = editingId === item.id
+          return (
+            <div
+              key={item.id}
+              className="group flex min-w-0 items-center gap-2 rounded-xl bg-bg-200/65 px-2.5 py-2 text-[length:var(--fs-sm)] text-text-100"
+            >
+              <span className="shrink-0 text-[length:var(--fs-xxs)] tabular-nums text-text-500">{index + 1}</span>
+              {editing ? (
+                <input
+                  autoFocus
+                  value={editingText}
+                  onChange={event => setEditingText(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      saveEdit()
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      setEditingId(undefined)
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-border-200/70 bg-bg-000/80 px-2 py-1 text-text-100 outline-none focus:border-accent-main-100/60"
+                />
+              ) : (
+                <div className="min-w-0 flex-1">
+                  <div className="truncate">{item.text}</div>
+                  {item.attachments.length > 0 && (
+                    <div className="text-[length:var(--fs-xxs)] text-text-500">
+                      {t('followupQueue.attachments', { count: item.attachments.length })}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex shrink-0 items-center gap-0.5">
+                {editing ? (
+                  <>
+                    <button type="button" onClick={saveEdit} className="rounded-md px-2 py-1 text-accent-main-100 hover:bg-bg-300/70">
+                      {t('followupQueue.save')}
+                    </button>
+                    <button type="button" onClick={() => setEditingId(undefined)} className="rounded-md p-1 text-text-400 hover:bg-bg-300/70 hover:text-text-100" aria-label={t('followupQueue.cancel')}>
+                      <CloseIcon size={13} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={sending}
+                      onClick={() => void onSteer?.(item.id)}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-text-300 hover:bg-bg-300/70 hover:text-text-100 disabled:opacity-50"
+                      title={isStreaming ? t('followupQueue.steerDescription') : t('followupQueue.sendDescription')}
+                    >
+                      <ReturnIcon size={13} />
+                      {sending ? t('followupQueue.sending') : isStreaming ? t('followupQueue.steer') : t('followupQueue.send')}
+                    </button>
+                    <button type="button" disabled={sending || index === 0} onClick={() => onMove?.(item.id, -1)} className="rounded-md p-1 text-text-400 hover:bg-bg-300/70 hover:text-text-100 disabled:opacity-25" aria-label={t('followupQueue.moveUp')}>
+                      <ArrowUpIcon size={13} />
+                    </button>
+                    <button type="button" disabled={sending || index === items.length - 1} onClick={() => onMove?.(item.id, 1)} className="rounded-md p-1 text-text-400 hover:bg-bg-300/70 hover:text-text-100 disabled:opacity-25" aria-label={t('followupQueue.moveDown')}>
+                      <ArrowDownIcon size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={sending}
+                      onClick={() => {
+                        setEditingId(item.id)
+                        setEditingText(item.text)
+                      }}
+                      className="rounded-md p-1 text-text-400 hover:bg-bg-300/70 hover:text-text-100 disabled:opacity-50"
+                      aria-label={t('followupQueue.edit')}
+                    >
+                      <PencilIcon size={13} />
+                    </button>
+                    <button type="button" disabled={sending} onClick={() => onRemove?.(item.id)} className="rounded-md p-1 text-text-400 hover:bg-danger-100/10 hover:text-danger-100 disabled:opacity-50" aria-label={t('followupQueue.delete')}>
+                      <TrashIcon size={13} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 // ============================================
@@ -223,6 +370,12 @@ function InputBoxComponent({
   hasMessages = false,
   rootPath = '',
   sessionId,
+  queuedFollowups = [],
+  queuedFollowupSendingId,
+  onQueuedFollowupRemove,
+  onQueuedFollowupUpdate,
+  onQueuedFollowupMove,
+  onQueuedFollowupSteer,
   revertedText,
   revertedAttachments,
   canRedo = false,
@@ -251,7 +404,10 @@ function InputBoxComponent({
       },
     [fileCapabilitiesProp, supportsImages],
   )
-  const { externalFileDropMode } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
+  const { externalFileDropMode, queueFollowupMessages } = useSyncExternalStore(
+    themeStore.subscribe,
+    themeStore.getSnapshot,
+  )
 
   // 是否有任何文件附件能力
   const supportsAnyFile = fileCaps.image || fileCaps.pdf || fileCaps.audio || fileCaps.video
@@ -570,7 +726,7 @@ function InputBoxComponent({
     [isSubmitting],
   )
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((delivery?: 'steer' | 'queue') => {
     if (!canSend || isSubmitting) return
 
     // 检测 command attachment
@@ -595,6 +751,7 @@ function InputBoxComponent({
         onSend(text, attachments, {
           agent: mentionedAgent || selectedAgent,
           variant: selectedVariant,
+          delivery,
         }),
       () => {
         resetDraft()
@@ -740,13 +897,30 @@ function InputBoxComponent({
       }
 
       // 发送消息（读取 keybinding 配置）
+      if (isStreaming && e.key === 'Enter' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        handleSend(queueFollowupMessages ? 'steer' : 'queue')
+        return
+      }
+
       const sendKey = keybindingStore.getKey('sendMessage')
       if (sendKey && !isImeComposing && matchesKeybinding(nativeEvent, sendKey)) {
         e.preventDefault()
         handleSend()
       }
     },
-    [mentionOpen, slashOpen, mentionQuery, updateMentionQuery, handleSend, text, attachments, handleHistoryKeyDown],
+    [
+      mentionOpen,
+      slashOpen,
+      mentionQuery,
+      updateMentionQuery,
+      handleSend,
+      text,
+      attachments,
+      handleHistoryKeyDown,
+      isStreaming,
+      queueFollowupMessages,
+    ],
   )
 
   const handleChange = useCallback(
@@ -1452,6 +1626,18 @@ function InputBoxComponent({
             />
 
             <GoalStatusBar sessionId={sessionId} rootPath={rootPath} isStreaming={isStreaming} />
+
+            {sessionId && queuedFollowups.length > 0 && (
+              <FollowupQueue
+                items={queuedFollowups}
+                sendingId={queuedFollowupSendingId}
+                isStreaming={isStreaming}
+                onRemove={onQueuedFollowupRemove}
+                onUpdate={onQueuedFollowupUpdate}
+                onMove={onQueuedFollowupMove}
+                onSteer={onQueuedFollowupSteer}
+              />
+            )}
 
             {!sessionId && (
               <div

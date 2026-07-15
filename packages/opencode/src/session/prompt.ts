@@ -1091,6 +1091,14 @@ const layer = Layer.effect(
       throw new Error("Impossible")
     })
 
+    const hasPendingUser = Effect.fnUntraced(function* (sessionID: SessionID) {
+      const msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
+        Effect.provideService(Database.Service, database),
+      )
+      const latest = MessageV2.latest(msgs)
+      return !!latest.user && (!latest.assistant || latest.user.id > latest.assistant.id)
+    })
+
     const runLoop: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.run")(
       function* (sessionID: SessionID) {
         const ctx = yield* InstanceState.context
@@ -1356,7 +1364,13 @@ const layer = Layer.effect(
     const loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.loop")(function* (
       input: LoopInput,
     ) {
-      return yield* state.ensureRunning(input.sessionID, lastAssistant(input.sessionID), runLoop(input.sessionID))
+      const result = yield* state.ensureRunning(
+        input.sessionID,
+        lastAssistant(input.sessionID),
+        runLoop(input.sessionID),
+      )
+      if (!(yield* hasPendingUser(input.sessionID))) return result
+      return yield* Effect.suspend(() => loop(input))
     })
 
     const shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError> = Effect.fn(

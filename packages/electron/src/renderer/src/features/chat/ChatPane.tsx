@@ -285,9 +285,15 @@ export const ChatPane = memo(function ChatPane({
 
     pendingPermissionRequests,
     pendingQuestionRequests,
+    queuedFollowups,
+    queuedFollowupSendingId,
     handlePermissionReply,
     handleQuestionReply,
     handleQuestionReject,
+    handleQueuedFollowupRemove,
+    handleQueuedFollowupUpdate,
+    handleQueuedFollowupMove,
+    handleQueuedFollowupSteer,
     isReplying,
 
     loadMoreHistory,
@@ -949,6 +955,12 @@ export const ChatPane = memo(function ChatPane({
           hasMessages={messages.length > 0}
           rootPath={effectiveDirectory}
           sessionId={routeSessionId}
+          queuedFollowups={queuedFollowups}
+          queuedFollowupSendingId={queuedFollowupSendingId}
+          onQueuedFollowupRemove={handleQueuedFollowupRemove}
+          onQueuedFollowupUpdate={handleQueuedFollowupUpdate}
+          onQueuedFollowupMove={handleQueuedFollowupMove}
+          onQueuedFollowupSteer={handleQueuedFollowupSteer}
           revertedText={revertedMessage?.text}
           revertedAttachments={revertedMessage?.attachments}
           canRedo={canRedo}

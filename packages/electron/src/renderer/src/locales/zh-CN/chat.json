@@ -41,6 +41,22 @@
     "replyToAgentMobile": "回复 Agent...",
     "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令）"
   },
+  "followupQueue": {
+    "title": "已排队 {{count}} 条后续消息",
+    "shortcut": "Cmd/Ctrl+Shift+Enter 临时切换投递方式",
+    "attachments": "{{count}} 个附件",
+    "steer": "引导",
+    "steerDescription": "立即加入当前运行，用于改变方向或补充信息",
+    "send": "发送",
+    "sendDescription": "立即发送这条消息",
+    "sending": "发送中",
+    "edit": "编辑排队消息",
+    "save": "保存",
+    "cancel": "取消编辑",
+    "delete": "删除排队消息",
+    "moveUp": "前移",
+    "moveDown": "后移"
+  },
   "providerSetup": {
     "title": "连接模型提供商后即可开始",
     "description": "添加 API Key 或登录一个 Provider，模型会自动出现在选择器中。",

@@ -13,6 +13,24 @@ function syncNativeTheme(mode: ThemeMode) {
   return window.customOpenCode.windowSetTheme(mode).catch(() => undefined)
 }
 
+function waitForThemeMask(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+async function applyElectronThemeWithMask(mode: ThemeMode, apply: () => void) {
+  const root = document.documentElement
+  root.setAttribute('data-theme-switch-mask', 'ready')
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+  root.setAttribute('data-theme-switch-mask', 'active')
+  await waitForThemeMask(100)
+  await syncNativeTheme(mode)
+  apply()
+  await waitForThemeMask(160)
+  root.setAttribute('data-theme-switch-mask', 'leaving')
+  await waitForThemeMask(180)
+  root.removeAttribute('data-theme-switch-mask')
+}
+
 export function useTheme() {
   // 订阅 themeStore 变化
   const state = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
@@ -39,6 +57,16 @@ export function useTheme() {
   }, [])
 
   const setThemeWithAnimation = useCallback((newMode: ThemeMode, event?: React.MouseEvent) => {
+    if (typeof window.customOpenCode?.windowSetTheme === 'function') {
+      void applyElectronThemeWithMask(newMode, () => {
+        skipNextTransitionRef.current = true
+        flushSync(() => {
+          themeStore.setColorMode(newMode)
+        })
+      })
+      return
+    }
+
     if (!document.startViewTransition || !event) {
       void syncNativeTheme(newMode).then(() => {
         skipNextTransitionRef.current = true

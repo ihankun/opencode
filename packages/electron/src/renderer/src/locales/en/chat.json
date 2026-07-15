@@ -41,6 +41,24 @@
     "replyToAgentMobile": "Reply to Agent...",
     "replyToAgent": "Reply to Agent (type @ to mention, / for commands)"
   },
+  "followupQueue": {
+    "title": "{{count}} queued follow-up",
+    "title_other": "{{count}} queued follow-ups",
+    "shortcut": "Cmd/Ctrl+Shift+Enter temporarily inverts delivery",
+    "attachments": "{{count}} attachment",
+    "attachments_other": "{{count}} attachments",
+    "steer": "Steer",
+    "steerDescription": "Add to the current run now to change direction or provide context",
+    "send": "Send",
+    "sendDescription": "Send this message now",
+    "sending": "Sending",
+    "edit": "Edit queued message",
+    "save": "Save",
+    "cancel": "Cancel editing",
+    "delete": "Delete queued message",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
   "providerSetup": {
     "title": "Connect a model provider to get started",
     "description": "Add an API key or sign in to a provider. Its models will appear automatically.",
