@@ -1,6 +1,6 @@
-import { appendFileSync, mkdirSync } from "node:fs"
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { app } from "electron"
+import { app, shell } from "electron"
 
 let logFile: string | undefined
 
@@ -17,6 +17,35 @@ export function writeLog(scope: string, message: string, meta?: unknown) {
   process.stdout.write(line)
   if (!logFile) return
   appendFileSync(logFile, line)
+}
+
+export function exportDebugLogs() {
+  if (!logFile) throw new Error("Logging is not initialized")
+
+  const output = join(app.getPath("downloads"), `opencodex-debug-${stamp()}.log`)
+  const manifest = {
+    generated: new Date().toISOString(),
+    version: app.getVersion(),
+    name: app.getName(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch,
+    versions: process.versions,
+    uptime: process.uptime(),
+    userData: app.getPath("userData"),
+    logFile,
+  }
+  writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n\n${readFileSync(logFile, "utf8")}`)
+  shell.showItemInFolder(output)
+  writeLog("main", "debug logs exported", { output })
+  return output
+}
+
+function stamp() {
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d+Z$/, "")
 }
 
 function format(value: unknown) {

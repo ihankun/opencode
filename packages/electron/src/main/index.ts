@@ -3,9 +3,10 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
+import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
-import { initLogging, writeLog } from "./logging"
+import { exportDebugLogs, initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
@@ -143,11 +144,18 @@ async function createWindow() {
 
   const isMac = process.platform === "darwin"
   const isWin = process.platform === "win32"
+  const state = windowState({
+    file: "window-state.json",
+    defaultWidth: 1180,
+    defaultHeight: 760,
+  })
 
   mainWindow = new BrowserWindow({
     title: "",
-    width: 1180,
-    height: 760,
+    x: state.x,
+    y: state.y,
+    width: state.width,
+    height: state.height,
     minWidth: 900,
     minHeight: 580,
     show: false,
@@ -166,6 +174,7 @@ async function createWindow() {
       backgroundThrottling: false,
     },
   })
+  state.manage(mainWindow)
 
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault()
@@ -397,6 +406,7 @@ ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
 ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
+ipcMain.handle("logging:export", exportDebugLogs)
 
 // Windows 盘符列表
 ipcMain.handle("drives:list", async () => {

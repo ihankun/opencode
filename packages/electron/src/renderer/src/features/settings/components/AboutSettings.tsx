@@ -16,6 +16,8 @@ export function AboutSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
+  const [logBusy, setLogBusy] = useState(false)
+  const [logError, setLogError] = useState<string | null>(null)
 
   useEffect(() => {
     void updateStore.checkForUpdates()
@@ -75,6 +77,18 @@ export function AboutSettings() {
     },
     [t],
   )
+
+  const handleExportLogs = useCallback(async () => {
+    setLogError(null)
+    setLogBusy(true)
+    try {
+      await window.customOpenCode.exportDebugLogs()
+    } catch (error) {
+      setLogError(error instanceof Error ? error.message : t('about.logExportFailed'))
+    } finally {
+      setLogBusy(false)
+    }
+  }, [t])
 
   return (
     <div className="space-y-7">
@@ -165,6 +179,23 @@ export function AboutSettings() {
             {backupError && (
               <div className="rounded-lg border border-danger-100/20 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100 leading-relaxed">
                 {backupError}
+              </div>
+            )}
+          </div>
+        </SettingsCard>
+
+        <SettingsCard title={t('about.debugLogsCardTitle')} description={t('about.debugLogsCardDesc')}>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border-200/50 bg-bg-100/35 px-3 py-3 text-[length:var(--fs-sm)] text-text-300 leading-relaxed">
+              {t('about.debugLogsWarning')}
+            </div>
+            <Button size="sm" variant="secondary" isLoading={logBusy} onClick={handleExportLogs}>
+              {!logBusy && <DownloadIcon size={12} />}
+              {t('about.exportDebugLogs')}
+            </Button>
+            {logError && (
+              <div className="rounded-lg border border-danger-100/20 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100 leading-relaxed">
+                {logError}
               </div>
             )}
           </div>

@@ -460,7 +460,7 @@
     },
     "packages/electron": {
       "name": "@opencode-ai/opencodex",
-      "version": "1.10.1",
+      "version": "1.10.2",
       "dependencies": {
         "@codemirror/commands": "^6.10.3",
         "@codemirror/search": "^6.7.0",
@@ -483,6 +483,7 @@
         "clsx": "^2.1.1",
         "croner": "^9.1.0",
         "diff": "^8.0.4",
+        "electron-window-state": "^5.0.3",
         "i18next": "^26.0.1",
         "i18next-browser-languagedetector": "^8.2.1",
         "jsonc-parser": "3.3.1",
