@@ -584,9 +584,10 @@ export function SidePanel({
   }, [currentDirectory, folderProjectGroups, gitWorkspaceCatalog, globalProject, normalizedCurrentDirectory])
 
   useEffect(() => {
+    if (!selectedSessionId) return
     if (currentProject.id === 'global') return
     setExpandedProjectIds(prev => (prev.includes(currentProject.id) ? prev : [...prev, currentProject.id]))
-  }, [currentProject.id])
+  }, [currentProject.id, selectedSessionId])
 
   const currentProjectLabel = useMemo(() => {
     const baseLabel = currentProject?.name || t('sidebar.global')

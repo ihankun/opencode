@@ -280,6 +280,18 @@ const UserMessageView = memo(function UserMessageView({
   return (
     <div ref={wrapperRef} className="flex flex-col items-end group">
       <div className="flex flex-col gap-1 items-end w-full">
+        {/* 用户附件 */}
+        {(fileParts.length > 0 || agentParts.length > 0) && (
+          <div className="mb-1 flex max-w-full min-w-0 flex-wrap gap-2 justify-end">
+            {fileParts.map(part => (
+              <FilePartView key={part.id} part={part} />
+            ))}
+            {agentParts.map(part => (
+              <AgentPartView key={part.id} part={part} />
+            ))}
+          </div>
+        )}
+
         {/* 消息文本 */}
         {messageText && (
           <CollapsibleUserText
@@ -288,18 +300,6 @@ const UserMessageView = memo(function UserMessageView({
             renderMarkdown={renderUserMarkdown}
             messageId={info.id}
           />
-        )}
-
-        {/* 用户附件 */}
-        {(fileParts.length > 0 || agentParts.length > 0) && (
-          <div className="mt-1 flex max-w-full min-w-0 flex-wrap gap-2 justify-end">
-            {fileParts.map(part => (
-              <FilePartView key={part.id} part={part} />
-            ))}
-            {agentParts.map(part => (
-              <AgentPartView key={part.id} part={part} />
-            ))}
-          </div>
         )}
 
         {/* 系统上下文 */}

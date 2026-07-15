@@ -225,7 +225,7 @@ function buildPromptParams(params: SendMessageParams): PromptParams {
     model,
     agent,
     variant,
-    delivery,
+    delivery: delivery === 'steer' || delivery === 'queue' ? delivery : undefined,
   }
 }
 

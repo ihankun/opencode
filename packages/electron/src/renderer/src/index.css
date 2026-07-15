@@ -780,14 +780,27 @@ html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
 
 .sidebar-surface {
   background-color: hsl(var(--sidebar-bg));
+  --sidebar-font-regular: 400;
+  --sidebar-font-emphasis: 500;
+  --sidebar-font-strong: 600;
+  font-weight: var(--sidebar-font-regular);
+}
+
+.sidebar-surface .font-medium {
+  font-weight: var(--sidebar-font-emphasis);
+}
+
+.sidebar-surface .font-semibold,
+.sidebar-surface .font-bold {
+  font-weight: var(--sidebar-font-strong);
 }
 
 :root[data-theme-preset='codex'][data-mode='light'] .sidebar-surface {
   --text-100: 0 0% 0%;
   --text-200: 0 0% 0%;
   --text-300: 0 0% 0%;
-  --text-400: 0 0% 30%;
-  --text-500: 0 0% 48%;
+  --text-400: 0 0% 0%;
+  --text-500: 0 0% 0%;
 }
 
 @media (prefers-color-scheme: light) {
@@ -795,8 +808,8 @@ html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
     --text-100: 0 0% 0%;
     --text-200: 0 0% 0%;
     --text-300: 0 0% 0%;
-    --text-400: 0 0% 30%;
-    --text-500: 0 0% 48%;
+    --text-400: 0 0% 0%;
+    --text-500: 0 0% 0%;
   }
 }
 

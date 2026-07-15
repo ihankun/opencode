@@ -728,6 +728,7 @@ function InputBoxComponent({
 
   const handleSend = useCallback((delivery?: 'steer' | 'queue') => {
     if (!canSend || isSubmitting) return
+    const normalizedDelivery = delivery === 'steer' || delivery === 'queue' ? delivery : undefined
 
     // 检测 command attachment
     const commandAttachment = attachments.find(a => a.type === 'command')
@@ -751,7 +752,7 @@ function InputBoxComponent({
         onSend(text, attachments, {
           agent: mentionedAgent || selectedAgent,
           variant: selectedVariant,
-          delivery,
+          delivery: normalizedDelivery,
         }),
       () => {
         resetDraft()

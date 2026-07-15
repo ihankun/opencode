@@ -808,7 +808,7 @@ export function InputToolbar({
             aria-label={isSending ? t('inputToolbar.sendingMessage') : t('inputToolbar.sendMessage')}
             variant="solid"
             disabled={!canSend || isSending}
-            onClick={onSend}
+            onClick={() => onSend()}
           >
             <SendIcon />
           </IconButton>
