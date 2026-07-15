@@ -350,6 +350,18 @@ const layer: Layer.Layer<Service, never, AccountRepo.Service | HttpClient.HttpCl
       return yield* fetchOrgs(account.url, accessToken)
     })
 
+    const remove = Effect.fn("Account.remove")(function* (accountID: AccountID) {
+      const active = yield* repo.active()
+      yield* repo.remove(accountID)
+      if (Option.isNone(active) || active.value.id !== accountID) return
+
+      const next = (yield* orgsByAccount()).flatMap((group) =>
+        group.orgs.map((org) => ({ accountID: group.account.id, orgID: org.id })),
+      )[0]
+      if (!next) return
+      yield* repo.use(next.accountID, Option.some(next.orgID))
+    })
+
     const config = Effect.fn("Account.config")(function* (accountID: AccountID, orgID: OrgID) {
       const resolved = yield* resolveAccess(accountID)
       if (Option.isNone(resolved)) return Option.none()
@@ -450,7 +462,7 @@ const layer: Layer.Layer<Service, never, AccountRepo.Service | HttpClient.HttpCl
       activeOrg,
       list: repo.list,
       orgsByAccount,
-      remove: repo.remove,
+      remove,
       use: repo.use,
       orgs,
       config,
