@@ -167,21 +167,8 @@ async function initializeElectronService() {
     serverStore.setActiveServer('local')
   }
 
-  applyServer(await waitForElectronServer())
   window.customOpenCode.onServerUpdated(applyServer)
-}
-
-async function waitForElectronServer() {
-  const state = await window.customOpenCode.server()
-  if (state.status === 'online') return state
-
-  return new Promise<Awaited<ReturnType<typeof window.customOpenCode.server>>>((resolve) => {
-    const unsubscribe = window.customOpenCode.onServerUpdated((nextState) => {
-      if (nextState.status !== 'online') return
-      unsubscribe()
-      resolve(nextState)
-    })
-  })
+  applyServer(await window.customOpenCode.server())
 }
 
 configureNativeShell()
@@ -214,10 +201,12 @@ function bootstrap() {
 }
 
 async function startApp() {
-  await initializeElectronService()
+  const electronService = initializeElectronService()
 
-  void initializeModels()
   bootstrap()
+
+  await electronService
+  void initializeModels()
 
   void initializeNativeDesktopService()
 

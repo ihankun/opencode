@@ -107,6 +107,7 @@
     "diff": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
+    "extract-zip": "2.0.1",
     "fuzzysort": "3.1.0",
     "gitlab-ai-provider": "6.11.1",
     "glob": "13.0.5",

@@ -2549,24 +2549,63 @@ export type SkillsMarketplaceSearchInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
     readonly limit?: number | undefined
     readonly page?: number | undefined
   }["location"]
   readonly q: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
     readonly limit?: number | undefined
     readonly page?: number | undefined
   }["q"]
+  readonly provider: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["provider"]
+  readonly sort?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["sort"]
+  readonly category?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
+    readonly limit?: number | undefined
+    readonly page?: number | undefined
+  }["category"]
   readonly limit?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
     readonly limit?: number | undefined
     readonly page?: number | undefined
   }["limit"]
   readonly page?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly q: string
+    readonly provider: "official" | "netease"
+    readonly sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent" | undefined
+    readonly category?: string | undefined
     readonly limit?: number | undefined
     readonly page?: number | undefined
   }["page"]
@@ -2581,11 +2620,16 @@ export type SkillsMarketplaceSearchOutput = {
   readonly data: {
     readonly data: ReadonlyArray<{
       readonly id: string
+      readonly provider: "official" | "netease"
       readonly slug: string
       readonly name: string
       readonly source: string
       readonly description: string
       readonly url: string
+      readonly version: string | null
+      readonly category: string | null
+      readonly tags: ReadonlyArray<string>
+      readonly icon: string | null
       readonly githubStars: number | "Infinity" | "-Infinity" | "NaN"
       readonly downloadCount: number | "Infinity" | "-Infinity" | "NaN"
       readonly isVerified: boolean
@@ -2597,6 +2641,7 @@ export type SkillsMarketplaceSearchOutput = {
     readonly page: number | "Infinity" | "-Infinity" | "NaN"
     readonly perPage: number | "Infinity" | "-Infinity" | "NaN"
     readonly total: number | "Infinity" | "-Infinity" | "NaN"
+    readonly categories: ReadonlyArray<string>
   }
 }
 
@@ -2604,11 +2649,18 @@ export type SkillsMarketplaceDetailInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly id: string
+    readonly provider: "official" | "netease"
   }["location"]
   readonly id: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly id: string
+    readonly provider: "official" | "netease"
   }["id"]
+  readonly provider: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly id: string
+    readonly provider: "official" | "netease"
+  }["provider"]
 }
 
 export type SkillsMarketplaceDetailOutput = {
@@ -2619,8 +2671,13 @@ export type SkillsMarketplaceDetailOutput = {
   }
   readonly data: {
     readonly id: string
+    readonly provider: "official" | "netease"
     readonly source: string
     readonly slug: string
+    readonly version: string | null
+    readonly category: string | null
+    readonly tags: ReadonlyArray<string>
+    readonly icon: string | null
     readonly hash: string
     readonly files: ReadonlyArray<{ readonly path: string; readonly contents: string }>
     readonly githubStars: number | "Infinity" | "-Infinity" | "NaN"
@@ -2650,13 +2707,16 @@ export type SkillsMarketplaceInstalledOutput = {
   }
   readonly data: ReadonlyArray<{
     readonly id: string
+    readonly provider: "official" | "netease"
     readonly slug: string
     readonly scope: "global" | "project"
     readonly directory: string
     readonly manifest: {
       readonly id: string
+      readonly provider: "official" | "netease"
       readonly source: string
       readonly slug: string
+      readonly version: string | null
       readonly hash: string | null
       readonly scope: "global" | "project"
       readonly installedAt: string
@@ -2672,9 +2732,30 @@ export type SkillsMarketplaceInstallInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
-  readonly id: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["id"]
-  readonly scope: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["scope"]
-  readonly force?: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["force"]
+  readonly id: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["id"]
+  readonly provider: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["provider"]
+  readonly scope: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["scope"]
+  readonly force?: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["force"]
 }
 
 export type SkillsMarketplaceInstallOutput = {
@@ -2685,13 +2766,16 @@ export type SkillsMarketplaceInstallOutput = {
   }
   readonly data: {
     readonly id: string
+    readonly provider: "official" | "netease"
     readonly slug: string
     readonly scope: "global" | "project"
     readonly directory: string
     readonly manifest: {
       readonly id: string
+      readonly provider: "official" | "netease"
       readonly source: string
       readonly slug: string
+      readonly version: string | null
       readonly hash: string | null
       readonly scope: "global" | "project"
       readonly installedAt: string
@@ -2707,9 +2791,30 @@ export type SkillsMarketplaceRemoveInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
-  readonly id: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["id"]
-  readonly scope: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["scope"]
-  readonly force?: { readonly id: string; readonly scope: "global" | "project"; readonly force?: boolean }["force"]
+  readonly id: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["id"]
+  readonly provider: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["provider"]
+  readonly scope: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["scope"]
+  readonly force?: {
+    readonly id: string
+    readonly provider: "official" | "netease"
+    readonly scope: "global" | "project"
+    readonly force?: boolean
+  }["force"]
 }
 
 export type SkillsMarketplaceRemoveOutput = void

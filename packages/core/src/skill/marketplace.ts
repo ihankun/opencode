@@ -2,6 +2,8 @@ export * as SkillMarketplace from "./marketplace"
 
 import path from "path"
 import { createHash } from "node:crypto"
+import { lstat } from "node:fs/promises"
+import extract from "extract-zip"
 import { Context, Effect, Layer, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { SkillMarketplace as Marketplace } from "@opencode-ai/schema/skill-marketplace"
@@ -11,8 +13,10 @@ import { FSUtil } from "../fs-util"
 import { Global } from "../global"
 import { Location } from "../location"
 
-const baseUrl = (process.env.SKILLHUB_URL ?? "https://skills.palebluedot.live").replace(/\/+$/, "")
+const officialUrl = (process.env.SKILLHUB_URL ?? "https://skills.palebluedot.live").replace(/\/+$/, "")
+const neteaseUrl = "https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/skill-store"
 const manifestFile = ".opencodex-marketplace.json"
+const maxArchiveBytes = 20 * 1024 * 1024
 const maxFileBytes = 1024 * 1024
 const maxTotalBytes = 5 * 1024 * 1024
 
@@ -66,14 +70,36 @@ const RemoteFiles = Schema.Struct({
   })),
 })
 
+const NetEaseEnvelope = Schema.Struct({
+  data: Schema.Struct({ value: Schema.Unknown }),
+})
+
+type NetEaseSkill = {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  readonly version: string | null
+  readonly archive: string
+  readonly source: string
+  readonly sourceUrl: string
+  readonly tags: string[]
+}
+
 export class Error extends Schema.TaggedErrorClass<Error>()("SkillMarketplace.Error", {
   message: Schema.String,
   conflict: Schema.optional(Schema.Boolean),
 }) {}
 
 export interface Interface {
-  readonly search: (input: { query: string; limit: number; page: number }) => Effect.Effect<typeof Marketplace.Page.Type, Error>
-  readonly detail: (id: string) => Effect.Effect<typeof Marketplace.Detail.Type, Error>
+  readonly search: (input: {
+    query: string
+    provider: Marketplace.Provider
+    sort: Marketplace.Sort
+    category?: string
+    limit: number
+    page: number
+  }) => Effect.Effect<typeof Marketplace.Page.Type, Error>
+  readonly detail: (id: string, provider: Marketplace.Provider) => Effect.Effect<typeof Marketplace.Detail.Type, Error>
   readonly installed: () => Effect.Effect<Marketplace.Installation[], Error>
   readonly install: (input: Marketplace.InstallInput) => Effect.Effect<Marketplace.Installation, Error>
   readonly remove: (input: Marketplace.RemoveInput) => Effect.Effect<void, Error>
@@ -111,22 +137,55 @@ const layer = Layer.effect(
       }),
       HttpClient.filterStatusOk,
     )
+    let neteaseCache: { expires: number; data: NetEaseSkill[] } | undefined
 
-    const execute = <S extends Schema.Top>(url: string, schema: S) =>
+    const execute = <S extends Schema.Top>(url: string, schema: S, provider: string) =>
       HttpClientRequest.get(url).pipe(
         HttpClientRequest.acceptJson,
         http.execute,
         Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-        Effect.mapError((cause) => new Error({
-          message: `SkillHub request failed: ${String(cause)}`,
-        })),
+        Effect.mapError((cause) => new Error({ message: `${provider} request failed: ${String(cause)}` })),
       )
 
-    const detail = Effect.fn("SkillMarketplace.detail")(function* (id: string) {
+    const netease = Effect.fn("SkillMarketplace.neteaseCatalog")(function* () {
+      if (neteaseCache && neteaseCache.expires > Date.now()) return neteaseCache.data
+      const response = yield* execute(neteaseUrl, NetEaseEnvelope, "NetEase skill marketplace")
+      const value = typeof response.data.value === "string"
+        ? yield* Schema.decodeUnknownEffect(Schema.UnknownFromJsonString)(response.data.value).pipe(
+            Effect.mapError((cause) => new Error({ message: `NetEase skill marketplace returned invalid JSON: ${String(cause)}` })),
+          )
+        : response.data.value
+      const root = asRecord(value)
+      const entries = Array.isArray(root?.marketplace) ? root.marketplace : []
+      const skills = entries.flatMap((entry): NetEaseSkill[] => {
+        const info = asRecord(entry)
+        if (!info) return []
+        const id = string(info.id)
+        const name = string(info.name)
+        const archive = string(info.url)
+        if (!id || !name || !archive || !/^https:\/\//.test(archive)) return []
+        const origin = asRecord(info.source)
+        const tags = Array.isArray(info.tags) ? info.tags.filter((tag): tag is string => typeof tag === "string") : []
+        return [{
+          id,
+          name,
+          description: localized(info.description) || name,
+          version: string(info.version) || null,
+          archive,
+          source: string(origin?.author) || string(origin?.from) || "NetEase Youdao",
+          sourceUrl: string(origin?.url) || archive,
+          tags,
+        }]
+      })
+      neteaseCache = { expires: Date.now() + 5 * 60_000, data: skills }
+      return skills
+    })
+
+    const officialDetail = Effect.fn("SkillMarketplace.officialDetail")(function* (id: string) {
       const encoded = id.split("/").map(encodeURIComponent).join("/")
       const [info, snapshot] = yield* Effect.all([
-        execute(`${baseUrl}/api/skills/${encoded}`, RemoteDetail),
-        execute(`${baseUrl}/api/skill-files?id=${encodeURIComponent(id)}`, RemoteFiles),
+        execute(`${officialUrl}/api/skills/${encoded}`, RemoteDetail, "SkillHub"),
+        execute(`${officialUrl}/api/skill-files?id=${encodeURIComponent(id)}`, RemoteFiles, "SkillHub"),
       ], { concurrency: 2 })
       if (info.isMalicious || info.isBlocked) return yield* new Error({ message: "SkillHub has blocked this skill" })
       const files = snapshot.files.flatMap((file) =>
@@ -135,9 +194,14 @@ const layer = Layer.effect(
       if (files.length === 0) return yield* new Error({ message: "This skill does not have an installable file snapshot" })
       return {
         id: info.id,
+        provider: "official" as const,
         source: `${info.githubOwner}/${info.githubRepo}`,
         slug: info.name,
-        hash: hash(files.toSorted((a, b) => a.path.localeCompare(b.path)).map((file) => `${file.path}\0${file.contents}`).join("\0")),
+        version: null,
+        category: null,
+        tags: [],
+        icon: null,
+        hash: snapshotHash(files),
         files,
         githubStars: info.githubStars,
         downloadCount: info.downloadCount,
@@ -152,6 +216,89 @@ const layer = Layer.effect(
       }
     })
 
+    const neteaseDetail = Effect.fn("SkillMarketplace.neteaseDetail")(function* (id: string) {
+      const info = (yield* netease()).find((item) => item.id === id)
+      if (!info) return yield* new Error({ message: "Skill was not found in the NetEase marketplace" })
+      const token = crypto.randomUUID()
+      const temporary = path.join(global.tmp, `skill-${token}`)
+      const archive = path.join(temporary, "skill.zip")
+      const unpacked = path.join(temporary, "unpacked")
+      const files = yield* Effect.gen(function* () {
+        const bytes = yield* HttpClientRequest.get(info.archive).pipe(
+          http.execute,
+          Effect.flatMap((response) => response.arrayBuffer),
+          Effect.mapError((cause) => new Error({ message: `Unable to download NetEase skill: ${String(cause)}` })),
+        )
+        if (bytes.byteLength === 0 || bytes.byteLength > maxArchiveBytes) {
+          return yield* new Error({ message: "NetEase skill archive exceeds the download size limit" })
+        }
+        yield* fs.writeWithDirs(archive, new Uint8Array(bytes)).pipe(
+          Effect.mapError((cause) => new Error({ message: `Unable to save NetEase skill: ${String(cause)}` })),
+        )
+        yield* fs.ensureDir(unpacked).pipe(Effect.mapError((cause) => new Error({ message: String(cause) })))
+        let extractedBytes = 0
+        yield* Effect.tryPromise({
+          try: () => extract(archive, {
+            dir: unpacked,
+            onEntry: (entry) => {
+              extractedBytes += entry.uncompressedSize
+              if (entry.uncompressedSize > maxFileBytes || extractedBytes > maxTotalBytes) {
+                throw new globalThis.Error("NetEase skill archive exceeds the extracted size limit")
+              }
+            },
+          }),
+          catch: (cause) => new Error({ message: `Unable to unpack NetEase skill: ${String(cause)}` }),
+        })
+        const all = yield* fs.glob("**/*", { cwd: unpacked, absolute: true, include: "all", dot: true }).pipe(
+          Effect.mapError((cause) => new Error({ message: String(cause) })),
+        )
+        const unsafe = yield* Effect.forEach(all, (entry) => Effect.tryPromise({
+          try: () => lstat(entry),
+          catch: (cause) => new Error({ message: String(cause) }),
+        }).pipe(Effect.map((stat) => !stat.isFile() && !stat.isDirectory())))
+        if (unsafe.some(Boolean)) return yield* new Error({ message: "NetEase skill archive contains unsupported links or entries" })
+        const skillFile = all
+          .filter((entry) => path.basename(entry) === "SKILL.md")
+          .toSorted((a, b) => a.split(path.sep).length - b.split(path.sep).length)[0]
+        if (!skillFile) return yield* new Error({ message: "NetEase skill archive does not contain SKILL.md" })
+        const root = path.dirname(skillFile)
+        const paths = yield* fs.glob("**/*", { cwd: root, absolute: true, include: "file", dot: true }).pipe(
+          Effect.mapError((cause) => new Error({ message: String(cause) })),
+        )
+        return yield* Effect.forEach(paths, (file) => fs.readFileString(file).pipe(
+          Effect.map((contents) => ({ path: path.relative(root, file).split(path.sep).join("/"), contents })),
+          Effect.mapError((cause) => new Error({ message: `Unable to read NetEase skill file: ${String(cause)}` })),
+        ), { concurrency: 8 })
+      }).pipe(Effect.ensuring(fs.remove(temporary, { recursive: true, force: true }).pipe(Effect.ignore)))
+      return {
+        id: info.id,
+        provider: "netease" as const,
+        source: info.source,
+        slug: installSlug(info.id, info.name),
+        version: info.version,
+        category: info.tags[0] ?? null,
+        tags: info.tags,
+        icon: null,
+        hash: snapshotHash(files),
+        files,
+        githubStars: 0,
+        downloadCount: 0,
+        isVerified: false,
+        isFeatured: false,
+        securityScore: null,
+        securityStatus: null,
+        qualityScore: null,
+        aiScore: null,
+        reviewStatus: null,
+        license: null,
+      }
+    })
+
+    const detail = Effect.fn("SkillMarketplace.detail")(function* (id: string, provider: Marketplace.Provider) {
+      if (provider === "netease") return yield* neteaseDetail(id)
+      return yield* officialDetail(id)
+    })
+
     const root = (scope: Marketplace.Scope) =>
       scope === "global"
         ? path.join(global.home, ".opencodex", "skills")
@@ -162,7 +309,16 @@ const layer = Layer.effect(
     const manifest = Effect.fn("SkillMarketplace.manifest")(function* (dir: string) {
       const raw = yield* fs.readFileStringSafe(path.join(dir, manifestFile)).pipe(Effect.mapError((cause) => new Error({ message: String(cause) })))
       if (!raw) return undefined
-      return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Marketplace.Manifest))(raw).pipe(
+      const decoded = yield* Schema.decodeUnknownEffect(Schema.UnknownFromJsonString)(raw).pipe(
+        Effect.mapError((cause) => new Error({ message: `Invalid marketplace metadata: ${String(cause)}` })),
+      )
+      const legacy = asRecord(decoded)
+      if (!legacy) return yield* new Error({ message: "Invalid marketplace metadata: expected an object" })
+      return yield* Schema.decodeUnknownEffect(Marketplace.Manifest)({
+        provider: "official",
+        version: null,
+        ...legacy,
+      }).pipe(
         Effect.mapError((cause) => new Error({ message: `Invalid marketplace metadata: ${String(cause)}` })),
       )
     })
@@ -192,6 +348,7 @@ const layer = Layer.effect(
     ) {
       return {
         id: info.id,
+        provider: info.provider,
         slug: info.slug,
         scope: info.scope,
         directory: dir,
@@ -210,9 +367,9 @@ const layer = Layer.effect(
       )
       return yield* Effect.forEach(entries.flat(), ({ file }) =>
         Effect.gen(function* () {
-          const info = yield* manifest(path.dirname(file))
+          const info = yield* manifest(path.dirname(file)).pipe(Effect.catch(() => Effect.succeed(undefined)))
           if (!info) return undefined
-          const remote = yield* detail(info.id).pipe(Effect.catch(() => Effect.succeed(undefined)))
+          const remote = yield* detail(info.id, info.provider).pipe(Effect.catch(() => Effect.succeed(undefined)))
           return yield* installation(info, path.dirname(file), remote?.hash ?? info.hash)
         }),
         { concurrency: 4 },
@@ -220,7 +377,7 @@ const layer = Layer.effect(
     })
 
     const install = Effect.fn("SkillMarketplace.install")(function* (input: Marketplace.InstallInput) {
-      const remote = yield* detail(input.id)
+      const remote = yield* detail(input.id, input.provider)
       if (!remote.files.some((file) => file.path === "SKILL.md")) {
         return yield* new Error({ message: "Skill snapshot does not contain SKILL.md" })
       }
@@ -244,8 +401,10 @@ const layer = Layer.effect(
       const now = new Date().toISOString()
       const next: Marketplace.Manifest = {
         id: remote.id,
+        provider: remote.provider,
         source: remote.source,
         slug: remote.slug,
+        version: remote.version,
         hash: remote.hash,
         scope: input.scope,
         installedAt: current?.installedAt ?? now,
@@ -264,12 +423,10 @@ const layer = Layer.effect(
         const exists = yield* fs.existsSafe(dir)
         if (exists) yield* fs.rename(dir, backup)
         yield* fs.rename(staging, dir).pipe(
-          Effect.catch((cause) =>
-            Effect.gen(function* () {
-              if (exists) yield* fs.rename(backup, dir).pipe(Effect.ignore)
-              return yield* Effect.fail(cause)
-            }),
-          ),
+          Effect.catch((cause) => Effect.gen(function* () {
+            if (exists) yield* fs.rename(backup, dir).pipe(Effect.ignore)
+            return yield* Effect.fail(cause)
+          })),
         )
         if (exists) yield* fs.remove(backup, { recursive: true, force: true }).pipe(Effect.ignore)
       }).pipe(
@@ -280,8 +437,9 @@ const layer = Layer.effect(
     })
 
     const remove = Effect.fn("SkillMarketplace.remove")(function* (input: Marketplace.RemoveInput) {
-      const matches = (yield* installed()).filter((item) => item.id === input.id && item.scope === input.scope)
-      const item = matches[0]
+      const item = (yield* installed()).find((entry) =>
+        entry.id === input.id && entry.provider === input.provider && entry.scope === input.scope,
+      )
       if (!item) return
       if (item.conflict && input.force !== true) {
         return yield* new Error({ message: "Local skill files have changes", conflict: true })
@@ -293,19 +451,65 @@ const layer = Layer.effect(
 
     return Service.of({
       search: Effect.fn("SkillMarketplace.search")(function* (input) {
-        const url = new URL(`${baseUrl}/api/skills`)
+        if (input.provider === "netease") {
+          const query = input.query.trim().toLocaleLowerCase()
+          const all = (yield* netease()).filter((skill) => {
+            const matchesQuery = !query || [skill.name, skill.description, skill.source, ...skill.tags]
+              .some((value) => value.toLocaleLowerCase().includes(query))
+            return matchesQuery && (!input.category || skill.tags.includes(input.category))
+          })
+          const sorted = all.toSorted((left, right) => {
+            if (input.sort === "recent") return (right.version ?? "").localeCompare(left.version ?? "")
+            return left.name.localeCompare(right.name)
+          })
+          const offset = Math.max(0, input.page - 1) * input.limit
+          return {
+            data: sorted.slice(offset, offset + input.limit).map((skill) => ({
+              id: skill.id,
+              provider: "netease" as const,
+              slug: installSlug(skill.id, skill.name),
+              name: skill.name,
+              source: skill.source,
+              description: skill.description,
+              url: skill.sourceUrl,
+              version: skill.version,
+              category: skill.tags[0] ?? null,
+              tags: skill.tags,
+              icon: null,
+              githubStars: 0,
+              downloadCount: 0,
+              isVerified: false,
+              securityScore: null,
+              securityStatus: null,
+              aiScore: null,
+              reviewStatus: null,
+            })),
+            page: input.page,
+            perPage: input.limit,
+            total: sorted.length,
+            categories: Array.from(new Set((yield* netease()).flatMap((skill) => skill.tags))).toSorted(),
+          }
+        }
+        const url = new URL(`${officialUrl}/api/skills`)
         url.searchParams.set("q", input.query)
         url.searchParams.set("limit", String(input.limit))
         url.searchParams.set("page", String(input.page))
-        const result = yield* execute(url.href, RemoteSearch)
+        url.searchParams.set("sort", input.sort)
+        if (input.category) url.searchParams.set("category", input.category)
+        const result = yield* execute(url.href, RemoteSearch, "SkillHub")
         return {
           data: result.skills.map((skill) => ({
             id: skill.id,
+            provider: "official" as const,
             slug: skill.name,
             name: skill.name,
             source: `${skill.githubOwner}/${skill.githubRepo}`,
             description: skill.description ?? skill.name,
-            url: `${baseUrl}/skills/${skill.id.split("/").map(encodeURIComponent).join("/")}`,
+            url: `${officialUrl}/skills/${skill.id.split("/").map(encodeURIComponent).join("/")}`,
+            version: null,
+            category: null,
+            tags: [],
+            icon: null,
             githubStars: skill.githubStars,
             downloadCount: skill.downloadCount,
             isVerified: skill.isVerified,
@@ -317,6 +521,7 @@ const layer = Layer.effect(
           page: result.pagination.page,
           perPage: result.pagination.limit,
           total: result.pagination.total,
+          categories: [],
         }
       }),
       detail,
@@ -326,6 +531,29 @@ const layer = Layer.effect(
     })
   }),
 )
+
+function asRecord(value: unknown) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+}
+
+function string(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function localized(value: unknown) {
+  if (typeof value === "string") return value.trim()
+  const info = asRecord(value)
+  return string(info?.zh) || string(info?.en)
+}
+
+function installSlug(id: string, name: string) {
+  const value = (id.split("/").at(-1) || name).trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")
+  return value || `netease-${hash(id).slice(0, 10)}`
+}
+
+function snapshotHash(files: ReadonlyArray<{ path: string; contents: string }>) {
+  return hash(files.toSorted((a, b) => a.path.localeCompare(b.path)).map((file) => `${file.path}\0${file.contents}`).join("\0"))
+}
 
 export const node = makeLocationNode({
   service: Service,

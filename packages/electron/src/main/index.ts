@@ -1,8 +1,10 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
-import { homedir } from "node:os"
-import { dirname, join, relative, resolve } from "node:path"
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { homedir, tmpdir } from "node:os"
+import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
+import extract from "extract-zip"
 import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
@@ -370,7 +372,11 @@ ipcMain.handle("security:set", async (_event, value: unknown) => {
 })
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("plugin:inspect", (_event, specs: unknown) => inspectPlugins(specs))
-ipcMain.handle("mcp:search", (_event, query: unknown) => searchMcpServers(String(query ?? "")))
+ipcMain.handle("mcp:search", (_event, input: unknown) => searchMcpServers(input))
+ipcMain.handle("mcp:source-set", (_event, input: unknown) => setMcpMarketplaceSource(input))
+ipcMain.handle("expert-kit:search", (_event, query: unknown) => searchExpertKits(String(query ?? "")))
+ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) => installExpertKit(String(id ?? ""), Boolean(force)))
+ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => removeExpertKit(String(id ?? ""), Boolean(force)))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("task:list", () => taskScheduler.list())
 ipcMain.handle("task:run-list", (_event, taskID: unknown) => taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined))
@@ -466,7 +472,7 @@ async function searchPlugins(raw: string) {
   url.searchParams.set("popularity", "0.2")
   url.searchParams.set("maintenance", "0.15")
 
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) })
   if (!response.ok) throw new Error(`npm search failed with ${response.status}`)
 
   const data = (await response.json()) as NpmSearchResponse
@@ -574,17 +580,22 @@ async function npmDownloads(name: string) {
   return value.downloads ?? 0
 }
 
-async function searchMcpServers(raw: string) {
-  const query = raw.trim()
-  if (!query) return []
+async function searchMcpServers(input: unknown) {
+  const options = isRecord(input) ? input : {}
+  const provider = options.provider === "netease" ? "netease" : "official"
+  const query = typeof options.query === "string" ? options.query.trim() : ""
+  const category = typeof options.category === "string" ? options.category.trim() : ""
+  const cursor = typeof options.cursor === "string" ? options.cursor : ""
+  if (provider === "netease") return searchNetEaseMcpServers(query, category, cursor)
   const url = new URL("https://registry.modelcontextprotocol.io/v0.1/servers")
-  url.searchParams.set("search", query)
+  if (query) url.searchParams.set("search", query)
   url.searchParams.set("version", "latest")
   url.searchParams.set("limit", "30")
+  if (cursor) url.searchParams.set("cursor", cursor)
   const response = await fetch(url)
   if (!response.ok) throw new Error(`MCP Registry search failed with ${response.status}`)
-  const data = await response.json() as { servers?: Array<{ server?: Record<string, unknown>; _meta?: Record<string, unknown> }> }
-  return Promise.all((data.servers ?? []).flatMap((entry) => {
+  const data = await response.json() as { servers?: Array<{ server?: Record<string, unknown>; _meta?: Record<string, unknown> }>; metadata?: { nextCursor?: string } }
+  const results = await Promise.all((data.servers ?? []).flatMap((entry) => {
     const item = entry.server
     if (!item || typeof item.name !== "string") return []
     const packages = Array.isArray(item.packages) ? item.packages.filter(isRecord) : []
@@ -604,6 +615,7 @@ async function searchMcpServers(raw: string) {
       : undefined
     return [{ item, npm, repository, environment, official, config }]
   }).map(async ({ item, npm, repository, environment, official, config }) => ({
+    provider: "official" as const,
     name: String(item.name),
     version: String(item.version ?? ""),
     description: typeof item.description === "string" ? item.description : "",
@@ -612,8 +624,362 @@ async function searchMcpServers(raw: string) {
     downloads: npm ? await npmDownloads(String(npm.identifier)) : 0,
     publishedAt: official?.publishedAt ? String(official.publishedAt) : "",
     requiredEnvironment: environment.filter((value) => value.isRequired === true && typeof value.name === "string").map((value) => String(value.name)),
+    category: "",
+    tags: [],
     config,
   })))
+  return { data: results, nextCursor: data.metadata?.nextCursor ?? null, categories: [] }
+}
+
+let neteaseMcpMarketplaceCache: { expires: number; value: Record<string, unknown> } | undefined
+
+async function searchNetEaseMcpServers(query: string, category: string, cursor: string) {
+  const root = await neteaseMcpMarketplaceValue()
+  const servers = Array.isArray(root.servers) ? root.servers : []
+  const categories = Array.isArray(root.categories) ? root.categories.flatMap((entry) => {
+    const item = isRecord(entry) ? entry : undefined
+    const id = typeof item?.id === "string" ? item.id : ""
+    if (!id || id === "all") return []
+    return [{
+      id,
+      nameZh: typeof item?.name_zh === "string" ? item.name_zh : id,
+      nameEn: typeof item?.name_en === "string" ? item.name_en : id,
+    }]
+  }) : []
+  const normalized = servers.flatMap((server) => {
+    const item = isRecord(server) ? server : undefined
+    if (!item) return []
+    const id = typeof item.id === "string" ? item.id.trim() : ""
+    const name = typeof item.name === "string" ? item.name.trim() : id
+    const itemCategory = typeof item.category === "string" ? item.category.trim() : ""
+    const command = typeof item.command === "string" ? item.command.trim() : ""
+    const args = Array.isArray(item.defaultArgs) ? item.defaultArgs.filter(isString) : []
+    const remoteUrl = typeof item.url === "string" ? item.url.trim() : ""
+    const config = command
+      ? { type: "local" as const, command: [command, ...args] }
+      : remoteUrl
+        ? { type: "remote" as const, url: remoteUrl }
+        : undefined
+    if (!name || !config) return []
+    return [{
+      provider: "netease" as const,
+      name,
+      version: typeof item.version === "string" ? item.version : "",
+      description: localizedMarketplaceText(item.description_zh) || localizedMarketplaceText(item.description) || localizedMarketplaceText(item.description_en),
+      source: "NetEase Youdao",
+      sourceUrl: "https://github.com/netease-youdao/LobsterAI",
+      downloads: typeof item.downloadCount === "number" ? item.downloadCount : 0,
+      publishedAt: typeof item.updatedAt === "string" ? item.updatedAt : "",
+      requiredEnvironment: Array.isArray(item.requiredEnvKeys) ? item.requiredEnvKeys.filter(isString) : [],
+      category: itemCategory,
+      tags: Array.isArray(item.tags) ? item.tags.filter(isString) : [],
+      config,
+    }]
+  }).filter((item) => {
+    const keyword = query.toLocaleLowerCase()
+    const matchesQuery = !keyword || [item.name, item.description, item.category, ...item.tags]
+      .some((value) => value.toLocaleLowerCase().includes(keyword))
+    return matchesQuery && (!category || item.category === category)
+  })
+  const offset = Math.max(0, Number.parseInt(cursor || "0", 10) || 0)
+  const page = normalized.slice(offset, offset + 30)
+  return {
+    data: page,
+    nextCursor: offset + page.length < normalized.length ? String(offset + page.length) : null,
+    categories,
+  }
+}
+
+async function neteaseMcpMarketplaceValue() {
+  if (neteaseMcpMarketplaceCache && neteaseMcpMarketplaceCache.expires > Date.now()) return neteaseMcpMarketplaceCache.value
+  const response = await fetch("https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/mcp-marketplace", { signal: AbortSignal.timeout(15_000) })
+  if (!response.ok) throw new Error(`NetEase MCP marketplace request failed with ${response.status}`)
+  const envelope = await response.json()
+  const data = isRecord(envelope) && isRecord(envelope.data) ? envelope.data : undefined
+  const raw = data?.value
+  const value = typeof raw === "string" ? JSON.parse(raw) : raw
+  const root = isRecord(value) ? value : {}
+  neteaseMcpMarketplaceCache = { expires: Date.now() + 5 * 60_000, value: root }
+  return root
+}
+
+function localizedMarketplaceText(value: unknown) {
+  if (typeof value === "string") return value.trim()
+  if (!isRecord(value)) return ""
+  return typeof value.zh === "string" ? value.zh.trim() : typeof value.en === "string" ? value.en.trim() : ""
+}
+
+function mcpMarketplaceSourceFile() {
+  return join(app.getPath("userData"), "marketplace-sources.json")
+}
+
+async function setMcpMarketplaceSource(input: unknown) {
+  if (!isRecord(input) || typeof input.name !== "string") throw new Error("MCP server name is required")
+  const directory = typeof input.directory === "string" ? input.directory : "global"
+  const key = `${directory}\0${input.name}`
+  const current = await readFile(mcpMarketplaceSourceFile(), "utf8").then((value) => JSON.parse(value), () => ({}))
+  const sources = isRecord(current) ? current : {}
+  if (input.provider === "official" || input.provider === "netease") sources[key] = input.provider
+  else delete sources[key]
+  await writeFile(mcpMarketplaceSourceFile(), JSON.stringify(sources, null, 2), "utf8")
+}
+
+type NetEaseExpertKit = {
+  id: string
+  name: string
+  description: string
+  icon: string
+  author: string
+  version: string
+  downloadCount: number
+  tryAsking: string[]
+  archive: string
+  skills: Array<{ id: string; name: string; description: string }>
+}
+
+type ExpertKitState = {
+  kits: Record<string, { provider: "netease"; version: string; installedAt: string; skills: string[] }>
+  skills: Record<string, { hash: string; owners: string[] }>
+}
+
+let neteaseExpertKitCache: { expires: number; data: NetEaseExpertKit[] } | undefined
+
+async function neteaseExpertKits() {
+  if (neteaseExpertKitCache && neteaseExpertKitCache.expires > Date.now()) return neteaseExpertKitCache.data
+  const response = await fetch("https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/kit-store", { signal: AbortSignal.timeout(15_000) })
+  if (!response.ok) throw new Error(`NetEase expert kit marketplace request failed with ${response.status}`)
+  const envelope = await response.json()
+  const data = isRecord(envelope) && isRecord(envelope.data) ? envelope.data : undefined
+  const raw = data?.value
+  const value = typeof raw === "string" ? JSON.parse(raw) : raw
+  const root = isRecord(value) ? value : {}
+  const kits = Array.isArray(root.kits) ? root.kits : []
+  const result = kits.flatMap((entry): NetEaseExpertKit[] => {
+    const kit = isRecord(entry) ? entry : undefined
+    const skillInfo = isRecord(kit?.skills) ? kit.skills : undefined
+    const id = typeof kit?.id === "string" ? kit.id.trim() : ""
+    const archive = typeof skillInfo?.bundle === "string" ? skillInfo.bundle.trim() : ""
+    if (!id || !archive || !archive.startsWith("https://")) return []
+    const list = Array.isArray(skillInfo?.list) ? skillInfo.list : []
+    return [{
+      id,
+      name: localizedMarketplaceText(kit?.name) || id,
+      description: localizedMarketplaceText(kit?.description),
+      icon: typeof kit?.icon === "string" ? kit.icon : "",
+      author: typeof kit?.author === "string" ? kit.author : "NetEase Youdao",
+      version: typeof kit?.version === "string" ? kit.version : "",
+      downloadCount: typeof kit?.downloadCount === "number" ? kit.downloadCount : Number.parseInt(String(kit?.downloadCount ?? "0"), 10) || 0,
+      tryAsking: Array.isArray(kit?.tryAsking) ? kit.tryAsking.flatMap((item) => {
+        const text = localizedMarketplaceText(item)
+        return text ? [text] : []
+      }) : [],
+      archive,
+      skills: list.flatMap((item) => {
+        const skill = isRecord(item) ? item : undefined
+        const skillID = typeof skill?.id === "string" ? skill.id : ""
+        if (!skillID) return []
+        return [{
+          id: skillID,
+          name: localizedMarketplaceText(skill?.name) || skillID,
+          description: localizedMarketplaceText(skill?.description),
+        }]
+      }),
+    }]
+  })
+  neteaseExpertKitCache = { expires: Date.now() + 5 * 60_000, data: result }
+  return result
+}
+
+function expertKitStateFile() {
+  return join(app.getPath("userData"), "expert-kits.json")
+}
+
+async function readExpertKitState(): Promise<ExpertKitState> {
+  const value = await readFile(expertKitStateFile(), "utf8").then((content) => JSON.parse(content), () => undefined)
+  if (!isRecord(value)) return { kits: {}, skills: {} }
+  return {
+    kits: isRecord(value.kits) ? value.kits as ExpertKitState["kits"] : {},
+    skills: isRecord(value.skills) ? value.skills as ExpertKitState["skills"] : {},
+  }
+}
+
+async function searchExpertKits(raw: string) {
+  const query = raw.trim().toLocaleLowerCase()
+  const [kits, state] = await Promise.all([neteaseExpertKits(), readExpertKitState()])
+  return kits.filter((kit) => !query || [kit.name, kit.description, kit.author, ...kit.skills.flatMap((skill) => [skill.name, skill.description])]
+    .some((value) => value.toLocaleLowerCase().includes(query)))
+    .map((kit) => ({
+      id: kit.id,
+      name: kit.name,
+      description: kit.description,
+      icon: kit.icon,
+      author: kit.author,
+      version: kit.version,
+      downloadCount: kit.downloadCount,
+      tryAsking: kit.tryAsking,
+      skills: kit.skills,
+      installed: Boolean(state.kits[kit.id]),
+      updateAvailable: Boolean(state.kits[kit.id] && state.kits[kit.id].version !== kit.version),
+    }))
+}
+
+async function installExpertKit(raw: string, force: boolean) {
+  const kit = (await neteaseExpertKits()).find((item) => item.id === raw.trim())
+  if (!kit) throw new Error("Expert kit was not found in the NetEase marketplace")
+  const response = await fetch(kit.archive, { signal: AbortSignal.timeout(60_000) })
+  if (!response.ok) throw new Error(`Unable to download expert kit (${response.status})`)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) throw new Error("Expert kit archive exceeds the size limit")
+  const temporary = await mkdtemp(join(tmpdir(), "opencodex-kit-"))
+  const archive = join(temporary, "kit.zip")
+  const unpacked = join(temporary, "unpacked")
+  await writeFile(archive, bytes)
+  await mkdir(unpacked, { recursive: true })
+  try {
+    let extractedBytes = 0
+    await extract(archive, {
+      dir: unpacked,
+      onEntry: (entry) => {
+        extractedBytes += entry.uncompressedSize
+        if (entry.uncompressedSize > 5 * 1024 * 1024 || extractedBytes > 50 * 1024 * 1024) {
+          throw new Error("Expert kit archive exceeds the extracted size limit")
+        }
+      },
+    })
+    const sources = await discoverExpertKitSkills(unpacked)
+    if (sources.length === 0) throw new Error("Expert kit does not contain any installable skills")
+    const root = join(homedir(), ".opencodex", "skills")
+    const state = await readExpertKitState()
+    const prepared = await Promise.all(sources.map(async (source) => {
+      const slug = safeKitSlug(basename(source))
+      const target = join(root, slug)
+      const nextHash = await expertKitDirectoryHash(source)
+      const tracked = state.skills[slug]
+      const exists = await stat(target).then(() => true, () => false)
+      const currentHash = exists ? await expertKitDirectoryHash(target) : undefined
+      const owned = tracked?.owners.includes(kit.id) === true
+      if (exists && currentHash !== nextHash && (!owned || currentHash !== tracked?.hash) && !force) {
+        throw new Error(`Skill “${slug}” already exists or has local changes`)
+      }
+      return { source, slug, target, nextHash, tracked, exists, currentHash }
+    }))
+    await mkdir(root, { recursive: true })
+    await Promise.all(prepared.map(async (item) => {
+      if (item.exists && item.currentHash === item.nextHash) return
+      const staging = `${item.target}.kit-tmp-${crypto.randomUUID()}`
+      const backup = `${item.target}.kit-old-${crypto.randomUUID()}`
+      await cp(item.source, staging, { recursive: true, errorOnExist: true })
+      if (item.exists) await rename(item.target, backup)
+      await rename(staging, item.target).catch(async (cause) => {
+        if (item.exists) await rename(backup, item.target).catch(() => undefined)
+        throw cause
+      })
+      if (item.exists) await rm(backup, { recursive: true, force: true })
+    }))
+    const installedSkills = new Set(prepared.map((item) => item.slug))
+    const removedSkills = (state.kits[kit.id]?.skills ?? []).filter((slug) => !installedSkills.has(slug))
+    await Promise.all(removedSkills.map(async (slug) => {
+      const tracked = state.skills[slug]
+      if (!tracked) return
+      const owners = tracked.owners.filter((owner) => owner !== kit.id)
+      if (owners.length > 0) {
+        state.skills[slug] = { ...tracked, owners }
+        return
+      }
+      const target = join(root, slug)
+      const current = await stat(target).then(() => expertKitDirectoryHash(target), () => undefined)
+      if (current === tracked.hash) await rm(target, { recursive: true, force: true })
+      delete state.skills[slug]
+    }))
+    prepared.forEach((item) => {
+      state.skills[item.slug] = {
+        hash: item.nextHash,
+        owners: Array.from(new Set([...(item.tracked?.owners ?? []), kit.id])),
+      }
+    })
+    state.kits[kit.id] = {
+      provider: "netease",
+      version: kit.version,
+      installedAt: state.kits[kit.id]?.installedAt ?? new Date().toISOString(),
+      skills: prepared.map((item) => item.slug),
+    }
+    await writeFile(expertKitStateFile(), JSON.stringify(state, null, 2), "utf8")
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
+}
+
+async function removeExpertKit(raw: string, force: boolean) {
+  const id = raw.trim()
+  const state = await readExpertKitState()
+  const kit = state.kits[id]
+  if (!kit) return
+  const root = join(homedir(), ".opencodex", "skills")
+  const removable = await Promise.all(kit.skills.map(async (slug) => {
+    const tracked = state.skills[slug]
+    if (!tracked || tracked.owners.some((owner) => owner !== id)) return { slug, remove: false }
+    const target = join(root, slug)
+    const exists = await stat(target).then(() => true, () => false)
+    if (!exists) return { slug, remove: true }
+    const current = await expertKitDirectoryHash(target)
+    if (current !== tracked.hash && !force) throw new Error(`Skill “${slug}” has local changes`)
+    return { slug, remove: true }
+  }))
+  await Promise.all(removable.filter((item) => item.remove).map((item) => rm(join(root, item.slug), { recursive: true, force: true })))
+  kit.skills.forEach((slug) => {
+    const tracked = state.skills[slug]
+    if (!tracked) return
+    const owners = tracked.owners.filter((owner) => owner !== id)
+    if (owners.length > 0) state.skills[slug] = { ...tracked, owners }
+    else delete state.skills[slug]
+  })
+  delete state.kits[id]
+  await writeFile(expertKitStateFile(), JSON.stringify(state, null, 2), "utf8")
+}
+
+async function discoverExpertKitSkills(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true })
+  const direct = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+    const directory = join(root, entry.name)
+    return stat(join(directory, "SKILL.md")).then((info) => info.isFile() ? directory : undefined, () => undefined)
+  }))
+  const skills = direct.filter((directory): directory is string => Boolean(directory))
+  if (skills.length > 0) return skills
+  if (entries.length === 1 && entries[0]?.isDirectory()) return discoverExpertKitSkills(join(root, entries[0].name))
+  return []
+}
+
+async function expertKitDirectoryHash(root: string) {
+  const files: Array<{ path: string; contents: Uint8Array }> = []
+  const visit = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    await Promise.all(entries.map(async (entry) => {
+      const file = join(directory, entry.name)
+      if (entry.isSymbolicLink()) throw new Error("Expert kit contains a symbolic link")
+      if (entry.isDirectory()) return visit(file)
+      if (!entry.isFile()) throw new Error("Expert kit contains an unsupported entry")
+      const contents = new Uint8Array(await readFile(file))
+      if (contents.byteLength > 1024 * 1024) throw new Error("Expert kit contains a file larger than 1 MB")
+      files.push({ path: relative(root, file).split("\\").join("/"), contents })
+    }))
+  }
+  await visit(root)
+  if (!files.some((file) => file.path === "SKILL.md")) throw new Error("Expert kit skill does not contain SKILL.md")
+  if (files.reduce((total, file) => total + file.contents.byteLength, 0) > 5 * 1024 * 1024) throw new Error("Expert kit skill exceeds the size limit")
+  const digest = createHash("sha256")
+  files.toSorted((left, right) => left.path.localeCompare(right.path)).forEach((file) => {
+    digest.update(file.path)
+    digest.update("\0")
+    digest.update(file.contents)
+    digest.update("\0")
+  })
+  return digest.digest("hex")
+}
+
+function safeKitSlug(value: string) {
+  const slug = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")
+  if (!slug || slug === "." || slug === "..") throw new Error("Expert kit contains an invalid skill name")
+  return slug
 }
 
 async function installPlugin(raw: string) {

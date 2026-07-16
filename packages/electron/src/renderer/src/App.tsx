@@ -57,6 +57,9 @@ const SkillPanel = lazy(() =>
 const McpPanel = lazy(() =>
   import('./components/McpPanel').then(module => ({ default: module.McpPanel })),
 )
+const ExpertKitPanel = lazy(() =>
+  import('./components/ExpertKitPanel').then(module => ({ default: module.ExpertKitPanel })),
+)
 const PluginPanel = lazy(() =>
   import('./components/PluginPanel').then(module => ({ default: module.PluginPanel })),
 )
@@ -70,7 +73,7 @@ const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
 type MainUtilityPage = 'skills' | 'plugins' | 'tasks'
-type PluginPageTab = 'plugins' | 'mcp'
+type PluginPageTab = 'plugins' | 'mcp' | 'kits'
 
 function ElectronSidebarToggle({
   expanded,
@@ -1006,9 +1009,16 @@ function App() {
               >
                 {t('chat:sidebar.mcpServers')}
               </button>
+              <button
+                type="button"
+                onClick={() => setPluginPageTab('kits')}
+                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'kits' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
+              >
+                {t('components:expertKit.nav')}
+              </button>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
-              {pluginPageTab === 'plugins' ? <PluginPanel /> : <McpPanel />}
+              {pluginPageTab === 'plugins' ? <PluginPanel /> : pluginPageTab === 'mcp' ? <McpPanel /> : <ExpertKitPanel />}
             </div>
           </div>
         ) : (

@@ -55,7 +55,7 @@ interface McpPanelProps {
 }
 
 export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpPanelProps) {
-  const { t } = useTranslation(['components', 'common'])
+  const { t, i18n } = useTranslation(['components', 'common'])
   const { currentDirectory } = useDirectory()
   const [servers, setServers] = useState<ServerEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,8 +63,13 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [marketQuery, setMarketQuery] = useState('')
-  const [marketResults, setMarketResults] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>>([])
+  const [marketResults, setMarketResults] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['data']>([])
   const [marketLoading, setMarketLoading] = useState(false)
+  const [marketError, setMarketError] = useState<string | null>(null)
+  const [marketProvider, setMarketProvider] = useState<'official' | 'netease'>('official')
+  const [marketCategory, setMarketCategory] = useState('')
+  const [marketCategories, setMarketCategories] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['categories']>([])
+  const [marketCursor, setMarketCursor] = useState<string | null>(null)
   const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
 
   // 加载 MCP 状态
@@ -183,25 +188,41 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
     [currentDirectory, loadStatus],
   )
 
-  const handleMarketSearch = useCallback(async () => {
-    if (!marketQuery.trim()) return
+  const handleMarketSearch = useCallback(async (cursor?: string, append = false) => {
     setMarketLoading(true)
     try {
-      setMarketResults(await window.customOpenCode.searchMcpServers(marketQuery))
+      setMarketError(null)
+      const result = await window.customOpenCode.searchMcpServers({
+        provider: marketProvider,
+        query: marketQuery,
+        category: marketCategory || undefined,
+        cursor,
+      })
+      setMarketResults(current => append ? [...current, ...result.data] : result.data)
+      setMarketCategories(result.categories)
+      setMarketCursor(result.nextCursor)
     } catch (err) {
       apiErrorHandler('search MCP registry', err)
+      setMarketError(err instanceof Error ? err.message : t('mcpPanel.marketplaceFailed'))
     } finally {
       setMarketLoading(false)
     }
-  }, [marketQuery])
+  }, [marketCategory, marketProvider, marketQuery, t])
 
-  const handleMarketInstall = useCallback(async (item: Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>[number]) => {
+  useEffect(() => {
+    if (tab !== 'marketplace') return
+    const timer = window.setTimeout(() => void handleMarketSearch(), marketQuery.trim() ? 500 : 0)
+    return () => window.clearTimeout(timer)
+  }, [handleMarketSearch, tab])
+
+  const handleMarketInstall = useCallback(async (item: Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['data'][number]) => {
     setActionLoading(item.name)
     try {
       const environment = Object.fromEntries(item.requiredEnvironment.map(name => [name, window.prompt(`请输入 ${name}`) ?? '']))
       if (item.requiredEnvironment.length > 0 && Object.values(environment).some(value => !value)) return
       const config = item.config.type === 'local' && item.requiredEnvironment.length > 0 ? { ...item.config, environment } : item.config
       await addMcpServer(item.name, config as McpServerConfig, currentDirectory)
+      await window.customOpenCode.setMcpMarketplaceSource({ directory: currentDirectory, name: item.name, provider: item.provider })
       await window.customOpenCode.restartServer()
       await loadStatus()
     } finally {
@@ -213,6 +234,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
     setActionLoading(name)
     try {
       await removeMcpServer(name, currentDirectory)
+      await window.customOpenCode.setMcpMarketplaceSource({ directory: currentDirectory, name, provider: null })
       await window.customOpenCode.restartServer()
       await loadStatus()
     } finally {
@@ -268,18 +290,25 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {tab === 'marketplace' && <div className="border-b border-border-200/50 p-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1"><SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400" /><input value={marketQuery} onChange={event => setMarketQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void handleMarketSearch()} placeholder="搜索官方 MCP Registry..." className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pl-8 pr-2 text-[length:var(--fs-sm)] text-text-100 outline-none" /></div>
-            <button disabled={marketLoading || !marketQuery.trim()} onClick={() => void handleMarketSearch()} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-bg-200 px-3 text-[length:var(--fs-sm)] text-text-200 disabled:opacity-50">{marketLoading ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}搜索</button>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-[length:var(--fs-xs)] text-text-400">{t('mcpPanel.provider')}</span>
+            <div className="flex rounded-md bg-bg-200/40 p-0.5">{(['official', 'netease'] as const).map(provider => <button key={provider} type="button" onClick={() => { setMarketProvider(provider); setMarketCategory('') }} className={`rounded px-2 py-1 text-[length:var(--fs-xs)] ${marketProvider === provider ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{t(`mcpPanel.provider_${provider}`)}</button>)}</div>
+            {marketCategories.length > 0 && <select value={marketCategory} onChange={event => setMarketCategory(event.target.value)} className="h-7 max-w-44 rounded-md border border-border-200/60 bg-bg-100 px-2 text-[length:var(--fs-xs)] text-text-200"><option value="">{t('mcpPanel.allCategories')}</option>{marketCategories.map(category => <option key={category.id} value={category.id}>{i18n.language.startsWith('zh') ? category.nameZh : category.nameEn}</option>)}</select>}
           </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1"><SearchIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-400" /><input value={marketQuery} onChange={event => setMarketQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void handleMarketSearch()} placeholder={t('mcpPanel.searchPlaceholder')} className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pl-8 pr-2 text-[length:var(--fs-sm)] text-text-100 outline-none" /></div>
+            <button disabled={marketLoading} onClick={() => void handleMarketSearch()} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-bg-200 px-3 text-[length:var(--fs-sm)] text-text-200 disabled:opacity-50">{marketLoading ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}{t('mcpPanel.search')}</button>
+          </div>
+          {marketError && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100"><span>{marketError}</span><button type="button" onClick={() => { setMarketProvider(current => current === 'official' ? 'netease' : 'official'); setMarketCategory('') }} className="rounded border border-danger-100/30 px-2 py-1">{t(marketProvider === 'official' ? 'mcpPanel.switchToNetease' : 'mcpPanel.switchToOfficial')}</button></div>}
           {marketResults.length > 0 && <div className="mt-3 space-y-1">{marketResults.map(item => {
             const installed = servers.some(server => server.name === item.name)
-            return <div key={`${item.name}-${item.version}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
+            return <div key={`${item.provider}-${item.name}-${item.version}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 text-text-300"><PlugIcon size={15} /></div>
-              <div className="min-w-0 flex-1"><div className="flex gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{item.name}</span><span className="text-[length:var(--fs-xs)] text-text-400">v{item.version}</span></div><div className="line-clamp-2 text-[length:var(--fs-xs)] text-text-400">{item.description}</div><div className="mt-1 flex flex-wrap gap-x-2 text-[length:var(--fs-xxs)] text-text-500"><span>来源：{item.source}</span>{item.downloads > 0 && <span>近 30 天 {item.downloads.toLocaleString()} 次下载</span>}{item.requiredEnvironment.length > 0 && <span className="text-warning-100">需配置：{item.requiredEnvironment.join(', ')}</span>}</div></div>
+              <div className="min-w-0 flex-1"><div className="flex gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{item.name}</span>{item.version && <span className="text-[length:var(--fs-xs)] text-text-400">v{item.version}</span>}</div><div className="line-clamp-2 text-[length:var(--fs-xs)] text-text-400">{item.description}</div><div className="mt-1 flex flex-wrap gap-x-2 text-[length:var(--fs-xxs)] text-text-500"><span>{t(`mcpPanel.provider_${item.provider}`)} · {item.source}</span>{item.category && <span>{item.category}</span>}{item.downloads > 0 && <span>{t('mcpPanel.monthlyDownloads', { count: item.downloads.toLocaleString() })}</span>}{item.requiredEnvironment.length > 0 && <span className="text-warning-100">{t('mcpPanel.requiresConfig')}: {item.requiredEnvironment.join(', ')}</span>}</div></div>
               <button disabled={Boolean(actionLoading)} onClick={() => void (installed ? handleRemoveServer(item.name) : handleMarketInstall(item))} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-300 hover:bg-bg-200 disabled:opacity-50">{actionLoading === item.name ? <SpinnerIcon size={13} className="animate-spin" /> : installed ? <TrashIcon size={13} /> : <DownloadIcon size={13} />}</button>
             </div>
           })}</div>}
+          {marketCursor && <div className="mt-3 flex justify-center"><button type="button" disabled={marketLoading} onClick={() => void handleMarketSearch(marketCursor, true)} className="rounded-md border border-border-200/60 bg-bg-000 px-3 py-1.5 text-[length:var(--fs-xs)] text-text-300 disabled:opacity-50">{t('mcpPanel.loadMore')}</button></div>}
         </div>}
         {/* Add Server Form */}
         {tab === 'installed' && showAddForm && (

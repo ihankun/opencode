@@ -26,7 +26,9 @@ const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
 export async function spawnServer(userDataPath: string, cors: string[]): Promise<SidecarHandle> {
-  const port = 4096
+  // Port 0 keeps 4096 as the preferred address, then lets the server fall back
+  // to an OS-assigned free port when another OpenCodex instance is running.
+  const port = 0
   const workspacePath = join(userDataPath, "workspace")
   mkdirSync(workspacePath, { recursive: true })
   writeLog("server", "spawning opencode sidecar", { cors, port, workspacePath })

@@ -12,12 +12,19 @@ export const SkillHandler = HttpApiBuilder.group(Api, "server.skill", (handlers)
     .handle("skill.marketplaceSearch", (ctx) =>
       response(
         SkillMarketplace.Service.use((marketplace) =>
-          badRequest(marketplace.search({ query: ctx.query.q, limit: ctx.query.limit ?? 24, page: ctx.query.page ?? 1 })),
+          badRequest(marketplace.search({
+            query: ctx.query.q,
+            provider: ctx.query.provider,
+            sort: ctx.query.sort ?? "recommended",
+            category: ctx.query.category,
+            limit: ctx.query.limit ?? 24,
+            page: ctx.query.page ?? 1,
+          })),
         ),
       ),
     )
     .handle("skill.marketplaceDetail", (ctx) =>
-      response(SkillMarketplace.Service.use((marketplace) => badRequest(marketplace.detail(ctx.query.id)))),
+      response(SkillMarketplace.Service.use((marketplace) => badRequest(marketplace.detail(ctx.query.id, ctx.query.provider)))),
     )
     .handle("skill.marketplaceInstalled", () =>
       response(SkillMarketplace.Service.use((marketplace) => badRequest(marketplace.installed()))),

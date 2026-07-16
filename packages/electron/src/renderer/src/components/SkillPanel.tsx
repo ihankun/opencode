@@ -28,7 +28,9 @@ import {
   searchMarketplaceSkills,
   type MarketplaceDetail,
   type MarketplaceInstallation,
+  type MarketplaceProvider,
   type MarketplaceScope,
+  type MarketplaceSort,
   type MarketplaceSummary,
 } from '../api/skill'
 import { reconnectSSE } from '../api/events'
@@ -65,6 +67,12 @@ export const SkillPanel = memo(function SkillPanel({
   const [marketLoading, setMarketLoading] = useState(false)
   const [marketError, setMarketError] = useState<string | null>(null)
   const [marketDetail, setMarketDetail] = useState<MarketplaceSummary | null>(null)
+  const [marketProvider, setMarketProvider] = useState<MarketplaceProvider>('official')
+  const [marketSort, setMarketSort] = useState<MarketplaceSort>('recommended')
+  const [marketCategory, setMarketCategory] = useState('')
+  const [marketCategories, setMarketCategories] = useState<ReadonlyArray<string>>([])
+  const [marketPage, setMarketPage] = useState(1)
+  const [marketTotal, setMarketTotal] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'create' | 'github' | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -116,16 +124,25 @@ export const SkillPanel = memo(function SkillPanel({
     loadSkills()
   }, [loadSkills])
 
-  const loadMarketplace = useCallback(async () => {
+  const loadMarketplace = useCallback(async (page = 1, append = false) => {
     try {
       setMarketLoading(true)
       setMarketError(null)
       const directory = currentDirectory || pathInfo?.directory
       const [available, installed] = await Promise.all([
-        filter.trim() ? searchMarketplaceSkills(filter.trim(), directory) : Promise.resolve([]),
+        searchMarketplaceSkills({
+          query: filter.trim(),
+          provider: marketProvider,
+          sort: marketSort,
+          category: marketCategory || undefined,
+          page,
+        }, directory),
         getMarketplaceInstalled(directory),
       ])
-      setMarketSkills(available)
+      setMarketSkills(current => append ? [...current, ...available.data] : available.data)
+      setMarketCategories(available.categories)
+      setMarketPage(available.page)
+      setMarketTotal(available.total)
       setMarketInstalled(installed)
     } catch (err) {
       apiErrorHandler('load skill marketplace', err)
@@ -133,13 +150,13 @@ export const SkillPanel = memo(function SkillPanel({
     } finally {
       setMarketLoading(false)
     }
-  }, [currentDirectory, filter, pathInfo?.directory, t])
+  }, [currentDirectory, filter, marketCategory, marketProvider, marketSort, pathInfo?.directory, t])
 
   useEffect(() => {
     if (tab !== 'marketplace') return
-    const timer = window.setTimeout(loadMarketplace, filter.trim() ? 900 : 0)
+    const timer = window.setTimeout(() => loadMarketplace(), filter.trim() ? 500 : 0)
     return () => window.clearTimeout(timer)
-  }, [filter, loadMarketplace, tab])
+  }, [loadMarketplace, tab])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -210,6 +227,18 @@ export const SkillPanel = memo(function SkillPanel({
           </button>
         ))}
       </div>
+      {tab === 'marketplace' && <div className="flex flex-wrap items-center gap-2 border-b border-border-200/30 px-3 py-2">
+        <span className="text-[length:var(--fs-xs)] text-text-400">{t('skillPanel.provider')}</span>
+        <div className="flex rounded-md bg-bg-200/40 p-0.5">
+          {(['official', 'netease'] as const).map(provider => <button key={provider} type="button" onClick={() => { setMarketProvider(provider); setMarketCategory(''); setMarketSort('recommended') }} className={`rounded px-2 py-1 text-[length:var(--fs-xs)] ${marketProvider === provider ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{t(`skillPanel.provider_${provider}`)}</button>)}
+        </div>
+        <select value={marketSort} onChange={event => setMarketSort(event.target.value as MarketplaceSort)} className="h-7 rounded-md border border-border-200/60 bg-bg-100 px-2 text-[length:var(--fs-xs)] text-text-200">
+          <option value="recommended">{t('skillPanel.sortRecommended')}</option>
+          {marketProvider === 'official' && <><option value="downloads">{t('skillPanel.sortDownloads')}</option><option value="stars">{t('skillPanel.sortStars')}</option><option value="aiScore">{t('skillPanel.sortAi')}</option></>}
+          <option value="recent">{t('skillPanel.sortRecent')}</option>
+        </select>
+        {marketCategories.length > 0 && <select value={marketCategory} onChange={event => setMarketCategory(event.target.value)} className="h-7 max-w-44 rounded-md border border-border-200/60 bg-bg-100 px-2 text-[length:var(--fs-xs)] text-text-200"><option value="">{t('skillPanel.allCategories')}</option>{marketCategories.map(category => <option key={category} value={category}>{category}</option>)}</select>}
+      </div>}
       <div className="relative px-3 py-2">
         <div className="relative group">
           <input
@@ -235,8 +264,11 @@ export const SkillPanel = memo(function SkillPanel({
             installed={marketInstalled}
             loading={marketLoading}
             error={marketError}
-            hasQuery={filter.trim().length > 0}
-            onRetry={loadMarketplace}
+            provider={marketProvider}
+            total={marketTotal}
+            onRetry={() => loadMarketplace()}
+            onLoadMore={() => loadMarketplace(marketPage + 1, true)}
+            onSwitchProvider={() => { setMarketProvider(current => current === 'official' ? 'netease' : 'official'); setMarketCategory('') }}
             onSelect={setMarketDetail}
           />
         ) : loading && skills.length === 0 ? (
@@ -308,7 +340,7 @@ export const SkillPanel = memo(function SkillPanel({
         <MarketplaceDetailDialog
           summary={marketDetail}
           directory={currentDirectory || pathInfo?.directory}
-          installed={marketInstalled.filter(item => item.id === marketDetail.id)}
+          installed={marketInstalled.filter(item => item.id === marketDetail.id && item.provider === marketDetail.provider)}
           onClose={() => setMarketDetail(null)}
           onChanged={async () => {
             await Promise.all([loadMarketplace(), loadSkills()])
@@ -386,28 +418,30 @@ function MarketplaceList(props: {
   installed: ReadonlyArray<MarketplaceInstallation>
   loading: boolean
   error: string | null
-  hasQuery: boolean
+  provider: MarketplaceProvider
+  total: number
   onRetry: () => void
+  onLoadMore: () => void
+  onSwitchProvider: () => void
   onSelect: (skill: MarketplaceSummary) => void
 }) {
   const { t } = useTranslation(['components', 'common'])
   if (props.loading && props.skills.length === 0) return <PanelStatus icon={<SpinnerIcon size={20} className="animate-spin" />} text={t('skillPanel.loadingMarketplace')} />
-  if (props.error) return <PanelStatus icon={<AlertCircleIcon size={20} className="text-danger-100" />} text={props.error} action={t('common:retry')} onAction={props.onRetry} />
-  if (!props.hasQuery) return <PanelStatus icon={<SearchIcon size={22} />} text={t('skillPanel.marketplaceSearchHint')} />
+  if (props.error) return <div className="flex h-full min-h-36 flex-col items-center justify-center gap-2 px-4 text-center text-[length:var(--fs-sm)] text-text-400"><AlertCircleIcon size={20} className="text-danger-100" /><span>{props.error}</span><div className="flex gap-2"><button type="button" onClick={props.onRetry} className="rounded-md bg-bg-200 px-3 py-1.5 text-text-200">{t('common:retry')}</button><button type="button" onClick={props.onSwitchProvider} className="rounded-md border border-border-200 px-3 py-1.5 text-text-200">{t(props.provider === 'official' ? 'skillPanel.switchToNetease' : 'skillPanel.switchToOfficial')}</button></div></div>
   return (
     <div className="p-2">
       {props.loading && <SpinnerIcon size={12} className="mb-2 ml-auto animate-spin text-text-400" />}
       {props.skills.length === 0 ? <PanelStatus icon={<TeachIcon size={22} />} text={t('skillPanel.noMarketplaceSkills')} /> : (
         <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
           {props.skills.map(skill => {
-            const installed = props.installed.filter(item => item.id === skill.id)
+            const installed = props.installed.filter(item => item.id === skill.id && item.provider === skill.provider)
             return (
-              <button key={skill.id} type="button" onClick={() => props.onSelect(skill)} className="rounded-md border border-border-200/50 bg-bg-000 p-3 text-left hover:border-border-100 hover:bg-bg-200/20">
+              <button key={`${skill.provider}:${skill.id}`} type="button" onClick={() => props.onSelect(skill)} className="rounded-md border border-border-200/50 bg-bg-000 p-3 text-left hover:border-border-100 hover:bg-bg-200/20">
                 <div className="flex items-start gap-2">
                   <TeachIcon size={16} className="mt-0.5 shrink-0 text-accent-main-100" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{skill.name || skill.slug}</div>
-                    <div className="mt-1 truncate text-[length:var(--fs-xs)] text-text-300">{t('skillPanel.source')}: {skill.source}</div>
+                    <div className="mt-1 truncate text-[length:var(--fs-xs)] text-text-300">{t(`skillPanel.provider_${skill.provider}`)} · {skill.source}{skill.version ? ` · v${skill.version}` : ''}</div>
                     <div className="mt-2 line-clamp-2 text-[length:var(--fs-xs)] leading-4 text-text-400">{skill.description}</div>
                     <MarketplaceBadges skill={skill} />
                   </div>
@@ -418,6 +452,7 @@ function MarketplaceList(props: {
           })}
         </div>
       )}
+      {props.skills.length < props.total && <div className="flex justify-center py-3"><button type="button" disabled={props.loading} onClick={props.onLoadMore} className="rounded-md border border-border-200/60 bg-bg-000 px-3 py-1.5 text-[length:var(--fs-xs)] text-text-300 disabled:opacity-50">{t('skillPanel.loadMore')}</button></div>}
     </div>
   )
 }
@@ -445,22 +480,22 @@ function MarketplaceDetailDialog(props: {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    getMarketplaceDetail(props.summary.id, props.directory)
+    getMarketplaceDetail(props.summary.id, props.summary.provider, props.directory)
       .then(nextDetail => {
         setDetail(nextDetail)
         setSelectedFile(nextDetail.files.find(file => file.path === 'SKILL.md')?.path ?? nextDetail.files[0]?.path ?? '')
       })
       .catch(err => setError(err instanceof Error ? err.message : t('skillPanel.marketplaceFailed')))
       .finally(() => setLoading(false))
-  }, [props.directory, props.summary.id, t])
+  }, [props.directory, props.summary.id, props.summary.provider, t])
 
   const installed = props.installed.find(item => item.scope === scope)
   const mutate = async (action: 'install' | 'remove', force = false) => {
     try {
       setSubmitting(true)
       setError(null)
-      if (action === 'install') await installMarketplaceSkill(props.summary.id, scope, props.directory, force)
-      else await removeMarketplaceSkill(props.summary.id, scope, props.directory, force)
+      if (action === 'install') await installMarketplaceSkill(props.summary.id, props.summary.provider, scope, props.directory, force)
+      else await removeMarketplaceSkill(props.summary.id, props.summary.provider, scope, props.directory, force)
       await restartElectronServer()
       await props.onChanged()
       if (action === 'remove') props.onClose()

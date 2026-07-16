@@ -36,6 +36,7 @@ export type CustomOpenCodePluginMetadata = {
 }
 
 export type CustomOpenCodeMcpSearchResult = {
+  provider: "official" | "netease"
   name: string
   version: string
   description: string
@@ -44,7 +45,29 @@ export type CustomOpenCodeMcpSearchResult = {
   downloads: number
   publishedAt: string
   requiredEnvironment: string[]
+  category: string
+  tags: string[]
   config: { type: "local"; command: string[] } | { type: "remote"; url: string }
+}
+
+export type CustomOpenCodeMcpSearchPage = {
+  data: CustomOpenCodeMcpSearchResult[]
+  nextCursor: string | null
+  categories: Array<{ id: string; nameZh: string; nameEn: string }>
+}
+
+export type CustomOpenCodeExpertKit = {
+  id: string
+  name: string
+  description: string
+  icon: string
+  author: string
+  version: string
+  downloadCount: number
+  tryAsking: string[]
+  skills: Array<{ id: string; name: string; description: string }>
+  installed: boolean
+  updateAvailable: boolean
 }
 
 export type CustomOpenCodePluginInstallResult = {
@@ -165,7 +188,11 @@ export type CustomOpenCodeApi = {
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   inspectPlugins(specs: string[]): Promise<CustomOpenCodePluginMetadata[]>
-  searchMcpServers(query: string): Promise<CustomOpenCodeMcpSearchResult[]>
+  searchMcpServers(input: { provider: "official" | "netease"; query: string; category?: string; cursor?: string }): Promise<CustomOpenCodeMcpSearchPage>
+  setMcpMarketplaceSource(input: { directory?: string; name: string; provider: "official" | "netease" | null }): Promise<void>
+  searchExpertKits(query: string): Promise<CustomOpenCodeExpertKit[]>
+  installExpertKit(id: string, force?: boolean): Promise<void>
+  removeExpertKit(id: string, force?: boolean): Promise<void>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   listTasks(): Promise<CustomOpenCodeScheduledTask[]>
   listTaskRuns(taskID?: string): Promise<CustomOpenCodeScheduledTaskRun[]>
@@ -213,7 +240,11 @@ const api: CustomOpenCodeApi = {
   },
   searchPlugins: (query) => ipcRenderer.invoke("plugin:search", query),
   inspectPlugins: (specs) => ipcRenderer.invoke("plugin:inspect", specs),
-  searchMcpServers: (query) => ipcRenderer.invoke("mcp:search", query),
+  searchMcpServers: (input) => ipcRenderer.invoke("mcp:search", input),
+  setMcpMarketplaceSource: (input) => ipcRenderer.invoke("mcp:source-set", input),
+  searchExpertKits: (query) => ipcRenderer.invoke("expert-kit:search", query),
+  installExpertKit: (id, force) => ipcRenderer.invoke("expert-kit:install", id, force),
+  removeExpertKit: (id, force) => ipcRenderer.invoke("expert-kit:remove", id, force),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   listTasks: () => ipcRenderer.invoke("task:list"),
   listTaskRuns: (taskID) => ipcRenderer.invoke("task:run-list", taskID),

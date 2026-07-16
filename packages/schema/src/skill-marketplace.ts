@@ -6,6 +6,12 @@ import { optional } from "./schema"
 export const Scope = Schema.Literals(["global", "project"])
 export type Scope = typeof Scope.Type
 
+export const Provider = Schema.Literals(["official", "netease"])
+export type Provider = typeof Provider.Type
+
+export const Sort = Schema.Literals(["recommended", "aiScore", "downloads", "stars", "rating", "recent"])
+export type Sort = typeof Sort.Type
+
 export const File = Schema.Struct({
   path: Schema.String,
   contents: Schema.String,
@@ -14,11 +20,16 @@ export interface File extends Schema.Schema.Type<typeof File> {}
 
 export const Summary = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   slug: Schema.String,
   name: Schema.String,
   source: Schema.String,
   description: Schema.String,
   url: Schema.String,
+  version: Schema.NullOr(Schema.String),
+  category: Schema.NullOr(Schema.String),
+  tags: Schema.Array(Schema.String),
+  icon: Schema.NullOr(Schema.String),
   githubStars: Schema.Number,
   downloadCount: Schema.Number,
   isVerified: Schema.Boolean,
@@ -34,13 +45,19 @@ export const Page = Schema.Struct({
   page: Schema.Number,
   perPage: Schema.Number,
   total: Schema.Number,
+  categories: Schema.Array(Schema.String),
 }).annotate({ identifier: "SkillMarketplace.Page" })
 export interface Page extends Schema.Schema.Type<typeof Page> {}
 
 export const Detail = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   source: Schema.String,
   slug: Schema.String,
+  version: Schema.NullOr(Schema.String),
+  category: Schema.NullOr(Schema.String),
+  tags: Schema.Array(Schema.String),
+  icon: Schema.NullOr(Schema.String),
   hash: Schema.String,
   files: Schema.Array(File),
   githubStars: Schema.Number,
@@ -58,8 +75,10 @@ export interface Detail extends Schema.Schema.Type<typeof Detail> {}
 
 export const Manifest = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   source: Schema.String,
   slug: Schema.String,
+  version: Schema.NullOr(Schema.String),
   hash: Schema.NullOr(Schema.String),
   scope: Scope,
   installedAt: Schema.String,
@@ -70,6 +89,7 @@ export interface Manifest extends Schema.Schema.Type<typeof Manifest> {}
 
 export const Installation = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   slug: Schema.String,
   scope: Scope,
   directory: Schema.String,
@@ -81,6 +101,7 @@ export interface Installation extends Schema.Schema.Type<typeof Installation> {}
 
 export const InstallInput = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   scope: Scope,
   force: Schema.Boolean.pipe(optional),
 }).annotate({ identifier: "SkillMarketplace.InstallInput" })
@@ -88,6 +109,7 @@ export interface InstallInput extends Schema.Schema.Type<typeof InstallInput> {}
 
 export const RemoveInput = Schema.Struct({
   id: Schema.String,
+  provider: Provider,
   scope: Scope,
   force: Schema.Boolean.pipe(optional),
 }).annotate({ identifier: "SkillMarketplace.RemoveInput" })

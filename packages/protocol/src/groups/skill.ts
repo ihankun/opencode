@@ -36,6 +36,9 @@ export const SkillGroup = HttpApiGroup.make("server.skill")
       query: Schema.Struct({
         ...LocationQuery.fields,
         q: Schema.String,
+        provider: SkillMarketplace.Provider,
+        sort: SkillMarketplace.Sort.pipe(Schema.optional),
+        category: Schema.String.pipe(Schema.optional),
         limit: Schema.NumberFromString.pipe(Schema.optional),
         page: Schema.NumberFromString.pipe(Schema.optional),
       }),
@@ -45,7 +48,7 @@ export const SkillGroup = HttpApiGroup.make("server.skill")
   )
   .add(
     HttpApiEndpoint.get("skill.marketplaceDetail", "/api/skill/marketplace/detail", {
-      query: Schema.Struct({ ...LocationQuery.fields, id: Schema.String }),
+      query: Schema.Struct({ ...LocationQuery.fields, id: Schema.String, provider: SkillMarketplace.Provider }),
       success: Location.response(SkillMarketplace.Detail),
       error: SkillMarketplaceError,
     }).annotateMerge(locationQueryOpenApi),

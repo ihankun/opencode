@@ -1,7 +1,7 @@
 {
   "name": "@opencode-ai/opencodex",
   "private": true,
-  "version": "1.10.5",
+  "version": "1.11.0",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
@@ -43,6 +43,7 @@
     "croner": "^9.1.0",
     "diff": "^8.0.4",
     "electron-window-state": "^5.0.3",
+    "extract-zip": "2.0.1",
     "i18next": "^26.0.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "jsonc-parser": "3.3.1",
