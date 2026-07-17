@@ -508,7 +508,8 @@ export function SidePanel({
       return changed ? next : prev
     })
 
-    const missing = allNeeded.filter(entry => !sessionLookup.has(entry.sessionId))
+    // 全局通知（例如技能或设置操作）没有关联 session，不能调用单 session 接口补全。
+    const missing = allNeeded.filter(entry => entry.sessionId?.trim() && !sessionLookup.has(entry.sessionId))
     if (missing.length === 0) return
 
     let cancelled = false

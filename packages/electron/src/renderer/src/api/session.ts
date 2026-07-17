@@ -138,6 +138,7 @@ export async function getSessions(params: SessionListParams = {}): Promise<ApiSe
  * 获取单个 session
  */
 export async function getSession(sessionId: string, directory?: string): Promise<ApiSession> {
+  if (!sessionId?.trim()) throw new Error('Session ID is required')
   const sdk = getSDKClient()
   return unwrap(await sdk.session.get({ sessionID: sessionId, directory: formatPathForApi(directory) }))
 }
