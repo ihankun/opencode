@@ -47,7 +47,7 @@ import {
   type ApiSession,
   type ConnectionInfo,
 } from '../../../api'
-import { getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
+import { areSessionListsSame, getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
 import { clearSessionRuntimeState } from '../../../utils/sessionLifecycle'
 import { uiErrorHandler } from '../../../utils'
 import { isElectron, getDesktopPlatform } from '../../../utils/tauri'
@@ -247,11 +247,6 @@ function findProjectGroupForDirectory(projects: ProjectItem[], directory: string
 
     return false
   })
-}
-
-function areSessionListsSame(a: ApiSession[], b: ApiSession[]) {
-  if (a.length !== b.length) return false
-  return a.every((session, index) => session.id === b[index]?.id && session.title === b[index]?.title)
 }
 
 export function SidePanel({

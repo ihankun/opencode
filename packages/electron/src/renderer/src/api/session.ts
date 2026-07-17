@@ -13,6 +13,16 @@ import type { SessionStatusMap } from '../types/api/session'
 import type { TodoItem } from '../types/api/event'
 import type { SessionPermissionRule } from '../store/autoApproveStore'
 
+const SESSION_LIST_CACHE_DURATION = 250
+const BACKGROUND_SESSION_LIST_CACHE_DURATION = 30000
+type SessionListRequest = {
+  background?: boolean
+  expiresAt: number
+  value?: ApiSession[]
+  promise?: Promise<ApiSession[]>
+}
+const sessionListRequests = new WeakMap<object, Map<string, SessionListRequest>>()
+
 function normalizeSessionList(value: unknown): ApiSession[] {
   if (Array.isArray(value)) return value as ApiSession[]
   throw new Error('Invalid OpenCode session list response')
@@ -83,18 +93,45 @@ export async function getLastTurnDiff(sessionId: string, directory?: string): Pr
 export async function getSessions(params: SessionListParams = {}): Promise<ApiSession[]> {
   const sdk = getSDKClient()
   const { directory, roots, start, search, limit, archived } = params
-  return normalizeSessionList(
-    unwrap(
-      await sdk.session.list({
-        directory: formatPathForApi(directory),
-        roots,
-        start,
-        search,
-        limit,
-        archived,
-      }),
-    ),
-  )
+  const query = {
+    directory: formatPathForApi(directory),
+    roots,
+    start,
+    search,
+    limit,
+    archived,
+  }
+  const key = JSON.stringify(query)
+  const requests = sessionListRequests.get(sdk) ?? new Map<string, SessionListRequest>()
+  sessionListRequests.set(sdk, requests)
+
+  const now = Date.now()
+  const background = document.visibilityState === 'hidden'
+  requests.forEach((request, requestKey) => {
+    if (!request.promise && request.expiresAt <= now) requests.delete(requestKey)
+  })
+  const cached = requests.get(key)
+  if (cached?.promise) return cached.promise
+  if (cached?.value && cached.expiresAt > now && (background || !cached.background)) return cached.value
+
+  const promise = sdk.session
+    .list(query)
+    .then(result => normalizeSessionList(unwrap(result)))
+    .then(value => {
+      requests.set(key, {
+        background,
+        value,
+        expiresAt:
+          Date.now() + (background ? BACKGROUND_SESSION_LIST_CACHE_DURATION : SESSION_LIST_CACHE_DURATION),
+      })
+      return value
+    })
+    .catch(error => {
+      requests.delete(key)
+      throw error
+    })
+  requests.set(key, { promise, expiresAt: 0 })
+  return promise
 }
 
 /**

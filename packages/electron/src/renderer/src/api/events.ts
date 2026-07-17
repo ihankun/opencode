@@ -61,8 +61,8 @@ export function subscribeToConnectionState(fn: (info: ConnectionInfo) => void): 
 // ============================================
 
 const RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 10000, 30000]
-/** 后台时使用更激进的重连延迟，确保尽快恢复连接 */
-const BACKGROUND_RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000, 10000]
+/** 后台降低重连频率；窗口恢复可见时会立即检查并恢复连接 */
+const BACKGROUND_RECONNECT_DELAYS = [5000, 10000, 30000, 60000]
 const HEARTBEAT_TIMEOUT = 60000
 /** 后台时的心跳超时（更宽松，因为后台 timer 可能不准） */
 const BACKGROUND_HEARTBEAT_TIMEOUT = 120000
@@ -153,7 +153,7 @@ function scheduleReconnect() {
   if (allSubscribers.size === 0) return // 没有订阅者就不重连
 
   const attempt = connectionInfo.reconnectAttempt
-  // 后台时使用更激进的重连策略
+  // 后台降低重连频率，避免隐藏窗口在服务不可用时持续唤醒
   const delays = isInBackground ? BACKGROUND_RECONNECT_DELAYS : RECONNECT_DELAYS
   const delay = delays[Math.min(attempt, delays.length - 1)]
 

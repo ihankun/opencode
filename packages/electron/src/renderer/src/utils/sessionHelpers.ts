@@ -2,7 +2,7 @@
 // Session 加载相关的辅助函数
 // ============================================
 
-import type { ModelInfo } from '../api'
+import type { ApiSession, ModelInfo } from '../api'
 import { getModelKey } from './modelUtils'
 
 // ============================================
@@ -13,6 +13,25 @@ export interface ModelSelectionResult {
   modelKey: string // providerId:modelId 格式
   model: ModelInfo
   variant: string | undefined
+}
+
+export function areSessionListsSame(a: ApiSession[], b: ApiSession[]) {
+  if (a.length !== b.length) return false
+  return a.every((session, index) => {
+    const other = b[index]
+    if (!other) return false
+    return (
+      session.id === other.id &&
+      session.title === other.title &&
+      session.directory === other.directory &&
+      session.parentID === other.parentID &&
+      session.time.updated === other.time.updated &&
+      session.time.archived === other.time.archived &&
+      session.summary?.additions === other.summary?.additions &&
+      session.summary?.deletions === other.summary?.deletions &&
+      session.summary?.files === other.summary?.files
+    )
+  })
 }
 
 /**

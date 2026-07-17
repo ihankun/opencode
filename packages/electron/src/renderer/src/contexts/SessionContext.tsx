@@ -12,7 +12,13 @@ import { todoStore } from '../store/todoStore'
 import { serverStore } from '../store/serverStore'
 import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
 import { useDirectory } from './useDirectory'
-import { sessionErrorHandler, normalizeToForwardSlash, isSameDirectory, autoDetectPathStyle } from '../utils'
+import {
+  areSessionListsSame,
+  sessionErrorHandler,
+  normalizeToForwardSlash,
+  isSameDirectory,
+  autoDetectPathStyle,
+} from '../utils'
 import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
 import { SessionContext, type SessionContextValue } from './SessionContext.shared'
 
@@ -28,6 +34,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const requestIdRef = useRef(0)
   const searchTimerRef = useRef<number | null>(null)
   const searchRef = useRef(search)
+  const hasLoadedSessionsRef = useRef(false)
   const isLoadingMoreRef = useRef(false) // 防止并发 loadMore
   const isFetchingRef = useRef(false) // 防止 onReconnected 密集触发时重复请求
   const queuedReconnectRefreshRef = useRef(false)
@@ -60,11 +67,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const requestId = ++requestIdRef.current
       isFetchingRef.current = true
 
-      if (append) {
-        setIsLoadingMore(true)
-      } else {
-        setIsLoading(true)
-      }
+      if (append) setIsLoadingMore(true)
+      if (!append && (!hasLoadedSessionsRef.current || search)) setIsLoading(true)
 
       try {
         // 使用正斜杠格式传给 API（http 层会处理兼容）
@@ -72,6 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
         if (!targetDir) {
           if (!append) {
+            hasLoadedSessionsRef.current = true
             setSessions([])
             setHasMore(false)
           }
@@ -103,11 +108,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setSessions(prev => {
             const existingIds = new Set(prev.map(s => s.id))
             const newSessions = data.filter(s => !existingIds.has(s.id))
+            if (newSessions.length === 0) return prev
             return [...prev, ...newSessions]
           })
         } else {
-          setSessions(data)
+          setSessions(prev => (areSessionListsSame(prev, data) ? prev : data))
         }
+        hasLoadedSessionsRef.current = true
         setHasMore(sessionData.length >= currentLimitRef.current)
       } catch (e) {
         if (requestId === requestIdRef.current && !append) {
@@ -130,7 +137,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setIsLoadingMore(false)
           if (queuedReconnectRefreshRef.current) {
             queuedReconnectRefreshRef.current = false
-            setSessions([])
             void fetchSessionsRef.current({ search: searchRef.current || undefined })
           }
         }
@@ -238,7 +244,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           queuedReconnectRefreshRef.current = true
           return
         }
-        setSessions([])
         fetchSessionsRef.current()
       },
     })
@@ -250,7 +255,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (typeof window.customOpenCode?.listTaskRuns !== 'function') return
     const refreshScheduledSessions = () => void window.customOpenCode.listTaskRuns().then(runs => {
       scheduledSessionIdsRef.current = new Set(runs.map(run => run.sessionID))
-      setSessions(prev => prev.filter(session => !scheduledSessionIdsRef.current.has(session.id)))
+      setSessions(prev => {
+        const filtered = prev.filter(session => !scheduledSessionIdsRef.current.has(session.id))
+        return filtered.length === prev.length ? prev : filtered
+      })
     })
     refreshScheduledSessions()
     return window.customOpenCode.onTasksChanged(refreshScheduledSessions)
@@ -259,6 +267,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return serverStore.onServerChange(() => {
       currentLimitRef.current = 30
+      hasLoadedSessionsRef.current = false
+      setIsLoading(true)
       setSessions([])
       void fetchSessionsRef.current()
     })

@@ -10,7 +10,7 @@ import {
 } from '../api'
 import { serverStore } from '../store/serverStore'
 import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
-import { autoDetectPathStyle, isSameDirectory } from '../utils'
+import { areSessionListsSame, autoDetectPathStyle, isSameDirectory } from '../utils'
 
 interface UseSessionsOptions {
   /** 每页数量 */
@@ -68,6 +68,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
   // 当前 limit，loadMore 时递增（与 SessionContext 保持一致）
   const currentLimitRef = useRef(pageSize)
   const searchRef = useRef(search)
+  const hasLoadedSessionsRef = useRef(false)
   // 防止 onReconnected 密集触发时重复请求
   const isFetchingRef = useRef(false)
   const queuedReconnectRefreshRef = useRef(false)
@@ -96,12 +97,9 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       const requestId = ++requestIdRef.current
       isFetchingRef.current = true
 
-      if (append) {
-        setIsLoadingMore(true)
-      } else {
-        setIsLoading(true)
-        setError(null)
-      }
+      if (append) setIsLoadingMore(true)
+      if (!append && (!hasLoadedSessionsRef.current || queryParams.search)) setIsLoading(true)
+      if (!append) setError(null)
 
       try {
         const data = await getSessions({
@@ -118,7 +116,9 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
           autoDetectPathStyle(data[0].directory)
         }
 
-        setSessions(data.filter(session => !isScheduledTaskSession(session)))
+        const nextSessions = data.filter(session => !isScheduledTaskSession(session))
+        setSessions(prev => (areSessionListsSame(prev, nextSessions) ? prev : nextSessions))
+        hasLoadedSessionsRef.current = true
         setHasMore(data.length >= currentLimitRef.current)
       } catch (e) {
         if (requestId !== requestIdRef.current) return
@@ -142,7 +142,6 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
           setIsLoadingMore(false)
           if (queuedReconnectRefreshRef.current) {
             queuedReconnectRefreshRef.current = false
-            setSessions([])
             void fetchSessionsRef.current({ search: searchRef.current || undefined })
           }
         }
@@ -156,6 +155,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
   // 初始加载和搜索变化时重新加载
   useEffect(() => {
     if (!enabled) {
+      hasLoadedSessionsRef.current = false
       setIsLoading(false)
       setIsLoadingMore(false)
       return
@@ -251,7 +251,6 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
           queuedReconnectRefreshRef.current = true
           return
         }
-        setSessions([])
         void fetchSessionsRef.current({ search: searchRef.current || undefined })
       },
     })
@@ -264,6 +263,8 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
 
     return serverStore.onServerChange(() => {
       currentLimitRef.current = pageSize
+      hasLoadedSessionsRef.current = false
+      setIsLoading(true)
       setSessions([])
       void fetchSessionsRef.current({ search: searchRef.current || undefined })
     })
