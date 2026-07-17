@@ -463,10 +463,9 @@ app.on("activate", () => {
 
 async function searchPlugins(raw: string) {
   const query = raw.trim()
-  if (!query) return []
 
   const url = new URL("https://registry.npmjs.org/-/v1/search")
-  url.searchParams.set("text", `${query} opencode plugin`)
+  url.searchParams.set("text", query ? `${query} opencode plugin` : "opencode plugin")
   url.searchParams.set("size", "20")
   url.searchParams.set("quality", "0.65")
   url.searchParams.set("popularity", "0.2")
@@ -476,7 +475,7 @@ async function searchPlugins(raw: string) {
   if (!response.ok) throw new Error(`npm search failed with ${response.status}`)
 
   const data = (await response.json()) as NpmSearchResponse
-  const exact = await readNpmManifest(query).catch(() => undefined)
+  const exact = query ? await readNpmManifest(query).catch(() => undefined) : undefined
   const results = (data.objects ?? []).flatMap((item) => {
     const pkg = item.package
     if (!pkg?.name) return []

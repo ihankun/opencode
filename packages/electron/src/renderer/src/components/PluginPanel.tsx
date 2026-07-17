@@ -163,14 +163,13 @@ export const PluginPanel = memo(function PluginPanel() {
     void loadPlugins()
   }, [loadPlugins])
 
-  const handleSearch = useCallback(async () => {
-    const query = searchDraft.trim()
-    if (!query || !canUseElectronInstaller) return
+  const searchMarketplace = useCallback(async (query: string) => {
+    if (!canUseElectronInstaller) return
     setSearching(true)
     setSearchError(null)
     setInstallMessage(null)
     try {
-      setSearchResults(await window.customOpenCode.searchPlugins(query))
+      setSearchResults(await window.customOpenCode.searchPlugins(query.trim()))
     } catch (err) {
       apiErrorHandler('search npm plugins', err)
       setSearchError(t('pluginPanel.searchFailed'))
@@ -178,7 +177,12 @@ export const PluginPanel = memo(function PluginPanel() {
     } finally {
       setSearching(false)
     }
-  }, [canUseElectronInstaller, searchDraft, t])
+  }, [canUseElectronInstaller, t])
+
+  useEffect(() => {
+    if (tab !== 'marketplace') return
+    void searchMarketplace('')
+  }, [searchMarketplace, tab])
 
   const openAddDialog = useCallback(() => {
     setDialog({ mode: 'add' })
@@ -354,7 +358,7 @@ export const PluginPanel = memo(function PluginPanel() {
                   onKeyDown={event => {
                     if (event.key !== 'Enter') return
                     event.preventDefault()
-                    void handleSearch()
+                    void searchMarketplace(searchDraft)
                   }}
                   placeholder={t('pluginPanel.searchPlaceholder')}
                   className="h-8 w-full rounded-md border border-border-200/60 bg-bg-100 pr-2 pl-8 text-text-100 text-[length:var(--fs-sm)] outline-none transition-colors placeholder:text-text-400 focus:border-border-100"
@@ -362,8 +366,8 @@ export const PluginPanel = memo(function PluginPanel() {
               </div>
               <button
                 type="button"
-                onClick={() => void handleSearch()}
-                disabled={searching || !searchDraft.trim()}
+                onClick={() => void searchMarketplace(searchDraft)}
+                disabled={searching}
                 className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-bg-200/70 px-3 text-text-200 text-[length:var(--fs-sm)] transition-colors hover:bg-bg-200 disabled:opacity-50"
               >
                 {searching ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}

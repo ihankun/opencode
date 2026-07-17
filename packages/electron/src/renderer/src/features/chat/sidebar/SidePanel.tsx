@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SessionList } from '../../sessions'
 import { FolderRecentList } from './FolderRecentList'
@@ -25,8 +26,10 @@ import {
   PackagePlusIcon,
   TeachIcon,
   ClockIcon,
+  GitBranchIcon,
+  MessageSquareIcon,
 } from '../../../components/Icons'
-import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList, useVcsInfo } from '../../../hooks'
+import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
 import { useLayoutStore, childSessionStore } from '../../../store'
 import { useBusySessions } from '../../../store/activeSessionStore'
@@ -38,6 +41,8 @@ import {
   archiveSession as apiArchiveSession,
   getSession,
   getSessions,
+  getVcsInfo,
+  isScheduledTaskSession,
   subscribeToConnectionState,
   type ApiSession,
   type ConnectionInfo,
@@ -86,6 +91,133 @@ interface ProjectItem {
   reorderPath?: string
   workspaceDirectories?: string[]
   sectionKind?: 'project' | 'workspace'
+}
+
+function ProjectInfoHover({ project, disabled, children }: { project: ProjectItem; disabled: boolean; children: ReactNode }) {
+  const { t } = useTranslation('chat')
+  const triggerRef = useRef<HTMLDivElement>(null)
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestRef = useRef(0)
+  const loadedAtRef = useRef(0)
+  const [isOpen, setIsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [details, setDetails] = useState<{ branch: string | null; sessionCount: number | null } | null>(null)
+  const [position, setPosition] = useState({ top: 8, left: 8, width: 340 })
+
+  const updatePosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const width = Math.min(340, window.innerWidth - 16)
+    setPosition({
+      top: Math.max(8, Math.min(rect.top, window.innerHeight - 176)),
+      left: Math.max(8, Math.min(rect.right + 10, window.innerWidth - width - 8)),
+      width,
+    })
+  }, [])
+
+  const loadDetails = useCallback(async () => {
+    if (isLoading || Date.now() - loadedAtRef.current < 30_000) return
+    const request = ++requestRef.current
+    setIsLoading(true)
+
+    const [vcsInfo, sessions] = await Promise.all([
+      getVcsInfo(project.worktree).catch(() => null),
+      getSessions({
+        roots: true,
+        limit: 1000,
+        directory: normalizeToForwardSlash(project.worktree) || project.worktree,
+      }).catch(() => null),
+    ])
+
+    if (request !== requestRef.current) return
+    setDetails({
+      branch: vcsInfo?.branch ?? null,
+      sessionCount: sessions?.filter(session => !isScheduledTaskSession(session)).length ?? null,
+    })
+    loadedAtRef.current = Date.now()
+    setIsLoading(false)
+  }, [isLoading, project.worktree])
+
+  const show = useCallback(() => {
+    if (disabled) return
+    if (openTimerRef.current) clearTimeout(openTimerRef.current)
+    openTimerRef.current = setTimeout(() => {
+      updatePosition()
+      setIsOpen(true)
+      void loadDetails()
+    }, 250)
+  }, [disabled, loadDetails, updatePosition])
+
+  const hide = useCallback(() => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current)
+      openTimerRef.current = null
+    }
+    setIsOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen, updatePosition])
+
+  useEffect(() => {
+    return () => {
+      requestRef.current += 1
+      if (openTimerRef.current) clearTimeout(openTimerRef.current)
+    }
+  }, [])
+
+  if (disabled) return children
+
+  return (
+    <div ref={triggerRef} onMouseEnter={show} onMouseLeave={hide} onPointerDown={hide}>
+      {children}
+      {isOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[10000] rounded-xl border border-border-200/70 bg-bg-000/95 p-3.5 shadow-xl backdrop-blur-md"
+              style={position}
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <FolderIcon size={17} className="shrink-0 text-text-300" />
+                <div className="truncate text-[length:var(--fs-base)] font-semibold text-text-100">{project.name}</div>
+              </div>
+              <div className="my-3 h-px bg-border-200/60" />
+              <div className="space-y-2.5 text-[length:var(--fs-sm)]">
+                <div className="grid grid-cols-[18px_76px_minmax(0,1fr)] items-center gap-2">
+                  <GitBranchIcon size={14} className="text-text-400" />
+                  <span className="text-text-400">{t('sidebar.projectBranch')}</span>
+                  <span className="truncate text-right font-medium text-text-200" title={details?.branch ?? undefined}>
+                    {isLoading ? t('sidebar.projectInfoLoading') : details?.branch ?? t('sidebar.projectNoBranch')}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[18px_76px_minmax(0,1fr)] items-center gap-2">
+                  <MessageSquareIcon size={14} className="text-text-400" />
+                  <span className="text-text-400">{t('sidebar.projectSessionCount')}</span>
+                  <span className="text-right font-medium text-text-200">
+                    {isLoading ? t('sidebar.projectInfoLoading') : details?.sessionCount ?? '—'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[18px_76px_minmax(0,1fr)] items-start gap-2">
+                  <FolderOpenIcon size={14} className="mt-0.5 text-text-400" />
+                  <span className="text-text-400">{t('sidebar.projectPath')}</span>
+                  <span className="break-all text-right leading-5 text-text-200">{project.worktree}</span>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
 }
 
 function getSelectionRange(visibleIds: string[], anchorId: string, targetId: string) {
@@ -160,7 +292,6 @@ export function SidePanel({
   )
   const { catalog: gitWorkspaceCatalog, isLoading: isGitWorkspaceCatalogLoading } =
     useGitWorkspaceCatalog(catalogDirectories)
-  const { vcsInfo: currentDirectoryVcsInfo, isLoading: isCurrentDirectoryVcsLoading } = useVcsInfo(currentDirectory)
   const { sidebarFolderRecents, sidebarShowChildSessions } = useLayoutStore()
   const normalizedCurrentDirectory = useMemo(
     () => (currentDirectory ? normalizeToForwardSlash(currentDirectory) : undefined),
@@ -588,21 +719,6 @@ export function SidePanel({
     if (currentProject.id === 'global') return
     setExpandedProjectIds(prev => (prev.includes(currentProject.id) ? prev : [...prev, currentProject.id]))
   }, [currentProject.id, selectedSessionId])
-
-  const currentProjectLabel = useMemo(() => {
-    const baseLabel = currentProject?.name || t('sidebar.global')
-    if (!currentDirectory || currentProject?.id === 'global') return baseLabel
-
-    const branchLabel = currentDirectoryVcsInfo?.branch ?? (isCurrentDirectoryVcsLoading ? '...' : undefined)
-    return branchLabel ? `${baseLabel} · ${branchLabel}` : baseLabel
-  }, [
-    currentDirectory,
-    currentDirectoryVcsInfo?.branch,
-    currentProject?.id,
-    currentProject?.name,
-    isCurrentDirectoryVcsLoading,
-    t,
-  ])
 
   const displayedProjects = useMemo(() => {
     if (currentProject.id === 'global') return projects
@@ -1326,95 +1442,93 @@ export function SidePanel({
                       hasMore: false,
                       onLoadMore: () => {},
                     }
-                const itemLabel =
-                  isActive && !isGlobal
-                    ? currentProjectLabel
-                    : project.name || (isGlobal ? t('sidebar.global') : project.worktree)
+                const itemLabel = project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (
                   <div
                     key={project.id}
                   >
-                    <div
-                      ref={element => registerProjectRef(project.id, element)}
-                      data-reorder-preview
-                      onClick={() => handleSelectProject(project.id)}
-                      onTouchStart={
-                        project.canReorder && !isEditMode
-                          ? event => handleProjectTouchStart(project.id, event)
-                          : undefined
-                      }
-                      className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-all ${
-                        draggedProjectId === project.id
-                          ? 'relative z-10 bg-bg-100 shadow-lg ring-1 ring-inset ring-accent-main-100/30'
-                          : ''
-                      } ${
-                        isActive
-                          ? 'sidebar-selected-row text-text-100'
-                          : 'sidebar-hover-row text-text-300 hover:text-text-100'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onPointerDown={
+                    <ProjectInfoHover project={project} disabled={isGlobal || isMobile}>
+                      <div
+                        ref={element => registerProjectRef(project.id, element)}
+                        data-reorder-preview
+                        onClick={() => handleSelectProject(project.id)}
+                        onTouchStart={
                           project.canReorder && !isEditMode
-                            ? event => handleProjectPointerStart(project.id, event)
+                            ? event => handleProjectTouchStart(project.id, event)
                             : undefined
                         }
-                        onClick={e => {
-                          e.stopPropagation()
-                          handleSelectProject(project.id)
-                          if (!isGlobal) handleToggleProject(project.id)
-                        }}
-                        aria-current={isActive ? 'true' : undefined}
-                        className={`min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0 ${
-                          project.canReorder && !isEditMode ? 'cursor-grab active:cursor-grabbing' : ''
+                        className={`group w-full flex items-center gap-2 rounded-md px-1.5 py-1 transition-all ${
+                          draggedProjectId === project.id
+                            ? 'relative z-10 bg-bg-100 shadow-lg ring-1 ring-inset ring-accent-main-100/30'
+                            : ''
+                        } ${
+                          isActive
+                            ? 'sidebar-selected-row text-text-100'
+                            : 'sidebar-hover-row text-text-300 hover:text-text-100'
                         }`}
-                        title={project.worktree}
                       >
-                        <span className="flex size-5 shrink-0 items-center justify-center">
-                          {isGlobal ? (
-                            <GlobeIcon size={14} className="text-accent-main-100" />
-                          ) : isExpanded ? (
-                            <FolderOpenIcon size={14} />
-                          ) : (
-                            <FolderIcon size={14} />
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
-                      </button>
-                      {!isGlobal && (
                         <button
                           type="button"
+                          onPointerDown={
+                            project.canReorder && !isEditMode
+                              ? event => handleProjectPointerStart(project.id, event)
+                              : undefined
+                          }
                           onClick={e => {
                             e.stopPropagation()
-                            handleToggleProject(project.id)
+                            handleSelectProject(project.id)
+                            if (!isGlobal) handleToggleProject(project.id)
                           }}
-                          aria-label={isExpanded ? '折叠项目' : '展开项目'}
-                          aria-expanded={isExpanded}
-                          className="flex size-6 shrink-0 items-center justify-center rounded text-text-500 transition-colors hover:bg-bg-200/70 hover:text-text-200"
-                          title={isExpanded ? '折叠项目' : '展开项目'}
+                          aria-current={isActive ? 'true' : undefined}
+                          className={`min-w-0 flex flex-1 items-center gap-2 text-left bg-transparent border-none p-0 ${
+                            project.canReorder && !isEditMode ? 'cursor-grab active:cursor-grabbing' : ''
+                          }`}
                         >
-                          <ChevronRightIcon
-                            size={14}
-                            className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
-                          />
+                          <span className="flex size-5 shrink-0 items-center justify-center">
+                            {isGlobal ? (
+                              <GlobeIcon size={14} className="text-accent-main-100" />
+                            ) : isExpanded ? (
+                              <FolderOpenIcon size={14} />
+                            ) : (
+                              <FolderIcon size={14} />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
                         </button>
-                      )}
-                      {!isGlobal && (
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation()
-                            setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
-                          }}
-                          aria-label={t('sidebar.removeProject')}
-                          className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
-                          title={t('common:remove')}
-                        >
-                          <TrashIcon size={12} />
-                        </button>
-                      )}
-                    </div>
+                        {!isGlobal && (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              handleToggleProject(project.id)
+                            }}
+                            aria-label={isExpanded ? '折叠项目' : '展开项目'}
+                            aria-expanded={isExpanded}
+                            className="flex size-6 shrink-0 items-center justify-center rounded text-text-500 transition-colors hover:bg-bg-200/70 hover:text-text-200"
+                            title={isExpanded ? '折叠项目' : '展开项目'}
+                          >
+                            <ChevronRightIcon
+                              size={14}
+                              className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                            />
+                          </button>
+                        )}
+                        {!isGlobal && (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
+                            }}
+                            aria-label={t('sidebar.removeProject')}
+                            className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
+                            title={t('common:remove')}
+                          >
+                            <TrashIcon size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </ProjectInfoHover>
                     {!isGlobal &&
                       isExpanded &&
                       sidebarTab === 'recents' &&
