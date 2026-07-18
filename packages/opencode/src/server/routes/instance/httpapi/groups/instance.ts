@@ -29,6 +29,11 @@ export const VcsDiffQuery = Schema.Struct({
   context: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
 })
 
+export const VcsHistoryQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
+})
+
 export class ApiVcsApplyError extends Schema.ErrorClass<ApiVcsApplyError>("VcsApplyError")(
   {
     name: Schema.Literal("VcsApplyError"),
@@ -77,6 +82,8 @@ export const InstancePaths = {
   vcsDiscard: "/vcs/discard",
   vcsCommit: "/vcs/commit",
   vcsPush: "/vcs/push",
+  vcsOperation: "/vcs/operation",
+  vcsHistory: "/vcs/history",
   command: "/command",
   agent: "/agent",
   skill: "/skill",
@@ -216,6 +223,17 @@ export const InstanceApi = HttpApi.make("instance")
           success: described(Vcs.MutationResult, "VCS branch pushed"),
           error: ApiVcsMutationError,
         }).annotateMerge(OpenApi.annotations({ identifier: "vcs.push", summary: "Push branch", description: "Push the current branch to its configured upstream." })),
+        HttpApiEndpoint.post("vcsOperation", InstancePaths.vcsOperation, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.OperationInput,
+          success: described(Vcs.MutationResult, "VCS operation result"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.operation", summary: "Run Git operation", description: "Fetch, pull, stash, create a branch, or merge using a validated operation." })),
+        HttpApiEndpoint.get("vcsHistory", InstancePaths.vcsHistory, {
+          query: VcsHistoryQuery,
+          success: described(Schema.Array(Vcs.HistoryItem), "VCS commit history"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.history", summary: "Get Git history", description: "List recent commits for the current branch." })),
         HttpApiEndpoint.get("command", InstancePaths.command, {
           query: WorkspaceRoutingQuery,
           success: described(Schema.Array(Command.Info), "List of commands"),

@@ -2123,7 +2123,17 @@ export type Provider = {
 }
 
 export type ExperimentalCapabilities = {
+  apiVersion: 2
   backgroundSubagents: boolean
+  worktree: boolean
+  worktreeBaseBranch: boolean
+  vcsMutations: boolean
+  workspaceCheckpoints: boolean
+  advancedVcs: boolean
+  checkpointRegistry: boolean
+  memory: boolean
+  hooks: boolean
+  pullRequests: boolean
 }
 
 export type ConsoleState = {
@@ -2172,11 +2182,21 @@ export type GoalResponse = {
 }
 
 export type WorkspaceCheckpoint = {
+  id: string
   snapshot: string
+  sessionID: string
+  directory: string
+  label: string
+  createdAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type WorkspaceCheckpointCreateInput = {
+  sessionID: string
+  label: string
 }
 
 export type WorkspaceCheckpointRestoreInput = {
-  snapshot: string
+  id: string
 }
 
 export type WorktreeError = {
@@ -8194,10 +8214,42 @@ export type ExperimentalGoalStatusResponses = {
 
 export type ExperimentalGoalStatusResponse = ExperimentalGoalStatusResponses[keyof ExperimentalGoalStatusResponses]
 
-export type ExperimentalCheckpointCreateData = {
-  body?: {
-    [key: string]: unknown
+export type ExperimentalCheckpointListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    sessionID?: string
   }
+  url: "/experimental/checkpoint"
+}
+
+export type ExperimentalCheckpointListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalCheckpointListError = ExperimentalCheckpointListErrors[keyof ExperimentalCheckpointListErrors]
+
+export type ExperimentalCheckpointListResponses = {
+  /**
+   * Workspace checkpoints
+   */
+  200: Array<WorkspaceCheckpoint>
+}
+
+export type ExperimentalCheckpointListResponse =
+  ExperimentalCheckpointListResponses[keyof ExperimentalCheckpointListResponses]
+
+export type ExperimentalCheckpointCreateData = {
+  body?: WorkspaceCheckpointCreateInput
   path?: never
   query?: {
     directory?: string
@@ -8226,6 +8278,69 @@ export type ExperimentalCheckpointCreateResponses = {
 export type ExperimentalCheckpointCreateResponse =
   ExperimentalCheckpointCreateResponses[keyof ExperimentalCheckpointCreateResponses]
 
+export type ExperimentalCheckpointDeleteData = {
+  body?: never
+  path: {
+    checkpointID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/checkpoint/{checkpointID}"
+}
+
+export type ExperimentalCheckpointDeleteErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalCheckpointDeleteError =
+  ExperimentalCheckpointDeleteErrors[keyof ExperimentalCheckpointDeleteErrors]
+
+export type ExperimentalCheckpointDeleteResponses = {
+  /**
+   * Workspace checkpoint removed
+   */
+  200: boolean
+}
+
+export type ExperimentalCheckpointDeleteResponse =
+  ExperimentalCheckpointDeleteResponses[keyof ExperimentalCheckpointDeleteResponses]
+
+export type ExperimentalCheckpointDiffData = {
+  body?: never
+  path: {
+    checkpointID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/checkpoint/{checkpointID}/diff"
+}
+
+export type ExperimentalCheckpointDiffErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalCheckpointDiffError = ExperimentalCheckpointDiffErrors[keyof ExperimentalCheckpointDiffErrors]
+
+export type ExperimentalCheckpointDiffResponses = {
+  /**
+   * Workspace checkpoint diff
+   */
+  200: string
+}
+
+export type ExperimentalCheckpointDiffResponse =
+  ExperimentalCheckpointDiffResponses[keyof ExperimentalCheckpointDiffResponses]
+
 export type ExperimentalCheckpointRestoreData = {
   body?: WorkspaceCheckpointRestoreInput
   path?: never
@@ -8250,11 +8365,279 @@ export type ExperimentalCheckpointRestoreResponses = {
   /**
    * Checkpoint restored
    */
-  200: boolean
+  200: {
+    backupID: string
+  }
 }
 
 export type ExperimentalCheckpointRestoreResponse =
   ExperimentalCheckpointRestoreResponses[keyof ExperimentalCheckpointRestoreResponses]
+
+export type ExperimentalMemoryListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/memory"
+}
+
+export type ExperimentalMemoryListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalMemoryListError = ExperimentalMemoryListErrors[keyof ExperimentalMemoryListErrors]
+
+export type ExperimentalMemoryListResponses = {
+  /**
+   * Memory sources
+   */
+  200: Array<{
+    id: "global" | "project" | "workspace"
+    name: string
+    path: string
+    scope: "global" | "project" | "workspace"
+    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    exists: boolean
+    content: string
+  }>
+}
+
+export type ExperimentalMemoryListResponse = ExperimentalMemoryListResponses[keyof ExperimentalMemoryListResponses]
+
+export type ExperimentalMemoryUpdateData = {
+  body?: {
+    content: string
+  }
+  path: {
+    sourceID: "global" | "project" | "workspace"
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/memory/{sourceID}"
+}
+
+export type ExperimentalMemoryUpdateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalMemoryUpdateError = ExperimentalMemoryUpdateErrors[keyof ExperimentalMemoryUpdateErrors]
+
+export type ExperimentalMemoryUpdateResponses = {
+  /**
+   * Updated memory source
+   */
+  200: {
+    id: "global" | "project" | "workspace"
+    name: string
+    path: string
+    scope: "global" | "project" | "workspace"
+    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    exists: boolean
+    content: string
+  }
+}
+
+export type ExperimentalMemoryUpdateResponse =
+  ExperimentalMemoryUpdateResponses[keyof ExperimentalMemoryUpdateResponses]
+
+export type ExperimentalMemoryCaptureData = {
+  body?: {
+    content: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/memory/capture"
+}
+
+export type ExperimentalMemoryCaptureErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalMemoryCaptureError = ExperimentalMemoryCaptureErrors[keyof ExperimentalMemoryCaptureErrors]
+
+export type ExperimentalMemoryCaptureResponses = {
+  /**
+   * Updated workspace memory
+   */
+  200: {
+    id: "global" | "project" | "workspace"
+    name: string
+    path: string
+    scope: "global" | "project" | "workspace"
+    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    exists: boolean
+    content: string
+  }
+}
+
+export type ExperimentalMemoryCaptureResponse =
+  ExperimentalMemoryCaptureResponses[keyof ExperimentalMemoryCaptureResponses]
+
+export type ExperimentalHooksGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/hooks"
+}
+
+export type ExperimentalHooksGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * InternalServerError
+   */
+  500: EffectHttpApiErrorInternalServerError
+}
+
+export type ExperimentalHooksGetError = ExperimentalHooksGetErrors[keyof ExperimentalHooksGetErrors]
+
+export type ExperimentalHooksGetResponses = {
+  /**
+   * Hook definitions and recent runs
+   */
+  200: {
+    hooks: Array<{
+      id: string
+      name: string
+      event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+      command: string
+      enabled: boolean
+      timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+    runs: Array<{
+      id: string
+      hookID: string
+      hookName: string
+      event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+      status: "completed" | "failed" | "timed_out"
+      output: string
+      startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+  }
+}
+
+export type ExperimentalHooksGetResponse = ExperimentalHooksGetResponses[keyof ExperimentalHooksGetResponses]
+
+export type ExperimentalHooksUpdateData = {
+  body?: {
+    hooks: Array<{
+      id: string
+      name: string
+      event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+      command: string
+      enabled: boolean
+      timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/hooks"
+}
+
+export type ExperimentalHooksUpdateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalHooksUpdateError = ExperimentalHooksUpdateErrors[keyof ExperimentalHooksUpdateErrors]
+
+export type ExperimentalHooksUpdateResponses = {
+  /**
+   * Updated hooks
+   */
+  200: {
+    hooks: Array<{
+      id: string
+      name: string
+      event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+      command: string
+      enabled: boolean
+      timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+    runs: Array<{
+      id: string
+      hookID: string
+      hookName: string
+      event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+      status: "completed" | "failed" | "timed_out"
+      output: string
+      startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+  }
+}
+
+export type ExperimentalHooksUpdateResponse = ExperimentalHooksUpdateResponses[keyof ExperimentalHooksUpdateResponses]
+
+export type ExperimentalHooksRunData = {
+  body?: {
+    event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/hooks/run"
+}
+
+export type ExperimentalHooksRunErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalHooksRunError = ExperimentalHooksRunErrors[keyof ExperimentalHooksRunErrors]
+
+export type ExperimentalHooksRunResponses = {
+  /**
+   * Hook runs
+   */
+  200: Array<{
+    id: string
+    hookID: string
+    hookName: string
+    event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+    status: "completed" | "failed" | "timed_out"
+    output: string
+    startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+}
+
+export type ExperimentalHooksRunResponse = ExperimentalHooksRunResponses[keyof ExperimentalHooksRunResponses]
 
 export type WorktreeRemoveData = {
   body?: WorktreeRemoveInput
@@ -9079,6 +9462,74 @@ export type VcsPushResponses = {
 }
 
 export type VcsPushResponse = VcsPushResponses[keyof VcsPushResponses]
+
+export type VcsOperationData = {
+  body?: {
+    action: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort"
+    argument?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/operation"
+}
+
+export type VcsOperationErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsOperationError = VcsOperationErrors[keyof VcsOperationErrors]
+
+export type VcsOperationResponses = {
+  /**
+   * VCS operation result
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsOperationResponse = VcsOperationResponses[keyof VcsOperationResponses]
+
+export type VcsHistoryData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    limit?: string
+  }
+  url: "/vcs/history"
+}
+
+export type VcsHistoryErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsHistoryError = VcsHistoryErrors[keyof VcsHistoryErrors]
+
+export type VcsHistoryResponses = {
+  /**
+   * VCS commit history
+   */
+  200: Array<{
+    hash: string
+    shortHash: string
+    author: string
+    timestamp: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    subject: string
+  }>
+}
+
+export type VcsHistoryResponse = VcsHistoryResponses[keyof VcsHistoryResponses]
 
 export type CommandListData = {
   body?: never

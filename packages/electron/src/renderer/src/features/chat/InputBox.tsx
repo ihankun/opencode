@@ -361,7 +361,7 @@ function FollowupQueue({
 function NewTaskContextBar({ paneId }: { paneId: string }) {
   const { t } = useTranslation('chat')
   const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
-  const { servers, activeServer, setActiveServer, checkHealth } = useServerStore()
+  const { servers, activeServer, setActiveServer, checkHealth, getHealth } = useServerStore()
   const [menu, setMenu] = useState<'project' | 'server' | 'mode' | 'branch'>()
   const [branches, setBranches] = useState<VcsBranch[]>([])
   const [branchLoading, setBranchLoading] = useState(false)
@@ -395,6 +395,19 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
       : activeServer.name
     : t('emptyState.noServer')
   const selectedBranch = branches.find(branch => branch.current)?.name
+  const activeHealth = activeServer ? getHealth(activeServer.id) : null
+  const supportsWorktree = activeHealth?.status === 'online' && activeHealth.capabilities?.worktree === true
+  const supportsBranchSwitch = activeHealth?.status === 'online' && activeHealth.capabilities?.vcsMutations === true
+
+  useEffect(() => {
+    if (!activeServer || activeHealth) return
+    void checkHealth(activeServer.id)
+  }, [activeHealth, activeServer, checkHealth])
+
+  useEffect(() => {
+    if (supportsWorktree || executionMode === 'current') return
+    setExecutionMode('current')
+  }, [executionMode, supportsWorktree])
 
   useEffect(() => {
     if (!activeServer) return
@@ -637,7 +650,7 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
               type="button"
               role="menuitemradio"
               aria-checked={executionMode === 'worktree'}
-              disabled={branches.length === 0}
+              disabled={branches.length === 0 || !supportsWorktree}
               onClick={() => {
                 setExecutionMode('worktree')
                 setMenu(undefined)
@@ -647,7 +660,9 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
               <GitWorktreeIcon size={14} />
               <span className="min-w-0 flex-1">
                 <span className="block">{t('emptyState.isolatedWorktree')}</span>
-                <span className="block text-[length:var(--fs-xxs)] text-text-500">{t('emptyState.isolatedWorktreeDescription')}</span>
+                <span className="block text-[length:var(--fs-xxs)] text-text-500">
+                  {supportsWorktree ? t('emptyState.isolatedWorktreeDescription') : t('emptyState.serverFeatureUnavailable')}
+                </span>
               </span>
             </button>
           </div>
@@ -658,7 +673,7 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
         <div className="relative min-w-0">
           <button
             type="button"
-            disabled={branchLoading || switching || branches.length < 2}
+            disabled={branchLoading || switching || branches.length < 2 || !supportsBranchSwitch}
             onClick={() => setMenu(value => (value === 'branch' ? undefined : 'branch'))}
             className={`${triggerClass} max-w-44 disabled:cursor-default`}
             aria-haspopup="menu"
@@ -668,7 +683,7 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
             {branchLoading ? <SpinnerIcon size={15} className="animate-spin" /> : <GitBranchIcon size={15} />}
             <span className="truncate">{selectedBranch || t('emptyState.loadingBranch')}</span>
           </button>
-          {menu === 'branch' && branches.length > 1 && (
+          {menu === 'branch' && branches.length > 1 && supportsBranchSwitch && (
             <div role="menu" className={menuClass}>
               <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
                 {t('emptyState.gitBranch')}
@@ -1888,6 +1903,9 @@ function InputBoxComponent({
 
   return (
     <div className="w-full">
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {isStreaming ? t('inputBox.sending') : ''}
+      </span>
       <div
         className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out max-w-[95%] xl:max-w-7xl ${isCompact ? 'px-2' : 'px-4'}`}
         style={{ paddingBottom: bottomDockPadding }}
@@ -1995,6 +2013,7 @@ function InputBoxComponent({
             <div
               ref={inputContainerRef}
               data-input-box
+              aria-busy={isStreaming}
               data-pane-id={paneId}
               onPointerDown={handleContainerPointerDown}
               onDragEnter={handleDragEnter}

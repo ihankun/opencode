@@ -16,6 +16,12 @@
     "chatDesc": "消息呈现、路径显示和 step 元数据",
     "archived": "已归档对话",
     "archivedDesc": "恢复或永久删除已归档的对话",
+    "memory": "Memory",
+    "memoryDesc": "管理跨任务生效的项目约定和偏好",
+    "hooks": "Hooks",
+    "hooksDesc": "配置自动化和 Git 生命周期脚本",
+    "extensions": "扩展中心",
+    "extensionsDesc": "统一管理 MCP、Skills、Plugins 和专家套件",
     "security": "安全",
     "securityDesc": "沙箱边界、网络访问与 Agent 审计日志",
     "workspace": "工作区",
@@ -74,10 +80,60 @@
     "passwordPlaceholder": "OPENCODE_SERVER_PASSWORD",
     "crossOriginWarning": "Web/PWA 跨域 + 密码可能被 CORS preflight 拦截，服务器需要允许 OPTIONS 和 Authorization header。",
     "httpsIpWarning": "HTTPS 直连 IP 需要证书包含该 IP；私有或自签 CA 可能不被桌面/移动客户端信任。",
-    "credentialsStorage": "凭证存储在 localStorage 中，通过 HTTP Basic Auth 发送。",
+    "credentialsStorage": "桌面端凭证使用系统安全存储加密；Web/PWA 仅保存在当前浏览器资料中。认证通过 HTTP Basic Auth 发送。",
+    "compatibility": {
+      "current": "完整兼容",
+      "legacy": "旧版兼容",
+      "incompatible": "能力未知"
+    },
+    "capabilities": {
+      "checkpoints": "检查点"
+    },
+    "hosting": {
+      "title": "代码托管平台",
+      "description": "配置令牌后可直接创建 GitHub PR、GitLab MR 或 Bitbucket Pull Request",
+      "configured": "已配置",
+      "notConfigured": "未配置",
+      "username": "用户名",
+      "token": "访问令牌",
+      "replaceToken": "输入新令牌以替换",
+      "secureStorage": "令牌只保存在桌面系统安全存储中，不会写入项目配置或发送给 OpenCode Server。"
+    },
     "editServer": "编辑服务器",
     "deleteServer": "删除服务器",
     "deleteServerConfirm": "确定从列表中移除「{{name}}」？此操作无法撤销。"
+  },
+  "memory": {
+    "unsupported": "当前服务器不支持 Memory 管理，请升级或切换服务器。",
+    "sources": "Memory 来源",
+    "sourcesDesc": "优先级越高越靠近当前工作区：全局 P10、项目 P50、工作区 P100。",
+    "useTemplate": "使用模板",
+    "capture": "保存为长期记忆",
+    "captureDesc": "把当前对话中值得长期保留的结论整理后追加到工作区 Memory。",
+    "capturePlaceholder": "例如：这个项目统一使用 Bun；提交前必须运行 bun typecheck…",
+    "saveToWorkspace": "保存到工作区 Memory"
+  },
+  "hooks": {
+    "unsupported": "当前服务器不支持 Hooks 管理，请升级或切换服务器。",
+    "title": "Hooks",
+    "description": "命令固定在当前工作区执行，仅继承 PATH 和 HOME，支持 1～120 秒超时。",
+    "add": "添加 Hook",
+    "template": "添加通知模板",
+    "enabled": "启用",
+    "timeout": "超时（秒）",
+    "testEvent": "测试事件",
+    "logs": "运行日志",
+    "logsDesc": "保留最近 200 次 Hook 结果和截断后的输出。"
+  },
+  "extensions": {
+    "expertKits": "专家套件",
+    "serverScope": "服务器作用域",
+    "workspaceScope": "工作区作用域",
+    "global": "全局",
+    "permissions": "权限边界",
+    "permissionsValue": "继承当前 Agent 安全策略",
+    "loading": "正在加载扩展中心…",
+    "diagnosticHint": "连接状态、安装冲突、版本更新和认证错误会显示在各分类内；安装或移除需要重启服务时，扩展中心会自动执行并刷新。"
   },
   "providers": {
     "title": "供应商连接",

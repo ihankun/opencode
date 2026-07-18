@@ -25,11 +25,11 @@ test("scheduled task migration preserves version 2 data", () => {
   migrateScheduledTaskDatabase(database)
   migrateScheduledTaskDatabase(database)
 
-  const task = database.prepare("SELECT id, title, variant, server_id, execution_mode, retry_count FROM scheduled_task WHERE id = 'task-1'").get() as Record<string, unknown>
-  const run = database.prepare("SELECT id, session_id, variant, archived, server_id, execution_directory, attempt FROM scheduled_task_run WHERE id = 'run-1'").get() as Record<string, unknown>
+  const task = database.prepare("SELECT id, title, variant, server_id, execution_mode, worktree_cleanup, retry_count FROM scheduled_task WHERE id = 'task-1'").get() as Record<string, unknown>
+  const run = database.prepare("SELECT id, session_id, variant, archived, server_id, execution_directory, worktree_directory, attempt, updated_at FROM scheduled_task_run WHERE id = 'run-1'").get() as Record<string, unknown>
   const version = database.prepare("PRAGMA user_version").get() as { user_version: number }
-  assert.deepEqual({ ...task }, { id: "task-1", title: "Existing task", variant: "", server_id: "local", execution_mode: "current", retry_count: 0 })
-  assert.deepEqual({ ...run }, { id: "run-1", session_id: "session-1", variant: "", archived: 0, server_id: "local", execution_directory: "", attempt: 1 })
-  assert.equal(version.user_version, 5)
+  assert.deepEqual({ ...task }, { id: "task-1", title: "Existing task", variant: "", server_id: "local", execution_mode: "current", worktree_cleanup: "on-success", retry_count: 0 })
+  assert.deepEqual({ ...run }, { id: "run-1", session_id: "session-1", variant: "", archived: 0, server_id: "local", execution_directory: "", worktree_directory: "", attempt: 1, updated_at: 0 })
+  assert.equal(version.user_version, 7)
   database.close()
 })

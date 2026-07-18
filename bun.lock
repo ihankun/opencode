@@ -461,7 +461,7 @@
     },
     "packages/electron": {
       "name": "@opencode-ai/opencodex",
-      "version": "1.11.1",
+      "version": "1.12.0",
       "dependencies": {
         "@codemirror/commands": "^6.10.3",
         "@codemirror/search": "^6.7.0",

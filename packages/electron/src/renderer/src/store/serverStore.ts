@@ -3,21 +3,10 @@
 // ============================================
 
 import { API_BASE_URL } from '../constants'
-import { isTauri } from '../utils/tauri'
-
-// Tauri plugin-http fetch 缓存（避免重复 dynamic import）
-let _tauriFetch: typeof globalThis.fetch | null = null
-let _tauriFetchLoading: Promise<typeof globalThis.fetch> | null = null
+import { platformFetch } from '../platform'
 
 async function getUnifiedFetch(): Promise<typeof globalThis.fetch> {
-  if (!isTauri()) return globalThis.fetch
-  if (_tauriFetch) return _tauriFetch
-  if (_tauriFetchLoading) return _tauriFetchLoading
-  _tauriFetchLoading = import('@tauri-apps/plugin-http').then(mod => {
-    _tauriFetch = mod.fetch as unknown as typeof globalThis.fetch
-    return _tauriFetch
-  })
-  return _tauriFetchLoading
+  return platformFetch as typeof globalThis.fetch
 }
 
 /**
@@ -49,6 +38,36 @@ export interface ServerHealth {
   error?: string // 错误信息
   details?: string // 原始诊断信息
   version?: string // 服务器版本
+  compatibility?: 'current' | 'legacy' | 'incompatible'
+  capabilities?: ServerCapabilities
+}
+
+export interface ServerCapabilities {
+  apiVersion: number
+  backgroundSubagents: boolean
+  worktree: boolean
+  worktreeBaseBranch: boolean
+  vcsMutations: boolean
+  workspaceCheckpoints: boolean
+  advancedVcs: boolean
+  checkpointRegistry: boolean
+  memory: boolean
+  hooks: boolean
+  pullRequests: boolean
+}
+
+const LEGACY_CAPABILITIES: ServerCapabilities = {
+  apiVersion: 1,
+  backgroundSubagents: false,
+  worktree: false,
+  worktreeBaseBranch: false,
+  vcsMutations: false,
+  workspaceCheckpoints: false,
+  advancedVcs: false,
+  checkpointRegistry: false,
+  memory: false,
+  hooks: false,
+  pullRequests: false,
 }
 
 export interface ServerSettingsBackup {
@@ -66,6 +85,31 @@ export type ServerChangeReason = 'server-switch' | 'local-runtime-url' | 'creden
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseCapabilities(value: unknown): ServerCapabilities | null {
+  if (!isRecord(value) || typeof value.apiVersion !== 'number') return null
+  return {
+    apiVersion: value.apiVersion,
+    backgroundSubagents: value.backgroundSubagents === true,
+    worktree: value.worktree === true,
+    worktreeBaseBranch: value.worktreeBaseBranch === true,
+    vcsMutations: value.vcsMutations === true,
+    workspaceCheckpoints: value.workspaceCheckpoints === true,
+    advancedVcs: value.advancedVcs === true,
+    checkpointRegistry: value.checkpointRegistry === true,
+    memory: value.memory === true,
+    hooks: value.hooks === true,
+    pullRequests: value.pullRequests === true,
+  }
+}
+
+function parseCapabilitiesText(value: string): ServerCapabilities | null {
+  try {
+    return parseCapabilities(JSON.parse(value))
+  } catch {
+    return null
+  }
 }
 
 function normalizeConnectionError(err: unknown): string {
@@ -383,6 +427,14 @@ class ServerStore {
     return this._healthMapSnapshot
   }
 
+  getCapabilities(serverId = this.getActiveServerId()): ServerCapabilities {
+    return this.healthMap.get(serverId)?.capabilities ?? LEGACY_CAPABILITIES
+  }
+
+  supports(capability: Exclude<keyof ServerCapabilities, 'apiVersion'>, serverId = this.getActiveServerId()): boolean {
+    return this.getCapabilities(serverId)[capability]
+  }
+
   getActiveCalibratedNow(): number | undefined {
     const calibration = this.clockCalibrationMap.get(this.getActiveServerId())
     if (!calibration) return undefined
@@ -595,12 +647,21 @@ class ServerStore {
           return commitHealth(health)
         }
 
+        const capabilitiesUrl = `${server.url}/experimental/capabilities`
+        const capabilitiesResponse = await f(capabilitiesUrl, { method: 'GET', signal: controller.signal, headers })
+        const capabilitiesBody = await capabilitiesResponse.text().catch(() => '')
+        const capabilities = capabilitiesResponse.ok ? parseCapabilitiesText(capabilitiesBody) : null
+        const compatibility = capabilities
+          ? capabilities.apiVersion >= 2 ? 'current' as const : 'legacy' as const
+          : capabilitiesResponse.status === 404 ? 'legacy' as const : 'incompatible' as const
         const health: ServerHealth = {
           status: 'online',
           latency,
           lastCheck: Date.now(),
           version: data.version,
-          details,
+          compatibility,
+          capabilities: capabilities ?? LEGACY_CAPABILITIES,
+          details: `${details}\n\nCapabilities: GET ${capabilitiesUrl}\nStatus: ${capabilitiesResponse.status}\nBody:\n${truncateForDiagnostics(capabilitiesBody)}`,
         }
         return commitHealth(health)
       } else if (response.status === 401) {

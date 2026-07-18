@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '../../components/ui/Dialog'
 import {
@@ -20,20 +20,23 @@ import {
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
-import { KeybindingsSection } from './KeybindingsSection'
-import { AgentSettings } from './components/AgentSettings'
-import { AppearanceSettings } from './components/AppearanceSettings'
-import { AboutSettings } from './components/AboutSettings'
-import { ChatSettings } from './components/ChatSettings'
-import { ModelsSettings } from './components/ModelsSettings'
-import { NotificationSettings } from './components/NotificationSettings'
-import { ProviderSettings } from './components/ProviderSettings'
-import { ServiceSettings } from './components/ServiceSettings'
-import { ServersSettings } from './components/ServersSettings'
-import { WorkspaceSettings } from './components/WorkspaceSettings'
-import { ConfigSettings } from './components/ConfigSettings'
-import { ArchivedSessionsSettings } from './components/ArchivedSessionsSettings'
-import { SecuritySettings } from './components/SecuritySettings'
+const KeybindingsSection = lazy(() => import('./KeybindingsSection').then(module => ({ default: module.KeybindingsSection })))
+const AgentSettings = lazy(() => import('./components/AgentSettings').then(module => ({ default: module.AgentSettings })))
+const AppearanceSettings = lazy(() => import('./components/AppearanceSettings').then(module => ({ default: module.AppearanceSettings })))
+const AboutSettings = lazy(() => import('./components/AboutSettings').then(module => ({ default: module.AboutSettings })))
+const ChatSettings = lazy(() => import('./components/ChatSettings').then(module => ({ default: module.ChatSettings })))
+const ModelsSettings = lazy(() => import('./components/ModelsSettings').then(module => ({ default: module.ModelsSettings })))
+const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(module => ({ default: module.NotificationSettings })))
+const ProviderSettings = lazy(() => import('./components/ProviderSettings').then(module => ({ default: module.ProviderSettings })))
+const ServiceSettings = lazy(() => import('./components/ServiceSettings').then(module => ({ default: module.ServiceSettings })))
+const ServersSettings = lazy(() => import('./components/ServersSettings').then(module => ({ default: module.ServersSettings })))
+const WorkspaceSettings = lazy(() => import('./components/WorkspaceSettings').then(module => ({ default: module.WorkspaceSettings })))
+const ConfigSettings = lazy(() => import('./components/ConfigSettings').then(module => ({ default: module.ConfigSettings })))
+const ArchivedSessionsSettings = lazy(() => import('./components/ArchivedSessionsSettings').then(module => ({ default: module.ArchivedSessionsSettings })))
+const SecuritySettings = lazy(() => import('./components/SecuritySettings').then(module => ({ default: module.SecuritySettings })))
+const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
+const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
+const ExtensionCenterSettings = lazy(() => import('./components/ExtensionCenterSettings').then(module => ({ default: module.ExtensionCenterSettings })))
 
 // ============================================
 // Types
@@ -53,6 +56,9 @@ export type SettingsTab =
   | 'workspace'
   | 'archived'
   | 'security'
+  | 'memory'
+  | 'hooks'
+  | 'extensions'
   | 'about'
 
 interface SettingsDialogProps {
@@ -80,6 +86,9 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   about: <QuestionIcon size={15} />,
   archived: <ArchiveIcon size={15} />,
   security: <ShieldIcon size={15} />,
+  memory: <AgentIcon size={15} />,
+  hooks: <PlugIcon size={15} />,
+  extensions: <PlugIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
@@ -89,6 +98,9 @@ const TAB_IDS: SettingsTab[] = [
   'agent',
   'chat',
   'archived',
+  'memory',
+  'hooks',
+  'extensions',
   'security',
   'workspace',
   'appearance',
@@ -114,6 +126,9 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   about: 'tabs.about',
   archived: 'tabs.archived',
   security: 'tabs.security',
+  memory: 'tabs.memory',
+  hooks: 'tabs.hooks',
+  extensions: 'tabs.extensions',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
@@ -131,11 +146,14 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   about: 'tabs.aboutDesc',
   archived: 'tabs.archivedDesc',
   security: 'tabs.securityDesc',
+  memory: 'tabs.memoryDesc',
+  hooks: 'tabs.hooksDesc',
+  extensions: 'tabs.extensionsDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'archived', 'workspace', 'appearance', 'notifications'] },
-  { labelKey: 'groups.advanced', tabs: ['security', 'service', 'config', 'keybindings', 'about'] },
+  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'archived', 'memory', 'extensions', 'workspace', 'appearance', 'notifications'] },
+  { labelKey: 'groups.advanced', tabs: ['security', 'hooks', 'service', 'config', 'keybindings', 'about'] },
 ]
 
 // ============================================
@@ -143,7 +161,8 @@ const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
 // ============================================
 
 function TabContent({ tab }: { tab: SettingsTab }) {
-  switch (tab) {
+  const content = (() => {
+    switch (tab) {
     case 'agent':
       return <AgentSettings />
     case 'appearance':
@@ -170,11 +189,19 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ArchivedSessionsSettings />
     case 'security':
       return <SecuritySettings />
+    case 'memory':
+      return <MemorySettings />
+    case 'hooks':
+      return <HooksSettings />
+    case 'extensions':
+      return <ExtensionCenterSettings />
     case 'about':
       return <AboutSettings />
     default:
       return null
-  }
+    }
+  })()
+  return <Suspense fallback={<div className="flex min-h-48 items-center justify-center text-[length:var(--fs-sm)] text-text-400">Loading…</div>}>{content}</Suspense>
 }
 
 // ============================================

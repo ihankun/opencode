@@ -126,6 +126,7 @@ export type CustomOpenCodeConsoleLoginResult = {
 export type CustomOpenCodeLocationApp = { id: string; name: string; icon?: string }
 
 export type CustomOpenCodeServerCredential = { username: string; password: string }
+export type CustomOpenCodeHostingProvider = "github" | "gitlab" | "bitbucket"
 
 export type CustomOpenCodeScheduledTask = {
   id: string
@@ -138,6 +139,7 @@ export type CustomOpenCodeScheduledTask = {
   serverUrl: string
   directory: string
   executionMode: "current" | "worktree"
+  worktreeCleanup: "always" | "on-success" | "never"
   branch: string
   permissionProfile: "ask" | "writes" | "risk" | "full"
   retryCount: number
@@ -155,7 +157,7 @@ export type CustomOpenCodeScheduledTask = {
   updatedAt: number
 }
 
-export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "modelProviderID" | "modelID" | "variant" | "enabled">
+export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "worktreeCleanup" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "modelProviderID" | "modelID" | "variant" | "enabled">
 
 export type CustomOpenCodeScheduledTaskRun = {
   id: string
@@ -169,15 +171,18 @@ export type CustomOpenCodeScheduledTaskRun = {
   directory: string
   executionDirectory: string
   executionMode: "current" | "worktree"
+  worktreeDirectory: string
   branch: string
   permissionProfile: "ask" | "writes" | "risk" | "full"
   attempt: number
   modelProviderID: string
   modelID: string
   variant: string
-  status: "running" | "submitted" | "completed" | "failed" | "timed_out"
+  status: "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
   error: string | null
+  log: string
   createdAt: number
+  updatedAt: number
   completedAt: number | null
 }
 
@@ -207,6 +212,9 @@ export type CustomOpenCodeApi = {
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
   serverCredentials(): Promise<Record<string, CustomOpenCodeServerCredential>>
   setServerCredential(id: string, credential: CustomOpenCodeServerCredential | null): Promise<void>
+  hostingCredentials(): Promise<Record<CustomOpenCodeHostingProvider, boolean>>
+  setHostingCredential(provider: CustomOpenCodeHostingProvider, credential: CustomOpenCodeServerCredential | null): Promise<void>
+  createPullRequest(input: { remoteUrl: string; sourceBranch: string; targetBranch: string; title: string; body?: string }): Promise<{ url: string; provider: CustomOpenCodeHostingProvider }>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   inspectPlugins(specs: string[]): Promise<CustomOpenCodePluginMetadata[]>
@@ -223,12 +231,16 @@ export type CustomOpenCodeApi = {
   updateTask(id: string, input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
   removeTask(id: string): Promise<boolean>
   runTask(id: string): Promise<CustomOpenCodeScheduledTask>
+  cancelTask(id: string): Promise<CustomOpenCodeScheduledTask>
+  cancelTaskRun(id: string): Promise<CustomOpenCodeScheduledTaskRun>
   onTasksChanged(callback: () => void): () => void
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   openExternalUrl(url: string): Promise<boolean>
   openInternalUrl(url: string): Promise<boolean>
+  discoverPreviewPorts(host: string): Promise<string[]>
+  capturePreview(rect: { x: number; y: number; width: number; height: number }): Promise<{ saved: boolean; file?: string }>
   locationApps(): Promise<CustomOpenCodeLocationApp[]>
   openLocation(input: { path: string; appId: string }): Promise<boolean>
   waitConsoleLogin(login: CustomOpenCodeConsoleLoginStart): Promise<CustomOpenCodeConsoleLoginResult>
@@ -258,6 +270,9 @@ const api: CustomOpenCodeApi = {
   updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
   serverCredentials: () => ipcRenderer.invoke("credential:list"),
   setServerCredential: (id, credential) => ipcRenderer.invoke("credential:set", id, credential),
+  hostingCredentials: () => ipcRenderer.invoke("hosting:credentials"),
+  setHostingCredential: (provider, credential) => ipcRenderer.invoke("hosting:credential-set", provider, credential),
+  createPullRequest: (input) => ipcRenderer.invoke("hosting:pr-create", input),
   onServerUpdated(callback) {
     const listener = (_event: unknown, state: CustomOpenCodeServerState) => callback(state)
     ipcRenderer.on("server:updated", listener)
@@ -278,6 +293,8 @@ const api: CustomOpenCodeApi = {
   updateTask: (id, input) => ipcRenderer.invoke("task:update", id, input),
   removeTask: (id) => ipcRenderer.invoke("task:remove", id),
   runTask: (id) => ipcRenderer.invoke("task:run", id),
+  cancelTask: (id) => ipcRenderer.invoke("task:cancel", id),
+  cancelTaskRun: (id) => ipcRenderer.invoke("task:run-cancel", id),
   onTasksChanged(callback) {
     const listener = () => callback()
     ipcRenderer.on("task:changed", listener)
@@ -288,6 +305,8 @@ const api: CustomOpenCodeApi = {
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
   openExternalUrl: (url) => ipcRenderer.invoke("browser:open-external", url),
   openInternalUrl: (url) => ipcRenderer.invoke("browser:open-internal", url),
+  discoverPreviewPorts: (host) => ipcRenderer.invoke("preview:discover", host),
+  capturePreview: (rect) => ipcRenderer.invoke("preview:capture", rect),
   locationApps: () => ipcRenderer.invoke("location:apps"),
   openLocation: (input) => ipcRenderer.invoke("location:open", input),
   waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),

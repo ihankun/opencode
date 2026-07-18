@@ -3,13 +3,14 @@ import { Command } from "@/command"
 import * as InstanceState from "@/effect/instance-state"
 import { Format } from "@/format"
 import { Global } from "@opencode-ai/core/global"
+import { HookManager } from "@/hooks"
 import { LSP } from "@/lsp/lsp"
 import { Vcs } from "@/project/vcs"
 import { Skill } from "@/skill"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ApiVcsApplyError, ApiVcsBranchSwitchError, ApiVcsMutationError } from "../groups/instance"
+import { ApiVcsApplyError, ApiVcsBranchSwitchError, ApiVcsMutationError, VcsHistoryQuery } from "../groups/instance"
 import { markInstanceForDisposal } from "../lifecycle"
 
 export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance", (handlers) =>
@@ -55,7 +56,7 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
     const switchVcsBranch = Effect.fn("InstanceHttpApi.vcsSwitchBranch")(function* (ctx: {
       payload: Vcs.SwitchBranchInput
     }) {
-      return yield* vcs.switchBranch(ctx.payload).pipe(
+      return yield* withGitHooks(vcs.switchBranch(ctx.payload)).pipe(
         Effect.mapError(
           (error) =>
             new ApiVcsBranchSwitchError({
@@ -80,7 +81,7 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
     })
 
     const applyVcs = Effect.fn("InstanceHttpApi.vcsApply")(function* (ctx: { payload: Vcs.ApplyInput }) {
-      return yield* vcs.apply(ctx.payload).pipe(
+      return yield* withGitHooks(vcs.apply(ctx.payload)).pipe(
         Effect.mapError(
           (error) =>
             new ApiVcsApplyError({
@@ -100,24 +101,43 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
         data: { message: error.message, reason: error.reason },
       })
 
+    const runGitHooks = Effect.fnUntraced(function* (event: "git.before" | "git.after") {
+      const ctx = yield* InstanceState.context
+      yield* Effect.promise(() => HookManager.execute(ctx.directory, event)).pipe(Effect.catch(() => Effect.void))
+    })
+
+    const withGitHooks = <A, E, R>(operation: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        yield* runGitHooks("git.before")
+        return yield* operation.pipe(Effect.ensuring(runGitHooks("git.after")))
+      })
+
     const stageVcs = Effect.fn("InstanceHttpApi.vcsStage")(function* (ctx: { payload: Vcs.FilesInput }) {
-      return yield* vcs.stage(ctx.payload).pipe(Effect.mapError(mutationError))
+      return yield* withGitHooks(vcs.stage(ctx.payload)).pipe(Effect.mapError(mutationError))
     })
 
     const unstageVcs = Effect.fn("InstanceHttpApi.vcsUnstage")(function* (ctx: { payload: Vcs.FilesInput }) {
-      return yield* vcs.unstage(ctx.payload).pipe(Effect.mapError(mutationError))
+      return yield* withGitHooks(vcs.unstage(ctx.payload)).pipe(Effect.mapError(mutationError))
     })
 
     const discardVcs = Effect.fn("InstanceHttpApi.vcsDiscard")(function* (ctx: { payload: Vcs.FilesInput }) {
-      return yield* vcs.discard(ctx.payload).pipe(Effect.mapError(mutationError))
+      return yield* withGitHooks(vcs.discard(ctx.payload)).pipe(Effect.mapError(mutationError))
     })
 
     const commitVcs = Effect.fn("InstanceHttpApi.vcsCommit")(function* (ctx: { payload: Vcs.CommitInput }) {
-      return yield* vcs.commit(ctx.payload).pipe(Effect.mapError(mutationError))
+      return yield* withGitHooks(vcs.commit(ctx.payload)).pipe(Effect.mapError(mutationError))
     })
 
     const pushVcs = Effect.fn("InstanceHttpApi.vcsPush")(function* () {
-      return yield* vcs.push().pipe(Effect.mapError(mutationError))
+      return yield* withGitHooks(vcs.push()).pipe(Effect.mapError(mutationError))
+    })
+
+    const operateVcs = Effect.fn("InstanceHttpApi.vcsOperation")(function* (ctx: { payload: Vcs.OperationInput }) {
+      return yield* withGitHooks(vcs.operation(ctx.payload)).pipe(Effect.mapError(mutationError))
+    })
+
+    const getVcsHistory = Effect.fn("InstanceHttpApi.vcsHistory")(function* (ctx: { query: typeof VcsHistoryQuery.Type }) {
+      return yield* vcs.history(ctx.query.limit ?? 50).pipe(Effect.mapError(mutationError))
     })
 
     const getCommand = Effect.fn("InstanceHttpApi.command")(function* () {
@@ -155,6 +175,8 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
       .handle("vcsDiscard", discardVcs)
       .handle("vcsCommit", commitVcs)
       .handle("vcsPush", pushVcs)
+      .handle("vcsOperation", operateVcs)
+      .handle("vcsHistory", getVcsHistory)
       .handle("command", getCommand)
       .handle("agent", getAgent)
       .handle("skill", getSkill)

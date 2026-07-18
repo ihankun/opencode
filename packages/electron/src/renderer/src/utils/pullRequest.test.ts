@@ -8,6 +8,15 @@ describe('createPullRequestUrl', () => {
     )
   })
 
+  test('normalizes SCP-style and SSH remotes', () => {
+    expect(createPullRequestUrl('git@github.com:owner/repo.git', 'feature/ui', 'main')).toBe(
+      'https://github.com/owner/repo/compare/main...feature%2Fui?expand=1',
+    )
+    expect(createPullRequestUrl('ssh://git@gitlab.com/group/repo.git', 'feature/ui', 'main')).toBe(
+      'https://gitlab.com/group/repo/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fui&merge_request%5Btarget_branch%5D=main',
+    )
+  })
+
   test('creates GitLab merge request URLs', () => {
     expect(createPullRequestUrl('https://gitlab.com/group/repo', 'feature/ui', 'main')).toBe(
       'https://gitlab.com/group/repo/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fui&merge_request%5Btarget_branch%5D=main',

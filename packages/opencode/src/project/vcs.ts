@@ -289,6 +289,21 @@ export const MutationResult = Schema.Struct({
 })
 export type MutationResult = Schema.Schema.Type<typeof MutationResult>
 
+export const OperationInput = Schema.Struct({
+  action: Schema.Literals(["fetch", "pull", "stash", "stash-pop", "create-branch", "merge", "merge-abort"]),
+  argument: Schema.optional(Schema.String),
+})
+export type OperationInput = Schema.Schema.Type<typeof OperationInput>
+
+export const HistoryItem = Schema.Struct({
+  hash: Schema.String,
+  shortHash: Schema.String,
+  author: Schema.String,
+  timestamp: Schema.Number,
+  subject: Schema.String,
+})
+export type HistoryItem = Schema.Schema.Type<typeof HistoryItem>
+
 export const Branch = Schema.Struct({
   name: Schema.String,
   current: Schema.Boolean,
@@ -336,6 +351,8 @@ export interface Interface {
   readonly discard: (input: FilesInput) => Effect.Effect<MutationResult, MutationError>
   readonly commit: (input: CommitInput) => Effect.Effect<MutationResult, MutationError>
   readonly push: () => Effect.Effect<MutationResult, MutationError>
+  readonly operation: (input: OperationInput) => Effect.Effect<MutationResult, MutationError>
+  readonly history: (limit: number) => Effect.Effect<HistoryItem[], MutationError>
 }
 
 interface State {
@@ -637,6 +654,53 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
           }),
           "Failed to push the current branch",
         )
+      }),
+      operation: Effect.fn("Vcs.operation")(function* (input: OperationInput) {
+        const ctx = yield* context()
+        const argument = input.argument?.trim()
+        const validRef = (value: string | undefined) =>
+          !!value && value.length <= 255 && !value.startsWith("-") && !/[\0\r\n]/.test(value)
+        if ((input.action === "create-branch" || input.action === "merge") && !validRef(argument)) {
+          return yield* new MutationError({
+            message: "A valid branch name is required",
+            reason: "invalid-input",
+          })
+        }
+        const args = input.action === "fetch"
+          ? ["fetch", "--prune"]
+          : input.action === "pull"
+            ? ["pull", "--ff-only"]
+            : input.action === "stash"
+              ? ["stash", "push", "--include-untracked", "--message", argument || "OpenCodex stash"]
+              : input.action === "stash-pop"
+                ? ["stash", "pop"]
+                : input.action === "create-branch"
+                  ? ["switch", "--create", argument!]
+                  : input.action === "merge"
+                    ? ["merge", "--no-edit", argument!]
+                    : ["merge", "--abort"]
+        return yield* result(
+          yield* git.run(args, { cwd: ctx.directory, maxOutputBytes: 1_000_000 }),
+          `Git ${input.action} failed`,
+        )
+      }),
+      history: Effect.fn("Vcs.history")(function* (limit: number) {
+        const ctx = yield* context()
+        const result = yield* git.run(
+          ["log", `--max-count=${Math.max(1, Math.min(200, limit))}`, "--pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%s"],
+          { cwd: ctx.directory, maxOutputBytes: 1_000_000 },
+        )
+        if (result.exitCode !== 0) {
+          return yield* new MutationError({
+            message: result.text().trim() || "Failed to read Git history",
+            reason: "conflict",
+          })
+        }
+        return result.text().split(/\r?\n/).flatMap((line) => {
+          const [hash, shortHash, author, timestamp, subject] = line.split("\u001f")
+          if (!hash || !shortHash || !author || !timestamp || subject === undefined) return []
+          return [{ hash, shortHash, author, timestamp: Number(timestamp) * 1000, subject }]
+        })
       }),
     })
   }),

@@ -1,5 +1,6 @@
 import { AccountID, DeviceCode, OrgID, UserCode } from "@/account/schema"
 import { MCP } from "@/mcp"
+import { HookManager } from "@/hooks"
 
 import { Session } from "@/session/session"
 import { SessionID } from "@/session/schema"
@@ -26,16 +27,56 @@ const ConsoleStateResponse = Schema.Struct({
 }).annotate({ identifier: "ConsoleState" })
 
 const CapabilitiesResponse = Schema.Struct({
+  apiVersion: Schema.Literal(2),
   backgroundSubagents: Schema.Boolean,
+  worktree: Schema.Boolean,
+  worktreeBaseBranch: Schema.Boolean,
+  vcsMutations: Schema.Boolean,
+  workspaceCheckpoints: Schema.Boolean,
+  advancedVcs: Schema.Boolean,
+  checkpointRegistry: Schema.Boolean,
+  memory: Schema.Boolean,
+  hooks: Schema.Boolean,
+  pullRequests: Schema.Boolean,
 }).annotate({ identifier: "ExperimentalCapabilities" })
 
 const CheckpointResponse = Schema.Struct({
+  id: Schema.String,
   snapshot: Schema.String,
+  sessionID: Schema.String,
+  directory: Schema.String,
+  label: Schema.String,
+  createdAt: Schema.Number,
 }).annotate({ identifier: "WorkspaceCheckpoint" })
 
+const CheckpointListResponse = Schema.Array(CheckpointResponse)
+
+export const CheckpointCreatePayload = Schema.Struct({
+  sessionID: Schema.String,
+  label: Schema.String,
+}).annotate({ identifier: "WorkspaceCheckpointCreateInput" })
+
 export const CheckpointRestorePayload = Schema.Struct({
-  snapshot: Schema.String,
+  id: Schema.String,
 }).annotate({ identifier: "WorkspaceCheckpointRestoreInput" })
+
+const CheckpointRestoreResponse = Schema.Struct({ backupID: Schema.String })
+export const CheckpointListQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  sessionID: Schema.optional(Schema.String),
+})
+
+const MemorySource = Schema.Struct({
+  id: Schema.Literals(["global", "project", "workspace"]),
+  name: Schema.String,
+  path: Schema.String,
+  scope: Schema.Literals(["global", "project", "workspace"]),
+  priority: Schema.Number,
+  exists: Schema.Boolean,
+  content: Schema.String,
+})
+export const MemoryUpdatePayload = Schema.Struct({ content: Schema.String })
+export const MemoryCapturePayload = Schema.Struct({ content: Schema.String })
 
 const ConsoleOrgOption = Schema.Struct({
   accountID: Schema.String,
@@ -185,7 +226,14 @@ export const ExperimentalPaths = {
   goal: "/experimental/goal/:sessionID",
   goalStatus: "/experimental/goal/:sessionID/status",
   checkpoint: "/experimental/checkpoint",
+  checkpointItem: "/experimental/checkpoint/:checkpointID",
+  checkpointDiff: "/experimental/checkpoint/:checkpointID/diff",
   checkpointRestore: "/experimental/checkpoint/restore",
+  memory: "/experimental/memory",
+  memoryItem: "/experimental/memory/:sourceID",
+  memoryCapture: "/experimental/memory/capture",
+  hooks: "/experimental/hooks",
+  hooksRun: "/experimental/hooks/run",
   worktree: "/experimental/worktree",
   worktreeReset: "/experimental/worktree/reset",
   session: "/experimental/session",
@@ -372,9 +420,20 @@ export const ExperimentalApi = HttpApi.make("experimental")
             description: "Remove the durable goal state for a session.",
           }),
         ),
+        HttpApiEndpoint.get("checkpointList", ExperimentalPaths.checkpoint, {
+          query: CheckpointListQuery,
+          success: described(CheckpointListResponse, "Workspace checkpoints"),
+          error: HttpApiError.InternalServerError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.checkpoint.list",
+            summary: "List workspace checkpoints",
+            description: "List server-persisted checkpoints for the current workspace.",
+          }),
+        ),
         HttpApiEndpoint.post("checkpointCreate", ExperimentalPaths.checkpoint, {
           query: WorkspaceRoutingQuery,
-          payload: Schema.Struct({}),
+          payload: CheckpointCreatePayload,
           success: described(CheckpointResponse, "Workspace checkpoint"),
           error: HttpApiError.BadRequest,
         }).annotateMerge(
@@ -384,10 +443,22 @@ export const ExperimentalApi = HttpApi.make("experimental")
             description: "Capture the current Git workspace files in the server snapshot store.",
           }),
         ),
+        HttpApiEndpoint.delete("checkpointDelete", ExperimentalPaths.checkpointItem, {
+          params: { checkpointID: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Boolean, "Workspace checkpoint removed"),
+          error: HttpApiError.BadRequest,
+        }),
+        HttpApiEndpoint.get("checkpointDiff", ExperimentalPaths.checkpointDiff, {
+          params: { checkpointID: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.String, "Workspace checkpoint diff"),
+          error: HttpApiError.BadRequest,
+        }),
         HttpApiEndpoint.post("checkpointRestore", ExperimentalPaths.checkpointRestore, {
           query: WorkspaceRoutingQuery,
           payload: CheckpointRestorePayload,
-          success: described(Schema.Boolean, "Checkpoint restored"),
+          success: described(CheckpointRestoreResponse, "Checkpoint restored"),
           error: HttpApiError.BadRequest,
         }).annotateMerge(
           OpenApi.annotations({
@@ -396,6 +467,41 @@ export const ExperimentalApi = HttpApi.make("experimental")
             description: "Restore workspace files to a previously captured server snapshot.",
           }),
         ),
+        HttpApiEndpoint.get("memoryList", ExperimentalPaths.memory, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(MemorySource), "Memory sources"),
+          error: HttpApiError.InternalServerError,
+        }),
+        HttpApiEndpoint.put("memoryUpdate", ExperimentalPaths.memoryItem, {
+          params: { sourceID: Schema.Literals(["global", "project", "workspace"]) },
+          query: WorkspaceRoutingQuery,
+          payload: MemoryUpdatePayload,
+          success: described(MemorySource, "Updated memory source"),
+          error: HttpApiError.BadRequest,
+        }),
+        HttpApiEndpoint.post("memoryCapture", ExperimentalPaths.memoryCapture, {
+          query: WorkspaceRoutingQuery,
+          payload: MemoryCapturePayload,
+          success: described(MemorySource, "Updated workspace memory"),
+          error: HttpApiError.BadRequest,
+        }),
+        HttpApiEndpoint.get("hooksGet", ExperimentalPaths.hooks, {
+          query: WorkspaceRoutingQuery,
+          success: described(HookManager.State, "Hook definitions and recent runs"),
+          error: HttpApiError.InternalServerError,
+        }),
+        HttpApiEndpoint.put("hooksUpdate", ExperimentalPaths.hooks, {
+          query: WorkspaceRoutingQuery,
+          payload: HookManager.UpdatePayload,
+          success: described(HookManager.State, "Updated hooks"),
+          error: HttpApiError.BadRequest,
+        }),
+        HttpApiEndpoint.post("hooksRun", ExperimentalPaths.hooksRun, {
+          query: WorkspaceRoutingQuery,
+          payload: HookManager.RunPayload,
+          success: described(Schema.Array(HookManager.Run), "Hook runs"),
+          error: HttpApiError.BadRequest,
+        }),
         HttpApiEndpoint.get("worktree", ExperimentalPaths.worktree, {
           query: WorkspaceRoutingQuery,
           success: described(WorktreeList, "List of worktree directories"),

@@ -9,26 +9,12 @@
 
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk/v2/client'
 import { serverStore, makeBasicAuthHeader } from '../store/serverStore'
-import { isTauri } from '../utils/tauri'
-
-// Tauri fetch 缓存
-let _tauriFetch: typeof globalThis.fetch | null = null
-let _tauriFetchLoading: Promise<typeof globalThis.fetch> | null = null
+import { platformFetch, preparePlatformNetwork } from '../platform'
 let _apiRequestGeneration = 0
 const _apiRequestControllers = new Set<AbortController>()
 
-async function getTauriFetch(): Promise<typeof globalThis.fetch> {
-  if (_tauriFetch) return _tauriFetch
-  if (_tauriFetchLoading) return _tauriFetchLoading
-  _tauriFetchLoading = import('@tauri-apps/plugin-http').then(mod => {
-    _tauriFetch = mod.fetch as unknown as typeof globalThis.fetch
-    return _tauriFetch
-  })
-  return _tauriFetchLoading
-}
-
 function getFetchImpl(): typeof globalThis.fetch {
-  return isTauri() && _tauriFetch ? _tauriFetch : globalThis.fetch
+  return platformFetch as typeof globalThis.fetch
 }
 
 function createAbortError(message: string) {
@@ -116,9 +102,7 @@ export function getSDKClient(): OpencodeClient {
 }
 
 export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  if (isTauri()) {
-    await getTauriFetch()
-  }
+  await preparePlatformNetwork()
 
   const baseUrl = serverStore.getActiveBaseUrl()
   const url = new URL(path, baseUrl)
@@ -154,9 +138,7 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
  * 在应用初始化时应该先调一次这个
  */
 export async function getSDKClientAsync(): Promise<OpencodeClient> {
-  if (isTauri()) {
-    await getTauriFetch()
-  }
+  await preparePlatformNetwork()
   // 使 cache 失效以便用新的 tauri fetch 重建
   _cachedClient = null
   _cachedKey = ''

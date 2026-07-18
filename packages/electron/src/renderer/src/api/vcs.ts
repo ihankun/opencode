@@ -68,3 +68,26 @@ export async function pushVcsBranch(directory?: string): Promise<string> {
   const sdk = getSDKClient()
   return unwrap(await sdk.vcs.push({ directory: formatPathForApi(directory) })).output
 }
+
+export type VcsOperation = 'fetch' | 'pull' | 'stash' | 'stash-pop' | 'create-branch' | 'merge' | 'merge-abort'
+
+export interface VcsHistoryItem {
+  hash: string
+  shortHash: string
+  author: string
+  timestamp: number
+  subject: string
+}
+
+export async function runVcsOperation(action: VcsOperation, argument?: string, directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.operation({ action, argument, directory: formatPathForApi(directory) })).output
+}
+
+export async function getVcsHistory(directory?: string, limit = 50): Promise<VcsHistoryItem[]> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.history({ directory: formatPathForApi(directory), limit: String(limit) })).map(item => ({
+    ...item,
+    timestamp: typeof item.timestamp === 'number' ? item.timestamp : Number(item.timestamp),
+  }))
+}

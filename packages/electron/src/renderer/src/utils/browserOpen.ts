@@ -1,5 +1,5 @@
 import { STORAGE_KEY_BROWSER_OPEN_MODE } from '../constants/storage'
-import { isTauri } from './tauri'
+import { platformOpenUrl } from '../platform'
 
 export type BrowserOpenMode = 'internal' | 'system'
 
@@ -16,22 +16,5 @@ export function setBrowserOpenMode(mode: BrowserOpenMode) {
 }
 
 export async function openUrl(url: string, mode: BrowserOpenMode = getBrowserOpenMode()) {
-  if (mode === 'system') {
-    if (typeof window !== 'undefined' && typeof window.customOpenCode?.openExternalUrl === 'function') {
-      await window.customOpenCode.openExternalUrl(url)
-      return
-    }
-    if (isTauri()) {
-      const opener = await import('@tauri-apps/plugin-opener')
-      await opener.openUrl(url)
-      return
-    }
-  }
-
-  if (typeof window !== 'undefined' && typeof window.customOpenCode?.openInternalUrl === 'function') {
-    await window.customOpenCode.openInternalUrl(url)
-    return
-  }
-
-  window.open(url, '_blank', 'noopener,noreferrer')
+  await platformOpenUrl(url, mode)
 }

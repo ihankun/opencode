@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { homedir, tmpdir } from "node:os"
@@ -13,6 +13,7 @@ import { exportDebugLogs, initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
+import type { ScheduledTaskRun } from "./scheduler"
 import { listServerCredentials, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
 
@@ -34,7 +35,7 @@ const taskScheduler = new TaskScheduler(async (task) => {
     url: task.serverUrl,
     ...(credential ? credential : {}),
   }
-}, notifyTasksChanged)
+}, notifyTasksChanged, notifyScheduledTaskFinished)
 const spawnProcess = spawn as unknown as (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcess
 
 type SecurityConfig = {
@@ -94,6 +95,17 @@ ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) =
   }
   return setServerCredential(id, { username: credential.username, password: credential.password })
 })
+ipcMain.handle("hosting:credentials", async () => {
+  const credentials = await listServerCredentials()
+  return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, !!credentials[`hosting.${provider}`]?.password]))
+})
+ipcMain.handle("hosting:credential-set", (_event, provider: unknown, rawCredential: unknown) => {
+  const name = normalizeHostingProvider(provider)
+  if (rawCredential === null) return setServerCredential(`hosting.${name}`, null)
+  if (!isRecord(rawCredential) || typeof rawCredential.username !== "string" || typeof rawCredential.password !== "string") throw new Error("Invalid hosting credential")
+  return setServerCredential(`hosting.${name}`, { username: rawCredential.username, password: rawCredential.password })
+})
+ipcMain.handle("hosting:pr-create", (_event, input: unknown) => createHostedPullRequest(input))
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -385,6 +397,16 @@ function notifyTasksChanged() {
   BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("task:changed"))
 }
 
+function notifyScheduledTaskFinished(run: ScheduledTaskRun) {
+  const successful = run.status === "completed"
+  void sendNativeNotification({
+    title: successful ? `自动化已完成：${run.taskTitle}` : `自动化${run.status === "cancelled" ? "已取消" : "执行失败"}：${run.taskTitle}`,
+    body: successful ? run.prompt : run.error || run.prompt,
+    sessionId: run.sessionID.startsWith("pending:") ? undefined : run.sessionID,
+    directory: run.executionDirectory,
+  })
+}
+
 ipcMain.handle("server:get", currentServerState)
 ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("security:get", readSecurityConfig)
@@ -428,11 +450,23 @@ ipcMain.handle("task:run", async (_event, id: unknown) => {
   notifyTasksChanged()
   return task
 })
+ipcMain.handle("task:cancel", async (_event, id: unknown) => {
+  const task = await taskScheduler.cancelTask(String(id))
+  notifyTasksChanged()
+  return task
+})
+ipcMain.handle("task:run-cancel", async (_event, id: unknown) => {
+  const run = await taskScheduler.cancelRun(String(id))
+  notifyTasksChanged()
+  return run
+})
 ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
 ipcMain.handle("browser:open-external", (_event, url: unknown) => openExternalUrl(String(url ?? "")))
 ipcMain.handle("browser:open-internal", (_event, url: unknown) => openInternalUrl(String(url ?? "")))
+ipcMain.handle("preview:discover", (_event, host: unknown) => discoverPreviewPorts(String(host ?? "")))
+ipcMain.handle("preview:capture", (_event, rect: unknown) => capturePreview(rect))
 ipcMain.handle("location:apps", locationApps)
 ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
 ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
@@ -1365,6 +1399,86 @@ async function openExternalUrl(rawUrl: string) {
   return true
 }
 
+type HostingProvider = "github" | "gitlab" | "bitbucket"
+
+function normalizeHostingProvider(value: unknown): HostingProvider {
+  if (value === "github" || value === "gitlab" || value === "bitbucket") return value
+  throw new Error("Unsupported Git hosting provider")
+}
+
+async function createHostedPullRequest(rawInput: unknown) {
+  if (!isRecord(rawInput)) throw new Error("Pull request input is required")
+  const remoteUrl = typeof rawInput.remoteUrl === "string" ? normalizeGitRemoteUrl(rawInput.remoteUrl) : undefined
+  const sourceBranch = typeof rawInput.sourceBranch === "string" ? rawInput.sourceBranch.trim() : ""
+  const targetBranch = typeof rawInput.targetBranch === "string" ? rawInput.targetBranch.trim() : ""
+  const title = typeof rawInput.title === "string" ? rawInput.title.trim() : ""
+  const body = typeof rawInput.body === "string" ? rawInput.body : ""
+  if (!remoteUrl || remoteUrl.protocol !== "https:") throw new Error("A valid HTTPS Git remote is required")
+  if (!sourceBranch || !targetBranch || sourceBranch === targetBranch || !title) throw new Error("Source branch, target branch, and title are required")
+
+  const provider = remoteUrl.hostname === "bitbucket.org"
+    ? "bitbucket" as const
+    : remoteUrl.hostname.includes("gitlab") ? "gitlab" as const : remoteUrl.hostname.includes("github") ? "github" as const : undefined
+  if (!provider) throw new Error("Only GitHub, GitLab, and Bitbucket repositories are supported")
+  const repository = remoteUrl.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "")
+  const repositoryParts = repository.split("/").filter(Boolean)
+  if (repositoryParts.length < 2 || (provider !== "gitlab" && repositoryParts.length !== 2)) throw new Error("The Git remote must identify one repository")
+  const [owner, name] = repositoryParts
+  const credential = (await listServerCredentials())[`hosting.${provider}`]
+  if (!credential?.password) throw new Error(`Configure a ${provider} access token in Settings before creating a pull request`)
+
+  const request = provider === "github"
+    ? {
+        url: remoteUrl.hostname === "github.com"
+          ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`
+          : `https://${remoteUrl.hostname}/api/v3/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`,
+        headers: { Authorization: `Bearer ${credential.password}`, Accept: "application/vnd.github+json" },
+        body: { title, head: sourceBranch, base: targetBranch, body },
+      }
+    : provider === "gitlab"
+      ? {
+          url: `https://${remoteUrl.hostname}/api/v4/projects/${encodeURIComponent(repository)}/merge_requests`,
+          headers: { "PRIVATE-TOKEN": credential.password },
+          body: { title, source_branch: sourceBranch, target_branch: targetBranch, description: body },
+        }
+      : {
+          url: `https://api.bitbucket.org/2.0/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pullrequests`,
+          headers: { Authorization: `Basic ${Buffer.from(`${credential.username}:${credential.password}`).toString("base64")}` },
+          body: { title, description: body, source: { branch: { name: sourceBranch } }, destination: { branch: { name: targetBranch } } },
+        }
+  const requestHeaders = new Headers({ "Content-Type": "application/json", "User-Agent": "OpenCodex" })
+  Object.entries(request.headers).forEach(([key, value]) => {
+    if (value) requestHeaders.set(key, value)
+  })
+  const response = await fetch(request.url, {
+    method: "POST",
+    headers: requestHeaders,
+    body: JSON.stringify(request.body),
+    signal: AbortSignal.timeout(20_000),
+  })
+  const text = await response.text()
+  if (!response.ok) throw new Error(text ? `${provider} HTTP ${response.status}: ${text.slice(0, 2_000)}` : `${provider} HTTP ${response.status}`)
+  const result = JSON.parse(text) as unknown
+  if (!isRecord(result)) throw new Error(`${provider} returned an invalid response`)
+  const url = typeof result.html_url === "string"
+    ? result.html_url
+    : isRecord(result.links) && isRecord(result.links.html) && typeof result.links.html.href === "string"
+      ? result.links.html.href
+      : typeof result.web_url === "string" ? result.web_url : undefined
+  if (!url) throw new Error(`${provider} did not return the pull request URL`)
+  return { url, provider }
+}
+
+function normalizeGitRemoteUrl(value: string) {
+  const remote = value.trim()
+  const scp = remote.includes("://") ? undefined : remote.match(/^(?:[^@\s]+@)?([^/:\s]+):(.+)$/)
+  if (scp) return new URL(`https://${scp[1]}/${scp[2]}`)
+  const url = new URL(remote)
+  if (url.protocol === "http:" || url.protocol === "https:") return url
+  if (url.protocol === "ssh:" && url.hostname) return new URL(`https://${url.hostname}${url.pathname}`)
+  throw new Error("A valid HTTPS or SSH Git remote is required")
+}
+
 async function openInternalUrl(rawUrl: string) {
   const url = new URL(rawUrl)
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
@@ -1413,6 +1527,41 @@ async function openInternalUrl(rawUrl: string) {
   internalBrowserWindow.show()
   internalBrowserWindow.focus()
   return true
+}
+
+async function discoverPreviewPorts(rawHost: string) {
+  const host = rawHost.trim().replace(/^\[|\]$/g, "")
+  if (!host || !/^[a-zA-Z0-9.:-]+$/.test(host)) throw new Error("Invalid preview host")
+  const hostname = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host
+  const ports = [3000, 3001, 4000, 4173, 5000, 5173, 5174, 8000, 8080]
+  const checks = ports.map(async port => {
+    const url = `http://${hostname}:${port}/`
+    const response = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(900) }).catch(() => undefined)
+    return response ? url : undefined
+  })
+  return (await Promise.all(checks)).filter((url): url is string => !!url)
+}
+
+async function capturePreview(rawRect: unknown) {
+  if (!mainWindow || mainWindow.isDestroyed() || !isRecord(rawRect)) return { saved: false as const }
+  const bounds = mainWindow.getContentBounds()
+  const values = [rawRect.x, rawRect.y, rawRect.width, rawRect.height]
+  if (!values.every(value => typeof value === "number" && Number.isFinite(value))) throw new Error("Invalid capture rectangle")
+  const rect = {
+    x: Math.max(0, Math.floor(Number(rawRect.x))),
+    y: Math.max(0, Math.floor(Number(rawRect.y))),
+    width: Math.max(1, Math.min(bounds.width, Math.floor(Number(rawRect.width)))),
+    height: Math.max(1, Math.min(bounds.height, Math.floor(Number(rawRect.height)))),
+  }
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Save preview screenshot",
+    defaultPath: `opencodex-preview-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
+    filters: [{ name: "PNG image", extensions: ["png"] }],
+  })
+  if (result.canceled || !result.filePath) return { saved: false as const }
+  const image = await mainWindow.webContents.capturePage(rect)
+  await writeFile(result.filePath, image.toPNG())
+  return { saved: true as const, file: result.filePath }
 }
 
 type LocationApp = { id: string; name: string; icon?: string; exe?: string; appPath?: string }

@@ -39,6 +39,7 @@ export async function createTaskFromCommand(text: string, directory: string | un
     serverUrl: server.url,
     directory: directory ?? '',
     executionMode: 'current',
+    worktreeCleanup: 'on-success',
     branch: '',
     permissionProfile: 'risk',
     retryCount: 1,

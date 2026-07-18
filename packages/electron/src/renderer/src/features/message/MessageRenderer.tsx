@@ -68,25 +68,29 @@ export const MessageRenderer = memo(function MessageRenderer({
 
   if (isUser) {
     return (
-      <UserMessageView
-        message={message}
-        onUndo={onUndo}
-        onFork={onFork}
-        forkMessageId={forkMessageId}
-        canUndo={canUndo}
-      />
+      <article className="message-render-boundary" aria-label="User message">
+        <UserMessageView
+          message={message}
+          onUndo={onUndo}
+          onFork={onFork}
+          forkMessageId={forkMessageId}
+          canUndo={canUndo}
+        />
+      </article>
     )
   }
 
   return (
-    <AssistantMessageView
-      message={message}
-      allowStreamingLayoutAnimation={allowStreamingLayoutAnimation}
-      turnDuration={turnDuration}
-      onFork={onFork}
-      forkMessageId={forkMessageId}
-      onEnsureParts={onEnsureParts}
-    />
+    <article className="message-render-boundary" aria-label="Assistant message">
+      <AssistantMessageView
+        message={message}
+        allowStreamingLayoutAnimation={allowStreamingLayoutAnimation}
+        turnDuration={turnDuration}
+        onFork={onFork}
+        forkMessageId={forkMessageId}
+        onEnsureParts={onEnsureParts}
+      />
+    </article>
   )
 })
 

@@ -112,6 +112,9 @@ const layer: Layer.Layer<
       const ctx = yield* InstanceState.context
       const paths = new Set<string>()
 
+      const globalMemory = path.join(global.config, "memory.md")
+      if (yield* fs.existsSafe(globalMemory)) paths.add(path.resolve(globalMemory))
+
       for (const file of globalFiles) {
         if (yield* fs.existsSafe(file)) {
           paths.add(path.resolve(file))
@@ -130,6 +133,9 @@ const layer: Layer.Layer<
             break
           }
         }
+
+        const workspaceMemory = path.join(ctx.directory, ".opencode", "memory.md")
+        if (yield* fs.existsSafe(workspaceMemory)) paths.add(path.resolve(workspaceMemory))
       }
 
       if (config.instructions) {

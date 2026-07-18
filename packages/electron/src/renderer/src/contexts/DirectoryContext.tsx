@@ -8,7 +8,7 @@ import { useRouter } from '../hooks/useRouter'
 import { handleError, normalizeToForwardSlash, getDirectoryName, isMissingDirectoryError, isSameDirectory, serverStorage } from '../utils'
 import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { serverStore } from '../store/serverStore'
-import { isTauri } from '../utils/tauri'
+import { initialOpenDirectory, onOpenDirectory, platformKind } from '../platform'
 import { DirectoryContext, type DirectoryContextValue, type SavedDirectory } from './DirectoryContext.shared'
 
 const STORAGE_KEY_SAVED = 'opencode-saved-directories'
@@ -206,26 +206,16 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
   addDirectoryRef.current = addDirectory
 
   useEffect(() => {
-    if (!isTauri()) return
+    if (!platformKind().startsWith('tauri')) return
 
     let unlisten: (() => void) | undefined
 
-    // 拉取启动时的 CLI 目录（一次性）
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke<string | null>('get_cli_directory')
-        .then(dir => {
-          if (dir) addDirectoryRef.current(dir)
-        })
-        .catch(() => {})
-    })
+    void initialOpenDirectory().then(directory => {
+      if (directory) addDirectoryRef.current(directory)
+    }).catch(() => undefined)
 
-    // 监听后续的 open-directory 事件（single-instance / macOS RunEvent::Opened）
-    import('@tauri-apps/api/event').then(({ listen }) => {
-      listen<string>('open-directory', event => {
-        addDirectoryRef.current(event.payload)
-      }).then(fn => {
-        unlisten = fn
-      })
+    void onOpenDirectory(directory => addDirectoryRef.current(directory)).then(dispose => {
+      unlisten = dispose
     })
 
     return () => {

@@ -26,9 +26,10 @@ import { useChatViewport } from './chatViewport'
 import { pinnedSessionsStore } from '../../store/pinnedSessionsStore'
 import { executionTargetStore } from '../../store/executionTargetStore'
 import { serverStore } from '../../store/serverStore'
-import { checkpointStore, type WorkspaceCheckpoint } from '../../store/checkpointStore'
-import { createWorkspaceCheckpoint, restoreWorkspaceCheckpoint } from '../../api/checkpoint'
+import { createWorkspaceCheckpoint, deleteWorkspaceCheckpoint, getWorkspaceCheckpointDiff, listWorkspaceCheckpoints, restoreWorkspaceCheckpoint } from '../../api/checkpoint'
+import type { WorkspaceCheckpoint } from '../../api/checkpoint'
 import { useRouter } from '../../hooks/useRouter'
+import { useServerStore } from '../../hooks/useServerStore'
 import vscodeIcon from '../../../../../assets/app-vscode.png'
 import finderIcon from '../../../../../assets/app-finder.png'
 import terminalIcon from '../../../../../assets/app-terminal.png'
@@ -77,8 +78,11 @@ interface SessionTitleControlProps {
   onHandoff?: () => void
   checkpoints: WorkspaceCheckpoint[]
   checkpointBusy: boolean
+  checkpointsSupported: boolean
   onCreateCheckpoint: () => void
   onRestoreCheckpoint: (checkpoint: WorkspaceCheckpoint) => void
+  onDeleteCheckpoint: (checkpoint: WorkspaceCheckpoint) => void
+  onDiffCheckpoint: (checkpoint: WorkspaceCheckpoint) => void
   clickToRenameTitle: string
   sessionActionsTitle: string
   pinTitle: string
@@ -87,6 +91,7 @@ interface SessionTitleControlProps {
   handoffTitle: string
   createCheckpointTitle: string
   restoreCheckpointTitle: string
+  unavailableFeatureTitle: string
   menuRef: RefObject<HTMLDivElement | null>
 }
 
@@ -108,8 +113,11 @@ function SessionTitleControl({
   onHandoff,
   checkpoints,
   checkpointBusy,
+  checkpointsSupported,
   onCreateCheckpoint,
   onRestoreCheckpoint,
+  onDeleteCheckpoint,
+  onDiffCheckpoint,
   clickToRenameTitle,
   sessionActionsTitle,
   pinTitle,
@@ -118,6 +126,7 @@ function SessionTitleControl({
   handoffTitle,
   createCheckpointTitle,
   restoreCheckpointTitle,
+  unavailableFeatureTitle,
   menuRef,
 }: SessionTitleControlProps) {
   const inputClass = compact
@@ -169,15 +178,16 @@ function SessionTitleControl({
                 <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PinIcon size={14} />{pinTitle}</button>
                 <button type="button" onClick={() => { onToggleSessionMenu(); handleStartEdit() }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PencilIcon size={14} />{renameTitle}</button>
                 {onHandoff && <button type="button" onClick={onHandoff} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><GitWorktreeIcon size={14} />{handoffTitle}</button>}
-                <button type="button" disabled={checkpointBusy} onClick={onCreateCheckpoint} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200 disabled:opacity-50"><GitCommitIcon size={14} />{createCheckpointTitle}</button>
-                {checkpoints.length > 0 ? (
+                <button type="button" disabled={checkpointBusy || !checkpointsSupported} onClick={onCreateCheckpoint} title={checkpointsSupported ? undefined : unavailableFeatureTitle} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200 disabled:opacity-50"><GitCommitIcon size={14} />{createCheckpointTitle}</button>
+                {checkpointsSupported && checkpoints.length > 0 ? (
                   <div className="my-1 border-t border-border-100 pt-1">
                     <div className="px-2.5 py-1 text-[length:var(--fs-xs)] text-text-500">{restoreCheckpointTitle}</div>
-                    {checkpoints.slice(0, 5).map(checkpoint => (
-                      <button key={checkpoint.id} type="button" disabled={checkpointBusy} onClick={() => onRestoreCheckpoint(checkpoint)} title={checkpoint.directory} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 hover:text-text-100 disabled:opacity-50">
-                        <RestoreIcon size={13} className="shrink-0" />
-                        <span className="truncate">{checkpoint.label}</span>
-                      </button>
+                    {checkpoints.slice(0, 8).map(checkpoint => (
+                      <div key={checkpoint.id} className="flex items-center rounded-md hover:bg-bg-200">
+                        <button type="button" disabled={checkpointBusy} onClick={() => onRestoreCheckpoint(checkpoint)} title={checkpoint.directory} className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-[length:var(--fs-xs)] text-text-300 hover:text-text-100 disabled:opacity-50"><RestoreIcon size={13} className="shrink-0" /><span className="truncate">{checkpoint.label}</span></button>
+                        <button type="button" disabled={checkpointBusy} onClick={() => onDiffCheckpoint(checkpoint)} className="px-1.5 text-[length:var(--fs-xxs)] text-text-500 hover:text-text-100">Diff</button>
+                        <button type="button" disabled={checkpointBusy} onClick={() => onDeleteCheckpoint(checkpoint)} className="px-1.5 text-[length:var(--fs-sm)] text-text-500 hover:text-danger-100">×</button>
+                      </div>
                     ))}
                   </div>
                 ) : null}
@@ -205,6 +215,7 @@ export function Header({
   const { refresh } = useSessionContext()
   const { currentDirectory, pathInfo, setCurrentDirectory } = useDirectory()
   const { navigateToSession } = useRouter()
+  const { activeServer, getHealth, checkHealth } = useServerStore()
   const { presentation, interaction } = useChatViewport()
 
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
@@ -226,6 +237,12 @@ export function Header({
   const executionTarget = sessionId
     ? executionTargetStore.getSession(serverStore.getActiveServerId(), sessionId)
     : undefined
+  const checkpointsSupported = !!activeServer && getHealth(activeServer.id)?.capabilities?.workspaceCheckpoints === true
+
+  useEffect(() => {
+    if (!activeServer || getHealth(activeServer.id)) return
+    void checkHealth(activeServer.id)
+  }, [activeServer, checkHealth, getHealth])
 
   useEffect(() => {
     document.title = currentSessionTitle ? `${currentSessionTitle} - OpenCodex` : 'OpenCodex'
@@ -236,8 +253,14 @@ export function Header({
 
   useEffect(() => {
     setIsEditingTitle(false)
-    setCheckpoints(sessionId ? checkpointStore.list(sessionId) : [])
-  }, [sessionId])
+    if (!sessionId || !checkpointsSupported) {
+      setCheckpoints([])
+      return
+    }
+    void listWorkspaceCheckpoints(sessionId, sessionDirectory || currentDirectory)
+      .then(setCheckpoints)
+      .catch(() => setCheckpoints([]))
+  }, [checkpointsSupported, currentDirectory, sessionDirectory, sessionId])
 
   useEffect(() => {
     const saved = localStorage.getItem('opencodex.location-app')
@@ -357,14 +380,8 @@ export function Header({
     if (!sessionId || !directory) return
     setCheckpointBusy(true)
     try {
-      const result = await createWorkspaceCheckpoint(directory)
-      checkpointStore.add({
-        sessionId,
-        directory,
-        snapshot: result.snapshot,
-        label: new Date().toLocaleString(),
-      })
-      setCheckpoints(checkpointStore.list(sessionId))
+      await createWorkspaceCheckpoint(sessionId, new Date().toLocaleString(), directory)
+      setCheckpoints(await listWorkspaceCheckpoints(sessionId, directory))
     } catch (error) {
       uiErrorHandler('create workspace checkpoint', error)
     } finally {
@@ -376,11 +393,37 @@ export function Header({
     if (!window.confirm(t('header.restoreCheckpointConfirm', { label: checkpoint.label }))) return
     setCheckpointBusy(true)
     try {
-      await restoreWorkspaceCheckpoint(checkpoint.snapshot, checkpoint.directory)
+      await restoreWorkspaceCheckpoint(checkpoint.id, checkpoint.directory)
+      setCheckpoints(await listWorkspaceCheckpoints(checkpoint.sessionID, checkpoint.directory))
       setSessionMenuOpen(false)
       window.dispatchEvent(new CustomEvent('opencodex:workspace-restored', { detail: checkpoint.directory }))
     } catch (error) {
       uiErrorHandler('restore workspace checkpoint', error)
+    } finally {
+      setCheckpointBusy(false)
+    }
+  }
+
+  const handleDeleteCheckpoint = async (checkpoint: WorkspaceCheckpoint) => {
+    if (!window.confirm(t('header.deleteCheckpointConfirm', { label: checkpoint.label }))) return
+    setCheckpointBusy(true)
+    try {
+      await deleteWorkspaceCheckpoint(checkpoint.id, checkpoint.directory)
+      setCheckpoints(await listWorkspaceCheckpoints(checkpoint.sessionID, checkpoint.directory))
+    } catch (error) {
+      uiErrorHandler('delete workspace checkpoint', error)
+    } finally {
+      setCheckpointBusy(false)
+    }
+  }
+
+  const handleDiffCheckpoint = async (checkpoint: WorkspaceCheckpoint) => {
+    setCheckpointBusy(true)
+    try {
+      const diff = await getWorkspaceCheckpointDiff(checkpoint.id, checkpoint.directory)
+      window.alert(diff || t('header.checkpointNoDiff'))
+    } catch (error) {
+      uiErrorHandler('diff workspace checkpoint', error)
     } finally {
       setCheckpointBusy(false)
     }
@@ -450,8 +493,11 @@ export function Header({
       onHandoff={executionTarget?.executionMode === 'worktree' && executionTarget.sourceDirectory ? () => void handleHandoff() : undefined}
       checkpoints={checkpoints}
       checkpointBusy={checkpointBusy}
+      checkpointsSupported={checkpointsSupported}
       onCreateCheckpoint={() => void handleCreateCheckpoint()}
       onRestoreCheckpoint={checkpoint => void handleRestoreCheckpoint(checkpoint)}
+      onDeleteCheckpoint={checkpoint => void handleDeleteCheckpoint(checkpoint)}
+      onDiffCheckpoint={checkpoint => void handleDiffCheckpoint(checkpoint)}
       clickToRenameTitle={t('header.clickToRename')}
       sessionActionsTitle={t('header.sessionActions')}
       pinTitle={t('header.pinSession')}
@@ -460,6 +506,7 @@ export function Header({
       handoffTitle={t('header.handoffSession')}
       createCheckpointTitle={t('header.createCheckpoint')}
       restoreCheckpointTitle={t('header.restoreCheckpoint')}
+      unavailableFeatureTitle={t('emptyState.serverFeatureUnavailable')}
       menuRef={sessionMenuRef}
     />
   )

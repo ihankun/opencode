@@ -33,6 +33,12 @@ import type {
   ExperimentalCapabilitiesGetResponses,
   ExperimentalCheckpointCreateErrors,
   ExperimentalCheckpointCreateResponses,
+  ExperimentalCheckpointDeleteErrors,
+  ExperimentalCheckpointDeleteResponses,
+  ExperimentalCheckpointDiffErrors,
+  ExperimentalCheckpointDiffResponses,
+  ExperimentalCheckpointListErrors,
+  ExperimentalCheckpointListResponses,
   ExperimentalCheckpointRestoreErrors,
   ExperimentalCheckpointRestoreResponses,
   ExperimentalConsoleGetErrors,
@@ -60,6 +66,18 @@ import type {
   ExperimentalGoalGetResponses,
   ExperimentalGoalStatusErrors,
   ExperimentalGoalStatusResponses,
+  ExperimentalHooksGetErrors,
+  ExperimentalHooksGetResponses,
+  ExperimentalHooksRunErrors,
+  ExperimentalHooksRunResponses,
+  ExperimentalHooksUpdateErrors,
+  ExperimentalHooksUpdateResponses,
+  ExperimentalMemoryCaptureErrors,
+  ExperimentalMemoryCaptureResponses,
+  ExperimentalMemoryListErrors,
+  ExperimentalMemoryListResponses,
+  ExperimentalMemoryUpdateErrors,
+  ExperimentalMemoryUpdateResponses,
   ExperimentalProjectCopyGenerateNameErrors,
   ExperimentalProjectCopyGenerateNameResponses,
   ExperimentalResourceListErrors,
@@ -435,6 +453,10 @@ import type {
   VcsDiscardResponses,
   VcsGetErrors,
   VcsGetResponses,
+  VcsHistoryErrors,
+  VcsHistoryResponses,
+  VcsOperationErrors,
+  VcsOperationResponses,
   VcsPushErrors,
   VcsPushResponses,
   VcsStageErrors,
@@ -443,6 +465,7 @@ import type {
   VcsStatusResponses,
   VcsUnstageErrors,
   VcsUnstageResponses,
+  WorkspaceCheckpointCreateInput,
   WorkspaceCheckpointRestoreInput,
   WorktreeCreateErrors,
   WorktreeCreateInput,
@@ -1218,17 +1241,15 @@ export class Goal extends HeyApiClient {
 
 export class Checkpoint extends HeyApiClient {
   /**
-   * Create workspace checkpoint
+   * List workspace checkpoints
    *
-   * Capture the current Git workspace files in the server snapshot store.
+   * List server-persisted checkpoints for the current workspace.
    */
-  public create<ThrowOnError extends boolean = false>(
+  public list<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       workspace?: string
-      body?: {
-        [key: string]: unknown
-      }
+      sessionID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1239,7 +1260,43 @@ export class Checkpoint extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
-            { key: "body", map: "body" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalCheckpointListResponses,
+      ExperimentalCheckpointListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/checkpoint",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create workspace checkpoint
+   *
+   * Capture the current Git workspace files in the server snapshot store.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      workspaceCheckpointCreateInput?: WorkspaceCheckpointCreateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "workspaceCheckpointCreateInput", map: "body" },
           ],
         },
       ],
@@ -1741,6 +1798,279 @@ export class Workspace extends HeyApiClient {
 }
 
 export class Experimental extends HeyApiClient {
+  public checkpointDelete<ThrowOnError extends boolean = false>(
+    parameters: {
+      checkpointID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "checkpointID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ExperimentalCheckpointDeleteResponses,
+      ExperimentalCheckpointDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/checkpoint/{checkpointID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public checkpointDiff<ThrowOnError extends boolean = false>(
+    parameters: {
+      checkpointID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "checkpointID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalCheckpointDiffResponses,
+      ExperimentalCheckpointDiffErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/checkpoint/{checkpointID}/diff",
+      ...options,
+      ...params,
+    })
+  }
+
+  public memoryList<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalMemoryListResponses,
+      ExperimentalMemoryListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/memory",
+      ...options,
+      ...params,
+    })
+  }
+
+  public memoryUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: "global" | "project" | "workspace"
+      directory?: string
+      workspace?: string
+      content?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "content" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ExperimentalMemoryUpdateResponses,
+      ExperimentalMemoryUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/memory/{sourceID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public memoryCapture<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      content?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "content" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalMemoryCaptureResponses,
+      ExperimentalMemoryCaptureErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/memory/capture",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public hooksGet<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalHooksGetResponses,
+      ExperimentalHooksGetErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/hooks",
+      ...options,
+      ...params,
+    })
+  }
+
+  public hooksUpdate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      hooks?: Array<{
+        id: string
+        name: string
+        event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+        command: string
+        enabled: boolean
+        timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "hooks" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ExperimentalHooksUpdateResponses,
+      ExperimentalHooksUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/hooks",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public hooksRun<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      event?: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "event" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalHooksRunResponses,
+      ExperimentalHooksRunErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/hooks/run",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   private _controlPlane?: ControlPlane
   get controlPlane(): ControlPlane {
     return (this._controlPlane ??= new ControlPlane({ client: this.client }))
@@ -2902,6 +3232,77 @@ export class Vcs extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<VcsPushResponses, VcsPushErrors, ThrowOnError>({
       url: "/vcs/push",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Run Git operation
+   *
+   * Fetch, pull, stash, create a branch, or merge using a validated operation.
+   */
+  public operation<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      action?: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort"
+      argument?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "action" },
+            { in: "body", key: "argument" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<VcsOperationResponses, VcsOperationErrors, ThrowOnError>({
+      url: "/vcs/operation",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get Git history
+   *
+   * List recent commits for the current branch.
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      limit?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<VcsHistoryResponses, VcsHistoryErrors, ThrowOnError>({
+      url: "/vcs/history",
       ...options,
       ...params,
     })

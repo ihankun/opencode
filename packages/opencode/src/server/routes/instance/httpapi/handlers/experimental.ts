@@ -7,14 +7,19 @@ import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { clearGoal, getGoal, setGoalStatus } from "@/goal/state"
 import { MCP } from "@/mcp"
+import { HookManager } from "@/hooks"
 import { Project } from "@/project/project"
 import { Session } from "@/session/session"
 import { Snapshot } from "@/snapshot"
+import { Global } from "@opencode-ai/core/global"
+import { Hash } from "@opencode-ai/core/util/hash"
 import type { SessionID } from "@/session/schema"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
 import { Worktree } from "@/worktree"
 import { Duration, Effect, Option } from "effect"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
@@ -23,7 +28,11 @@ import {
   ConsoleLoginPayload,
   ConsoleLoginPollPayload,
   ConsoleSwitchPayload,
+  CheckpointCreatePayload,
+  CheckpointListQuery,
   CheckpointRestorePayload,
+  MemoryCapturePayload,
+  MemoryUpdatePayload,
   GoalStatusPayload,
   SessionListQuery,
   ToolListQuery,
@@ -32,6 +41,66 @@ import {
 import { markInstanceForDisposal } from "../lifecycle"
 
 const defaultConsoleUrl = "https://console.opencode.ai"
+
+type CheckpointEntry = {
+  id: string
+  snapshot: string
+  sessionID: string
+  directory: string
+  label: string
+  createdAt: number
+}
+
+function checkpointRegistryFile(projectID: string, worktree: string) {
+  return path.join(Global.Path.data, "checkpoint-registry", `${projectID}-${Hash.fast(worktree)}.json`)
+}
+
+async function readCheckpointRegistry(file: string): Promise<CheckpointEntry[]> {
+  const value = await Bun.file(file).json().catch(() => []) as unknown
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item): CheckpointEntry[] => {
+    if (!item || typeof item !== "object") return []
+    if (!("id" in item) || typeof item.id !== "string") return []
+    if (!("snapshot" in item) || typeof item.snapshot !== "string") return []
+    if (!("sessionID" in item) || typeof item.sessionID !== "string") return []
+    if (!("directory" in item) || typeof item.directory !== "string") return []
+    if (!("label" in item) || typeof item.label !== "string") return []
+    if (!("createdAt" in item) || typeof item.createdAt !== "number") return []
+    return [item as CheckpointEntry]
+  })
+}
+
+async function writeCheckpointRegistry(file: string, entries: CheckpointEntry[]) {
+  await mkdir(path.dirname(file), { recursive: true })
+  await Bun.write(file, `${JSON.stringify(entries, null, 2)}\n`)
+}
+
+type MemorySourceID = "global" | "project" | "workspace"
+
+function memorySourceDefinitions(ctx: { directory: string; worktree: string }) {
+  return [
+    { id: "global" as const, name: "Global memory", path: path.join(Global.Path.config, "memory.md"), scope: "global" as const, priority: 10 },
+    { id: "project" as const, name: "Project instructions", path: path.join(ctx.worktree, "AGENTS.md"), scope: "project" as const, priority: 50 },
+    { id: "workspace" as const, name: "Workspace memory", path: path.join(ctx.directory, ".opencode", "memory.md"), scope: "workspace" as const, priority: 100 },
+  ]
+}
+
+async function readMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID) {
+  const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
+  if (!source) throw new Error("Memory source not found")
+  const file = Bun.file(source.path)
+  const exists = await file.exists()
+  return { ...source, exists, content: exists ? await file.text() : "" }
+}
+
+async function writeMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID, content: string) {
+  if (Buffer.byteLength(content) > 1_000_000) throw new Error("Memory content exceeds 1 MB")
+  const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
+  if (!source) throw new Error("Memory source not found")
+  await mkdir(path.dirname(source.path), { recursive: true })
+  await Bun.write(source.path, content)
+  return readMemorySource(ctx, id)
+}
 
 type ConsoleLoginResult =
   | { readonly _tag: "PollSuccess"; readonly email: string }
@@ -62,7 +131,19 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     const flags = yield* RuntimeFlags.Service
 
     const capabilities = Effect.fn("ExperimentalHttpApi.capabilities")(function* () {
-      return { backgroundSubagents: flags.experimentalBackgroundSubagents }
+      return {
+        apiVersion: 2 as const,
+        backgroundSubagents: flags.experimentalBackgroundSubagents,
+        worktree: true,
+        worktreeBaseBranch: true,
+        vcsMutations: true,
+        workspaceCheckpoints: true,
+        advancedVcs: true,
+        checkpointRegistry: true,
+        memory: true,
+        hooks: true,
+        pullRequests: true,
+      }
     })
 
     const getConsole = Effect.fn("ExperimentalHttpApi.console")(function* () {
@@ -319,18 +400,127 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       )
     })
 
-    const checkpointCreate = Effect.fn("ExperimentalHttpApi.checkpointCreate")(function* () {
+    const checkpointList = Effect.fn("ExperimentalHttpApi.checkpointList")(function* (input: {
+      query: typeof CheckpointListQuery.Type
+    }) {
+      const ctx = yield* InstanceState.context
+      const entries = yield* Effect.promise(() => readCheckpointRegistry(checkpointRegistryFile(ctx.project.id, ctx.worktree)))
+      return input.query.sessionID ? entries.filter((entry) => entry.sessionID === input.query.sessionID) : entries
+    })
+
+    const checkpointCreate = Effect.fn("ExperimentalHttpApi.checkpointCreate")(function* (input: {
+      payload: typeof CheckpointCreatePayload.Type
+    }) {
       const snapshot = yield* snapshots.track()
       if (!snapshot) return yield* Effect.fail(new HttpApiError.BadRequest({}))
-      return { snapshot }
+      const ctx = yield* InstanceState.context
+      const file = checkpointRegistryFile(ctx.project.id, ctx.worktree)
+      const entry: CheckpointEntry = {
+        id: crypto.randomUUID(),
+        snapshot,
+        sessionID: input.payload.sessionID,
+        directory: ctx.directory,
+        label: input.payload.label.trim() || new Date().toISOString(),
+        createdAt: Date.now(),
+      }
+      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
+      const next = [entry, ...entries].filter((item, index, all) =>
+        index < 100 && all.slice(0, index).filter((previous) => previous.sessionID === item.sessionID).length < 20,
+      )
+      yield* Effect.promise(() => writeCheckpointRegistry(file, next))
+      return entry
     })
 
     const checkpointRestore = Effect.fn("ExperimentalHttpApi.checkpointRestore")(function* (ctx: {
       payload: typeof CheckpointRestorePayload.Type
     }) {
-      const patch = yield* snapshots.patch(ctx.payload.snapshot)
+      const state = yield* InstanceState.context
+      const file = checkpointRegistryFile(state.project.id, state.worktree)
+      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
+      const target = entries.find((entry) => entry.id === ctx.payload.id)
+      if (!target) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      const snapshot = yield* snapshots.track()
+      if (!snapshot) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      const backup: CheckpointEntry = {
+        id: crypto.randomUUID(),
+        snapshot,
+        sessionID: target.sessionID,
+        directory: state.directory,
+        label: `Before restore: ${target.label}`,
+        createdAt: Date.now(),
+      }
+      yield* Effect.promise(() => writeCheckpointRegistry(file, [backup, ...entries].slice(0, 100)))
+      const patch = yield* snapshots.patch(target.snapshot)
       yield* snapshots.revert([patch])
+      return { backupID: backup.id }
+    })
+
+    const checkpointDelete = Effect.fn("ExperimentalHttpApi.checkpointDelete")(function* (input: {
+      params: { checkpointID: string }
+    }) {
+      const ctx = yield* InstanceState.context
+      const file = checkpointRegistryFile(ctx.project.id, ctx.worktree)
+      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
+      if (!entries.some((entry) => entry.id === input.params.checkpointID)) return false
+      yield* Effect.promise(() => writeCheckpointRegistry(file, entries.filter((entry) => entry.id !== input.params.checkpointID)))
       return true
+    })
+
+    const checkpointDiff = Effect.fn("ExperimentalHttpApi.checkpointDiff")(function* (input: {
+      params: { checkpointID: string }
+    }) {
+      const ctx = yield* InstanceState.context
+      const entries = yield* Effect.promise(() => readCheckpointRegistry(checkpointRegistryFile(ctx.project.id, ctx.worktree)))
+      const target = entries.find((entry) => entry.id === input.params.checkpointID)
+      if (!target) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      return yield* snapshots.diff(target.snapshot)
+    })
+
+    const memoryList = Effect.fn("ExperimentalHttpApi.memoryList")(function* () {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => Promise.all(memorySourceDefinitions(ctx).map((source) => readMemorySource(ctx, source.id))))
+    })
+
+    const memoryUpdate = Effect.fn("ExperimentalHttpApi.memoryUpdate")(function* (input: {
+      params: { sourceID: MemorySourceID }
+      payload: typeof MemoryUpdatePayload.Type
+    }) {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => writeMemorySource(ctx, input.params.sourceID, input.payload.content))
+    })
+
+    const memoryCapture = Effect.fn("ExperimentalHttpApi.memoryCapture")(function* (input: {
+      payload: typeof MemoryCapturePayload.Type
+    }) {
+      const content = input.payload.content.trim()
+      if (!content) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      const ctx = yield* InstanceState.context
+      const current = yield* Effect.promise(() => readMemorySource(ctx, "workspace"))
+      const heading = current.content.trim() ? "\n\n" : "# Workspace memory\n\n"
+      return yield* Effect.promise(() => writeMemorySource(
+        ctx,
+        "workspace",
+        `${current.content.trimEnd()}${heading}## Saved ${new Date().toISOString()}\n\n${content}\n`,
+      ))
+    })
+
+    const hooksGet = Effect.fn("ExperimentalHttpApi.hooksGet")(function* () {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => HookManager.read(ctx.directory))
+    })
+
+    const hooksUpdate = Effect.fn("ExperimentalHttpApi.hooksUpdate")(function* (input: {
+      payload: typeof HookManager.UpdatePayload.Type
+    }) {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => HookManager.write(ctx.directory, [...input.payload.hooks]))
+    })
+
+    const hooksRun = Effect.fn("ExperimentalHttpApi.hooksRun")(function* (input: {
+      payload: typeof HookManager.RunPayload.Type
+    }) {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => HookManager.execute(ctx.directory, input.payload.event))
     })
 
     const worktree = Effect.fn("ExperimentalHttpApi.worktree")(function* () {
@@ -416,8 +606,17 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("goal", goal)
       .handle("goalStatus", goalStatus)
       .handle("goalClear", goalClear)
+      .handle("checkpointList", checkpointList)
       .handle("checkpointCreate", checkpointCreate)
+      .handle("checkpointDelete", checkpointDelete)
+      .handle("checkpointDiff", checkpointDiff)
       .handle("checkpointRestore", checkpointRestore)
+      .handle("memoryList", memoryList)
+      .handle("memoryUpdate", memoryUpdate)
+      .handle("memoryCapture", memoryCapture)
+      .handle("hooksGet", hooksGet)
+      .handle("hooksUpdate", hooksUpdate)
+      .handle("hooksRun", hooksRun)
       .handle("worktree", worktree)
       .handle("worktreeCreate", worktreeCreate)
       .handle("worktreeRemove", worktreeRemove)

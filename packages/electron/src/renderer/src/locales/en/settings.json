@@ -16,6 +16,12 @@
     "chatDesc": "Message presentation, path formatting, and step metadata",
     "archived": "Archived Chats",
     "archivedDesc": "Restore or permanently delete archived chats",
+    "memory": "Memory",
+    "memoryDesc": "Manage project conventions and preferences across tasks",
+    "hooks": "Hooks",
+    "hooksDesc": "Configure automation and Git lifecycle scripts",
+    "extensions": "Extensions",
+    "extensionsDesc": "Manage MCP, Skills, Plugins, and expert kits in one place",
     "security": "Security",
     "securityDesc": "Sandbox boundaries, network access, and agent audit logs",
     "workspace": "Workspace",
@@ -74,10 +80,60 @@
     "passwordPlaceholder": "OPENCODE_SERVER_PASSWORD",
     "crossOriginWarning": "Web/PWA cross-origin + password can be blocked by CORS preflight. The server must allow OPTIONS and the Authorization header.",
     "httpsIpWarning": "HTTPS direct IP connections require a certificate that includes that IP. Private or self-signed CAs may not be trusted by desktop/mobile clients.",
-    "credentialsStorage": "Credentials are stored in localStorage and sent via HTTP Basic Auth.",
+    "credentialsStorage": "Desktop credentials are encrypted with the system credential store. Web/PWA keeps them only in the current browser profile. Authentication uses HTTP Basic Auth.",
+    "compatibility": {
+      "current": "Fully compatible",
+      "legacy": "Legacy compatibility",
+      "incompatible": "Unknown capabilities"
+    },
+    "capabilities": {
+      "checkpoints": "Checkpoints"
+    },
+    "hosting": {
+      "title": "Code hosting",
+      "description": "Configure a token to create GitHub PRs, GitLab MRs, or Bitbucket pull requests directly",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "username": "Username",
+      "token": "Access token",
+      "replaceToken": "Enter a new token to replace it",
+      "secureStorage": "Tokens stay in the desktop system's secure storage and are never written to project config or sent to the OpenCode Server."
+    },
     "editServer": "Edit server",
     "deleteServer": "Delete Server",
     "deleteServerConfirm": "Remove \"{{name}}\" from the server list? This cannot be undone."
+  },
+  "memory": {
+    "unsupported": "The current server does not support Memory management. Upgrade it or switch servers.",
+    "sources": "Memory sources",
+    "sourcesDesc": "Higher priority is closer to the active workspace: global P10, project P50, workspace P100.",
+    "useTemplate": "Use template",
+    "capture": "Save durable memory",
+    "captureDesc": "Summarize conclusions worth retaining from the current chat and append them to workspace Memory.",
+    "capturePlaceholder": "For example: this project uses Bun; run bun typecheck before committing…",
+    "saveToWorkspace": "Save to workspace Memory"
+  },
+  "hooks": {
+    "unsupported": "The current server does not support Hooks management. Upgrade it or switch servers.",
+    "title": "Hooks",
+    "description": "Commands run in the current workspace, inherit only PATH and HOME, and have a 1–120 second timeout.",
+    "add": "Add hook",
+    "template": "Add notification template",
+    "enabled": "Enabled",
+    "timeout": "Timeout (seconds)",
+    "testEvent": "Test event",
+    "logs": "Run logs",
+    "logsDesc": "Keeps the latest 200 hook results with truncated output."
+  },
+  "extensions": {
+    "expertKits": "Expert kits",
+    "serverScope": "Server scope",
+    "workspaceScope": "Workspace scope",
+    "global": "Global",
+    "permissions": "Permission boundary",
+    "permissionsValue": "Inherits the active Agent security policy",
+    "loading": "Loading extension center…",
+    "diagnosticHint": "Connection state, install conflicts, version updates, and authentication errors appear within each category. The center restarts and refreshes the service when an install or removal requires it."
   },
   "providers": {
     "title": "Provider Connections",

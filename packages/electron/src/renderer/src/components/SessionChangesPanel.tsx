@@ -12,7 +12,8 @@ import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } 
 import { ViewModeSwitch } from './FullscreenViewer'
 import { getCurrentProject, initGitProject } from '../api/client'
 import { getLastTurnDiff, getSessionDiff } from '../api/session'
-import { commitVcsChanges, discardVcsFiles, getVcsDiff, getVcsInfo, pushVcsBranch, stageVcsFiles, unstageVcsFiles } from '../api/vcs'
+import { commitVcsChanges, discardVcsFiles, getVcsDiff, getVcsHistory, getVcsInfo, pushVcsBranch, runVcsOperation, stageVcsFiles, unstageVcsFiles } from '../api/vcs'
+import type { VcsHistoryItem } from '../api/vcs'
 import type { ApiProject, FileDiff, VcsDiffMode, VcsInfo } from '../api/types'
 import { detectLanguage } from '../utils/languageUtils'
 import { extractContentFromUnifiedDiff } from '../utils/diffUtils'
@@ -27,6 +28,7 @@ import { useFullscreenLayer } from '../contexts'
 import { openUrl } from '../utils/browserOpen'
 import { createPullRequestUrl } from '../utils/pullRequest'
 import { insertComposerDraft } from '../utils/composerDraft'
+import { serverStore } from '../store/serverStore'
 
 // 常量
 const MIN_LIST_HEIGHT = 80
@@ -927,6 +929,9 @@ function GitActions({
   const [commitOpen, setCommitOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [discardFiles, setDiscardFiles] = useState<string[]>([])
+  const [history, setHistory] = useState<VcsHistoryItem[] | null>(null)
+  const mutationsSupported = serverStore.supports('vcsMutations')
+  const advancedSupported = serverStore.supports('advancedVcs')
 
   useEffect(() => {
     if (!isOpen) return
@@ -979,7 +984,7 @@ function GitActions({
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(open => !open)}
-        disabled={action !== null}
+        disabled={action !== null || !mutationsSupported}
         aria-label={t('sessionChanges.gitActions')}
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -1017,6 +1022,16 @@ function GitActions({
           <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('push', () => pushVcsBranch(directory))}>
             {t('sessionChanges.push')}
           </button>
+          {advancedSupported ? <>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('fetch', () => runVcsOperation('fetch', undefined, directory))}>{t('sessionChanges.fetch')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}>{t('sessionChanges.pull')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stash', () => runVcsOperation('stash', undefined, directory))}>{t('sessionChanges.stash')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stashPop', () => runVcsOperation('stash-pop', undefined, directory))}>{t('sessionChanges.stashPop')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { const branch = window.prompt(t('sessionChanges.branchNamePrompt')); if (branch) void run('createBranch', () => runVcsOperation('create-branch', branch, directory)) }}>{t('sessionChanges.createBranch')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { const branch = window.prompt(t('sessionChanges.mergeBranchPrompt')); if (branch) void run('merge', () => runVcsOperation('merge', branch, directory)) }}>{t('sessionChanges.mergeBranch')}</button>
+            <button type="button" role="menuitem" className={`${menuItemClass} !text-danger-100`} onClick={() => void run('mergeAbort', () => runVcsOperation('merge-abort', undefined, directory))}>{t('sessionChanges.mergeAbort')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); void getVcsHistory(directory).then(setHistory).catch(error => onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))) }}>{t('sessionChanges.history')}</button>
+          </> : null}
           <button
             type="button"
             role="menuitem"
@@ -1026,8 +1041,20 @@ function GitActions({
             onClick={() =>
               void run('createPr', async () => {
                 const output = await pushVcsBranch(directory)
-                await openUrl(pullRequestUrl!)
-                return output
+                const title = window.prompt(t('sessionChanges.pullRequestTitlePrompt'), vcsInfo?.branch || '')
+                if (!title) return output
+                if (typeof window.customOpenCode?.createPullRequest !== 'function') {
+                  await openUrl(pullRequestUrl!)
+                  return output
+                }
+                const result = await window.customOpenCode.createPullRequest({
+                  remoteUrl: vcsInfo!.remote_url!,
+                  sourceBranch: vcsInfo!.branch!,
+                  targetBranch: vcsInfo!.default_branch!,
+                  title,
+                })
+                await openUrl(result.url)
+                return result.url
               })
             }
           >
@@ -1078,6 +1105,15 @@ function GitActions({
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog isOpen={history !== null} onClose={() => setHistory(null)} title={t('sessionChanges.history')} width={560}>
+        <div className="max-h-[440px] divide-y divide-border-200/50 overflow-auto">
+          {history?.map(item => <div key={item.hash} className="flex gap-3 py-2.5">
+            <code className="shrink-0 text-[length:var(--fs-xs)] text-accent-main-100">{item.shortHash}</code>
+            <div className="min-w-0 flex-1"><div className="truncate text-[length:var(--fs-sm)] text-text-100">{item.subject}</div><div className="mt-0.5 text-[length:var(--fs-xs)] text-text-500">{item.author} · {new Date(item.timestamp).toLocaleString()}</div></div>
+          </div>)}
+        </div>
       </Dialog>
 
       <ConfirmDialog

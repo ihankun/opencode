@@ -15,6 +15,7 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
         server_url TEXT NOT NULL DEFAULT '',
         directory TEXT NOT NULL,
         execution_mode TEXT NOT NULL DEFAULT 'current',
+        worktree_cleanup TEXT NOT NULL DEFAULT 'on-success',
         branch TEXT NOT NULL DEFAULT '',
         permission_profile TEXT NOT NULL DEFAULT 'risk',
         retry_count INTEGER NOT NULL DEFAULT 0,
@@ -43,6 +44,7 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
         directory TEXT NOT NULL,
         execution_directory TEXT NOT NULL DEFAULT '',
         execution_mode TEXT NOT NULL DEFAULT 'current',
+        worktree_directory TEXT NOT NULL DEFAULT '',
         branch TEXT NOT NULL DEFAULT '',
         permission_profile TEXT NOT NULL DEFAULT 'risk',
         attempt INTEGER NOT NULL DEFAULT 1,
@@ -61,6 +63,7 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     ensureColumn(database, "scheduled_task", "server_name", "TEXT NOT NULL DEFAULT 'Local'")
     ensureColumn(database, "scheduled_task", "server_url", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task", "execution_mode", "TEXT NOT NULL DEFAULT 'current'")
+    ensureColumn(database, "scheduled_task", "worktree_cleanup", "TEXT NOT NULL DEFAULT 'on-success'")
     ensureColumn(database, "scheduled_task", "branch", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task", "permission_profile", "TEXT NOT NULL DEFAULT 'risk'")
     ensureColumn(database, "scheduled_task", "retry_count", "INTEGER NOT NULL DEFAULT 0")
@@ -79,16 +82,19 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     ensureColumn(database, "scheduled_task_run", "server_url", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task_run", "execution_directory", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task_run", "execution_mode", "TEXT NOT NULL DEFAULT 'current'")
+    ensureColumn(database, "scheduled_task_run", "worktree_directory", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task_run", "branch", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task_run", "permission_profile", "TEXT NOT NULL DEFAULT 'risk'")
     ensureColumn(database, "scheduled_task_run", "attempt", "INTEGER NOT NULL DEFAULT 1")
     ensureColumn(database, "scheduled_task_run", "status", "TEXT NOT NULL DEFAULT 'submitted'")
     ensureColumn(database, "scheduled_task_run", "error", "TEXT")
+    ensureColumn(database, "scheduled_task_run", "log", "TEXT NOT NULL DEFAULT ''")
+    ensureColumn(database, "scheduled_task_run", "updated_at", "INTEGER NOT NULL DEFAULT 0")
     ensureColumn(database, "scheduled_task_run", "archived", "INTEGER NOT NULL DEFAULT 0")
     ensureColumn(database, "scheduled_task_run", "created_at", "INTEGER NOT NULL DEFAULT 0")
     ensureColumn(database, "scheduled_task_run", "completed_at", "INTEGER")
     database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_task_id_idx ON scheduled_task_run(task_id)")
-    database.exec("PRAGMA user_version = 5")
+    database.exec("PRAGMA user_version = 7")
     database.exec("COMMIT")
   } catch (error) {
     database.exec("ROLLBACK")
