@@ -1,12 +1,14 @@
 {
   "name": "@opencode-ai/opencodex",
   "private": true,
-  "version": "1.11.5",
+  "version": "1.12.0",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test src/renderer && node --test src/main/*.test.ts",
+    "verify": "bun run typecheck && bun run test",
     "install:electron": "node ./node_modules/electron/install.js",
     "icons": "bun ./scripts/generate-icons.ts",
     "predev": "bun run icons && bun ./scripts/build-server.ts",
@@ -14,9 +16,9 @@
     "prebuild": "bun run icons && bun ./scripts/build-server.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "prepackage": "bun run build",
+    "prepackage": "bun run verify && bun run build",
     "package": "electron-builder --config electron-builder.config.ts",
-    "prepackage:win": "bun run build",
+    "prepackage:win": "bun run verify && bun run build",
     "package:win": "electron-builder --win --config electron-builder.config.ts",
     "package:mac": "electron-builder --mac --config electron-builder.config.ts"
   },

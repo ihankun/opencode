@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import { homedir, tmpdir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
+import type { ChildProcess, SpawnOptions } from "node:child_process"
 import extract from "extract-zip"
 import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
@@ -12,8 +13,11 @@ import { exportDebugLogs, initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
+import { listServerCredentials, setServerCredential } from "./credentials"
+import type { ServerCredential } from "./credentials"
 
 let mainWindow: BrowserWindow | undefined
+let internalBrowserWindow: BrowserWindow | undefined
 let server: SidecarHandle | undefined
 let serverError: string | undefined
 let tray: Tray | undefined
@@ -23,7 +27,15 @@ const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
 const appId = "com.hankun.opencodex"
-const taskScheduler = new TaskScheduler(() => server?.state, notifyTasksChanged)
+const taskScheduler = new TaskScheduler(async (task) => {
+  if (task.serverId === "local" && server) return server.state
+  const credential = (await listServerCredentials())[task.serverId]
+  return {
+    url: task.serverUrl,
+    ...(credential ? credential : {}),
+  }
+}, notifyTasksChanged)
+const spawnProcess = spawn as unknown as (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcess
 
 type SecurityConfig = {
   sandbox: {
@@ -69,6 +81,18 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
   if (value !== "system" && value !== "light" && value !== "dark") return
   if (nativeTheme.themeSource === value) return
   nativeTheme.themeSource = value
+})
+
+ipcMain.handle("credential:list", () => listServerCredentials())
+ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) => {
+  if (typeof id !== "string") throw new Error("Invalid server credential id")
+  if (rawCredential === null) return setServerCredential(id, null)
+  if (!rawCredential || typeof rawCredential !== "object") throw new Error("Invalid server credential")
+  const credential = rawCredential as Partial<ServerCredential>
+  if (typeof credential.username !== "string" || typeof credential.password !== "string") {
+    throw new Error("Invalid server credential")
+  }
+  return setServerCredential(id, { username: credential.username, password: credential.password })
 })
 
 type PluginInstallTarget = {
@@ -323,7 +347,7 @@ function allowedOrigins(url: string) {
   }
 }
 
-if (process.platform === "darwin") {
+if (process.platform === "darwin" && process.env.OPENCODE_USE_MOCK_KEYCHAIN === "1") {
   app.commandLine.appendSwitch("use-mock-keychain")
 }
 app.setName("OpenCodex")
@@ -408,6 +432,7 @@ ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => w
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
 ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
 ipcMain.handle("browser:open-external", (_event, url: unknown) => openExternalUrl(String(url ?? "")))
+ipcMain.handle("browser:open-internal", (_event, url: unknown) => openInternalUrl(String(url ?? "")))
 ipcMain.handle("location:apps", locationApps)
 ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
 ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
@@ -1340,6 +1365,56 @@ async function openExternalUrl(rawUrl: string) {
   return true
 }
 
+async function openInternalUrl(rawUrl: string) {
+  const url = new URL(rawUrl)
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
+
+  if (!internalBrowserWindow || internalBrowserWindow.isDestroyed()) {
+    internalBrowserWindow = new BrowserWindow({
+      title: url.hostname,
+      width: 1040,
+      height: 760,
+      minWidth: 640,
+      minHeight: 480,
+      parent: mainWindow,
+      icon: iconPath(process.platform === "darwin" ? "icon.icns" : "icon.ico"),
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        safeDialogs: true,
+        webSecurity: true,
+        partition: "persist:opencodex-browser",
+      },
+    })
+    internalBrowserWindow.webContents.session.setPermissionCheckHandler(() => false)
+    internalBrowserWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+    internalBrowserWindow.on("closed", () => {
+      internalBrowserWindow = undefined
+    })
+    internalBrowserWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+      void openInternalUrl(target).catch((error) => writeLog("browser", "blocked internal popup", { target, error }))
+      return { action: "deny" }
+    })
+    internalBrowserWindow.webContents.on("will-navigate", (event, target) => {
+      try {
+        const next = new URL(target)
+        if (next.protocol === "http:" || next.protocol === "https:") return
+      } catch {
+        // Block malformed navigation targets.
+      }
+      event.preventDefault()
+      writeLog("browser", "blocked internal navigation", { target })
+    })
+  }
+
+  internalBrowserWindow.setTitle(url.hostname)
+  await internalBrowserWindow.loadURL(url.toString())
+  internalBrowserWindow.show()
+  internalBrowserWindow.focus()
+  return true
+}
+
 type LocationApp = { id: string; name: string; icon?: string; exe?: string; appPath?: string }
 
 function sortLocationApps(apps: LocationApp[]) {
@@ -1503,9 +1578,10 @@ async function openLocation(input: unknown) {
   if (!input || typeof input !== "object") throw new Error("Invalid location request")
   const value = input as { path?: unknown; appId?: unknown }
   if (typeof value.path !== "string" || !value.path) throw new Error("A location is required")
+  const location = value.path
   const appId = typeof value.appId === "string" ? value.appId : "default"
   if (appId === "default") {
-    await shell.openPath(value.path)
+    await shell.openPath(location)
     return true
   }
 
@@ -1514,8 +1590,9 @@ async function openLocation(input: unknown) {
     const apps = await locationAppsWin()
     const app = apps.find(item => item.id === appId)
     if (!app?.exe) throw new Error("Selected application is not installed")
+    const executable = app.exe
     await new Promise<void>((resolveOpen, rejectOpen) => {
-      const child = spawn(app.exe!, [value.path], { detached: true, stdio: "ignore" })
+      const child = spawnProcess(executable, [location], { detached: true, stdio: "ignore" })
       child.unref()
       child.once("error", rejectOpen)
       child.once("exit", code => (code === 0 ? resolveOpen() : rejectOpen(new Error("Failed to open location"))))
@@ -1527,8 +1604,9 @@ async function openLocation(input: unknown) {
   const apps = await locationAppsMac()
   const app = apps.find(item => item.id === appId)
   if (!app?.appPath) throw new Error("Selected application is not installed")
+  const application = app.appPath
   await new Promise<void>((resolveOpen, rejectOpen) => {
-    const child = spawn("open", [app.appPath, value.path])
+    const child = spawnProcess("open", [application, location])
     child.once("error", rejectOpen)
     child.once("exit", code => (code === 0 ? resolveOpen() : rejectOpen(new Error("Failed to open location"))))
   })

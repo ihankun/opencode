@@ -9,6 +9,7 @@ import {
   type SessionListParams,
 } from '../api'
 import { serverStore } from '../store/serverStore'
+import { executionTargetStore } from '../store/executionTargetStore'
 import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
 import { areSessionListsSame, autoDetectPathStyle, isSameDirectory } from '../utils'
 
@@ -316,6 +317,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       await archiveSession(sessionId, normalizedDirectory)
       if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(sessionId, true)
       pinnedSessionsStore.unpin(sessionId)
+      executionTargetStore.removeSession(serverStore.getActiveServerId(), sessionId)
       setSessions(prev => prev.filter(s => s.id !== sessionId))
     },
     [normalizedDirectory],

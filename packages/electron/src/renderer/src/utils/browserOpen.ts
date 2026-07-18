@@ -28,5 +28,10 @@ export async function openUrl(url: string, mode: BrowserOpenMode = getBrowserOpe
     }
   }
 
+  if (typeof window !== 'undefined' && typeof window.customOpenCode?.openInternalUrl === 'function') {
+    await window.customOpenCode.openInternalUrl(url)
+    return
+  }
+
   window.open(url, '_blank', 'noopener,noreferrer')
 }

@@ -9,7 +9,7 @@
 // 4. 与具体 session 无关，处理所有 session 的事件
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { messageStore, childSessionStore, paneLayoutStore, serverStore } from '../store'
+import { messageStore, childSessionStore, paneLayoutStore, serverStore, todoStore, followupQueueStore } from '../store'
 import { activeSessionStore } from '../store/activeSessionStore'
 import { notificationStore } from '../store/notificationStore'
 import { soundStore } from '../store/soundStore'
@@ -388,7 +388,14 @@ export function useGlobalEvents(directories?: string[]) {
     }
 
     const unsubscribeAutoApprove = autoApproveStore.subscribe(approveGlobalPendingPermissions)
-    const unsubscribeServerChange = serverStore.onServerChange(serverId => {
+    const unsubscribeServerChange = serverStore.onServerChange((serverId, reason) => {
+      if (reason === 'server-switch') {
+        messageStore.clearAll()
+        childSessionStore.clearAll()
+        todoStore.clearAll()
+        followupQueueStore.reset()
+        activeSessionStore.reset()
+      }
       void serverStore.checkHealth(serverId).catch(() => {})
     })
 

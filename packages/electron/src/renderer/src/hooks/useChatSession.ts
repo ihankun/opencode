@@ -37,6 +37,7 @@ import {
   executeCommand,
   summarizeSession,
   updateSession,
+  createWorktree,
   forkSession,
   extractUserMessageContent,
   type ApiPermissionRequest,
@@ -57,6 +58,8 @@ import { followupQueueStore, useFollowupQueue } from '../store/followupQueueStor
 import { themeStore } from '../store/themeStore'
 import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
 import { createTaskFromCommand } from '../api/task'
+import { executionTargetStore } from '../store/executionTargetStore'
+import { serverStore } from '../store/serverStore'
 
 const handleError = createErrorHandler('session')
 
@@ -628,6 +631,16 @@ export function useChatSession({
       allowCreateSession?: boolean
     }) => {
       let sessionId = input.sessionId ?? routeSessionId
+      const serverId = serverStore.getActiveServerId()
+      const fallbackTarget = {
+        serverId,
+        directory: input.directory,
+        executionMode: 'current' as const,
+      }
+      let executionTarget = sessionId
+        ? executionTargetStore.getSession(serverId, sessionId) ?? fallbackTarget
+        : executionTargetStore.resolveDraft(paneId, fallbackTarget)
+      let executionDirectory = executionTarget.directory
 
       if (sessionId && input.allowCreateSession) {
         const state = messageStore.getSessionState(sessionId)
@@ -638,23 +651,45 @@ export function useChatSession({
       }
 
       let rollbackSnapshot = sessionId ? messageStore.createSendRollbackSnapshot(sessionId) : null
+      if (sessionId && !executionTargetStore.getSession(serverId, sessionId)) {
+        executionTargetStore.bindSession(sessionId, executionTarget)
+      }
 
       try {
+        if (!sessionId && executionTarget.executionMode === 'worktree' && !executionTarget.worktreeId) {
+          if (!executionTarget.directory) throw new Error('Choose a Git project before creating an isolated worktree')
+          const project = await getCurrentProject(executionTarget.directory)
+          if (project.vcs !== 'git' || !project.worktree) {
+            throw new Error('Isolated worktrees are only available for Git projects')
+          }
+          const worktree = await createWorktree({ name: `task-${Date.now().toString(36)}` }, project.worktree)
+          if (!worktree.directory) throw new Error('Worktree creation returned no directory')
+          executionTarget = {
+            ...executionTarget,
+            sourceDirectory: executionTarget.sourceDirectory || executionTarget.directory,
+            directory: worktree.directory,
+            worktreeId: worktree.directory,
+            branch: worktree.branch ?? executionTarget.branch,
+          }
+          executionDirectory = worktree.directory
+          executionTargetStore.updateDraft(paneId, executionTarget)
+        }
+
         // 在创建或继续会话前确认目录仍然可被当前 Server 访问。否则 promptAsync 会异步失败，
         // 用户只能看到“没有回复”，而无法知道项目目录已经被删除或移动。
-        if (input.directory) {
+        if (executionDirectory) {
           try {
-            await getCurrentProject(input.directory)
+            await getCurrentProject(executionDirectory)
           } catch (error) {
             const missing = isMissingDirectoryError(error)
             notificationStore.push(
               'error',
               missing ? '项目目录不可用' : '无法访问项目目录',
               missing
-                ? `“${input.directory}”已不存在或已被移动，请重新选择项目文件夹。`
+                ? `“${executionDirectory}”已不存在或已被移动，请重新选择项目文件夹。`
                 : error instanceof Error ? error.message : '请检查当前 Server 与项目目录是否可访问。',
               sessionId ?? '',
-              input.directory,
+              executionDirectory,
             )
             return false
           }
@@ -662,8 +697,9 @@ export function useChatSession({
 
         if (!sessionId) {
           if (!input.allowCreateSession) return false
-          const newSession = await createSession()
+          const newSession = await createSession(undefined, executionTarget)
           sessionId = newSession.id
+          executionTargetStore.clearDraft(paneId)
           navigateToSession(sessionId, routeDirectoryForSession(newSession.directory))
         }
 
@@ -676,7 +712,7 @@ export function useChatSession({
         await updateSession(
           sessionId,
           { permission: approvalPermissionRules(autoApproveStore.getApprovalMode(paneId)) },
-          input.directory,
+          executionDirectory,
         )
 
         // 记录发送前的消息数量，作为判断 SSE 是否推送新消息的基线
@@ -690,7 +726,7 @@ export function useChatSession({
           agent: input.options?.agent,
           variant: input.options?.variant,
           delivery: input.options?.delivery,
-          directory: input.directory,
+          directory: executionDirectory,
         })
 
         setModelRecovery(null)
@@ -698,7 +734,7 @@ export function useChatSession({
         // 兜底：等待短暂时间后检查 SSE 是否已推送用户消息，
         // 若未收到则主动拉取补齐，避免 SSE 断流导致用户消息不显示
         const pullSessionId = sessionId
-        const pullDir = input.directory
+        const pullDir = executionDirectory
         setTimeout(() => {
           const state = messageStore.getSessionState(pullSessionId)
           if (!state) return
@@ -1038,8 +1074,14 @@ export function useChatSession({
 
         // Create session if needed (like handleSend does)
         if (!sessionId) {
-          const newSession = await createSession()
+          const executionTarget = executionTargetStore.resolveDraft(paneId, {
+            serverId: serverStore.getActiveServerId(),
+            directory: effectiveDirectory ?? '',
+            executionMode: 'current',
+          })
+          const newSession = await createSession(undefined, executionTarget)
           sessionId = newSession.id
+          executionTargetStore.clearDraft(paneId)
           navigateToSession(sessionId, routeDirectoryForSession(newSession.directory))
         }
 
@@ -1129,6 +1171,7 @@ export function useChatSession({
       await updateSession(routeSessionId, { time: { archived: Date.now() } }, effectiveDirectory)
       if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(routeSessionId, true)
       pinnedSessionsStore.unpin(routeSessionId)
+      executionTargetStore.removeSession(serverStore.getActiveServerId(), routeSessionId)
       navigateHome()
       handleNewChat()
     } catch (error) {

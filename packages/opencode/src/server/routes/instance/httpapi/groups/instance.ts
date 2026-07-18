@@ -51,6 +51,17 @@ export class ApiVcsBranchSwitchError extends Schema.ErrorClass<ApiVcsBranchSwitc
   { httpApiStatus: 400 },
 ) {}
 
+export class ApiVcsMutationError extends Schema.ErrorClass<ApiVcsMutationError>("VcsMutationError")(
+  {
+    name: Schema.Literal("VcsMutationError"),
+    data: Schema.Struct({
+      message: Schema.String,
+      reason: Schema.Literals(["non-git", "invalid-input", "conflict"]),
+    }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
 export const InstancePaths = {
   dispose: "/instance/dispose",
   path: "/path",
@@ -61,6 +72,11 @@ export const InstancePaths = {
   vcsDiff: "/vcs/diff",
   vcsDiffRaw: "/vcs/diff/raw",
   vcsApply: "/vcs/apply",
+  vcsStage: "/vcs/stage",
+  vcsUnstage: "/vcs/unstage",
+  vcsDiscard: "/vcs/discard",
+  vcsCommit: "/vcs/commit",
+  vcsPush: "/vcs/push",
   command: "/command",
   agent: "/agent",
   skill: "/skill",
@@ -171,6 +187,35 @@ export const InstanceApi = HttpApi.make("instance")
             description: "Apply a raw patch to the current working tree.",
           }),
         ),
+        HttpApiEndpoint.post("vcsStage", InstancePaths.vcsStage, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.FilesInput,
+          success: described(Vcs.MutationResult, "VCS files staged"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.stage", summary: "Stage files", description: "Stage selected changed files." })),
+        HttpApiEndpoint.post("vcsUnstage", InstancePaths.vcsUnstage, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.FilesInput,
+          success: described(Vcs.MutationResult, "VCS files unstaged"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.unstage", summary: "Unstage files", description: "Remove selected files from the Git index." })),
+        HttpApiEndpoint.post("vcsDiscard", InstancePaths.vcsDiscard, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.FilesInput,
+          success: described(Vcs.MutationResult, "VCS changes discarded"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.discard", summary: "Discard changes", description: "Permanently discard selected working tree changes." })),
+        HttpApiEndpoint.post("vcsCommit", InstancePaths.vcsCommit, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.CommitInput,
+          success: described(Vcs.MutationResult, "VCS changes committed"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.commit", summary: "Commit changes", description: "Commit the currently staged changes." })),
+        HttpApiEndpoint.post("vcsPush", InstancePaths.vcsPush, {
+          query: WorkspaceRoutingQuery,
+          success: described(Vcs.MutationResult, "VCS branch pushed"),
+          error: ApiVcsMutationError,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.push", summary: "Push branch", description: "Push the current branch to its configured upstream." })),
         HttpApiEndpoint.get("command", InstancePaths.command, {
           query: WorkspaceRoutingQuery,
           success: described(Schema.Array(Command.Info), "List of commands"),

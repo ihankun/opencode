@@ -27,5 +27,27 @@ export async function createTaskFromCommand(text: string, directory: string | un
   if (!model) throw new Error('当前对话没有可用模型，无法创建定时任务')
   const [hour, minute] = parsed.time.split(':')
   const cron = parsed.frequency === 'weekdays' ? `${minute} ${hour} * * 1-5` : parsed.frequency === 'weekly' ? `${minute} ${hour} * * ${parsed.day}` : `${minute} ${hour} * * *`
-  return window.customOpenCode.createTask({ title: parsed.title, prompt: parsed.prompt, cron, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, directory: directory ?? '', modelProviderID: model.providerId, modelID: model.id, variant: variant ?? '', enabled: true })
+  const server = serverStore.getActiveServer()
+  if (!server) throw new Error('当前没有可用服务器，无法创建定时任务')
+  return window.customOpenCode.createTask({
+    title: parsed.title,
+    prompt: parsed.prompt,
+    cron,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    serverId: server.id,
+    serverName: server.name,
+    serverUrl: server.url,
+    directory: directory ?? '',
+    executionMode: 'current',
+    branch: '',
+    permissionProfile: 'risk',
+    retryCount: 1,
+    retryDelaySeconds: 30,
+    completionTimeoutMinutes: 60,
+    modelProviderID: model.providerId,
+    modelID: model.id,
+    variant: variant ?? '',
+    enabled: true,
+  })
 }
+import { serverStore } from '../store/serverStore'

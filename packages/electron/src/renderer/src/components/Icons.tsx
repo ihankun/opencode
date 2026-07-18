@@ -105,12 +105,19 @@ export interface IconProps extends SVGProps<SVGSVGElement> {
 // Wrapper: apply project defaults (size=16, aria-hidden)
 // ============================================
 
-function wrap(Icon: ComponentType<LucideProps>) {
+function wrap(icon: unknown) {
+  // lucide-react can resolve against a different compatible React type package in
+  // the monorepo. Keep that package boundary here instead of leaking duplicate
+  // React types through every icon consumer.
+  const Icon = icon as ComponentType<LucideProps>
   const Wrapped = ({ size = 16, ...props }: IconProps) => (
     <Icon size={size} aria-hidden="true" {...(props as LucideProps)} />
   )
   return Wrapped
 }
+
+const SquareComponent = Square as unknown as ComponentType<LucideProps>
+const SlashComponent = Slash as unknown as ComponentType<LucideProps>
 
 // ============================================
 // Lucide-backed icons
@@ -198,7 +205,7 @@ export const CogIcon = wrap(Settings)
 // ============================================
 
 export const StopIcon = ({ size = 16, ...props }: IconProps) => (
-  <Square size={size} fill="currentColor" strokeWidth={0} aria-hidden="true" {...(props as LucideProps)} />
+  <SquareComponent size={size} fill="currentColor" strokeWidth={0} aria-hidden="true" {...(props as LucideProps)} />
 )
 
 export const SpinnerIcon = wrap(LoaderCircle)
@@ -207,7 +214,7 @@ export const PathAutoIcon = wrap(Sun)
 export const PathUnixIcon = wrap(Slash)
 
 export const PathWindowsIcon = ({ size = 16, style, ...props }: IconProps) => (
-  <Slash size={size} aria-hidden="true" style={{ transform: 'scaleX(-1)', ...style }} {...(props as LucideProps)} />
+  <SlashComponent size={size} aria-hidden="true" style={{ transform: 'scaleX(-1)', ...style }} {...(props as LucideProps)} />
 )
 
 export const PatchIcon = wrap(FileDiff)

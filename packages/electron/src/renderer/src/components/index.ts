@@ -8,7 +8,6 @@ export * from './Icons'
 export { DiffView } from './DiffView'
 
 // Re-export Markdown
-export { MarkdownRenderer, HighlightedCode } from './MarkdownRenderer'
 
 // Re-export CodeBlock
 export { CodeBlock } from './CodeBlock'

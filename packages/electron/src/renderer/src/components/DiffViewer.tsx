@@ -9,7 +9,7 @@
  * 不再按文件大小、行数、字符数降级高亮或 diff
  */
 
-import { memo, useMemo, useRef, useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
+import { createContext, memo, useContext, useMemo, useRef, useState, useEffect, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { diffLines, diffWordsWithSpace } from 'diff'
 import { useSyntaxHighlight, type HighlightTokens } from '../hooks/useSyntaxHighlight'
@@ -47,6 +47,12 @@ export interface DiffViewerProps {
   data?: DiffViewerData
   /** Stable key for preserving expanded collapsed-context regions across remounts. */
   stateKey?: string
+  onLineSelect?: (selection: DiffLineSelection) => void
+}
+
+export interface DiffLineSelection {
+  side: 'before' | 'after'
+  line: number
 }
 
 export interface DiffViewerData {
@@ -301,8 +307,24 @@ function useDiffLineNumberWidth(before: string, after: string): number {
   )
 }
 
+const DiffLineSelectionContext = createContext<DiffViewerProps['onLineSelect']>(undefined)
+
 function LineNumberCell({ lineNo, width, type }: { lineNo?: number; width: number; type?: LineType }) {
+  const onLineSelect = useContext(DiffLineSelectionContext)
   const toneClass = type === 'add' || type === 'delete' ? 'text-text-300' : 'text-text-400'
+  if (onLineSelect && lineNo) {
+    return (
+      <button
+        type="button"
+        className={`shrink-0 pl-4 pr-3 text-right text-[length:var(--fs-code)] leading-[var(--fs-code-line-height)] select-none hover:bg-accent-main-100/15 hover:text-accent-main-100 ${toneClass}`}
+        style={{ width }}
+        title={`Comment on line ${lineNo}`}
+        onClick={() => onLineSelect({ side: type === 'delete' ? 'before' : 'after', line: lineNo })}
+      >
+        {lineNo}
+      </button>
+    )
+  }
   return (
     <div
       className={`shrink-0 pl-4 pr-3 text-right text-[length:var(--fs-code)] leading-[var(--fs-code-line-height)] select-none ${toneClass}`}
@@ -524,10 +546,14 @@ export function useDiffViewerData(before: string, after: string, language = 'tex
 
 export const DiffViewer = memo(function DiffViewer({
   data,
+  onLineSelect,
   ...props
 }: DiffViewerProps) {
-  if (data) return <DiffViewerContent {...props} data={data} />
-  return <DiffViewerWithData {...props} />
+  return (
+    <DiffLineSelectionContext.Provider value={onLineSelect}>
+      {data ? <DiffViewerContent {...props} data={data} /> : <DiffViewerWithData {...props} />}
+    </DiffLineSelectionContext.Provider>
+  )
 })
 
 function DiffViewerWithData({ before, after, language = 'text', isResizing = false, ...props }: DiffViewerProps) {

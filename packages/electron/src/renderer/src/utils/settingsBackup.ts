@@ -191,7 +191,7 @@ export async function importSettingsBackup(file: File): Promise<void> {
 
   importThemeBackup(backup.modules.theme)
   importLayoutBackup(backup.modules.layout)
-  importServerSettingsBackup(backup.modules.servers)
+  await importServerSettingsBackup(backup.modules.servers)
   importPerServerStorageBackup(backup.modules.perServerStorage)
   importServiceSettingsBackup(backup.modules.service)
   importKeybindingBackup(backup.modules.keybindings)

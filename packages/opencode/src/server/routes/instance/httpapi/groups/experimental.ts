@@ -29,6 +29,14 @@ const CapabilitiesResponse = Schema.Struct({
   backgroundSubagents: Schema.Boolean,
 }).annotate({ identifier: "ExperimentalCapabilities" })
 
+const CheckpointResponse = Schema.Struct({
+  snapshot: Schema.String,
+}).annotate({ identifier: "WorkspaceCheckpoint" })
+
+export const CheckpointRestorePayload = Schema.Struct({
+  snapshot: Schema.String,
+}).annotate({ identifier: "WorkspaceCheckpointRestoreInput" })
+
 const ConsoleOrgOption = Schema.Struct({
   accountID: Schema.String,
   accountEmail: Schema.String,
@@ -176,6 +184,8 @@ export const ExperimentalPaths = {
   toolIDs: "/experimental/tool/ids",
   goal: "/experimental/goal/:sessionID",
   goalStatus: "/experimental/goal/:sessionID/status",
+  checkpoint: "/experimental/checkpoint",
+  checkpointRestore: "/experimental/checkpoint/restore",
   worktree: "/experimental/worktree",
   worktreeReset: "/experimental/worktree/reset",
   session: "/experimental/session",
@@ -360,6 +370,30 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.goal.clear",
             summary: "Clear session goal",
             description: "Remove the durable goal state for a session.",
+          }),
+        ),
+        HttpApiEndpoint.post("checkpointCreate", ExperimentalPaths.checkpoint, {
+          query: WorkspaceRoutingQuery,
+          payload: Schema.Struct({}),
+          success: described(CheckpointResponse, "Workspace checkpoint"),
+          error: HttpApiError.BadRequest,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.checkpoint.create",
+            summary: "Create workspace checkpoint",
+            description: "Capture the current Git workspace files in the server snapshot store.",
+          }),
+        ),
+        HttpApiEndpoint.post("checkpointRestore", ExperimentalPaths.checkpointRestore, {
+          query: WorkspaceRoutingQuery,
+          payload: CheckpointRestorePayload,
+          success: described(Schema.Boolean, "Checkpoint restored"),
+          error: HttpApiError.BadRequest,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.checkpoint.restore",
+            summary: "Restore workspace checkpoint",
+            description: "Restore workspace files to a previously captured server snapshot.",
           }),
         ),
         HttpApiEndpoint.get("worktree", ExperimentalPaths.worktree, {

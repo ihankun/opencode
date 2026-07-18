@@ -11,16 +11,24 @@ import {
   ArchiveIcon,
   PinIcon,
   PencilIcon,
+  GitWorktreeIcon,
+  GitCommitIcon,
+  RestoreIcon,
 } from '../../components/Icons'
 import { IconButton } from '../../components/ui'
 import { messageStore, useMessageStore } from '../../store'
 import { useLayoutStore, layoutStore } from '../../store/layoutStore'
 import { useSessionContext } from '../../contexts/useSessionContext'
-import { archiveSession, updateSession } from '../../api'
+import { archiveSession, moveSession, updateSession } from '../../api'
 import { useDirectory } from '../../contexts/useDirectory'
 import { isSameDirectory, uiErrorHandler } from '../../utils'
 import { useChatViewport } from './chatViewport'
 import { pinnedSessionsStore } from '../../store/pinnedSessionsStore'
+import { executionTargetStore } from '../../store/executionTargetStore'
+import { serverStore } from '../../store/serverStore'
+import { checkpointStore, type WorkspaceCheckpoint } from '../../store/checkpointStore'
+import { createWorkspaceCheckpoint, restoreWorkspaceCheckpoint } from '../../api/checkpoint'
+import { useRouter } from '../../hooks/useRouter'
 import vscodeIcon from '../../../../../assets/app-vscode.png'
 import finderIcon from '../../../../../assets/app-finder.png'
 import terminalIcon from '../../../../../assets/app-terminal.png'
@@ -66,11 +74,19 @@ interface SessionTitleControlProps {
   onToggleSessionMenu: () => void
   onPin: () => void
   onArchive: () => void
+  onHandoff?: () => void
+  checkpoints: WorkspaceCheckpoint[]
+  checkpointBusy: boolean
+  onCreateCheckpoint: () => void
+  onRestoreCheckpoint: (checkpoint: WorkspaceCheckpoint) => void
   clickToRenameTitle: string
   sessionActionsTitle: string
   pinTitle: string
   renameTitle: string
   archiveTitle: string
+  handoffTitle: string
+  createCheckpointTitle: string
+  restoreCheckpointTitle: string
   menuRef: RefObject<HTMLDivElement | null>
 }
 
@@ -89,11 +105,19 @@ function SessionTitleControl({
   onToggleSessionMenu,
   onPin,
   onArchive,
+  onHandoff,
+  checkpoints,
+  checkpointBusy,
+  onCreateCheckpoint,
+  onRestoreCheckpoint,
   clickToRenameTitle,
   sessionActionsTitle,
   pinTitle,
   renameTitle,
   archiveTitle,
+  handoffTitle,
+  createCheckpointTitle,
+  restoreCheckpointTitle,
   menuRef,
 }: SessionTitleControlProps) {
   const inputClass = compact
@@ -141,9 +165,22 @@ function SessionTitleControl({
               <ChevronDownIcon size={12} />
             </button>
             {sessionMenuOpen && (
-              <div className="absolute left-0 top-full z-[70] mt-1 w-40 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
+              <div className="absolute left-0 top-full z-[70] mt-1 w-64 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-lg">
                 <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PinIcon size={14} />{pinTitle}</button>
                 <button type="button" onClick={() => { onToggleSessionMenu(); handleStartEdit() }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><PencilIcon size={14} />{renameTitle}</button>
+                {onHandoff && <button type="button" onClick={onHandoff} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><GitWorktreeIcon size={14} />{handoffTitle}</button>}
+                <button type="button" disabled={checkpointBusy} onClick={onCreateCheckpoint} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200 disabled:opacity-50"><GitCommitIcon size={14} />{createCheckpointTitle}</button>
+                {checkpoints.length > 0 ? (
+                  <div className="my-1 border-t border-border-100 pt-1">
+                    <div className="px-2.5 py-1 text-[length:var(--fs-xs)] text-text-500">{restoreCheckpointTitle}</div>
+                    {checkpoints.slice(0, 5).map(checkpoint => (
+                      <button key={checkpoint.id} type="button" disabled={checkpointBusy} onClick={() => onRestoreCheckpoint(checkpoint)} title={checkpoint.directory} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 hover:text-text-100 disabled:opacity-50">
+                        <RestoreIcon size={13} className="shrink-0" />
+                        <span className="truncate">{checkpoint.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <button type="button" onClick={onArchive} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200"><ArchiveIcon size={14} />{archiveTitle}</button>
               </div>
             )}
@@ -166,7 +203,8 @@ export function Header({
   const { sessionId, sessionDirectory, sessionTitle: currentSessionTitle } = useMessageStore()
   const { rightPanelOpen, bottomPanelOpen } = useLayoutStore()
   const { refresh } = useSessionContext()
-  const { currentDirectory, pathInfo } = useDirectory()
+  const { currentDirectory, pathInfo, setCurrentDirectory } = useDirectory()
+  const { navigateToSession } = useRouter()
   const { presentation, interaction } = useChatViewport()
 
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
@@ -175,6 +213,8 @@ export function Header({
   const [selectedLocationApp, setSelectedLocationApp] = useState('vscode')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editTitle, setEditTitle] = useState('')
+  const [checkpoints, setCheckpoints] = useState<WorkspaceCheckpoint[]>([])
+  const [checkpointBusy, setCheckpointBusy] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const sessionMenuRef = useRef<HTMLDivElement>(null)
   const locationMenuRef = useRef<HTMLDivElement>(null)
@@ -183,6 +223,9 @@ export function Header({
   const isCompact = presentation.isCompact
   const projectLocation = sessionDirectory && (!pathInfo?.directory || !isSameDirectory(sessionDirectory, pathInfo.directory))
   const selectedLocationAppDetails = locationApps.find(app => app.id === selectedLocationApp)
+  const executionTarget = sessionId
+    ? executionTargetStore.getSession(serverStore.getActiveServerId(), sessionId)
+    : undefined
 
   useEffect(() => {
     document.title = currentSessionTitle ? `${currentSessionTitle} - OpenCodex` : 'OpenCodex'
@@ -193,6 +236,7 @@ export function Header({
 
   useEffect(() => {
     setIsEditingTitle(false)
+    setCheckpoints(sessionId ? checkpointStore.list(sessionId) : [])
   }, [sessionId])
 
   useEffect(() => {
@@ -285,6 +329,63 @@ export function Header({
     }
   }
 
+  const handleHandoff = async () => {
+    if (!sessionId || !executionTarget?.sourceDirectory) return
+    if (!window.confirm(t('header.handoffConfirm'))) return
+    try {
+      const destination = executionTarget.sourceDirectory
+      await moveSession(sessionId, destination, true)
+      executionTargetStore.bindSession(sessionId, {
+        ...executionTarget,
+        directory: destination,
+        sourceDirectory: undefined,
+        executionMode: 'current',
+        worktreeId: undefined,
+      })
+      messageStore.updateSessionMetadata(sessionId, { directory: destination })
+      setCurrentDirectory(destination)
+      navigateToSession(sessionId, destination)
+      setSessionMenuOpen(false)
+      await refresh()
+    } catch (error) {
+      uiErrorHandler('handoff session', error)
+    }
+  }
+
+  const handleCreateCheckpoint = async () => {
+    const directory = sessionDirectory || currentDirectory
+    if (!sessionId || !directory) return
+    setCheckpointBusy(true)
+    try {
+      const result = await createWorkspaceCheckpoint(directory)
+      checkpointStore.add({
+        sessionId,
+        directory,
+        snapshot: result.snapshot,
+        label: new Date().toLocaleString(),
+      })
+      setCheckpoints(checkpointStore.list(sessionId))
+    } catch (error) {
+      uiErrorHandler('create workspace checkpoint', error)
+    } finally {
+      setCheckpointBusy(false)
+    }
+  }
+
+  const handleRestoreCheckpoint = async (checkpoint: WorkspaceCheckpoint) => {
+    if (!window.confirm(t('header.restoreCheckpointConfirm', { label: checkpoint.label }))) return
+    setCheckpointBusy(true)
+    try {
+      await restoreWorkspaceCheckpoint(checkpoint.snapshot, checkpoint.directory)
+      setSessionMenuOpen(false)
+      window.dispatchEvent(new CustomEvent('opencodex:workspace-restored', { detail: checkpoint.directory }))
+    } catch (error) {
+      uiErrorHandler('restore workspace checkpoint', error)
+    } finally {
+      setCheckpointBusy(false)
+    }
+  }
+
   const loadLocationApps = async () => {
     if (!window.customOpenCode?.locationApps) return []
     try {
@@ -346,11 +447,19 @@ export function Header({
       onToggleSessionMenu={() => setSessionMenuOpen(open => !open)}
       onPin={handlePin}
       onArchive={() => void handleArchive()}
+      onHandoff={executionTarget?.executionMode === 'worktree' && executionTarget.sourceDirectory ? () => void handleHandoff() : undefined}
+      checkpoints={checkpoints}
+      checkpointBusy={checkpointBusy}
+      onCreateCheckpoint={() => void handleCreateCheckpoint()}
+      onRestoreCheckpoint={checkpoint => void handleRestoreCheckpoint(checkpoint)}
       clickToRenameTitle={t('header.clickToRename')}
       sessionActionsTitle={t('header.sessionActions')}
       pinTitle={t('header.pinSession')}
       renameTitle={t('header.renameSession')}
       archiveTitle={t('header.archiveSession')}
+      handoffTitle={t('header.handoffSession')}
+      createCheckpointTitle={t('header.createCheckpoint')}
+      restoreCheckpointTitle={t('header.restoreCheckpoint')}
       menuRef={sessionMenuRef}
     />
   )

@@ -62,7 +62,7 @@ interface ServerClockCalibration {
 }
 
 type Listener = () => void
-export type ServerChangeReason = 'server-switch' | 'local-runtime-url'
+export type ServerChangeReason = 'server-switch' | 'local-runtime-url' | 'credential-change'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -143,6 +143,7 @@ class ServerStore {
   private clockCalibrationMap = new Map<string, ServerClockCalibration>()
   private listeners: Set<Listener> = new Set()
   private localServerUrlOverride: string | null = null
+  private credentialsReady: Promise<void>
 
   // server 切换监听器（用于触发 SSE 重连等副作用，避免循环依赖）
   private serverChangeListeners: Set<(newServerId: string, reason: ServerChangeReason) => void> = new Set()
@@ -158,6 +159,7 @@ class ServerStore {
   constructor() {
     this.loadFromStorage()
     this.updateSnapshots()
+    this.credentialsReady = this.hydrateCredentials().catch(() => undefined)
   }
 
   // ============================================
@@ -210,7 +212,15 @@ class ServerStore {
 
   private saveToStorage(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.servers))
+      const servers = this.supportsSecureCredentials()
+        ? this.servers.map(server => ({
+            id: server.id,
+            name: server.name,
+            url: server.url,
+            isDefault: server.isDefault,
+          }))
+        : this.servers
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(servers))
       if (this.activeServerId) {
         // 写入 sessionStorage（当前窗口刷新保持）+ localStorage（新窗口默认值）
         sessionStorage.setItem(ACTIVE_SERVER_KEY, this.activeServerId)
@@ -219,6 +229,31 @@ class ServerStore {
     } catch {
       // ignore
     }
+  }
+
+  private supportsSecureCredentials(): boolean {
+    return typeof window !== 'undefined' && !!window.customOpenCode?.serverCredentials
+  }
+
+  private async hydrateCredentials(): Promise<void> {
+    if (!this.supportsSecureCredentials()) return
+
+    const legacyCredentials = this.servers.flatMap(server => server.auth ? [[server.id, server.auth] as const] : [])
+    await Promise.all(legacyCredentials.map(([id, auth]) => window.customOpenCode.setServerCredential(id, auth)))
+    const credentials = await window.customOpenCode.serverCredentials()
+    this.servers = this.servers.map(server => ({ ...server, auth: credentials[server.id] }))
+    this.saveToStorage()
+    this.notify()
+    if (this.activeServerId && credentials[this.activeServerId]) {
+      this.notifyServerChange(this.activeServerId, 'credential-change')
+    }
+  }
+
+  private persistCredential(id: string, auth: ServerAuth | null): void {
+    if (!this.supportsSecureCredentials()) return
+    void window.customOpenCode.setServerCredential(id, auth).catch(error => {
+      console.error('Failed to update secure server credential', error)
+    })
   }
 
   // ============================================
@@ -369,6 +404,7 @@ class ServerStore {
       url: config.url.replace(/\/+$/, ''), // 移除尾部斜杠
     }
     this.servers.push(server)
+    if (server.auth) this.persistCredential(server.id, server.auth)
     this.saveToStorage()
     this.notify()
     return server
@@ -390,6 +426,9 @@ class ServerStore {
     }
     if (id === this.DEFAULT_SERVER_ID && updates.url) {
       this.localServerUrlOverride = null
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'auth')) {
+      this.persistCredential(id, updates.auth ?? null)
     }
     this.saveToStorage()
     this.notify()
@@ -422,6 +461,7 @@ class ServerStore {
     this.healthMap.delete(id)
     this.healthCheckSeqMap.delete(id)
     this.clockCalibrationMap.delete(id)
+    this.persistCredential(id, null)
 
     // 如果删除的是当前选中的，切换到默认
     if (this.activeServerId === id) {
@@ -472,6 +512,7 @@ class ServerStore {
    * 检查服务器健康状态
    */
   async checkHealth(serverId: string): Promise<ServerHealth> {
+    await this.credentialsReady
     const storedServer = this.servers.find(s => s.id === serverId)
     if (!storedServer) {
       return { status: 'error', error: 'Server not found' }
@@ -658,16 +699,34 @@ function normalizeServerBackup(raw: unknown): ServerSettingsBackup {
 export function exportServerSettingsBackup(): ServerSettingsBackup {
   return {
     servers: serverStore.getStoredServers().map(server => ({
-      ...server,
-      auth: server.auth ? { ...server.auth } : undefined,
+      id: server.id,
+      name: server.name,
+      url: server.url,
+      isDefault: server.isDefault,
     })),
     activeServerId: serverStore.getActiveServerId(),
   }
 }
 
-export function importServerSettingsBackup(raw: unknown): void {
+export async function importServerSettingsBackup(raw: unknown): Promise<void> {
   const normalized = normalizeServerBackup(raw)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized.servers))
+  const supportsSecureCredentials = typeof window !== 'undefined' && !!window.customOpenCode?.setServerCredential
+  if (supportsSecureCredentials) {
+    await Promise.all(
+      normalized.servers.flatMap(server => server.auth
+        ? [window.customOpenCode.setServerCredential(server.id, server.auth)]
+        : []),
+    )
+  }
+  const servers = supportsSecureCredentials
+    ? normalized.servers.map(server => ({
+        id: server.id,
+        name: server.name,
+        url: server.url,
+        isDefault: server.isDefault,
+      }))
+    : normalized.servers
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(servers))
   if (normalized.activeServerId) {
     localStorage.setItem(ACTIVE_SERVER_KEY, normalized.activeServerId)
     sessionStorage.setItem(ACTIVE_SERVER_KEY, normalized.activeServerId)

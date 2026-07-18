@@ -6,7 +6,7 @@
 export type PanelPosition = 'bottom' | 'right'
 
 // 面板内容类型
-export type PanelTabType = 'terminal' | 'files' | 'changes' | 'mcp' | 'skill' | 'worktree'
+export type PanelTabType = 'terminal' | 'files' | 'changes' | 'mcp' | 'skill' | 'worktree' | 'preview'
 type PersistedPanelTabType = Exclude<PanelTabType, 'terminal'>
 
 // 统一的面板标签
@@ -16,6 +16,7 @@ export interface PanelTab {
   position: PanelPosition
   previewFile?: PreviewFile | null
   previewFiles?: PreviewFile[]
+  previewUrl?: string
   // Terminal 特有属性
   ptyId?: string
   title?: string
@@ -130,6 +131,7 @@ interface PersistedPanelTab {
   type: PersistedPanelTabType
   position: PanelPosition
   title?: string
+  previewUrl?: string
 }
 
 export interface PersistedPanelLayout {
@@ -163,7 +165,7 @@ export interface PersistedTerminalLayoutMap {
 }
 
 const PANEL_POSITIONS: PanelPosition[] = ['bottom', 'right']
-const PERSISTED_PANEL_TAB_TYPES: PersistedPanelTabType[] = ['files', 'changes', 'mcp', 'skill', 'worktree']
+const PERSISTED_PANEL_TAB_TYPES: PersistedPanelTabType[] = ['files', 'changes', 'mcp', 'skill', 'worktree', 'preview']
 
 function isPanelPosition(value: unknown): value is PanelPosition {
   return typeof value === 'string' && PANEL_POSITIONS.includes(value as PanelPosition)
@@ -190,6 +192,7 @@ function normalizePersistedPanelTab(tab: PersistedPanelTab): PanelTab {
     type: tab.type,
     position: tab.position,
     title: tab.title,
+    previewUrl: tab.previewUrl,
   }
 }
 
@@ -214,8 +217,9 @@ function sanitizePersistedPanelLayout(raw: unknown): PersistedPanelLayout | null
     if (typeof tab.id !== 'string' || !tab.id || seenIds.has(tab.id)) continue
     if (!isPersistedPanelTabType(tab.type) || !isPanelPosition(tab.position)) continue
     if (tab.title !== undefined && typeof tab.title !== 'string') continue
+    if (tab.previewUrl !== undefined && typeof tab.previewUrl !== 'string') continue
     seenIds.add(tab.id)
-    panelTabs.push({ id: tab.id, type: tab.type, position: tab.position, title: tab.title })
+    panelTabs.push({ id: tab.id, type: tab.type, position: tab.position, title: tab.title, previewUrl: tab.previewUrl })
   }
 
   return {
@@ -647,6 +651,19 @@ export class LayoutStore {
   // 添加 Worktree 标签
   addWorktreeTab(position: PanelPosition) {
     return this.addSingletonTab('worktree', position, 'worktree')
+  }
+
+  // 添加应用内网页预览；外部链接始终复用同一个预览标签。
+  addPreviewTab(position: PanelPosition, url?: string) {
+    const existing = this.state.panelTabs.find(tab => tab.type === 'preview')
+    if (existing) {
+      if (url) existing.previewUrl = url
+      this.state.activeTabId[existing.position] = existing.id
+      this.setPanelOpen(existing.position, true)
+      this.notify()
+      return existing.id
+    }
+    return this.addTab({ id: 'preview', type: 'preview', position, previewUrl: url })
   }
 
   // 移除 tab
@@ -1180,6 +1197,7 @@ function buildPersistedPanelLayout(state: LayoutState): PersistedPanelLayout {
         type: tab.type,
         position: tab.position,
         title: tab.title,
+        previewUrl: tab.previewUrl,
       })),
     activeTabId: { ...state.activeTabId },
     rightPanelOpen: state.rightPanelOpen,

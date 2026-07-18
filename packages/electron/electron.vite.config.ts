@@ -77,9 +77,24 @@ export default defineConfig({
       strictPort: false,
     },
     build: {
+      chunkSizeWarningLimit: 1500,
       rollupOptions: {
         input: {
           main: "src/renderer/index.html",
+        },
+        output: {
+          manualChunks(id) {
+            const module = id.replaceAll("\\", "/")
+            if (!module.includes("/node_modules/")) return
+            if (module.includes("/react/") || module.includes("/react-dom/") || module.includes("/scheduler/")) {
+              return "vendor-react"
+            }
+            if (module.includes("/@codemirror/") || module.includes("/@lezer/")) return "vendor-editor"
+            if (module.includes("/@xterm/")) return "vendor-terminal"
+            if (module.includes("/i18next/") || module.includes("/react-i18next/")) return "vendor-i18n"
+            if (module.includes("/lucide-react/")) return "vendor-icons"
+            if (module.includes("/@opencode-ai/sdk/")) return "vendor-sdk"
+          },
         },
       },
     },

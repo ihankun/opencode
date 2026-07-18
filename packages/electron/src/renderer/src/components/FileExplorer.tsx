@@ -112,6 +112,15 @@ export const FileExplorer = memo(function FileExplorer({
     }
   }, [loadPreview, previewFile, refresh])
 
+  useEffect(() => {
+    const onWorkspaceRestored = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail !== directory) return
+      void handleRefresh()
+    }
+    window.addEventListener('opencodex:workspace-restored', onWorkspaceRestored)
+    return () => window.removeEventListener('opencodex:workspace-restored', onWorkspaceRestored)
+  }, [directory, handleRefresh])
+
   // 处理文件点击
   const handleFileClick = useCallback(
     (node: FileTreeNode) => {

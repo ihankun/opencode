@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
 import { SunIcon, MoonIcon, SystemIcon, CheckIcon, ChevronDownIcon } from '../../../components/Icons'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
@@ -8,6 +8,7 @@ import { getThemePreset } from '../../../themes'
 import type { CustomCSSSnippet } from '../../../store/themeStore'
 import { FONT_SCALE_MIN, FONT_SCALE_MAX } from '../../../store/themeStore'
 import { saveData } from '../../../utils/downloadUtils'
+import { I18nTrans } from '../../../components/I18nTrans'
 
 // ============================================
 // Theme Preset Card
@@ -373,7 +374,7 @@ function CustomCSSEditor({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-[length:var(--fs-xs)] text-text-400">
-          <Trans
+          <I18nTrans
             i18nKey="settings:appearance.customCssSpecificityHelp"
             components={{
               1: <code className="text-[length:var(--fs-xxs)] px-1 py-0.5 bg-bg-200 rounded font-mono" />,

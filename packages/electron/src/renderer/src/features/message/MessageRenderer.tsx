@@ -4,7 +4,7 @@ import { diffLines } from 'diff'
 import { animate } from 'motion/mini'
 import { ChevronDownIcon, ChevronRightIcon, SplitIcon, SpinnerIcon, UndoIcon } from '../../components/Icons'
 import { CopyButton, SmoothHeight } from '../../components/ui'
-import { MarkdownRenderer } from '../../components/MarkdownRenderer'
+import { LazyMarkdownRenderer } from '../../components/LazyMarkdownRenderer'
 import { useDelayedRender } from '../../hooks'
 import { useTheme } from '../../hooks/useTheme'
 import {
@@ -178,7 +178,7 @@ const CollapsibleUserText = memo(function CollapsibleUserText({
           }`}
           style={isCollapsed ? { maxHeight: `${COLLAPSE_PREVIEW_LINES}lh` } : undefined}
         >
-          {renderMarkdown ? <MarkdownRenderer content={text} /> : text}
+          {renderMarkdown ? <LazyMarkdownRenderer content={text} /> : text}
         </div>
         {/* 底部渐变遮罩 */}
         {showCollapse && isCollapsed && (

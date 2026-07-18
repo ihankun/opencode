@@ -9,7 +9,7 @@ import { Skill } from "@/skill"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ApiVcsApplyError, ApiVcsBranchSwitchError } from "../groups/instance"
+import { ApiVcsApplyError, ApiVcsBranchSwitchError, ApiVcsMutationError } from "../groups/instance"
 import { markInstanceForDisposal } from "../lifecycle"
 
 export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance", (handlers) =>
@@ -38,10 +38,10 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
     })
 
     const getVcs = Effect.fn("InstanceHttpApi.vcs")(function* () {
-      const [branch, default_branch] = yield* Effect.all([vcs.branch(), vcs.defaultBranch()], {
+      const [branch, default_branch, remote_url] = yield* Effect.all([vcs.branch(), vcs.defaultBranch(), vcs.remoteUrl()], {
         concurrency: "unbounded",
       })
-      return { branch, default_branch }
+      return { branch, default_branch, remote_url }
     })
 
     const getVcsStatus = Effect.fn("InstanceHttpApi.vcsStatus")(function* () {
@@ -94,6 +94,32 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
       )
     })
 
+    const mutationError = (error: Vcs.MutationError) =>
+      new ApiVcsMutationError({
+        name: "VcsMutationError",
+        data: { message: error.message, reason: error.reason },
+      })
+
+    const stageVcs = Effect.fn("InstanceHttpApi.vcsStage")(function* (ctx: { payload: Vcs.FilesInput }) {
+      return yield* vcs.stage(ctx.payload).pipe(Effect.mapError(mutationError))
+    })
+
+    const unstageVcs = Effect.fn("InstanceHttpApi.vcsUnstage")(function* (ctx: { payload: Vcs.FilesInput }) {
+      return yield* vcs.unstage(ctx.payload).pipe(Effect.mapError(mutationError))
+    })
+
+    const discardVcs = Effect.fn("InstanceHttpApi.vcsDiscard")(function* (ctx: { payload: Vcs.FilesInput }) {
+      return yield* vcs.discard(ctx.payload).pipe(Effect.mapError(mutationError))
+    })
+
+    const commitVcs = Effect.fn("InstanceHttpApi.vcsCommit")(function* (ctx: { payload: Vcs.CommitInput }) {
+      return yield* vcs.commit(ctx.payload).pipe(Effect.mapError(mutationError))
+    })
+
+    const pushVcs = Effect.fn("InstanceHttpApi.vcsPush")(function* () {
+      return yield* vcs.push().pipe(Effect.mapError(mutationError))
+    })
+
     const getCommand = Effect.fn("InstanceHttpApi.command")(function* () {
       return yield* command.list()
     })
@@ -124,6 +150,11 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
       .handle("vcsDiff", getVcsDiff)
       .handle("vcsDiffRaw", getVcsDiffRaw)
       .handle("vcsApply", applyVcs)
+      .handle("vcsStage", stageVcs)
+      .handle("vcsUnstage", unstageVcs)
+      .handle("vcsDiscard", discardVcs)
+      .handle("vcsCommit", commitVcs)
+      .handle("vcsPush", pushVcs)
       .handle("command", getCommand)
       .handle("agent", getAgent)
       .handle("skill", getSkill)

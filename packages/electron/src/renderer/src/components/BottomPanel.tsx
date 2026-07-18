@@ -19,6 +19,7 @@ const FileExplorer = lazy(() => import('./FileExplorer').then(module => ({ defau
 const McpPanel = lazy(() => import('./McpPanel').then(module => ({ default: module.McpPanel })))
 const SkillPanel = lazy(() => import('./SkillPanel').then(module => ({ default: module.SkillPanel })))
 const WorktreePanel = lazy(() => import('./WorktreePanel').then(module => ({ default: module.WorktreePanel })))
+const PreviewPanel = lazy(() => import('./PreviewPanel').then(module => ({ default: module.PreviewPanel })))
 
 interface BottomPanelProps {
   directory?: string
@@ -209,6 +210,12 @@ export const BottomPanel = memo(function BottomPanel({ directory }: BottomPanelP
           {activeTab.type === 'worktree' ? (
             <Suspense fallback={<PanelFallback />}>
               <WorktreePanel isResizing={isPanelResizing} />
+            </Suspense>
+          ) : null}
+
+          {activeTab.type === 'preview' ? (
+            <Suspense fallback={<PanelFallback />}>
+              <PreviewPanel tabId={activeTab.id} url={activeTab.previewUrl} />
             </Suspense>
           ) : null}
         </>

@@ -11,6 +11,8 @@ import {
 import { todoStore } from '../store/todoStore'
 import { serverStore } from '../store/serverStore'
 import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
+import { executionTargetStore } from '../store/executionTargetStore'
+import type { ExecutionTarget } from '../types/executionTarget'
 import { useDirectory } from './useDirectory'
 import {
   areSessionListsSame,
@@ -294,14 +296,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [hasMore, sessions, fetchSessions])
 
   const createSession = useCallback(
-    async (title?: string) => {
+    async (title?: string, target?: ExecutionTarget) => {
       // 使用正斜杠格式传给后端
-      const targetDir = effectiveDirectory
+      if (target && target.serverId !== serverStore.getActiveServerId()) {
+        throw new Error('The selected execution server changed before the task was created')
+      }
+      const targetDir = target?.directory || effectiveDirectory
 
       const newSession = await apiCreateSession({
         title,
         directory: targetDir,
       })
+      if (target) executionTargetStore.bindSession(newSession.id, target)
       return newSession
     },
     [effectiveDirectory],
@@ -313,6 +319,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await apiArchiveSession(id, targetDir)
       if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(id, true)
       pinnedSessionsStore.unpin(id)
+      executionTargetStore.removeSession(serverStore.getActiveServerId(), id)
       clearSessionRuntimeState(id)
       setSessions(prev => prev.filter(s => s.id !== id))
     },

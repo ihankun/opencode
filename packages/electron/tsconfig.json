@@ -9,6 +9,7 @@
     "strict": true,
     "jsx": "react-jsx",
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["bun", "node", "electron", "vite/client", "electron-vite/node"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]

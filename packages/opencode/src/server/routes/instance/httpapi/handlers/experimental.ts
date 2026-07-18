@@ -9,6 +9,7 @@ import { clearGoal, getGoal, setGoalStatus } from "@/goal/state"
 import { MCP } from "@/mcp"
 import { Project } from "@/project/project"
 import { Session } from "@/session/session"
+import { Snapshot } from "@/snapshot"
 import type { SessionID } from "@/session/schema"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
@@ -22,6 +23,7 @@ import {
   ConsoleLoginPayload,
   ConsoleLoginPollPayload,
   ConsoleSwitchPayload,
+  CheckpointRestorePayload,
   GoalStatusPayload,
   SessionListQuery,
   ToolListQuery,
@@ -55,6 +57,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     const registry = yield* ToolRegistry.Service
     const worktreeSvc = yield* Worktree.Service
     const sessions = yield* Session.Service
+    const snapshots = yield* Snapshot.Service
     const background = yield* BackgroundJob.Service
     const flags = yield* RuntimeFlags.Service
 
@@ -316,6 +319,20 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       )
     })
 
+    const checkpointCreate = Effect.fn("ExperimentalHttpApi.checkpointCreate")(function* () {
+      const snapshot = yield* snapshots.track()
+      if (!snapshot) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      return { snapshot }
+    })
+
+    const checkpointRestore = Effect.fn("ExperimentalHttpApi.checkpointRestore")(function* (ctx: {
+      payload: typeof CheckpointRestorePayload.Type
+    }) {
+      const patch = yield* snapshots.patch(ctx.payload.snapshot)
+      yield* snapshots.revert([patch])
+      return true
+    })
+
     const worktree = Effect.fn("ExperimentalHttpApi.worktree")(function* () {
       const ctx = yield* InstanceState.context
       return yield* project.sandboxes(ctx.project.id)
@@ -399,6 +416,8 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("goal", goal)
       .handle("goalStatus", goalStatus)
       .handle("goalClear", goalClear)
+      .handle("checkpointCreate", checkpointCreate)
+      .handle("checkpointRestore", checkpointRestore)
       .handle("worktree", worktree)
       .handle("worktreeCreate", worktreeCreate)
       .handle("worktreeRemove", worktreeRemove)

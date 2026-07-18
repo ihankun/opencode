@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { MarkdownRenderer } from '../../../components'
+import { LazyMarkdownRenderer } from '../../../components/LazyMarkdownRenderer'
 import type { TextPart } from '../../../types/message'
 
 interface TextPartViewProps {
@@ -21,7 +21,7 @@ export const TextPartView = memo(function TextPartView({ part, isStreaming = fal
 
   return (
     <div>
-      <MarkdownRenderer content={displayText} isStreaming={isStreaming} />
+      <LazyMarkdownRenderer content={displayText} isStreaming={isStreaming} />
     </div>
   )
 })

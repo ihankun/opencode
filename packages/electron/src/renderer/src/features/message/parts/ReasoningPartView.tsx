@@ -4,7 +4,7 @@ import { ChevronDownIcon, LightbulbIcon, SpinnerIcon } from '../../../components
 import { ScrollArea } from '../../../components/ui'
 import { useDelayedRender } from '../../../hooks'
 import { useTheme } from '../../../hooks/useTheme'
-import { MarkdownRenderer } from '../../../components/MarkdownRenderer'
+import { LazyMarkdownRenderer } from '../../../components/LazyMarkdownRenderer'
 import type { ReasoningPart } from '../../../types/message'
 import { useUiDisclosureState } from '../../../utils/uiDisclosureState'
 
@@ -161,7 +161,7 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
             {shouldRenderBody &&
               (isMarkdownMode ? (
                 <div className="text-[length:var(--fs-sm)]">
-                  <MarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
+                  <LazyMarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
                 </div>
               ) : (
                 <div className="text-[length:var(--fs-sm)] leading-6 italic whitespace-pre-wrap break-words overflow-x-hidden text-text-300">
@@ -174,7 +174,7 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
     ) : (
       <div ref={summaryContainerRef} className="relative min-w-0 overflow-hidden text-[length:var(--fs-sm)]">
         {isMarkdownMode ? (
-          <MarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
+          <LazyMarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
         ) : (
           <span className="block min-w-0 text-[length:var(--fs-sm)] leading-5 italic whitespace-pre-wrap break-words text-text-300">
             {displayText}

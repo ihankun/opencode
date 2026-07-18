@@ -273,7 +273,7 @@ describe("instance HttpApi", () => {
       const switched = yield* HttpClientRequest.post(InstancePaths.vcsSwitchBranch).pipe(
         directoryHeader(dir),
         HttpClientRequest.bodyJson({ branch: "feature" }),
-        HttpClient.execute,
+        Effect.flatMap(HttpClient.execute),
       )
       expect(switched.status).toBe(200)
       expect(yield* switched.json).toEqual({ branch: "feature" })
@@ -282,4 +282,5 @@ describe("instance HttpApi", () => {
       expect(yield* selected.json).toMatchObject({ branch: "feature" })
     }),
   )
+
 })

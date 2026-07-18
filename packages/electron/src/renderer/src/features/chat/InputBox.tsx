@@ -40,6 +40,7 @@ import {
   CloseIcon,
   FolderIcon,
   GitBranchIcon,
+  GitWorktreeIcon,
   GlobeIcon,
   LaptopIcon,
   PencilIcon,
@@ -54,6 +55,8 @@ import type { Command } from '../../api/command'
 import { useServerStore } from '../../hooks'
 import type { SessionStats } from '../../hooks'
 import { notificationStore } from '../../store'
+import { onComposerDraftInsertion } from '../../utils/composerDraft'
+import { executionTargetStore } from '../../store/executionTargetStore'
 import { getDirectoryName, isSameDirectory } from '../../utils'
 import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
@@ -355,14 +358,15 @@ function FollowupQueue({
   )
 }
 
-function NewTaskContextBar() {
+function NewTaskContextBar({ paneId }: { paneId: string }) {
   const { t } = useTranslation('chat')
   const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
   const { servers, activeServer, setActiveServer, checkHealth } = useServerStore()
-  const [menu, setMenu] = useState<'project' | 'server' | 'branch'>()
+  const [menu, setMenu] = useState<'project' | 'server' | 'mode' | 'branch'>()
   const [branches, setBranches] = useState<VcsBranch[]>([])
   const [branchLoading, setBranchLoading] = useState(false)
   const [switching, setSwitching] = useState(false)
+  const [executionMode, setExecutionMode] = useState<'current' | 'worktree'>('current')
   const menuRef = useRef<HTMLDivElement>(null)
   const projects = useMemo(() => {
     const directories = [...savedDirectories].toSorted(
@@ -391,6 +395,24 @@ function NewTaskContextBar() {
       : activeServer.name
     : t('emptyState.noServer')
   const selectedBranch = branches.find(branch => branch.current)?.name
+
+  useEffect(() => {
+    if (!activeServer) return
+    const previous = executionTargetStore.getDraft(paneId)
+    const sameLocation = previous?.serverId === activeServer.id && previous.directory === (currentDirectory ?? '')
+    const targetMode = sameLocation ? executionMode : 'current'
+    if (!sameLocation && executionMode !== 'current') setExecutionMode('current')
+    executionTargetStore.updateDraft(paneId, {
+      serverId: activeServer.id,
+      directory: currentDirectory ?? '',
+      sourceDirectory: currentDirectory,
+      executionMode: targetMode,
+      projectId: sameLocation ? previous.projectId : undefined,
+      branch: selectedBranch,
+      worktreeId: sameLocation ? previous.worktreeId : undefined,
+      permissionProfile: sameLocation ? previous.permissionProfile : undefined,
+    })
+  }, [activeServer, currentDirectory, executionMode, paneId, selectedBranch])
 
   useEffect(() => {
     if (!menu) return
@@ -581,6 +603,57 @@ function NewTaskContextBar() {
         )}
       </div>
 
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          disabled={!currentDirectory || branchLoading}
+          onClick={() => setMenu(value => (value === 'mode' ? undefined : 'mode'))}
+          className={triggerClass}
+          aria-haspopup="menu"
+          aria-expanded={menu === 'mode'}
+        >
+          {executionMode === 'worktree' ? <GitWorktreeIcon size={15} /> : <FolderIcon size={15} />}
+          <span>{t(executionMode === 'worktree' ? 'emptyState.isolatedWorktree' : 'emptyState.currentWorkspace')}</span>
+        </button>
+        {menu === 'mode' && (
+          <div role="menu" className={menuClass}>
+            <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+              {t('emptyState.executionMode')}
+            </div>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={executionMode === 'current'}
+              onClick={() => {
+                setExecutionMode('current')
+                setMenu(undefined)
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${executionMode === 'current' ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+            >
+              <FolderIcon size={14} />
+              <span>{t('emptyState.currentWorkspace')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={executionMode === 'worktree'}
+              disabled={branches.length === 0}
+              onClick={() => {
+                setExecutionMode('worktree')
+                setMenu(undefined)
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${executionMode === 'worktree' ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+            >
+              <GitWorktreeIcon size={14} />
+              <span className="min-w-0 flex-1">
+                <span className="block">{t('emptyState.isolatedWorktree')}</span>
+                <span className="block text-[length:var(--fs-xxs)] text-text-500">{t('emptyState.isolatedWorktreeDescription')}</span>
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {(branchLoading || selectedBranch) && (
         <div className="relative min-w-0">
           <button
@@ -697,6 +770,16 @@ function InputBoxComponent({
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(
+    () =>
+      onComposerDraftInsertion(insertion => {
+        if (!sessionId || insertion.sessionId !== sessionId) return
+        setText(current => (current.trim() ? `${current.trimEnd()}\n\n${insertion.text}` : insertion.text))
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      }),
+    [sessionId],
+  )
 
   // @ Mention 状态
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -1906,7 +1989,7 @@ function InputBoxComponent({
               />
             )}
 
-            {!sessionId && <NewTaskContextBar />}
+            {!sessionId && <NewTaskContextBar paneId={paneId} />}
 
             {/* Input Container */}
             <div

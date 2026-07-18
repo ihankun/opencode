@@ -43,3 +43,28 @@ export async function getVcsDiff(mode: VcsDiffMode, directory?: string): Promise
   const sdk = getSDKClient()
   return normalizeFileDiffs(unwrap(await sdk.vcs.diff({ mode, directory: formatPathForApi(directory) })))
 }
+
+export async function stageVcsFiles(files: string[], directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.stage({ files, directory: formatPathForApi(directory) })).output
+}
+
+export async function unstageVcsFiles(files: string[], directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.unstage({ files, directory: formatPathForApi(directory) })).output
+}
+
+export async function discardVcsFiles(files: string[], directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.discard({ files, directory: formatPathForApi(directory) })).output
+}
+
+export async function commitVcsChanges(message: string, directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.commit({ message, directory: formatPathForApi(directory) })).output
+}
+
+export async function pushVcsBranch(directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.push({ directory: formatPathForApi(directory) })).output
+}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -16,7 +16,7 @@ import {
 import { EventV2Bridge } from "../../src/event-v2-bridge"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { Git } from "../../src/git"
-import { Vcs } from "@/project/vcs"
+import { Vcs, safeRemoteUrl } from "@/project/vcs"
 import { testEffect } from "../lib/effect"
 
 // ---------------------------------------------------------------------------
@@ -172,6 +172,82 @@ describe("Vcs", () => {
       }),
     { git: true },
   )
+})
+
+describe("Vcs mutations", () => {
+  afterEach(async () => {
+    await disposeAllInstances()
+  })
+
+  it.instance(
+    "stages, unstages, and commits selected files",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        yield* write(path.join(test.directory, weird), "hello\n")
+        const vcs = yield* init()
+
+        yield* vcs.stage({ files: [weird] })
+        const staged = yield* Git.Service.use((service) => service.run(["diff", "--cached", "--name-only", "-z"], { cwd: test.directory }))
+        expect(staged.text()).toContain(weird)
+
+        yield* vcs.unstage({ files: [weird] })
+        const unstaged = yield* Git.Service.use((service) => service.run(["diff", "--cached", "--name-only", "-z"], { cwd: test.directory }))
+        expect(unstaged.text()).not.toContain(weird)
+
+        yield* vcs.stage({ files: [weird] })
+        yield* vcs.commit({ message: "test: commit selected file" })
+        const subject = yield* Git.Service.use((service) => service.run(["log", "-1", "--format=%s"], { cwd: test.directory }))
+        expect(subject.text().trim()).toBe("test: commit selected file")
+      }),
+    { git: true },
+  )
+
+  it.instance(
+    "rejects files outside the current change set",
+    () =>
+      Effect.gen(function* () {
+        const vcs = yield* init()
+        const error = yield* vcs.stage({ files: ["../outside.txt"] }).pipe(Effect.flip)
+        expect(error.reason).toBe("invalid-input")
+      }),
+    { git: true },
+  )
+
+  it.instance(
+    "discards tracked and untracked changes",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const tracked = path.join(test.directory, "tracked.txt")
+        const untracked = path.join(test.directory, "untracked.txt")
+        yield* write(tracked, "before\n")
+        yield* git(test.directory, ["add", "tracked.txt"])
+        yield* git(test.directory, ["commit", "--no-gpg-sign", "-m", "add tracked"])
+        yield* write(tracked, "after\n")
+        yield* write(untracked, "remove me\n")
+        const vcs = yield* init()
+
+        yield* vcs.discard({ files: ["tracked.txt", "untracked.txt"] })
+
+        expect(yield* Effect.promise(() => fs.readFile(tracked, "utf8"))).toBe("before\n")
+        expect(yield* Effect.promise(() => fs.stat(untracked).then(() => true, () => false))).toBe(false)
+      }),
+    { git: true },
+  )
+})
+
+describe("safeRemoteUrl", () => {
+  test("normalizes browser URLs without exposing credentials", () => {
+    expect(safeRemoteUrl("git@github.com:owner/repo.git")).toBe("https://github.com/owner/repo")
+    expect(safeRemoteUrl("https://token:secret@github.com/owner/repo.git")).toBe("https://github.com/owner/repo")
+    expect(safeRemoteUrl("ssh://git@gitlab.com/group/repo.git")).toBe("https://gitlab.com/group/repo")
+  })
+
+  test("rejects local and unsupported remotes", () => {
+    expect(safeRemoteUrl("/tmp/repo.git")).toBeUndefined()
+    expect(safeRemoteUrl("file:///tmp/repo.git")).toBeUndefined()
+  })
 })
 
 describe("Vcs diff", () => {

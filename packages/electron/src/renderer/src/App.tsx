@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { invoke } from '@tauri-apps/api/core'
 import { Sidebar } from './features/chat'
 import { ChatPane } from './features/chat/ChatPane'
 import { SplitContainer } from './features/chat/SplitContainer'
@@ -180,9 +179,9 @@ function App() {
   useEffect(() => {
     if (!isTauri() || isTauriMobile()) return
 
-    void invoke('desktop_window_ready').catch(() => {
-      // best effort only
-    })
+    void import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('desktop_window_ready'))
+      .catch(() => undefined)
   }, [])
 
   useViewportHeight()

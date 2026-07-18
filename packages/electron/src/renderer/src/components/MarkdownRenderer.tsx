@@ -9,11 +9,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
+  type ReactNode,
 } from 'react'
 import {
   Streamdown,
   defaultRehypePlugins,
-  type Components,
   type CustomRendererProps,
   type PluginConfig,
 } from 'streamdown'
@@ -35,6 +36,30 @@ interface MarkdownRendererProps {
   /** Display variant: 'default' for normal content, 'reasoning' for subdued thinking blocks */
   variant?: 'default' | 'reasoning'
 }
+
+type MarkdownComponentProps = {
+  children?: ReactNode
+  href?: string
+  src?: string
+  alt?: string
+  title?: string
+  start?: number
+}
+
+type MarkdownComponents = Record<string, ComponentType<MarkdownComponentProps>>
+
+type StreamdownBridgeProps = {
+  children?: ReactNode
+  components: MarkdownComponents
+  isAnimating: boolean
+  controls: boolean
+  plugins: PluginConfig
+  rehypePlugins: readonly unknown[]
+}
+
+// streamdown may be installed with another compatible React type package in
+// the workspace. Isolate that type-only mismatch at the dependency boundary.
+const StreamdownComponent = Streamdown as unknown as ComponentType<StreamdownBridgeProps>
 
 const markdownMath = createMathPlugin({ singleDollarTextMath: true })
 const MERMAID_MIN_SCALE = 0.5
@@ -646,10 +671,10 @@ const MarkdownMermaid = memo(function MarkdownMermaid({ code, isIncomplete }: Cu
   )
 })
 
-const markdownPlugins: PluginConfig = {
+const markdownPlugins = {
   math: markdownMath,
   renderers: [{ language: 'mermaid', component: MarkdownMermaid }],
-}
+} as unknown as PluginConfig
 const markdownRehypePlugins = [
   defaultRehypePlugins.raw,
   rewriteWindowsPathLinkHrefs,
@@ -740,7 +765,7 @@ const MarkdownStreamBlock = memo(function MarkdownStreamBlock({
   isLast,
 }: {
   src: string
-  components: Components
+  components: MarkdownComponents
   isAnimating: boolean
   isFirst: boolean
   isLast: boolean
@@ -751,7 +776,7 @@ const MarkdownStreamBlock = memo(function MarkdownStreamBlock({
         isLast ? 'markdown-stream-block-last' : 'markdown-stream-block-not-last'
       }`}
     >
-      <Streamdown
+      <StreamdownComponent
         components={components}
         isAnimating={isAnimating}
         controls={false}
@@ -759,7 +784,7 @@ const MarkdownStreamBlock = memo(function MarkdownStreamBlock({
         rehypePlugins={markdownRehypePlugins}
       >
         {src}
-      </Streamdown>
+      </StreamdownComponent>
     </div>
   )
 })
@@ -778,7 +803,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   const streamBlocks = useMemo(() => splitMarkdownStream(renderedContent, isStreaming), [renderedContent, isStreaming])
 
   const componentsByMode = useMemo(() => {
-    const makeComponents = (streamingCodeHighlight: boolean): Components => ({
+    const makeComponents = (streamingCodeHighlight: boolean): MarkdownComponents => ({
       // --- Inline code ---
       inlineCode({ children }) {
         return <InlineCode variant={isReasoning ? 'reasoning' : 'default'}>{children}</InlineCode>

@@ -47,6 +47,7 @@ export * from './goal'
 export * from './tool'
 export * from './lsp'
 export * from './provider'
+export * from './controlPlane'
 
 // ============================================
 // Model API Functions

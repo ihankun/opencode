@@ -238,6 +238,27 @@ describe("Worktree", () => {
         ),
       { git: true },
     )
+
+    it.instance(
+      "creates from a selected base branch",
+      () =>
+        Effect.gen(function* () {
+          const test = yield* TestInstance
+          const fs = yield* FSUtil.Service
+          yield* git(test.directory, ["switch", "-c", "automation-base"])
+          yield* fs.writeWithDirs(path.join(test.directory, "base-only.txt"), "from base\n")
+          yield* git(test.directory, ["add", "base-only.txt"])
+          yield* git(test.directory, ["commit", "--no-gpg-sign", "-m", "base commit"])
+          yield* git(test.directory, ["switch", "-"])
+
+          yield* withCreatedWorktree({ name: "selected-base", baseBranch: "automation-base" }, ({ info }) =>
+            Effect.gen(function* () {
+              expect(yield* fs.exists(path.join(info.directory, "base-only.txt"))).toBe(true)
+            }),
+          )
+        }),
+      { git: true },
+    )
   })
 
   describe("createFromInfo", () => {

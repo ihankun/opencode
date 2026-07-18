@@ -26,7 +26,8 @@ interface IconProps {
 const defaultSize = 14
 const defaultClassName = 'text-text-400'
 
-function wrapTool(Icon: ComponentType<LucideProps>) {
+function wrapTool(icon: unknown) {
+  const Icon = icon as ComponentType<LucideProps>
   return function WrappedToolIcon({ size = defaultSize, className = defaultClassName, ...props }: IconProps) {
     return <Icon size={size} className={className} {...(props as LucideProps)} />
   }

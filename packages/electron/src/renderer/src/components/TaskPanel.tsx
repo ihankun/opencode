@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckIcon, ClockIcon, CloseIcon, MessageSquareIcon, PencilIcon, PlusIcon, RetryIcon, SearchIcon, SpinnerIcon, TrashIcon } from './Icons'
-import { useDirectory, useModels } from '../hooks'
+import { useDirectory, useModels, useServerStore } from '../hooks'
 import type { ModelInfo } from '../api'
+import { executionTargetStore } from '../store/executionTargetStore'
+import { serverStore, type ServerConfig } from '../store/serverStore'
 
 type Task = Awaited<ReturnType<typeof window.customOpenCode.listTasks>>[number]
 type TaskInput = Parameters<typeof window.customOpenCode.createTask>[0]
@@ -15,6 +17,7 @@ const weekdays = [
 export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSession: (sessionID: string, directory: string) => void }) {
   const { currentDirectory, savedDirectories, pathInfo } = useDirectory()
   const { models, isLoading: modelsLoading } = useModels()
+  const { servers, activeServer } = useServerStore()
   const [tasks, setTasks] = useState<Task[]>([])
   const [runs, setRuns] = useState<TaskRun[]>([])
   const [view, setView] = useState<'tasks' | 'runs'>('tasks')
@@ -96,7 +99,7 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2"><span className="font-medium text-text-100">{task.title}</span><Status task={task} /></div>
                     <div className="mt-1 truncate text-[length:var(--fs-sm)] text-text-300">{task.prompt}</div>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[length:var(--fs-xs)] text-text-400"><span>{describeCron(task.cron)}</span><span>项目：{task.directory || '全局'}</span><span>模型：{task.modelProviderID}/{task.modelID}</span><span>推理：{task.variant || '默认'}</span><span>{task.timezone}</span>{task.nextRunAt && <span>下次：{new Date(task.nextRunAt).toLocaleString()}</span>}{task.lastRunAt && <span>上次：{new Date(task.lastRunAt).toLocaleString()}</span>}</div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[length:var(--fs-xs)] text-text-400"><span>{describeCron(task.cron)}</span><span>服务器：{task.serverName}</span><span>项目：{task.directory || '全局'}</span><span>{task.executionMode === 'worktree' ? '隔离 Worktree' : '当前目录'}{task.branch ? ` · ${task.branch}` : ''}</span><span>模型：{task.modelProviderID}/{task.modelID}</span><span>审批：{permissionLabel(task.permissionProfile)}</span><span>失败重试：{task.retryCount} 次</span><span>{task.timezone}</span>{task.nextRunAt && <span>下次：{new Date(task.nextRunAt).toLocaleString()}</span>}{task.lastRunAt && <span>上次：{new Date(task.lastRunAt).toLocaleString()}</span>}</div>
                     {task.lastError && <div className="mt-2 text-[length:var(--fs-xs)] text-danger-100">{task.lastError}</div>}
                   </div>
                   <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
@@ -110,7 +113,7 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
           </div>
         )}</>}
       </div>
-      {editing && <TaskDialog task={editing === 'new' ? undefined : editing} directory={currentDirectory ?? pathInfo?.directory ?? ''} directories={directories} models={models} modelsLoading={modelsLoading} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load() }} />}
+      {editing && <TaskDialog task={editing === 'new' ? undefined : editing} directory={currentDirectory ?? pathInfo?.directory ?? ''} directories={directories} servers={servers} activeServer={activeServer} models={models} modelsLoading={modelsLoading} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load() }} />}
     </div>
   )
 })
@@ -131,9 +134,9 @@ function TaskRunList({ runs, loading, onOpenSession }: { runs: TaskRun[]; loadin
     {!loading && groups.length === 0 ? <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border-200 py-20 text-text-400"><MessageSquareIcon size={28} /><div className="mt-3 text-text-200">暂无执行会话</div><div className="mt-1 text-[length:var(--fs-sm)]">任务运行后，会话会集中显示在这里</div></div> : null}
     <div className="space-y-5">{groups.map(group => <section key={group.runs[0].taskID}>
       <div className="mb-2 flex items-center gap-2 px-1"><span className="text-[length:var(--fs-sm)] font-medium text-text-200">{group.title}</span><span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-200 px-1.5 text-[length:var(--fs-xxs)] text-text-400">{group.runs.length}</span></div>
-      <div className="overflow-hidden rounded-xl border border-border-200/60 bg-bg-100">{group.runs.map((run, index) => <button key={run.id} type="button" onClick={() => onOpenSession(run.sessionID, run.directory)} className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-200/35 ${index > 0 ? 'border-t border-border-200/45' : ''}`}>
-        <span className={`h-2 w-2 shrink-0 rounded-full ${run.status === 'failed' ? 'bg-danger-100' : run.status === 'running' ? 'bg-warning-100' : 'bg-success-100'}`} />
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{run.prompt}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] ${run.status === 'failed' ? 'bg-danger-100/10 text-danger-100' : run.status === 'running' ? 'bg-warning-100/10 text-warning-100' : 'bg-success-100/10 text-success-100'}`}>{run.status === 'failed' ? '失败' : run.status === 'running' ? '启动中' : '已启动'}</span></div><div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[length:var(--fs-xs)] text-text-400"><span>{new Date(run.createdAt).toLocaleString()}</span><span>{run.directory || '全局'}</span><span>{run.modelProviderID}/{run.modelID}</span><span>推理：{run.variant || '默认'}</span></div>{run.error && <div className="mt-1 text-[length:var(--fs-xs)] text-danger-100">{run.error}</div>}</div>
+      <div className="overflow-hidden rounded-xl border border-border-200/60 bg-bg-100">{group.runs.map((run, index) => <button key={run.id} type="button" disabled={run.sessionID.startsWith('pending:') || !serverStore.getServers().some(server => server.id === run.serverId)} onClick={() => { serverStore.setActiveServer(run.serverId); executionTargetStore.bindSession(run.sessionID, { serverId: run.serverId, directory: run.executionDirectory, sourceDirectory: run.directory, executionMode: run.executionMode, branch: run.branch || undefined, permissionProfile: run.permissionProfile }); onOpenSession(run.sessionID, run.executionDirectory) }} className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-200/35 disabled:cursor-not-allowed disabled:opacity-60 ${index > 0 ? 'border-t border-border-200/45' : ''}`}>
+        <span className={`h-2 w-2 shrink-0 rounded-full ${run.status === 'failed' || run.status === 'timed_out' ? 'bg-danger-100' : run.status === 'running' || run.status === 'submitted' ? 'bg-warning-100' : 'bg-success-100'}`} />
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{run.prompt}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] ${run.status === 'failed' || run.status === 'timed_out' ? 'bg-danger-100/10 text-danger-100' : run.status === 'running' || run.status === 'submitted' ? 'bg-warning-100/10 text-warning-100' : 'bg-success-100/10 text-success-100'}`}>{runStatusLabel(run.status)}</span></div><div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[length:var(--fs-xs)] text-text-400"><span>{new Date(run.createdAt).toLocaleString()}</span><span>{run.serverName}</span><span>{run.executionDirectory || run.directory || '全局'}</span><span>{run.executionMode === 'worktree' ? 'Worktree' : '当前目录'}{run.branch ? ` · ${run.branch}` : ''}</span><span>第 {run.attempt} 次</span><span>{run.modelProviderID}/{run.modelID}</span></div>{run.error && <div className="mt-1 text-[length:var(--fs-xs)] text-danger-100">{run.error}</div>}</div>
         <span className="shrink-0 text-text-500 transition-transform group-hover:translate-x-0.5 group-hover:text-text-200">›</span>
       </button>)}</div>
     </section>)}</div>
@@ -145,7 +148,7 @@ function Status({ task }: { task: Task }) {
   return <span className={`rounded-full px-2 py-0.5 text-[length:var(--fs-xxs)] ${task.status === 'error' ? 'bg-danger-100/10 text-danger-100' : task.enabled ? 'bg-success-100/10 text-success-100' : 'bg-bg-200 text-text-400'}`}>{label}</span>
 }
 
-function TaskDialog({ task, directory, directories, models, modelsLoading, onClose, onSaved }: { task?: Task; directory: string; directories: Array<{ path: string; name: string }>; models: ModelInfo[]; modelsLoading: boolean; onClose: () => void; onSaved: () => void }) {
+function TaskDialog({ task, directory, directories, servers, activeServer, models, modelsLoading, onClose, onSaved }: { task?: Task; directory: string; directories: Array<{ path: string; name: string }>; servers: ServerConfig[]; activeServer: ServerConfig | null; models: ModelInfo[]; modelsLoading: boolean; onClose: () => void; onSaved: () => void }) {
   const inputClass = 'rounded-lg border border-border-200/70 bg-bg-100 px-3 text-[length:var(--fs-sm)] text-text-100 outline-none transition-colors placeholder:text-text-500 focus:border-border-100'
   const initial = task ? cronParts(task.cron) : { frequency: 'daily' as Frequency, time: '18:00', day: '1' }
   const [title, setTitle] = useState(task?.title ?? '')
@@ -155,23 +158,39 @@ function TaskDialog({ task, directory, directories, models, modelsLoading, onClo
   const [day, setDay] = useState(initial.day)
   const [expression, setExpression] = useState(task?.cron ?? '0 18 * * *')
   const [selectedDirectory, setSelectedDirectory] = useState(task?.directory ?? directory)
+  const [selectedServerId, setSelectedServerId] = useState(task?.serverId ?? activeServer?.id ?? '')
+  const [executionMode, setExecutionMode] = useState<'current' | 'worktree'>(task?.executionMode ?? 'current')
+  const [branch, setBranch] = useState(task?.branch ?? '')
+  const [permissionProfile, setPermissionProfile] = useState<'ask' | 'writes' | 'risk' | 'full'>(task?.permissionProfile ?? 'risk')
+  const [retryCount, setRetryCount] = useState(task?.retryCount ?? 1)
+  const [retryDelaySeconds, setRetryDelaySeconds] = useState(task?.retryDelaySeconds ?? 30)
+  const [completionTimeoutMinutes, setCompletionTimeoutMinutes] = useState(task?.completionTimeoutMinutes ?? 60)
   const [selectedModelKey, setSelectedModelKey] = useState(task?.modelProviderID && task.modelID ? taskModelKey(task.modelProviderID, task.modelID) : '')
   const [variant, setVariant] = useState(task?.variant ?? '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const selectedModel = models.find(model => taskModelKey(model.providerId, model.id) === selectedModelKey)
+  const selectedServer = servers.find(server => server.id === selectedServerId)
 
   useEffect(() => {
     if (selectedModelKey || models.length === 0) return
     setSelectedModelKey(taskModelKey(models[0].providerId, models[0].id))
   }, [models, selectedModelKey])
 
+  useEffect(() => {
+    if (!selectedServerId || activeServer?.id === selectedServerId) return
+    serverStore.setActiveServer(selectedServerId)
+  }, [activeServer?.id, selectedServerId])
+
   const save = async () => {
     const cron = frequency === 'advanced' ? expression : buildCron(frequency, time, day)
     setSaving(true); setError('')
     try {
       if (!selectedModel) throw new Error('请选择运行模型')
-      const input = { title, prompt, cron, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, directory: selectedDirectory, modelProviderID: selectedModel.providerId, modelID: selectedModel.id, variant, enabled: task?.enabled ?? true }
+      if (!selectedServer) throw new Error('请选择运行服务器')
+      const health = await serverStore.checkHealth(selectedServer.id)
+      if (health.status !== 'online') throw new Error(health.error || '所选服务器当前不可用')
+      const input = { title, prompt, cron, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, serverId: selectedServer.id, serverName: selectedServer.name, serverUrl: selectedServer.url, directory: selectedDirectory, executionMode, branch, permissionProfile, retryCount, retryDelaySeconds, completionTimeoutMinutes, modelProviderID: selectedModel.providerId, modelID: selectedModel.id, variant, enabled: task?.enabled ?? true }
       if (task) await window.customOpenCode.updateTask(task.id, input)
       else await window.customOpenCode.createTask(input)
       onSaved()
@@ -183,7 +202,11 @@ function TaskDialog({ task, directory, directories, models, modelsLoading, onClo
       <div className="space-y-4 p-5">
         <div><Label>名称</Label><input value={title} onChange={e => setTitle(e.target.value)} className={`${inputClass} h-9 w-full`} placeholder="每日修改总结" /></div>
         <div><Label>要执行的指令</Label><textarea value={prompt} onChange={e => setPrompt(e.target.value)} className={`${inputClass} min-h-24 w-full resize-y py-2`} placeholder="总结今天修改的全部内容" /></div>
-        <div><Label>运行项目</Label><select value={selectedDirectory} onChange={e => setSelectedDirectory(e.target.value)} className={`${inputClass} h-9 w-full`}><option value="">全局（无项目目录）</option>{directories.map(item => <option key={item.path} value={item.path}>{item.name} — {item.path}</option>)}</select></div>
+        <div><Label>运行服务器</Label><select value={selectedServerId} onChange={e => { setSelectedServerId(e.target.value); setSelectedDirectory(''); setSelectedModelKey(''); setVariant(''); serverStore.setActiveServer(e.target.value) }} className={`${inputClass} h-9 w-full`}>{servers.map(server => <option key={server.id} value={server.id}>{server.id === 'local' ? '本地' : server.name} — {server.url}</option>)}</select></div>
+        <div><Label>运行项目</Label><input list="scheduled-task-directories" value={selectedDirectory} onChange={e => setSelectedDirectory(e.target.value)} className={`${inputClass} h-9 w-full`} placeholder="服务器上的项目绝对路径；留空表示全局" /><datalist id="scheduled-task-directories">{directories.map(item => <option key={item.path} value={item.path}>{item.name}</option>)}</datalist></div>
+        <div className="grid grid-cols-2 gap-2"><div><Label>执行位置</Label><select value={executionMode} onChange={e => setExecutionMode(e.target.value as 'current' | 'worktree')} className={`${inputClass} h-9 w-full`}><option value="current">当前目录</option><option value="worktree" disabled={!selectedDirectory}>隔离 Worktree</option></select></div><div><Label>基准分支</Label><input value={branch} onChange={e => setBranch(e.target.value)} disabled={!selectedDirectory} className={`${inputClass} h-9 w-full`} placeholder="留空使用当前分支" /></div></div>
+        <div className="grid grid-cols-2 gap-2"><div><Label>权限审批</Label><select value={permissionProfile} onChange={e => setPermissionProfile(e.target.value as 'ask' | 'writes' | 'risk' | 'full')} className={`${inputClass} h-9 w-full`}><option value="ask">每项都审批</option><option value="writes">写入时审批</option><option value="risk">仅风险操作审批</option><option value="full">全自动（不审批）</option></select></div><div><Label>完成超时（分钟）</Label><input type="number" min={1} max={1440} value={completionTimeoutMinutes} onChange={e => setCompletionTimeoutMinutes(Number(e.target.value))} className={`${inputClass} h-9 w-full`} /></div></div>
+        <div className="grid grid-cols-2 gap-2"><div><Label>失败重试次数</Label><input type="number" min={0} max={10} value={retryCount} onChange={e => setRetryCount(Number(e.target.value))} className={`${inputClass} h-9 w-full`} /></div><div><Label>重试间隔（秒）</Label><input type="number" min={1} max={3600} value={retryDelaySeconds} onChange={e => setRetryDelaySeconds(Number(e.target.value))} className={`${inputClass} h-9 w-full`} /></div></div>
         <div className="grid grid-cols-2 gap-2"><div><Label>运行模型</Label><select value={selectedModelKey} disabled={modelsLoading} onChange={e => { setSelectedModelKey(e.target.value); setVariant('') }} className={`${inputClass} h-9 w-full`}><option value="">{modelsLoading ? '正在加载模型...' : '请选择模型'}</option>{models.map(model => <option key={taskModelKey(model.providerId, model.id)} value={taskModelKey(model.providerId, model.id)}>{model.name} · {model.providerName}</option>)}</select></div><div><Label>推理级别</Label><select value={variant} onChange={e => setVariant(e.target.value)} disabled={!selectedModel} className={`${inputClass} h-9 w-full`}><option value="">默认</option>{selectedModel?.variants.map(item => <option key={item} value={item}>{variantLabel(item)}</option>)}</select></div></div>
         <div><Label>执行时间</Label><div className="grid grid-cols-[1fr_1fr] gap-2"><select value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} className={`${inputClass} h-9`}><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="advanced">高级（Cron）</option></select>{frequency === 'advanced' ? <input value={expression} onChange={e => setExpression(e.target.value)} className={`${inputClass} h-9 font-mono`} placeholder="0 18 * * *" /> : <div className="flex gap-2">{frequency === 'weekly' && <select value={day} onChange={e => setDay(e.target.value)} className={`${inputClass} h-9 flex-1`}>{weekdays.map(item => <option value={item[0]} key={item[0]}>周{item[1]}</option>)}</select>}<input type="time" value={time} onChange={e => setTime(e.target.value)} className={`${inputClass} h-9 flex-1`} /></div>}</div>{frequency === 'advanced' && <p className="mt-1 text-[length:var(--fs-xs)] text-text-400">支持标准五段 Cron 表达式，按当前时区执行。</p>}</div>
         {error && <div className="text-[length:var(--fs-xs)] text-danger-100">{error}</div>}
@@ -199,3 +222,5 @@ function cronParts(cron: string) { const [minute, hour, , , day] = cron.split(' 
 function describeCron(cron: string) { const value = cronParts(cron); if (value.frequency === 'advanced') return `Cron ${cron}`; if (value.frequency === 'weekdays') return `工作日 ${value.time}`; if (value.frequency === 'weekly') return `每周${weekdays.find(item => item[0] === value.day)?.[1] ?? value.day} ${value.time}`; return `每天 ${value.time}` }
 function taskModelKey(providerID: string, modelID: string) { return `${providerID}\u0000${modelID}` }
 function variantLabel(value: string) { const labels: Record<string, string> = { low: '低', medium: '中', middle: '中', high: '高' }; return labels[value.toLowerCase()] ?? value }
+function permissionLabel(value: Task['permissionProfile']) { return { ask: '全部审批', writes: '写入审批', risk: '风险审批', full: '全自动' }[value] }
+function runStatusLabel(value: TaskRun['status']) { return { running: '启动中', submitted: '执行中', completed: '已完成', failed: '失败', timed_out: '超时' }[value] }

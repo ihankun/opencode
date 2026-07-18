@@ -6,22 +6,27 @@
 
 import { memo, useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon } from './Icons'
+import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, GitCommitIcon } from './Icons'
 import { getMaterialIconUrl } from '../utils/materialIcons'
-import { DiffViewer, useDiffViewerData, type ViewMode } from './DiffViewer'
+import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
 import { getCurrentProject, initGitProject } from '../api/client'
 import { getLastTurnDiff, getSessionDiff } from '../api/session'
-import { getVcsDiff, getVcsInfo } from '../api/vcs'
+import { commitVcsChanges, discardVcsFiles, getVcsDiff, getVcsInfo, pushVcsBranch, stageVcsFiles, unstageVcsFiles } from '../api/vcs'
 import type { ApiProject, FileDiff, VcsDiffMode, VcsInfo } from '../api/types'
 import { detectLanguage } from '../utils/languageUtils'
 import { extractContentFromUnifiedDiff } from '../utils/diffUtils'
 import { sessionErrorHandler } from '../utils'
 import { PreviewTabsBar, type PreviewTabsBarItem } from './PreviewTabsBar'
 import { useVerticalSplitResize } from '../hooks/useVerticalSplitResize'
-import { DropdownMenu } from './ui'
+import { Button, Dialog, DropdownMenu } from './ui'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import { changeScopeStore, useSessionChangeScope, type ChangeScopeMode } from '../store/changeScopeStore'
+import { notificationStore } from '../store'
 import { useFullscreenLayer } from '../contexts'
+import { openUrl } from '../utils/browserOpen'
+import { createPullRequestUrl } from '../utils/pullRequest'
+import { insertComposerDraft } from '../utils/composerDraft'
 
 // 常量
 const MIN_LIST_HEIGHT = 80
@@ -630,6 +635,18 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
+            {changeMode === 'git' && (
+              <GitActions
+                files={diffs.map(diff => diff.file)}
+                selectedFile={selectedFile}
+                directory={directory}
+                vcsInfo={vcsInfo}
+                containerRef={containerRef}
+                onChanged={handleRefresh}
+                onError={setError}
+              />
+            )}
+
             <button
               ref={changeMenuTriggerRef}
               type="button"
@@ -867,6 +884,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           {mountedPreviewDiffs.map(previewDiff => (
             <div key={previewDiff.file} className={previewDiff.file === selectedFile ? 'h-full min-h-0' : 'hidden'}>
               <DiffPreviewPanel
+                sessionId={sessionId}
                 diff={previewDiff}
                 previewDiffs={previewDiffs}
                 viewMode={viewMode}
@@ -884,11 +902,209 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   )
 })
 
+function GitActions({
+  files,
+  selectedFile,
+  directory,
+  vcsInfo,
+  containerRef,
+  onChanged,
+  onError,
+}: {
+  files: string[]
+  selectedFile: string | null
+  directory?: string
+  vcsInfo: VcsInfo | null
+  containerRef: React.RefObject<HTMLDivElement | null>
+  onChanged: () => Promise<void>
+  onError: (message: string | null) => void
+}) {
+  const { t } = useTranslation(['components', 'common'])
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const [action, setAction] = useState<string | null>(null)
+  const [commitOpen, setCommitOpen] = useState(false)
+  const [commitMessage, setCommitMessage] = useState('')
+  const [discardFiles, setDiscardFiles] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setIsOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setIsOpen(false)
+      triggerRef.current?.focus()
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen])
+
+  const run = useCallback(
+    async (name: string, operation: () => Promise<string>) => {
+      setAction(name)
+      setIsOpen(false)
+      onError(null)
+      try {
+        const output = await operation()
+        await onChanged()
+        notificationStore.push('completed', t(`sessionChanges.${name}Complete`), output, '', directory)
+        return true
+      } catch (error) {
+        sessionErrorHandler(`git ${name}`, error)
+        onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))
+        return false
+      } finally {
+        setAction(null)
+      }
+    },
+    [directory, onChanged, onError, t],
+  )
+
+  const menuItemClass = 'flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 disabled:opacity-40 disabled:cursor-not-allowed'
+  const selected = selectedFile ? [selectedFile] : []
+  const pullRequestUrl = createPullRequestUrl(vcsInfo?.remote_url, vcsInfo?.branch, vcsInfo?.default_branch)
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setIsOpen(open => !open)}
+        disabled={action !== null}
+        aria-label={t('sessionChanges.gitActions')}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        title={t('sessionChanges.gitActions')}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors disabled:opacity-50"
+      >
+        <GitCommitIcon size={13} className={action ? 'animate-pulse' : ''} />
+      </button>
+
+      <DropdownMenu
+        triggerRef={triggerRef}
+        isOpen={isOpen}
+        position="bottom"
+        align="right"
+        minWidth="190px"
+        constrainToRef={containerRef}
+      >
+        <div ref={menuRef} role="menu" aria-label={t('sessionChanges.gitActions')} className="space-y-px">
+          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void run('stage', () => stageVcsFiles(selected, directory))}>
+            {t('sessionChanges.stageSelected')}
+          </button>
+          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void run('stage', () => stageVcsFiles(files, directory))}>
+            {t('sessionChanges.stageAll')}
+          </button>
+          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void run('unstage', () => unstageVcsFiles(selected, directory))}>
+            {t('sessionChanges.unstageSelected')}
+          </button>
+          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void run('unstage', () => unstageVcsFiles(files, directory))}>
+            {t('sessionChanges.unstageAll')}
+          </button>
+          <div className="my-1 h-px bg-border-200/50" />
+          <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setCommitOpen(true) }}>
+            {t('sessionChanges.commit')}
+          </button>
+          <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('push', () => pushVcsBranch(directory))}>
+            {t('sessionChanges.push')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!pullRequestUrl}
+            className={menuItemClass}
+            title={pullRequestUrl ? undefined : t('sessionChanges.pullRequestUnavailable')}
+            onClick={() =>
+              void run('createPr', async () => {
+                const output = await pushVcsBranch(directory)
+                await openUrl(pullRequestUrl!)
+                return output
+              })
+            }
+          >
+            {t('sessionChanges.createPullRequest')}
+          </button>
+          <div className="my-1 h-px bg-border-200/50" />
+          <button type="button" role="menuitem" disabled={!selectedFile} className={`${menuItemClass} !text-danger-100`} onClick={() => { setIsOpen(false); setDiscardFiles(selected) }}>
+            {t('sessionChanges.discardSelected')}
+          </button>
+          <button type="button" role="menuitem" disabled={files.length === 0} className={`${menuItemClass} !text-danger-100`} onClick={() => { setIsOpen(false); setDiscardFiles(files) }}>
+            {t('sessionChanges.discardAll')}
+          </button>
+        </div>
+      </DropdownMenu>
+
+      <Dialog
+        isOpen={commitOpen}
+        onClose={() => setCommitOpen(false)}
+        title={t('sessionChanges.commitTitle')}
+        width={440}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={event => {
+            event.preventDefault()
+            if (!commitMessage.trim()) return
+            void run('commit', () => commitVcsChanges(commitMessage, directory)).then(success => {
+              if (!success) return
+              setCommitMessage('')
+              setCommitOpen(false)
+            })
+          }}
+        >
+          <textarea
+            value={commitMessage}
+            onChange={event => setCommitMessage(event.target.value)}
+            placeholder={t('sessionChanges.commitPlaceholder')}
+            rows={4}
+            autoFocus
+            className="w-full resize-y rounded-lg border border-border-200 bg-bg-100 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setCommitOpen(false)} disabled={action !== null}>
+              {t('common:cancel')}
+            </Button>
+            <Button type="submit" disabled={!commitMessage.trim()} isLoading={action === 'commit'}>
+              {t('sessionChanges.commit')}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={discardFiles.length > 0}
+        onClose={() => setDiscardFiles([])}
+        onConfirm={() => {
+          const selectedFiles = discardFiles
+          void run('discard', () => discardVcsFiles(selectedFiles, directory)).then(success => {
+            if (success) setDiscardFiles([])
+          })
+        }}
+        title={t('sessionChanges.discardTitle')}
+        description={t('sessionChanges.discardConfirm', { count: discardFiles.length })}
+        confirmText={t('sessionChanges.discard')}
+        variant="danger"
+        isLoading={action === 'discard'}
+      />
+    </>
+  )
+}
+
 // ============================================
 // Diff Preview Panel - 下方预览区
 // ============================================
 
 interface DiffPreviewPanelProps {
+  sessionId: string
   diff: FileDiff
   previewDiffs: FileDiff[]
   viewMode: ViewMode
@@ -900,6 +1116,7 @@ interface DiffPreviewPanelProps {
 }
 
 const DiffPreviewPanel = memo(function DiffPreviewPanel({
+  sessionId,
   diff,
   previewDiffs,
   viewMode,
@@ -919,6 +1136,12 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
   const diffViewerData = useDiffViewerData(before, after, language, isResizing)
   const { t } = useTranslation(['components', 'common'])
   const [fullscreenViewMode, setFullscreenViewMode] = useState<ViewMode>(viewMode)
+  const [lineSelection, setLineSelection] = useState<DiffLineSelection | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const handleLineSelect = useCallback((selection: DiffLineSelection) => {
+    setLineSelection(selection)
+    setFeedback('')
+  }, [])
   const fileName = diff.file.split(/[/\\]/).pop() || diff.file
   const fullscreenLayer = useMemo(
     () => ({
@@ -939,10 +1162,11 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
           language={language}
           viewMode={fullscreenViewMode}
           data={diffViewerData}
+          onLineSelect={handleLineSelect}
         />
       ),
     }),
-    [after, before, diff.additions, diff.deletions, diff.file, diffViewerData, fileName, fullscreenViewMode, language],
+    [after, before, diff.additions, diff.deletions, diff.file, diffViewerData, fileName, fullscreenViewMode, handleLineSelect, language],
   )
   const { open: openFullscreen } = useFullscreenLayer(fullscreenLayer)
   const previewTabItems = useMemo<PreviewTabsBarItem[]>(
@@ -972,7 +1196,8 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <>
+      <div className="flex flex-col h-full">
       <PreviewTabsBar
         items={previewTabItems}
         activeId={diff.file}
@@ -998,9 +1223,62 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
 
       {/* Diff Content - DiffViewer 自带滚动 */}
       <div className="flex-1 min-h-0">
-        <DiffViewer before={before} after={after} language={language} viewMode={viewMode} isResizing={isResizing} data={diffViewerData} />
+        <DiffViewer
+          before={before}
+          after={after}
+          language={language}
+          viewMode={viewMode}
+          isResizing={isResizing}
+          data={diffViewerData}
+          onLineSelect={handleLineSelect}
+        />
       </div>
-    </div>
+      </div>
+
+      <Dialog
+        isOpen={lineSelection !== null}
+        onClose={() => setLineSelection(null)}
+        title={t('sessionChanges.lineFeedbackTitle', { file: fileName, line: lineSelection?.line ?? '' })}
+        width={460}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={event => {
+            event.preventDefault()
+            if (!lineSelection || !feedback.trim()) return
+            const side = lineSelection.side === 'before' ? t('sessionChanges.beforeChange') : t('sessionChanges.afterChange')
+            insertComposerDraft({
+              sessionId,
+              text: t('sessionChanges.lineFeedbackPrompt', {
+                file: diff.file,
+                line: lineSelection.line,
+                side,
+                feedback: feedback.trim(),
+              }),
+            })
+            setLineSelection(null)
+          }}
+        >
+          <p className="text-[length:var(--fs-sm)] text-text-400">{t('sessionChanges.lineFeedbackHint')}</p>
+          <textarea
+            value={feedback}
+            onChange={event => setFeedback(event.target.value)}
+            placeholder={t('sessionChanges.lineFeedbackPlaceholder')}
+            rows={4}
+            autoFocus
+            className="w-full resize-y rounded-lg border border-border-200 bg-bg-100 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setLineSelection(null)}>
+              {t('common:cancel')}
+            </Button>
+            <Button type="submit" disabled={!feedback.trim()}>
+              {t('sessionChanges.addToConversation')}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   )
 })
 

@@ -2171,6 +2171,14 @@ export type GoalResponse = {
   goal: GoalInfo
 }
 
+export type WorkspaceCheckpoint = {
+  snapshot: string
+}
+
+export type WorkspaceCheckpointRestoreInput = {
+  snapshot: string
+}
+
 export type WorktreeError = {
   name:
     | "WorktreeNotGitError"
@@ -2187,6 +2195,7 @@ export type WorktreeError = {
 
 export type WorktreeCreateInput = {
   name?: string
+  baseBranch?: string
   /**
    * Additional startup script to run after the project's start command
    */
@@ -2332,6 +2341,7 @@ export type Path = {
 export type VcsInfo = {
   branch?: string
   default_branch?: string
+  remote_url?: string
 }
 
 export type VcsBranchSwitchError = {
@@ -2362,6 +2372,14 @@ export type VcsApplyError = {
   data: {
     message: string
     reason: "non-git" | "not-clean"
+  }
+}
+
+export type VcsMutationError = {
+  name: "VcsMutationError"
+  data: {
+    message: string
+    reason: "non-git" | "invalid-input" | "conflict"
   }
 }
 
@@ -8176,6 +8194,68 @@ export type ExperimentalGoalStatusResponses = {
 
 export type ExperimentalGoalStatusResponse = ExperimentalGoalStatusResponses[keyof ExperimentalGoalStatusResponses]
 
+export type ExperimentalCheckpointCreateData = {
+  body?: {
+    [key: string]: unknown
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/checkpoint"
+}
+
+export type ExperimentalCheckpointCreateErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalCheckpointCreateError =
+  ExperimentalCheckpointCreateErrors[keyof ExperimentalCheckpointCreateErrors]
+
+export type ExperimentalCheckpointCreateResponses = {
+  /**
+   * Workspace checkpoint
+   */
+  200: WorkspaceCheckpoint
+}
+
+export type ExperimentalCheckpointCreateResponse =
+  ExperimentalCheckpointCreateResponses[keyof ExperimentalCheckpointCreateResponses]
+
+export type ExperimentalCheckpointRestoreData = {
+  body?: WorkspaceCheckpointRestoreInput
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/checkpoint/restore"
+}
+
+export type ExperimentalCheckpointRestoreErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalCheckpointRestoreError =
+  ExperimentalCheckpointRestoreErrors[keyof ExperimentalCheckpointRestoreErrors]
+
+export type ExperimentalCheckpointRestoreResponses = {
+  /**
+   * Checkpoint restored
+   */
+  200: boolean
+}
+
+export type ExperimentalCheckpointRestoreResponse =
+  ExperimentalCheckpointRestoreResponses[keyof ExperimentalCheckpointRestoreResponses]
+
 export type WorktreeRemoveData = {
   body?: WorktreeRemoveInput
   path?: never
@@ -8841,6 +8921,164 @@ export type VcsApplyResponses = {
 }
 
 export type VcsApplyResponse = VcsApplyResponses[keyof VcsApplyResponses]
+
+export type VcsStageData = {
+  body?: {
+    files: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/stage"
+}
+
+export type VcsStageErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsStageError = VcsStageErrors[keyof VcsStageErrors]
+
+export type VcsStageResponses = {
+  /**
+   * VCS files staged
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsStageResponse = VcsStageResponses[keyof VcsStageResponses]
+
+export type VcsUnstageData = {
+  body?: {
+    files: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/unstage"
+}
+
+export type VcsUnstageErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsUnstageError = VcsUnstageErrors[keyof VcsUnstageErrors]
+
+export type VcsUnstageResponses = {
+  /**
+   * VCS files unstaged
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsUnstageResponse = VcsUnstageResponses[keyof VcsUnstageResponses]
+
+export type VcsDiscardData = {
+  body?: {
+    files: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/discard"
+}
+
+export type VcsDiscardErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsDiscardError = VcsDiscardErrors[keyof VcsDiscardErrors]
+
+export type VcsDiscardResponses = {
+  /**
+   * VCS changes discarded
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsDiscardResponse = VcsDiscardResponses[keyof VcsDiscardResponses]
+
+export type VcsCommitData = {
+  body?: {
+    message: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/commit"
+}
+
+export type VcsCommitErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsCommitError = VcsCommitErrors[keyof VcsCommitErrors]
+
+export type VcsCommitResponses = {
+  /**
+   * VCS changes committed
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsCommitResponse = VcsCommitResponses[keyof VcsCommitResponses]
+
+export type VcsPushData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/push"
+}
+
+export type VcsPushErrors = {
+  /**
+   * VcsMutationError | InvalidRequestError
+   */
+  400: VcsMutationError | InvalidRequestError
+}
+
+export type VcsPushError = VcsPushErrors[keyof VcsPushErrors]
+
+export type VcsPushResponses = {
+  /**
+   * VCS branch pushed
+   */
+  200: {
+    output: string
+  }
+}
+
+export type VcsPushResponse = VcsPushResponses[keyof VcsPushResponses]
 
 export type CommandListData = {
   body?: never

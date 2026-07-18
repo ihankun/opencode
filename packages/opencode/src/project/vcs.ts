@@ -240,6 +240,7 @@ export const Event = VcsEvent
 export const Info = Schema.Struct({
   branch: Schema.optional(Schema.String),
   default_branch: Schema.optional(Schema.String),
+  remote_url: Schema.optional(Schema.String),
 }).annotate({ identifier: "VcsInfo" })
 export type Info = Schema.Schema.Type<typeof Info>
 
@@ -273,6 +274,21 @@ export const ApplyResult = Schema.Struct({
 })
 export type ApplyResult = Schema.Schema.Type<typeof ApplyResult>
 
+export const FilesInput = Schema.Struct({
+  files: Schema.Array(Schema.String),
+})
+export type FilesInput = Schema.Schema.Type<typeof FilesInput>
+
+export const CommitInput = Schema.Struct({
+  message: Schema.String,
+})
+export type CommitInput = Schema.Schema.Type<typeof CommitInput>
+
+export const MutationResult = Schema.Struct({
+  output: Schema.String,
+})
+export type MutationResult = Schema.Schema.Type<typeof MutationResult>
+
 export const Branch = Schema.Struct({
   name: Schema.String,
   current: Schema.Boolean,
@@ -299,16 +315,27 @@ export class BranchSwitchError extends Schema.TaggedErrorClass<BranchSwitchError
   reason: Schema.Literals(["non-git", "not-found", "conflict"]),
 }) {}
 
+export class MutationError extends Schema.TaggedErrorClass<MutationError>()("VcsMutationError", {
+  message: Schema.String,
+  reason: Schema.Literals(["non-git", "invalid-input", "conflict"]),
+}) {}
+
 export interface Interface {
   readonly init: () => Effect.Effect<void>
   readonly branch: () => Effect.Effect<string | undefined>
   readonly branches: () => Effect.Effect<Branch[]>
   readonly switchBranch: (input: SwitchBranchInput) => Effect.Effect<SwitchBranchResult, BranchSwitchError>
   readonly defaultBranch: () => Effect.Effect<string | undefined>
+  readonly remoteUrl: () => Effect.Effect<string | undefined>
   readonly status: () => Effect.Effect<FileStatus[]>
   readonly diff: (mode: Mode, options?: DiffOptions) => Effect.Effect<FileDiff[]>
   readonly diffRaw: () => Effect.Effect<string>
   readonly apply: (input: ApplyInput) => Effect.Effect<ApplyResult, PatchApplyError>
+  readonly stage: (input: FilesInput) => Effect.Effect<MutationResult, MutationError>
+  readonly unstage: (input: FilesInput) => Effect.Effect<MutationResult, MutationError>
+  readonly discard: (input: FilesInput) => Effect.Effect<MutationResult, MutationError>
+  readonly commit: (input: CommitInput) => Effect.Effect<MutationResult, MutationError>
+  readonly push: () => Effect.Effect<MutationResult, MutationError>
 }
 
 interface State {
@@ -358,6 +385,40 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
       }),
     )
 
+    const context = Effect.fnUntraced(function* () {
+      const ctx = yield* InstanceState.context
+      if (ctx.project.vcs === "git") return ctx
+      return yield* new MutationError({
+        message: "Git operation can't run because the project is not git-based",
+        reason: "non-git",
+      })
+    })
+
+    const pathspecs = Effect.fnUntraced(function* (input: FilesInput) {
+      const ctx = yield* context()
+      const changed = new Set((yield* git.status(ctx.directory)).map((item) => item.file))
+      const files = [...new Set(input.files.map((file) => file.trim()))]
+      if (files.length === 0 || files.some((file) => !file || !changed.has(file))) {
+        return yield* new MutationError({
+          message: "Select one or more changed files from the current working tree",
+          reason: "invalid-input",
+        })
+      }
+      return { ctx, files: files.map((file) => `:(literal)${file}`) }
+    })
+
+    const result = Effect.fnUntraced(function* (command: Git.Result, fallback: string) {
+      const output = [command.stdout.toString("utf8"), command.stderr.toString("utf8")]
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join("\n")
+      if (command.exitCode === 0) return { output }
+      return yield* new MutationError({
+        message: output || fallback,
+        reason: "conflict",
+      })
+    })
+
     return Service.of({
       init: Effect.fn("Vcs.init")(function* () {
         yield* InstanceState.get(state).pipe(Effect.forkIn(scope))
@@ -405,6 +466,20 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
       }),
       defaultBranch: Effect.fn("Vcs.defaultBranch")(function* () {
         return yield* InstanceState.use(state, (x) => x.root?.name)
+      }),
+      remoteUrl: Effect.fn("Vcs.remoteUrl")(function* () {
+        const ctx = yield* InstanceState.context
+        if (ctx.project.vcs !== "git") return
+        const remotes = (yield* git.run(["remote"], { cwd: ctx.directory }))
+          .text()
+          .split(/\r?\n/)
+          .map((remote) => remote.trim())
+          .filter(Boolean)
+        const remote = remotes.includes("origin") ? "origin" : remotes[0]
+        if (!remote) return
+        const result = yield* git.run(["remote", "get-url", remote], { cwd: ctx.directory })
+        if (result.exitCode !== 0) return
+        return safeRemoteUrl(result.text().trim())
       }),
       status: Effect.fn("Vcs.status")(function* () {
         const ctx = yield* InstanceState.context
@@ -475,10 +550,113 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         }
         return { applied: true }
       }),
+      stage: Effect.fn("Vcs.stage")(function* (input: FilesInput) {
+        const target = yield* pathspecs(input)
+        return yield* result(
+          yield* git.run(["add", "--all", "--", ...target.files], { cwd: target.ctx.directory }),
+          "Failed to stage files",
+        )
+      }),
+      unstage: Effect.fn("Vcs.unstage")(function* (input: FilesInput) {
+        const target = yield* pathspecs(input)
+        const args = (yield* git.hasHead(target.ctx.directory))
+          ? ["reset", "HEAD", "--", ...target.files]
+          : ["rm", "--cached", "-r", "--", ...target.files]
+        return yield* result(yield* git.run(args, { cwd: target.ctx.directory }), "Failed to unstage files")
+      }),
+      discard: Effect.fn("Vcs.discard")(function* (input: FilesInput) {
+        const target = yield* pathspecs(input)
+        const status = yield* git.status(target.ctx.directory)
+        const selected = new Set(input.files.map((file) => file.trim()))
+        const added = status
+          .filter((item) => selected.has(item.file) && item.code[0] === "A")
+          .map((item) => `:(literal)${item.file}`)
+        const tracked = status
+          .filter((item) => selected.has(item.file) && item.code !== "??" && item.code[0] !== "A")
+          .map((item) => `:(literal)${item.file}`)
+        const untracked = status
+          .filter((item) => selected.has(item.file) && item.code === "??")
+          .map((item) => `:(literal)${item.file}`)
+        const commands = [
+          ...(added.length > 0
+            ? [git.run(["rm", "--cached", "-f", "--", ...added], { cwd: target.ctx.directory })]
+            : []),
+          ...(tracked.length > 0
+            ? [git.run(["restore", "--source=HEAD", "--staged", "--worktree", "--", ...tracked], { cwd: target.ctx.directory })]
+            : []),
+          ...(untracked.length > 0 || added.length > 0
+            ? [git.run(["clean", "-f", "--", ...untracked, ...added], { cwd: target.ctx.directory })]
+            : []),
+        ]
+        const outputs = yield* Effect.all(commands, { concurrency: 1 })
+        for (const command of outputs) yield* result(command, "Failed to discard files")
+        return { output: outputs.flatMap((command) => [command.text().trim()]).filter(Boolean).join("\n") }
+      }),
+      commit: Effect.fn("Vcs.commit")(function* (input: CommitInput) {
+        const ctx = yield* context()
+        const message = input.message.trim()
+        if (!message || message.length > 10_000 || message.includes("\0")) {
+          return yield* new MutationError({
+            message: "Commit message must contain between 1 and 10,000 characters",
+            reason: "invalid-input",
+          })
+        }
+        return yield* result(
+          yield* git.run(["commit", "--message", message], { cwd: ctx.directory, maxOutputBytes: 1_000_000 }),
+          "Failed to commit staged changes",
+        )
+      }),
+      push: Effect.fn("Vcs.push")(function* () {
+        const ctx = yield* context()
+        const upstream = yield* git.run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], {
+          cwd: ctx.directory,
+        })
+        if (upstream.exitCode === 0) {
+          return yield* result(
+            yield* git.run(["push"], { cwd: ctx.directory, maxOutputBytes: 1_000_000 }),
+            "Failed to push the current branch",
+          )
+        }
+        const branch = yield* git.branch(ctx.directory)
+        const remotes = (yield* git.run(["remote"], { cwd: ctx.directory }))
+          .text()
+          .split(/\r?\n/)
+          .map((remote) => remote.trim())
+          .filter(Boolean)
+        const remote = remotes.includes("origin") ? "origin" : remotes[0]
+        if (!branch || !remote) {
+          return yield* new MutationError({
+            message: "Configure a Git remote before pushing this branch",
+            reason: "conflict",
+          })
+        }
+        return yield* result(
+          yield* git.run(["push", "--set-upstream", remote, branch], {
+            cwd: ctx.directory,
+            maxOutputBytes: 1_000_000,
+          }),
+          "Failed to push the current branch",
+        )
+      }),
     })
   }),
 )
 
 export const node = LayerNode.make({ service: Service, layer: layer, deps: [Git.node, EventV2Bridge.node] })
+
+export function safeRemoteUrl(value: string) {
+  const scp = /^(?:[^@]+@)?([^:]+):(.+)$/.exec(value)
+  if (scp && !value.includes("://")) return browserRemoteUrl(scp[1], scp[2])
+  if (!URL.canParse(value)) return
+  const remote = new URL(value)
+  if (!["http:", "https:", "ssh:", "git:"].includes(remote.protocol)) return
+  return browserRemoteUrl(remote.hostname, remote.pathname)
+}
+
+function browserRemoteUrl(host: string, pathname: string) {
+  const path = pathname.replace(/^\/+/, "").replace(/\.git\/?$/, "").replace(/\/+$/, "")
+  if (!host || !path) return
+  return `https://${host}/${path}`
+}
 
 export * as Vcs from "./vcs"

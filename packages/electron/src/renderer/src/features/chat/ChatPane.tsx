@@ -7,7 +7,7 @@
  */
 
 import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredValue } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
 import { AlertCircleIcon, CloseIcon, PlugIcon } from '../../components/Icons'
@@ -32,6 +32,7 @@ import { getProviders, type Attachment } from '../../api'
 import type { MessageError } from '../../types/message'
 import { getInternalDragSnapshot, subscribeInternalDrag, subscribeInternalDrop } from '../../lib/internalDragCore'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { I18nTrans } from '../../components/I18nTrans'
 
 interface ChatPaneProps {
   paneId: string
@@ -908,7 +909,7 @@ export const ChatPane = memo(function ChatPane({
           <div className="absolute bottom-full inset-x-0 flex justify-center pb-2 pointer-events-none z-20">
             <div className="px-3 py-1.5 glass border border-border-200/60 rounded-lg shadow-lg text-[length:var(--fs-sm)] text-text-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
               {showCancelHint ? (
-                <Trans
+                <I18nTrans
                   i18nKey="chat:hints.pressEscAgain"
                   components={{
                     1: (

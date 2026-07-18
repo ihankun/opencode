@@ -17,6 +17,7 @@ const Terminal = lazy(() => import('./Terminal').then(module => ({ default: modu
 const McpPanel = lazy(() => import('./McpPanel').then(module => ({ default: module.McpPanel })))
 const SkillPanel = lazy(() => import('./SkillPanel').then(module => ({ default: module.SkillPanel })))
 const WorktreePanel = lazy(() => import('./WorktreePanel').then(module => ({ default: module.WorktreePanel })))
+const PreviewPanel = lazy(() => import('./PreviewPanel').then(module => ({ default: module.PreviewPanel })))
 
 function PanelFallback() {
   const { t } = useTranslation(['components', 'common'])
@@ -145,6 +146,12 @@ export const RightPanel = memo(function RightPanel({ directory, sessionId, inlin
           {activeTab.type === 'worktree' ? (
             <Suspense fallback={<PanelFallback />}>
               <WorktreePanel isResizing={isPanelResizing} />
+            </Suspense>
+          ) : null}
+
+          {activeTab.type === 'preview' ? (
+            <Suspense fallback={<PanelFallback />}>
+              <PreviewPanel tabId={activeTab.id} url={activeTab.previewUrl} />
             </Suspense>
           ) : null}
         </>

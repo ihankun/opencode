@@ -29,6 +29,7 @@ export type Info = Schema.Schema.Type<typeof Info>
 
 export const CreateInput = Schema.Struct({
   name: Schema.optional(Schema.String),
+  baseBranch: Schema.optional(Schema.String),
   startCommand: Schema.optional(
     Schema.String.annotate({ description: "Additional startup script to run after the project's start command" }),
   ),
@@ -118,7 +119,7 @@ function failedRemoves(...chunks: string[]) {
 
 export interface Interface {
   readonly makeWorktreeInfo: (options?: { name?: string; detached?: boolean }) => Effect.Effect<Info, Error>
-  readonly createFromInfo: (info: Info, startCommand?: string) => Effect.Effect<void, Error>
+  readonly createFromInfo: (info: Info, startCommand?: string, baseBranch?: string) => Effect.Effect<void, Error>
   readonly create: (input?: CreateInput) => Effect.Effect<Info, Error>
   readonly list: () => Effect.Effect<(Omit<Info, "branch"> & { branch?: string })[], Error>
   readonly remove: (input: RemoveInput) => Effect.Effect<boolean, Error>
@@ -211,11 +212,14 @@ const layer: Layer.Layer<
       return yield* candidate({ root, name: input?.name ? slugify(input.name) : "", detached: input?.detached })
     })
 
-    const setup = Effect.fnUntraced(function* (info: Info) {
+    const setup = Effect.fnUntraced(function* (info: Info, baseBranch?: string) {
       const ctx = yield* InstanceState.context
+      if (baseBranch && !(yield* gitSvc.branches(ctx.worktree)).includes(baseBranch)) {
+        return yield* new CreateFailedError({ message: `Base branch not found: ${baseBranch}` })
+      }
       const created = yield* git(
         info.branch
-          ? ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
+          ? ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory, baseBranch ?? "HEAD"]
           : ["worktree", "add", "--no-checkout", "--detach", info.directory, "HEAD"],
         { cwd: ctx.worktree },
       )
@@ -278,8 +282,8 @@ const layer: Layer.Layer<
       yield* runStartScripts(info.directory, { projectID, extra })
     })
 
-    const createFromInfo = Effect.fn("Worktree.createFromInfo")(function* (info: Info, startCommand?: string) {
-      yield* setup(info)
+    const createFromInfo = Effect.fn("Worktree.createFromInfo")(function* (info: Info, startCommand?: string, baseBranch?: string) {
+      yield* setup(info, baseBranch)
       yield* boot(info, startCommand).pipe(
         Effect.catchCause((cause) => Effect.logError("worktree bootstrap failed", { cause })),
         Effect.forkIn(scope),
@@ -288,7 +292,7 @@ const layer: Layer.Layer<
 
     const create = Effect.fn("Worktree.create")(function* (input?: CreateInput) {
       const info = yield* makeWorktreeInfo({ name: input?.name })
-      yield* createFromInfo(info, input?.startCommand)
+      yield* createFromInfo(info, input?.startCommand, input?.baseBranch)
       return info
     })
 

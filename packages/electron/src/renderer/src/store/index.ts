@@ -34,6 +34,7 @@ export { autoApproveStore } from './autoApproveStore'
 export type { AutoApproveRule } from './autoApproveStore'
 
 export { serverStore, makeBasicAuthHeader, exportServerSettingsBackup, importServerSettingsBackup } from './serverStore'
+export { executionTargetStore } from './executionTargetStore'
 export type { ServerConfig, ServerHealth, ServerAuth, ServerSettingsBackup } from './serverStore'
 
 export {
