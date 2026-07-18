@@ -130,6 +130,12 @@ export const TeachIcon = wrap(GraduationCap)
 export const SettingsIcon = wrap(Settings)
 export const SunIcon = wrap(Sun)
 export const MoonIcon = wrap(Moon)
+export const LaptopIcon = ({ size = 16, ...props }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <rect x="4" y="4" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth="2" />
+    <path d="M2.5 19h19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
 export const SystemIcon = wrap(Monitor)
 export const SidebarIcon = wrap(PanelLeft)
 export const PanelRightIcon = wrap(PanelRight)

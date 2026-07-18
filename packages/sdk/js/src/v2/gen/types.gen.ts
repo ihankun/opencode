@@ -2334,6 +2334,14 @@ export type VcsInfo = {
   default_branch?: string
 }
 
+export type VcsBranchSwitchError = {
+  name: "VcsBranchSwitchError"
+  data: {
+    message: string
+    reason: "non-git" | "not-found" | "conflict"
+  }
+}
+
 export type VcsFileStatus = {
   file: string
   additions: number
@@ -5052,11 +5060,16 @@ export type SkillV2Info = {
 
 export type SkillMarketplaceSummary = {
   id: string
+  provider: "official" | "netease"
   slug: string
   name: string
   source: string
   description: string
   url: string
+  version: string
+  category: string
+  tags: Array<string>
+  icon: string
   githubStars: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   downloadCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   isVerified: boolean
@@ -5071,6 +5084,7 @@ export type SkillMarketplacePage = {
   page: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   perPage: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   total: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  categories: Array<string>
 }
 
 export type SkillMarketplaceFile = {
@@ -5080,8 +5094,13 @@ export type SkillMarketplaceFile = {
 
 export type SkillMarketplaceDetail = {
   id: string
+  provider: "official" | "netease"
   source: string
   slug: string
+  version: string
+  category: string
+  tags: Array<string>
+  icon: string
   hash: string
   files: Array<SkillMarketplaceFile>
   githubStars: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -5098,8 +5117,10 @@ export type SkillMarketplaceDetail = {
 
 export type SkillMarketplaceManifest = {
   id: string
+  provider: "official" | "netease"
   source: string
   slug: string
+  version: string
   hash: string
   scope: "global" | "project"
   installedAt: string
@@ -5111,6 +5132,7 @@ export type SkillMarketplaceManifest = {
 
 export type SkillMarketplaceInstallation = {
   id: string
+  provider: "official" | "netease"
   slug: string
   scope: "global" | "project"
   directory: string
@@ -5121,12 +5143,14 @@ export type SkillMarketplaceInstallation = {
 
 export type SkillMarketplaceInstallInput = {
   id: string
+  provider: "official" | "netease"
   scope: "global" | "project"
   force?: boolean
 }
 
 export type SkillMarketplaceRemoveInput = {
   id: string
+  provider: "official" | "netease"
   scope: "global" | "project"
   force?: boolean
 }
@@ -8636,6 +8660,69 @@ export type VcsGetResponses = {
 }
 
 export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
+
+export type VcsBranchListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/branch"
+}
+
+export type VcsBranchListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type VcsBranchListError = VcsBranchListErrors[keyof VcsBranchListErrors]
+
+export type VcsBranchListResponses = {
+  /**
+   * VCS branches
+   */
+  200: Array<{
+    name: string
+    current: boolean
+  }>
+}
+
+export type VcsBranchListResponse = VcsBranchListResponses[keyof VcsBranchListResponses]
+
+export type VcsBranchSwitchData = {
+  body?: {
+    branch: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/branch"
+}
+
+export type VcsBranchSwitchErrors = {
+  /**
+   * VcsBranchSwitchError | InvalidRequestError
+   */
+  400: VcsBranchSwitchError | InvalidRequestError
+}
+
+export type VcsBranchSwitchError2 = VcsBranchSwitchErrors[keyof VcsBranchSwitchErrors]
+
+export type VcsBranchSwitchResponses = {
+  /**
+   * Selected VCS branch
+   */
+  200: {
+    branch: string
+  }
+}
+
+export type VcsBranchSwitchResponse = VcsBranchSwitchResponses[keyof VcsBranchSwitchResponses]
 
 export type VcsStatusData = {
   body?: never
@@ -13450,6 +13537,9 @@ export type ServerSkillSkillMarketplaceSearchData = {
       workspace?: string
     }
     q: string
+    provider: "official" | "netease"
+    sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent"
+    category?: string
     limit?: string
     page?: string
   }
@@ -13492,6 +13582,7 @@ export type ServerSkillSkillMarketplaceDetailData = {
       workspace?: string
     }
     id: string
+    provider: "official" | "netease"
   }
   url: "/api/skill/marketplace/detail"
 }

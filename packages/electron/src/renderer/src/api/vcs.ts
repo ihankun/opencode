@@ -21,6 +21,21 @@ export async function getVcsInfo(directory?: string): Promise<VcsInfo | null> {
   }
 }
 
+export interface VcsBranch {
+  name: string
+  current: boolean
+}
+
+export async function listVcsBranches(directory?: string): Promise<VcsBranch[]> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.branch.list({ directory: formatPathForApi(directory) }))
+}
+
+export async function switchVcsBranch(branch: string, directory?: string): Promise<string> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.vcs.branch.switch({ branch, directory: formatPathForApi(directory) })).branch
+}
+
 /**
  * 获取 Git 或分支维度的 diff
  */

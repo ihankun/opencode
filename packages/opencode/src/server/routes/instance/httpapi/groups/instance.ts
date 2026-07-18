@@ -40,10 +40,23 @@ export class ApiVcsApplyError extends Schema.ErrorClass<ApiVcsApplyError>("VcsAp
   { httpApiStatus: 400 },
 ) {}
 
+export class ApiVcsBranchSwitchError extends Schema.ErrorClass<ApiVcsBranchSwitchError>("VcsBranchSwitchError")(
+  {
+    name: Schema.Literal("VcsBranchSwitchError"),
+    data: Schema.Struct({
+      message: Schema.String,
+      reason: Schema.Literals(["non-git", "not-found", "conflict"]),
+    }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
 export const InstancePaths = {
   dispose: "/instance/dispose",
   path: "/path",
   vcs: "/vcs",
+  vcsBranches: "/vcs/branch",
+  vcsSwitchBranch: "/vcs/branch",
   vcsStatus: "/vcs/status",
   vcsDiff: "/vcs/diff",
   vcsDiffRaw: "/vcs/diff/raw",
@@ -89,6 +102,28 @@ export const InstanceApi = HttpApi.make("instance")
             summary: "Get VCS info",
             description:
               "Retrieve version control system (VCS) information for the current project, such as git branch.",
+          }),
+        ),
+        HttpApiEndpoint.get("vcsBranches", InstancePaths.vcsBranches, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(Vcs.Branch), "VCS branches"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "vcs.branch.list",
+            summary: "List VCS branches",
+            description: "List local branches for the current git project.",
+          }),
+        ),
+        HttpApiEndpoint.post("vcsSwitchBranch", InstancePaths.vcsSwitchBranch, {
+          query: WorkspaceRoutingQuery,
+          payload: Vcs.SwitchBranchInput,
+          success: described(Vcs.SwitchBranchResult, "Selected VCS branch"),
+          error: ApiVcsBranchSwitchError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "vcs.branch.switch",
+            summary: "Switch VCS branch",
+            description: "Switch the current git project to an existing local branch.",
           }),
         ),
         HttpApiEndpoint.get("vcsStatus", InstancePaths.vcsStatus, {

@@ -110,6 +110,25 @@ describe("Vcs", () => {
   )
 
   it.instance(
+    "lists and switches local branches",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        yield* git(test.directory, ["branch", "feature"])
+
+        const vcs = yield* init()
+        const before = yield* vcs.branches()
+        expect(before).toContainEqual({ name: "feature", current: false })
+
+        const switched = yield* vcs.switchBranch({ branch: "feature" })
+        expect(switched).toEqual({ branch: "feature" })
+        expect(yield* vcs.branch()).toBe("feature")
+        expect(yield* vcs.branches()).toContainEqual({ name: "feature", current: true })
+      }),
+    { git: true },
+  )
+
+  it.instance(
     "publishes BranchUpdated when .git/HEAD changes",
     () =>
       Effect.gen(function* () {

@@ -18,6 +18,7 @@
  * - `.mutating()` tells the runner to reset isolated state after destructive routes.
  */
 import { Effect } from "effect"
+import { $ } from "bun"
 import { OpenApi } from "effect/unstable/httpapi"
 import { TestLLMServer } from "../../lib/llm-server"
 import path from "path"
@@ -121,6 +122,13 @@ const scenarios: Scenario[] = [
     check(body.worktree === ctx.directory, "worktree should resolve from x-opencode-directory")
   }),
   http.protected.get("/vcs", "vcs.get").json(),
+  http.protected.get("/vcs/branch", "vcs.branch.list").json(200, array),
+  http.protected
+    .post("/vcs/branch", "vcs.branch.switch")
+    .mutating()
+    .seeded((ctx) => Effect.promise(() => $`git branch --show-current`.cwd(ctx.directory!).text()))
+    .at((ctx) => ({ path: "/vcs/branch", headers: ctx.headers(), body: { branch: ctx.state.trim() } }))
+    .json(),
   http.protected.get("/vcs/status", "vcs.status").json(200, array),
   http.protected
     .get("/vcs/diff", "vcs.diff")

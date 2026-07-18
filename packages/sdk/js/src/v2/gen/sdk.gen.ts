@@ -417,6 +417,10 @@ import type {
   V2SkillListResponses,
   VcsApplyErrors,
   VcsApplyResponses,
+  VcsBranchListErrors,
+  VcsBranchListResponses,
+  VcsBranchSwitchErrors,
+  VcsBranchSwitchResponses,
   VcsDiffErrors,
   VcsDiffRawErrors,
   VcsDiffRawResponses,
@@ -2386,6 +2390,75 @@ export class Path extends HeyApiClient {
   }
 }
 
+export class Branch extends HeyApiClient {
+  /**
+   * List VCS branches
+   *
+   * List local branches for the current git project.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<VcsBranchListResponses, VcsBranchListErrors, ThrowOnError>({
+      url: "/vcs/branch",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Switch VCS branch
+   *
+   * Switch the current git project to an existing local branch.
+   */
+  public switch<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      branch?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "branch" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<VcsBranchSwitchResponses, VcsBranchSwitchErrors, ThrowOnError>({
+      url: "/vcs/branch",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Diff extends HeyApiClient {
   /**
    * Get raw VCS diff
@@ -2548,6 +2621,11 @@ export class Vcs extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _branch?: Branch
+  get branch(): Branch {
+    return (this._branch ??= new Branch({ client: this.client }))
   }
 
   private _diff?: Diff
@@ -7490,6 +7568,9 @@ export class Skill2 extends HeyApiClient {
         workspace?: string
       }
       q: string
+      provider: "official" | "netease"
+      sort?: "recommended" | "aiScore" | "downloads" | "stars" | "rating" | "recent"
+      category?: string
       limit?: string
       page?: string
     },
@@ -7502,6 +7583,9 @@ export class Skill2 extends HeyApiClient {
           args: [
             { in: "query", key: "location" },
             { in: "query", key: "q" },
+            { in: "query", key: "provider" },
+            { in: "query", key: "sort" },
+            { in: "query", key: "category" },
             { in: "query", key: "limit" },
             { in: "query", key: "page" },
           ],
@@ -7526,6 +7610,7 @@ export class Skill2 extends HeyApiClient {
         workspace?: string
       }
       id: string
+      provider: "official" | "netease"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7536,6 +7621,7 @@ export class Skill2 extends HeyApiClient {
           args: [
             { in: "query", key: "location" },
             { in: "query", key: "id" },
+            { in: "query", key: "provider" },
           ],
         },
       ],

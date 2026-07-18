@@ -496,6 +496,8 @@ function AddServerForm({
 export function ServersSettings() {
   const { t } = useTranslation(['settings', 'common'])
   const [addingServer, setAddingServer] = useState(false)
+  const [switchError, setSwitchError] = useState('')
+  const [selectingServerId, setSelectingServerId] = useState<string>()
   const {
     servers,
     activeServer,
@@ -521,8 +523,17 @@ export function ServersSettings() {
 
   // 切换服务器：设置 active + 清理当前 session + 导航回首页
   const handleSelectServer = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (activeServer?.id === id) return // 没变，不做事
+
+      setSwitchError('')
+      setSelectingServerId(id)
+      const health = await checkHealth(id)
+      setSelectingServerId(undefined)
+      if (health.status !== 'online') {
+        setSwitchError(t('servers.switchUnavailable'))
+        return
+      }
 
       // 清理当前 session 的 store 状态
       if (routeSessionId) {
@@ -531,9 +542,8 @@ export function ServersSettings() {
 
       setActiveServer(id) // 内部触发 serverChangeListeners → reconnectSSE()
       navigateHome()
-      void checkHealth(id)
     },
-    [activeServer?.id, checkHealth, routeSessionId, setActiveServer, navigateHome],
+    [activeServer?.id, checkHealth, routeSessionId, setActiveServer, navigateHome, t],
   )
 
   return (
@@ -567,7 +577,10 @@ export function ServersSettings() {
               server={s}
               health={getHealth(s.id)}
               isActive={activeServer?.id === s.id}
-              onSelect={() => handleSelectServer(s.id)}
+              onSelect={() => {
+                if (selectingServerId) return
+                void handleSelectServer(s.id)
+              }}
               onDelete={() => removeServer(s.id)}
               onEdit={updates => {
                 const auth = updates.password
@@ -591,6 +604,8 @@ export function ServersSettings() {
               onCancel={() => setAddingServer(false)}
             />
           )}
+
+          {switchError && <div className="px-1 text-[length:var(--fs-xs)] text-danger-100">{switchError}</div>}
 
           {servers.length === 0 && !addingServer && (
             <div className="text-[length:var(--fs-md)] text-text-400 text-center py-8">{t('servers.noServersConfigured')}</div>

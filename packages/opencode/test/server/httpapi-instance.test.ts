@@ -1,4 +1,5 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { $ } from "bun"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { describe, expect } from "bun:test"
@@ -236,6 +237,7 @@ describe("instance HttpApi", () => {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       yield* fs.writeFileString(path.join(dir, "changed.txt"), "hello")
+      yield* Effect.promise(() => $`git branch feature`.cwd(dir).quiet())
 
       const [paths, vcs, diff] = yield* Effect.all(
         [
@@ -260,6 +262,24 @@ describe("instance HttpApi", () => {
       expect(yield* diff.json).toContainEqual(
         expect.objectContaining({ file: "changed.txt", additions: 1, status: "added" }),
       )
+
+      const branches = yield* HttpClientRequest.get(InstancePaths.vcsBranches).pipe(
+        directoryHeader(dir),
+        HttpClient.execute,
+      )
+      expect(branches.status).toBe(200)
+      expect(yield* branches.json).toContainEqual({ name: "feature", current: false })
+
+      const switched = yield* HttpClientRequest.post(InstancePaths.vcsSwitchBranch).pipe(
+        directoryHeader(dir),
+        HttpClientRequest.bodyJson({ branch: "feature" }),
+        HttpClient.execute,
+      )
+      expect(switched.status).toBe(200)
+      expect(yield* switched.json).toEqual({ branch: "feature" })
+
+      const selected = yield* HttpClientRequest.get(InstancePaths.vcs).pipe(directoryHeader(dir), HttpClient.execute)
+      expect(yield* selected.json).toMatchObject({ branch: "feature" })
     }),
   )
 })

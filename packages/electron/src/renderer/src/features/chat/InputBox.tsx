@@ -39,15 +39,21 @@ import {
   ChevronDownIcon,
   CloseIcon,
   FolderIcon,
+  GitBranchIcon,
   GlobeIcon,
+  LaptopIcon,
   PencilIcon,
   ReturnIcon,
+  SpinnerIcon,
   TrashIcon,
 } from '../../components/Icons'
 import type { ApiAgent } from '../../api/client'
-import type { ModelInfo, FileCapabilities } from '../../api'
+import { getVcsInfo, listVcsBranches, switchVcsBranch } from '../../api'
+import type { VcsBranch, ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
+import { useServerStore } from '../../hooks'
 import type { SessionStats } from '../../hooks'
+import { notificationStore } from '../../store'
 import { getDirectoryName, isSameDirectory } from '../../utils'
 import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
@@ -105,6 +111,14 @@ function getComposerMaxHeight(paneHeight: number, isCompact: boolean): number {
   const hardMax = isCompact ? COMPOSER_COMPACT_MAX_HEIGHT : COMPOSER_DESKTOP_MAX_HEIGHT
   const availableMax = Math.max(COMPOSER_MIN_HEIGHT, paneHeight - 96)
   return clamp(Math.floor(paneHeight * ratio), COMPOSER_MIN_HEIGHT, Math.min(hardMax, availableMax))
+}
+
+function isLoopbackServer(url: string) {
+  try {
+    return ['127.0.0.1', 'localhost', '::1'].includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
 }
 
 function getDropClientPoints(position: TauriDropPosition): Array<{ x: number; y: number }> {
@@ -341,6 +355,272 @@ function FollowupQueue({
   )
 }
 
+function NewTaskContextBar() {
+  const { t } = useTranslation('chat')
+  const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
+  const { servers, activeServer, setActiveServer, checkHealth } = useServerStore()
+  const [menu, setMenu] = useState<'project' | 'server' | 'branch'>()
+  const [branches, setBranches] = useState<VcsBranch[]>([])
+  const [branchLoading, setBranchLoading] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const projects = useMemo(() => {
+    const directories = [...savedDirectories].toSorted(
+      (a, b) => (recentProjects[b.path] ?? b.addedAt) - (recentProjects[a.path] ?? a.addedAt),
+    )
+    if (!currentDirectory || directories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
+      return directories
+    }
+    return [
+      ...directories,
+      {
+        path: currentDirectory,
+        name: getDirectoryName(currentDirectory) || currentDirectory,
+        addedAt: Date.now(),
+      },
+    ]
+  }, [currentDirectory, recentProjects, savedDirectories])
+  const projectName = currentDirectory
+    ? projects.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
+      getDirectoryName(currentDirectory) ||
+      currentDirectory
+    : t('emptyState.chooseProject')
+  const serverName = activeServer
+    ? isLoopbackServer(activeServer.url)
+      ? t('emptyState.localServer')
+      : activeServer.name
+    : t('emptyState.noServer')
+  const selectedBranch = branches.find(branch => branch.current)?.name
+
+  useEffect(() => {
+    if (!menu) return
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenu(undefined)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menu])
+
+  useEffect(() => {
+    if (!currentDirectory) {
+      setBranches([])
+      setBranchLoading(false)
+      return
+    }
+
+    let disposed = false
+    setBranchLoading(true)
+    void Promise.all([getVcsInfo(currentDirectory), listVcsBranches(currentDirectory).catch(() => [])])
+      .then(([info, listed]) => {
+        if (disposed) return
+        setBranches(listed.length > 0 ? listed : info?.branch ? [{ name: info.branch, current: true }] : [])
+      })
+      .finally(() => {
+        if (!disposed) setBranchLoading(false)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [activeServer?.id, currentDirectory])
+
+  const selectServer = async (serverId: string) => {
+    if (serverId === activeServer?.id) {
+      setMenu(undefined)
+      return
+    }
+
+    setSwitching(true)
+    const health = await checkHealth(serverId)
+    setSwitching(false)
+    if (health.status !== 'online') {
+      notificationStore.push(
+        'error',
+        t('emptyState.serverUnavailable'),
+        health.error || servers.find(server => server.id === serverId)?.url || t('emptyState.serverUnavailableDescription'),
+        '',
+      )
+      return
+    }
+
+    setActiveServer(serverId)
+    setMenu(undefined)
+  }
+
+  const selectBranch = async (branch: string) => {
+    if (!currentDirectory || branch === selectedBranch) {
+      setMenu(undefined)
+      return
+    }
+
+    setSwitching(true)
+    try {
+      await switchVcsBranch(branch, currentDirectory)
+      setBranches(current => current.map(item => ({ ...item, current: item.name === branch })))
+      setMenu(undefined)
+    } catch (error) {
+      notificationStore.push(
+        'error',
+        t('emptyState.branchSwitchFailed'),
+        error instanceof Error ? error.message : t('emptyState.branchSwitchFailedDescription'),
+        '',
+        currentDirectory,
+      )
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  const triggerClass =
+    'inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[length:var(--fs-sm)] font-normal text-text-100 transition-colors hover:bg-bg-200/70 disabled:opacity-60'
+  const menuClass =
+    'absolute bottom-full left-0 z-50 mb-2 max-h-64 min-w-60 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl'
+
+  return (
+    <div
+      ref={menuRef}
+      className="relative z-0 mx-3 -mb-px flex h-10 items-center gap-1 overflow-visible rounded-t-2xl bg-bg-200/45 px-4"
+    >
+      <div className="relative min-w-0">
+        <button
+          type="button"
+          onClick={() => setMenu(value => (value === 'project' ? undefined : 'project'))}
+          className={`${triggerClass} max-w-52`}
+          aria-haspopup="menu"
+          aria-expanded={menu === 'project'}
+          title={currentDirectory || t('emptyState.noWorkingDirectoryDescription')}
+        >
+          {currentDirectory ? <FolderIcon size={15} /> : <GlobeIcon size={15} />}
+          <span className="truncate">{projectName}</span>
+        </button>
+        {menu === 'project' && (
+          <div role="menu" className={menuClass}>
+            <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+              {t('emptyState.workingDirectory')}
+            </div>
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={!currentDirectory}
+              onClick={() => {
+                setCurrentDirectory(undefined)
+                setMenu(undefined)
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${!currentDirectory ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+            >
+              <GlobeIcon size={14} />
+              <span className="min-w-0 flex-1 truncate">{t('emptyState.noWorkingDirectory')}</span>
+            </button>
+            {projects.map(directory => {
+              const selected = !!currentDirectory && isSameDirectory(directory.path, currentDirectory)
+              return (
+                <button
+                  key={directory.path}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    setCurrentDirectory(directory.path)
+                    setMenu(undefined)
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${selected ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+                  title={directory.path}
+                >
+                  <FolderIcon size={14} />
+                  <span className="min-w-0 flex-1 truncate">{directory.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          disabled={switching}
+          onClick={() => setMenu(value => (value === 'server' ? undefined : 'server'))}
+          className={triggerClass}
+          aria-haspopup="menu"
+          aria-expanded={menu === 'server'}
+          title={activeServer?.url}
+        >
+          {switching ? (
+            <SpinnerIcon size={15} className="animate-spin" />
+          ) : isLoopbackServer(activeServer?.url || '') ? (
+            <LaptopIcon size={15} />
+          ) : (
+            <GlobeIcon size={15} />
+          )}
+          <span className="max-w-32 truncate">{serverName}</span>
+        </button>
+        {menu === 'server' && (
+          <div role="menu" className={menuClass}>
+            <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+              {t('emptyState.executionServer')}
+            </div>
+            {servers.map(server => {
+              const selected = server.id === activeServer?.id
+              return (
+                <button
+                  key={server.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  onClick={() => void selectServer(server.id)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${selected ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+                >
+                  {isLoopbackServer(server.url) ? <LaptopIcon size={14} /> : <GlobeIcon size={14} />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{isLoopbackServer(server.url) ? t('emptyState.localServer') : server.name}</span>
+                    <span className="block truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{server.url}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {(branchLoading || selectedBranch) && (
+        <div className="relative min-w-0">
+          <button
+            type="button"
+            disabled={branchLoading || switching || branches.length < 2}
+            onClick={() => setMenu(value => (value === 'branch' ? undefined : 'branch'))}
+            className={`${triggerClass} max-w-44 disabled:cursor-default`}
+            aria-haspopup="menu"
+            aria-expanded={menu === 'branch'}
+            title={selectedBranch}
+          >
+            {branchLoading ? <SpinnerIcon size={15} className="animate-spin" /> : <GitBranchIcon size={15} />}
+            <span className="truncate">{selectedBranch || t('emptyState.loadingBranch')}</span>
+          </button>
+          {menu === 'branch' && branches.length > 1 && (
+            <div role="menu" className={menuClass}>
+              <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
+                {t('emptyState.gitBranch')}
+              </div>
+              {branches.map(branch => (
+                <button
+                  key={branch.name}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={branch.current}
+                  onClick={() => void selectBranch(branch.name)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${branch.current ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'}`}
+                >
+                  <GitBranchIcon size={14} />
+                  <span className="min-w-0 flex-1 truncate">{branch.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============================================
 // InputBox Component
 // ============================================
@@ -392,7 +672,7 @@ function InputBoxComponent({
   homeMode = false,
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
-  const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
+  const { currentDirectory, savedDirectories, recentProjects } = useDirectory()
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
   const fileCaps: FileCapabilities = useMemo(
     () =>
@@ -417,7 +697,6 @@ function InputBoxComponent({
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
 
   // @ Mention 状态
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -450,7 +729,6 @@ function InputBoxComponent({
   const latestDraftRef = useRef<HistoryEntry>({ text: '', attachments: [] })
   const contentWrapRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
-  const projectMenuRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
   const compositionEndTimerRef = useRef<number | null>(null)
   const [composerMaxHeight, setComposerMaxHeight] = useState(280)
@@ -531,18 +809,6 @@ function InputBoxComponent({
     },
     [],
   )
-
-  useEffect(() => {
-    if (!projectMenuOpen) return
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (projectMenuRef.current?.contains(event.target as Node)) return
-      setProjectMenuOpen(false)
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [projectMenuOpen])
 
   const updateComposerHeightBudget = useCallback(() => {
     const paneHeight = getComposerPaneHeight(inputContainerRef.current ?? contentWrapRef.current)
@@ -1640,73 +1906,7 @@ function InputBoxComponent({
               />
             )}
 
-            {!sessionId && (
-              <div
-                className="relative z-0 -mb-3 flex min-h-12 items-start rounded-t-2xl border border-b-0 border-border-200/55 bg-bg-100/95 px-3 pb-4 pt-2 shadow-sm"
-                ref={projectMenuRef}
-              >
-                <button
-                  type="button"
-                  onClick={() => setProjectMenuOpen(value => !value)}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-bg-200/80 px-2.5 py-1.5 text-[length:var(--fs-sm)] font-medium text-text-100 transition-colors hover:bg-bg-300/70"
-                  aria-haspopup="menu"
-                  aria-expanded={projectMenuOpen}
-                  title={currentDirectory || '不选择工作目录时，对话会归到下面的对话列表'}
-                >
-                  {currentDirectory ? <FolderIcon size={14} /> : <GlobeIcon size={14} />}
-                  <span className="truncate">{selectedProjectName}</span>
-                  <ChevronDownIcon size={13} className="shrink-0 text-text-500" />
-                </button>
-
-                {projectMenuOpen && (
-                  <div
-                    role="menu"
-                    className="absolute bottom-full left-3 z-50 mb-2 max-h-64 min-w-56 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl"
-                  >
-                    <div className="px-2.5 py-1.5 text-[length:var(--fs-xxs)] font-medium uppercase tracking-wide text-text-500">
-                      {t('emptyState.workingDirectory')}
-                    </div>
-                    <button
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={!currentDirectory}
-                      onClick={() => {
-                        setCurrentDirectory(undefined)
-                        setProjectMenuOpen(false)
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${
-                        !currentDirectory ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'
-                      }`}
-                    >
-                      <GlobeIcon size={14} />
-                      <span className="min-w-0 flex-1 truncate">无工作目录</span>
-                    </button>
-                    {projectOptions.map(directory => {
-                      const selected = !!currentDirectory && isSameDirectory(directory.path, currentDirectory)
-                      return (
-                        <button
-                          key={directory.path}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={selected}
-                          onClick={() => {
-                            setCurrentDirectory(directory.path)
-                            setProjectMenuOpen(false)
-                          }}
-                          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${
-                            selected ? 'sidebar-selected-row text-text-100' : 'text-text-300 hover:bg-bg-200/70'
-                          }`}
-                          title={directory.path}
-                        >
-                          <FolderIcon size={14} />
-                          <span className="min-w-0 flex-1 truncate">{directory.name}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            {!sessionId && <NewTaskContextBar />}
 
             {/* Input Container */}
             <div
@@ -1718,7 +1918,7 @@ function InputBoxComponent({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`glass rounded-2xl relative flex flex-col overflow-hidden focus-within:outline-none shadow-lg ${
+              className={`glass rounded-2xl relative z-10 flex flex-col overflow-hidden focus-within:outline-none shadow-lg ${!sessionId ? 'min-h-[98px]' : ''} ${
                 isDragging || isInternalFileDragging
                   ? 'border border-accent-main-100 ring-2 ring-accent-main-100/30'
                   : isStreaming

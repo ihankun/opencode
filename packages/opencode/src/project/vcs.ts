@@ -273,14 +273,37 @@ export const ApplyResult = Schema.Struct({
 })
 export type ApplyResult = Schema.Schema.Type<typeof ApplyResult>
 
+export const Branch = Schema.Struct({
+  name: Schema.String,
+  current: Schema.Boolean,
+})
+export type Branch = Schema.Schema.Type<typeof Branch>
+
+export const SwitchBranchInput = Schema.Struct({
+  branch: Schema.String,
+})
+export type SwitchBranchInput = Schema.Schema.Type<typeof SwitchBranchInput>
+
+export const SwitchBranchResult = Schema.Struct({
+  branch: Schema.String,
+})
+export type SwitchBranchResult = Schema.Schema.Type<typeof SwitchBranchResult>
+
 export class PatchApplyError extends Schema.TaggedErrorClass<PatchApplyError>()("VcsPatchApplyError", {
   message: Schema.String,
   reason: Schema.Literals(["non-git", "not-clean"]),
 }) {}
 
+export class BranchSwitchError extends Schema.TaggedErrorClass<BranchSwitchError>()("VcsBranchSwitchError", {
+  message: Schema.String,
+  reason: Schema.Literals(["non-git", "not-found", "conflict"]),
+}) {}
+
 export interface Interface {
   readonly init: () => Effect.Effect<void>
   readonly branch: () => Effect.Effect<string | undefined>
+  readonly branches: () => Effect.Effect<Branch[]>
+  readonly switchBranch: (input: SwitchBranchInput) => Effect.Effect<SwitchBranchResult, BranchSwitchError>
   readonly defaultBranch: () => Effect.Effect<string | undefined>
   readonly status: () => Effect.Effect<FileStatus[]>
   readonly diff: (mode: Mode, options?: DiffOptions) => Effect.Effect<FileDiff[]>
@@ -341,6 +364,44 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
       }),
       branch: Effect.fn("Vcs.branch")(function* () {
         return yield* InstanceState.use(state, (x) => x.current)
+      }),
+      branches: Effect.fn("Vcs.branches")(function* () {
+        const ctx = yield* InstanceState.context
+        if (ctx.project.vcs !== "git") return []
+        const current = yield* InstanceState.use(state, (value) => value.current)
+        return (yield* git.branches(ctx.directory)).map((name) => ({ name, current: name === current }))
+      }),
+      switchBranch: Effect.fn("Vcs.switchBranch")(function* (input: SwitchBranchInput) {
+        const ctx = yield* InstanceState.context
+        if (ctx.project.vcs !== "git") {
+          return yield* new BranchSwitchError({
+            message: "Branch can't be switched because the project is not git-based",
+            reason: "non-git",
+          })
+        }
+
+        const branches = yield* git.branches(ctx.directory)
+        if (!branches.includes(input.branch)) {
+          return yield* new BranchSwitchError({
+            message: `Branch not found: ${input.branch}`,
+            reason: "not-found",
+          })
+        }
+
+        const value = yield* InstanceState.get(state)
+        if (value.current === input.branch) return { branch: input.branch }
+
+        const result = yield* git.switchBranch(ctx.directory, input.branch)
+        if (result.exitCode !== 0) {
+          return yield* new BranchSwitchError({
+            message: result.stderr.toString("utf8").trim() || `Failed to switch to branch ${input.branch}`,
+            reason: "conflict",
+          })
+        }
+
+        value.current = input.branch
+        yield* events.publish(Event.BranchUpdated, { branch: input.branch })
+        return { branch: input.branch }
       }),
       defaultBranch: Effect.fn("Vcs.defaultBranch")(function* () {
         return yield* InstanceState.use(state, (x) => x.root?.name)
