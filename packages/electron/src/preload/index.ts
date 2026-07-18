@@ -149,6 +149,12 @@ export type CustomOpenCodeScheduledTask = {
   maxConcurrentRuns: number
   missedRunPolicy: "skip" | "run-once"
   catchUpWindowMinutes: number
+  triggerType: "schedule" | "task-success" | "task-failure" | "webhook"
+  triggerTaskId: string
+  dependencyTaskIds: string[]
+  notificationChannels: Array<"desktop" | "webhook">
+  notificationWebhookUrl: string
+  webhookUrl: string
   modelProviderID: string
   modelID: string
   variant: string
@@ -161,7 +167,7 @@ export type CustomOpenCodeScheduledTask = {
   updatedAt: number
 }
 
-export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "worktreeCleanup" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "overlapPolicy" | "maxConcurrentRuns" | "missedRunPolicy" | "catchUpWindowMinutes" | "modelProviderID" | "modelID" | "variant" | "enabled">
+export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "worktreeCleanup" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "overlapPolicy" | "maxConcurrentRuns" | "missedRunPolicy" | "catchUpWindowMinutes" | "triggerType" | "triggerTaskId" | "dependencyTaskIds" | "notificationChannels" | "notificationWebhookUrl" | "modelProviderID" | "modelID" | "variant" | "enabled">
 
 export type CustomOpenCodeScheduledTaskRun = {
   id: string
@@ -182,7 +188,7 @@ export type CustomOpenCodeScheduledTaskRun = {
   modelProviderID: string
   modelID: string
   variant: string
-  status: "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
+  status: "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled" | "blocked"
   error: string | null
   log: string
   createdAt: number
@@ -190,7 +196,7 @@ export type CustomOpenCodeScheduledTaskRun = {
   completedAt: number | null
 }
 
-export type CustomOpenCodeScheduledTaskSettings = { maxConcurrency: number; historyRetentionDays: number; maxHistory: number }
+export type CustomOpenCodeScheduledTaskSettings = { maxConcurrency: number; historyRetentionDays: number; maxHistory: number; webhookPort: number }
 
 export type CustomOpenCodeSecurityConfig = {
   sandbox: {

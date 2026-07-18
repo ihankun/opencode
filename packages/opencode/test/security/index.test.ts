@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import path from "path"
-import { evaluateSandboxFilesystemRisks } from "@/security"
+import { evaluateSandboxFilesystemRisks, redactAuditData } from "@/security"
 import { tmpdir } from "../fixture/fixture"
 
 test("file tools use sandbox read and write boundaries", async () => {
@@ -59,4 +59,23 @@ test("file tools use sandbox read and write boundaries", async () => {
       project,
     ),
   ).toEqual([`filesystem:${path.join(tmp.path, "outside")}`])
+})
+
+test("security audit data redacts credential fields and token-shaped strings", () => {
+  const value = redactAuditData({
+    authorization: "Bearer abcdef",
+    nested: {
+      password: "hunter2",
+      output: "token=supersecret ghp_abcdefghijklmnopqrstuvwxyz123456",
+      url: "https://user:password@example.com/path",
+    },
+  })
+  expect(value).toEqual({
+    authorization: "[REDACTED]",
+    nested: {
+      password: "[REDACTED]",
+      output: "token=[REDACTED] [REDACTED]",
+      url: "https://user:[REDACTED]@example.com/path",
+    },
+  })
 })

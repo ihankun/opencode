@@ -13,7 +13,7 @@ import { exportDebugLogs, initLogging, writeLog } from "./logging"
 import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
-import type { ScheduledTaskRun } from "./scheduler"
+import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
 import { listServerCredentials, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
 
@@ -397,10 +397,14 @@ function notifyTasksChanged() {
   BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("task:changed"))
 }
 
-function notifyScheduledTaskFinished(run: ScheduledTaskRun) {
+function notifyScheduledTaskFinished(run: ScheduledTaskRun, task: ScheduledTask) {
+  if (!task.notificationChannels.includes("desktop")) return
   const successful = run.status === "completed"
+  const chinese = app.getLocale().toLowerCase().startsWith("zh")
   void sendNativeNotification({
-    title: successful ? `自动化已完成：${run.taskTitle}` : `自动化${run.status === "cancelled" ? "已取消" : "执行失败"}：${run.taskTitle}`,
+    title: chinese
+      ? successful ? `自动化已完成：${run.taskTitle}` : `自动化${run.status === "cancelled" ? "已取消" : run.status === "blocked" ? "已阻止" : "执行失败"}：${run.taskTitle}`
+      : successful ? `Automation completed: ${run.taskTitle}` : `Automation ${run.status === "cancelled" ? "cancelled" : run.status === "blocked" ? "blocked" : "failed"}: ${run.taskTitle}`,
     body: successful ? run.prompt : run.error || run.prompt,
     sessionId: run.sessionID.startsWith("pending:") ? undefined : run.sessionID,
     directory: run.executionDirectory,

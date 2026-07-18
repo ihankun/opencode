@@ -49,6 +49,12 @@ interface UseSessionsResult {
   removeLocalSession: (sessionId: string) => void
 }
 
+const sessionListCache = new Map<string, ApiSession[]>()
+
+function sessionCacheKey(serverId: string, directory: string | undefined, rootsOnly: boolean, search: string) {
+  return `${serverId}\0${directory ?? ''}\0${rootsOnly ? 'roots' : 'all'}\0${search}`
+}
+
 export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult {
   const { pageSize = 20, initialSearch = '', rootsOnly = true, directory, enabled = true } = options
 
@@ -70,6 +76,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
   const currentLimitRef = useRef(pageSize)
   const searchRef = useRef(search)
   const hasLoadedSessionsRef = useRef(false)
+  const serverIdRef = useRef(serverStore.getActiveServerId())
   // 防止 onReconnected 密集触发时重复请求
   const isFetchingRef = useRef(false)
   const queuedReconnectRefreshRef = useRef(false)
@@ -96,6 +103,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
 
       const { append = false, retryAttempt = 0, ...queryParams } = params
       const requestId = ++requestIdRef.current
+      const requestServerId = serverIdRef.current
       isFetchingRef.current = true
 
       if (append) setIsLoadingMore(true)
@@ -111,13 +119,14 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         })
 
         // 检查是否是最新的请求
-        if (requestId !== requestIdRef.current) return
+        if (requestId !== requestIdRef.current || requestServerId !== serverIdRef.current) return
 
         if (data.length > 0 && data[0].directory) {
           autoDetectPathStyle(data[0].directory)
         }
 
         const nextSessions = data.filter(session => !isScheduledTaskSession(session))
+        sessionListCache.set(sessionCacheKey(requestServerId, normalizedDirectory, rootsOnly, queryParams.search ?? ''), nextSessions)
         setSessions(prev => (areSessionListsSame(prev, nextSessions) ? prev : nextSessions))
         hasLoadedSessionsRef.current = true
         setHasMore(data.length >= currentLimitRef.current)
@@ -262,14 +271,17 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
   useEffect(() => {
     if (!enabled) return
 
-    return serverStore.onServerChange(() => {
+    return serverStore.onServerChange(serverId => {
+      serverIdRef.current = serverId
+      requestIdRef.current++
       currentLimitRef.current = pageSize
-      hasLoadedSessionsRef.current = false
-      setIsLoading(true)
-      setSessions([])
+      const cached = sessionListCache.get(sessionCacheKey(serverId, normalizedDirectory, rootsOnly, searchRef.current))
+      hasLoadedSessionsRef.current = cached !== undefined
+      setIsLoading(cached === undefined)
+      setSessions(cached ?? [])
       void fetchSessionsRef.current({ search: searchRef.current || undefined })
     })
-  }, [enabled, pageSize])
+  }, [enabled, normalizedDirectory, pageSize, rootsOnly])
 
   // 加载更多：递增 limit 重新拉取完整列表（与 SessionContext 一致）
   const loadMore = useCallback(async () => {

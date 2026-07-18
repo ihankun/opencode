@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, realpath } from "node:fs/promises"
+import { appendFile, mkdir, readFile, realpath, rename, rm, stat } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime"
@@ -148,13 +148,40 @@ function writeAudit(sessionID: string, event: unknown) {
     const current = await load()
     if (!current.audit.enabled) return
     await mkdir(current.audit.directory, { recursive: true })
+    const file = path.join(current.audit.directory, `${safe(sessionID)}.jsonl`)
+    const size = await stat(file).then((info) => info.size, () => 0)
+    if (size >= 10 * 1024 * 1024) {
+      await rm(`${file}.1`, { force: true })
+      await rename(file, `${file}.1`).catch(() => undefined)
+    }
+    const line = JSON.stringify(redactAuditData(event)) ?? "null"
     await appendFile(
-      path.join(current.audit.directory, `${safe(sessionID)}.jsonl`),
-      JSON.stringify(event) + "\n",
+      file,
+      `${line.slice(0, 1_000_000)}\n`,
       { mode: 0o600 },
     )
   }).catch((error) => console.error("[security:audit] failed to write audit event", error))
   return auditWrite
+}
+
+export function redactAuditData(value: unknown, depth = 0): unknown {
+  if (depth > 12) return "[TRUNCATED]"
+  if (typeof value === "string") {
+    return value
+      .replace(/\b((?:bearer|basic)\s+)[^\s"']+/gi, "$1[REDACTED]")
+      .replace(/(authorization["'\s:=]+(?:bearer|basic)\s+)[^\s"']+/gi, "$1[REDACTED]")
+      .replace(/((?:api[_-]?key|token|secret|password|private[_-]?token)["'\s:=]+)[^\s,"'}]+/gi, "$1[REDACTED]")
+      .replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,})\b/g, "[REDACTED]")
+      .replace(/(https?:\/\/[^\s/:@]+:)[^\s@]+@/gi, "$1[REDACTED]@")
+  }
+  if (Array.isArray(value)) return value.slice(0, 10_000).map((item) => redactAuditData(item, depth + 1))
+  if (!value || typeof value !== "object") return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    /authorization|cookie|password|passwd|secret|token|api[_-]?key|private[_-]?key/i.test(key)
+      ? "[REDACTED]"
+      : redactAuditData(item, depth + 1),
+  ]))
 }
 
 async function load() {

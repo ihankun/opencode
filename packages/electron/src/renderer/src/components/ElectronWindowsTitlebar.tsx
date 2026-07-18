@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './Icons'
 import { DESKTOP_TITLEBAR_HEIGHT, DESKTOP_TITLEBAR_Z_INDEX } from '../constants/desktopWindow'
+import { useTranslation } from 'react-i18next'
 
 interface ElectronWindowsTitlebarProps {
   sidebarExpanded: boolean
@@ -25,6 +26,7 @@ export function ElectronWindowsTitlebar({
   backTitle,
   forwardTitle,
 }: ElectronWindowsTitlebarProps) {
+  const { t } = useTranslation('common')
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -119,8 +121,8 @@ export function ElectronWindowsTitlebar({
         <button
           type="button"
           onClick={handleMinimize}
-          title="最小化"
-          aria-label="最小化"
+          title={t('minimize')}
+          aria-label={t('minimize')}
           className="electron-windows-titlebar-ctrl-btn window-no-drag"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -130,8 +132,8 @@ export function ElectronWindowsTitlebar({
         <button
           type="button"
           onClick={handleMaximizeToggle}
-          title={isMaximized ? '还原' : '最大化'}
-          aria-label={isMaximized ? '还原' : '最大化'}
+          title={isMaximized ? t('restore') : t('maximize')}
+          aria-label={isMaximized ? t('restore') : t('maximize')}
           className="electron-windows-titlebar-ctrl-btn window-no-drag"
         >
           {isMaximized ? (
@@ -150,8 +152,8 @@ export function ElectronWindowsTitlebar({
         <button
           type="button"
           onClick={handleClose}
-          title="关闭"
-          aria-label="关闭"
+          title={t('close')}
+          aria-label={t('close')}
           className="electron-windows-titlebar-ctrl-btn electron-windows-titlebar-close window-no-drag"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">

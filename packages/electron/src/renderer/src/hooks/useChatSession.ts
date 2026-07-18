@@ -60,6 +60,7 @@ import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
 import { createTaskFromCommand } from '../api/task'
 import { executionTargetStore } from '../store/executionTargetStore'
 import { serverStore } from '../store/serverStore'
+import i18n from '../i18n'
 
 const handleError = createErrorHandler('session')
 
@@ -127,25 +128,25 @@ function buildCompletedNotificationBody(messages: UIMessage[]) {
   const lastAssistant = [...messages].reverse().find(message => message.info.role === 'assistant')
   const text = lastAssistant ? getMessageText(lastAssistant).replace(/\s+/g, ' ').trim() : ''
 
-  if (!text) return '会话已完成'
+  if (!text) return i18n.t('chat:notification.completedBody')
   if (text.length <= COMPLETED_NOTIFICATION_MAX_LENGTH) return text
   return `${text.slice(0, COMPLETED_NOTIFICATION_MAX_LENGTH).trimEnd()}.....`
 }
 
 function buildPermissionNotificationBody(request: ApiPermissionRequest) {
   const pattern = request.patterns?.[0]
-  if (pattern) return `需要确认：${request.permission}（${pattern}）`
-  return `需要确认：${request.permission}`
+  if (pattern) return i18n.t('chat:notification.permissionBodyPattern', { permission: request.permission, pattern })
+  return i18n.t('chat:notification.permissionBody', { permission: request.permission })
 }
 
 function buildQuestionNotificationBody(request: ApiQuestionRequest) {
-  return request.questions?.[0]?.header || 'AI 正在等待你的输入'
+  return request.questions?.[0]?.header || i18n.t('chat:notification.questionWaiting')
 }
 
 function buildErrorNotificationBody(error: SessionErrorPayload) {
   if (typeof error.data === 'string' && error.data.trim()) return error.data.trim()
-  if (error.name && error.name !== 'UnknownError') return `错误类型：${error.name}`
-  return '会话执行出错'
+  if (error.name && error.name !== 'UnknownError') return i18n.t('chat:notification.errorType', { name: error.name })
+  return i18n.t('chat:notification.executionError')
 }
 
 export function useChatSession({
@@ -380,7 +381,7 @@ export function useChatSession({
         // 页面不在前台时通知用户有权限请求等待批准
         if (notificationEventSettingsStore.isSystemEnabled('permission')) {
           sendNotification(
-            buildNotificationTitle(request.sessionID, '权限请求'),
+            buildNotificationTitle(request.sessionID, i18n.t('chat:notification.permissionTitle')),
             buildPermissionNotificationBody(request),
             {
               sessionId: request.sessionID,
@@ -404,7 +405,7 @@ export function useChatSession({
         // 页面不在前台时通知用户有问题等待回答
         if (notificationEventSettingsStore.isSystemEnabled('question')) {
           sendNotification(
-            buildNotificationTitle(request.sessionID, '需要回答'),
+            buildNotificationTitle(request.sessionID, i18n.t('chat:notification.questionTitle')),
             buildQuestionNotificationBody(request),
             {
               sessionId: request.sessionID,
@@ -441,7 +442,7 @@ export function useChatSession({
         // 页面不在前台时通知用户 session 出错
         if (notificationEventSettingsStore.isSystemEnabled('error')) {
           sendNotification(
-            buildNotificationTitle(error.sessionID, '执行出错'),
+            buildNotificationTitle(error.sessionID, i18n.t('chat:notification.errorTitle')),
             buildErrorNotificationBody(error),
             {
               sessionId: error.sessionID,
@@ -684,10 +685,10 @@ export function useChatSession({
             const missing = isMissingDirectoryError(error)
             notificationStore.push(
               'error',
-              missing ? '项目目录不可用' : '无法访问项目目录',
+              missing ? i18n.t('chat:notification.directoryUnavailableTitle') : i18n.t('chat:notification.directoryAccessTitle'),
               missing
-                ? `“${executionDirectory}”已不存在或已被移动，请重新选择项目文件夹。`
-                : error instanceof Error ? error.message : '请检查当前 Server 与项目目录是否可访问。',
+                ? i18n.t('chat:notification.directoryUnavailable', { directory: executionDirectory })
+                : error instanceof Error ? error.message : i18n.t('chat:notification.directoryAccessHint'),
               sessionId ?? '',
               executionDirectory,
             )
@@ -768,8 +769,8 @@ export function useChatSession({
           setModelRecovery({ failedModel: `${input.model.providerID}/${input.model.modelID}` })
           notificationStore.push(
             'error',
-            '所选模型不可用',
-            `“${input.model.providerID}/${input.model.modelID}”无法继续使用。模型列表已刷新，原消息仍保留在输入框中。`,
+            i18n.t('chat:notification.modelUnavailableTitle'),
+            i18n.t('chat:notification.modelUnavailableBody', { model: `${input.model.providerID}/${input.model.modelID}` }),
             sessionId ?? '',
             input.directory,
           )
@@ -1053,7 +1054,7 @@ export function useChatSession({
       if (command === 'task') {
         try {
           const task = await createTaskFromCommand(args, effectiveDirectory, currentModel, selectedVariant)
-          void window.customOpenCode.sendNotification({ title: '定时任务已创建', body: `${task.title} · ${task.cron}` })
+          void window.customOpenCode.sendNotification({ title: i18n.t('chat:notification.taskCreatedTitle'), body: `${task.title} · ${task.cron}` })
           return true
         } catch (err) {
           handleError('create scheduled task', err)

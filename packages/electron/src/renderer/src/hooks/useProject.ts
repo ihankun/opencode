@@ -21,6 +21,7 @@ export interface UseProjectResult {
 }
 
 const STORAGE_KEY = 'selected-project-id'
+const projectCache = new Map<string, { currentProject: ApiProject | null; projects: ApiProject[] }>()
 
 export function useProject(): UseProjectResult {
   const { t } = useTranslation(['commands'])
@@ -33,14 +34,20 @@ export function useProject(): UseProjectResult {
   // 加载项目列表
   const loadProjects = useCallback(async () => {
     const requestId = ++requestIdRef.current
+    const serverId = serverStore.getActiveServerId()
+    const cached = projectCache.get(serverId)
+    if (cached) {
+      setCurrentProject(cached.currentProject)
+      setProjects(cached.projects)
+    }
     setIsLoading(true)
     setError(null)
 
     try {
       // 并行获取当前项目和所有项目
-      const [current, all] = await Promise.all([getCurrentProject(), getProjects()])
+      const [current, all] = await Promise.all([getCurrentProject(undefined, serverId), getProjects(undefined, serverId)])
 
-      if (requestId !== requestIdRef.current) return
+      if (requestId !== requestIdRef.current || serverStore.getActiveServerId() !== serverId) return
 
       setProjects(all)
 
@@ -52,14 +59,17 @@ export function useProject(): UseProjectResult {
         const savedProject = all.find(p => p.id === savedProjectId)
         if (savedProject) {
           setCurrentProject(savedProject)
+          projectCache.set(serverId, { currentProject: savedProject, projects: all })
         } else {
           // 保存的项目不存在了，用当前项目
           setCurrentProject(current)
+          projectCache.set(serverId, { currentProject: current, projects: all })
           serverStorage.remove(STORAGE_KEY)
         }
       } else {
         // 没有保存的，用当前项目
         setCurrentProject(current)
+        projectCache.set(serverId, { currentProject: current, projects: all })
       }
     } catch (e) {
       if (requestId !== requestIdRef.current) return
@@ -85,6 +95,7 @@ export function useProject(): UseProjectResult {
       const project = projects.find(p => p.id === projectId)
       if (project) {
         setCurrentProject(project)
+        projectCache.set(serverStore.getActiveServerId(), { currentProject: project, projects })
         serverStorage.set(STORAGE_KEY, projectId)
       }
     },

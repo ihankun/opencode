@@ -1498,10 +1498,10 @@ export function SidePanel({
                               e.stopPropagation()
                               handleToggleProject(project.id)
                             }}
-                            aria-label={isExpanded ? '折叠项目' : '展开项目'}
+                            aria-label={t(isExpanded ? 'sidebar.collapseProject' : 'sidebar.expandProject')}
                             aria-expanded={isExpanded}
                             className="flex size-6 shrink-0 items-center justify-center rounded text-text-500 transition-colors hover:bg-bg-200/70 hover:text-text-200"
-                            title={isExpanded ? '折叠项目' : '展开项目'}
+                            title={t(isExpanded ? 'sidebar.collapseProject' : 'sidebar.expandProject')}
                           >
                             <ChevronRightIcon
                               size={14}

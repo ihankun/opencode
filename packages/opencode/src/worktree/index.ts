@@ -386,7 +386,7 @@ const layer: Layer.Layer<
       return yield* Effect.forEach(worktrees, (worktree) => Effect.gen(function* () {
         const status = yield* git(["status", "--porcelain"], { cwd: worktree.directory })
         const measured = yield* Effect.tryPromise({
-          try: () => measureDirectory(worktree.directory),
+          try: () => measureDirectoryCached(worktree.directory),
           catch: (error) => new ListFailedError({ message: errorMessage(error) }),
         })
         const directory = yield* canonical(worktree.directory)
@@ -688,6 +688,20 @@ async function measureDirectory(root: string) {
     createdAt: Number.isFinite(createdAt) ? createdAt : 0,
     modifiedAt,
   }
+}
+
+const directoryMeasureCache = new Map<string, { expiresAt: number; value: Awaited<ReturnType<typeof measureDirectory>> }>()
+
+async function measureDirectoryCached(root: string) {
+  const cached = directoryMeasureCache.get(root)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+  const value = await measureDirectory(root)
+  directoryMeasureCache.set(root, { expiresAt: Date.now() + 30_000, value })
+  if (directoryMeasureCache.size > 100) {
+    const oldest = directoryMeasureCache.keys().next().value
+    if (oldest) directoryMeasureCache.delete(oldest)
+  }
+  return value
 }
 
 export const node = LayerNode.make({

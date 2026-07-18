@@ -1,6 +1,9 @@
 import { app } from "electron"
 import { DatabaseSync } from "node:sqlite"
 import { join } from "node:path"
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { timingSafeEqual } from "node:crypto"
+import { chmod } from "node:fs/promises"
 import { Cron } from "croner"
 import { migrateScheduledTaskDatabase, verifyScheduledTaskDatabase } from "./schedulerDatabase"
 
@@ -9,7 +12,9 @@ type WorktreeCleanup = "always" | "on-success" | "never"
 type PermissionProfile = "ask" | "writes" | "risk" | "full"
 type OverlapPolicy = "skip" | "queue" | "parallel"
 type MissedRunPolicy = "skip" | "run-once"
-type RunStatus = "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
+type TriggerType = "schedule" | "task-success" | "task-failure" | "webhook"
+type NotificationChannel = "desktop" | "webhook"
+type RunStatus = "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled" | "blocked"
 
 export type ScheduledTask = {
   id: string
@@ -32,6 +37,12 @@ export type ScheduledTask = {
   maxConcurrentRuns: number
   missedRunPolicy: MissedRunPolicy
   catchUpWindowMinutes: number
+  triggerType: TriggerType
+  triggerTaskId: string
+  dependencyTaskIds: string[]
+  notificationChannels: NotificationChannel[]
+  notificationWebhookUrl: string
+  webhookUrl: string
   modelProviderID: string
   modelID: string
   variant: string
@@ -75,6 +86,7 @@ export type ScheduledTaskSettings = {
   maxConcurrency: number
   historyRetentionDays: number
   maxHistory: number
+  webhookPort: number
 }
 
 type TaskInput = Pick<
@@ -98,6 +110,11 @@ type TaskInput = Pick<
   | "maxConcurrentRuns"
   | "missedRunPolicy"
   | "catchUpWindowMinutes"
+  | "triggerType"
+  | "triggerTaskId"
+  | "dependencyTaskIds"
+  | "notificationChannels"
+  | "notificationWebhookUrl"
   | "modelProviderID"
   | "modelID"
   | "variant"
@@ -105,7 +122,7 @@ type TaskInput = Pick<
 >
 
 type ServerState = { url: string; username?: string; password?: string }
-type AttemptResult = { ok: true } | { ok: false; message: string; retryable: boolean; cancelled: boolean }
+type AttemptResult = { ok: true; runID: string } | { ok: false; runID: string; message: string; retryable: boolean; cancelled: boolean }
 
 export class TaskScheduler {
   private database?: DatabaseSync
@@ -120,19 +137,25 @@ export class TaskScheduler {
   private maxConcurrency = 3
   private historyRetentionDays = 90
   private maxHistory = 1000
+  private webhookPort = 49832
+  private webhookServer?: Server
+  private webhookAddress = ""
 
   constructor(
     private readonly resolveServer: (task: ScheduledTask) => Promise<ServerState | undefined>,
     private readonly onChanged: () => void,
-    private readonly onFinished?: (run: ScheduledTaskRun) => void,
+    private readonly onFinished?: (run: ScheduledTaskRun, task: ScheduledTask) => void,
   ) {}
 
   start() {
     this.stopping = false
-    this.database = new DatabaseSync(join(app.getPath("userData"), "scheduled-tasks.sqlite"))
+    const databasePath = join(app.getPath("userData"), "scheduled-tasks.sqlite")
+    this.database = new DatabaseSync(databasePath)
+    void chmod(databasePath, 0o600).catch(() => undefined)
     migrateScheduledTaskDatabase(this.database)
     verifyScheduledTaskDatabase(this.database)
     this.loadSettings()
+    void this.startWebhookServer()
     this.pruneHistory()
     const tasks = this.list().filter((task) => task.enabled)
     tasks.forEach((task) => this.register(task))
@@ -145,6 +168,7 @@ export class TaskScheduler {
     this.stopping = true
     this.jobs.forEach((job) => job.stop())
     this.jobs.clear()
+    await this.stopWebhookServer()
     await Promise.race([Promise.allSettled([...this.activeExecutions]), delay(5_000)])
     if (this.activeExecutions.size > 0) return
     this.database?.exec("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -162,6 +186,7 @@ export class TaskScheduler {
       maxConcurrency: this.maxConcurrency,
       historyRetentionDays: this.historyRetentionDays,
       maxHistory: this.maxHistory,
+      webhookPort: this.webhookPort,
     }
   }
 
@@ -169,6 +194,8 @@ export class TaskScheduler {
     if (!Number.isInteger(input.maxConcurrency) || input.maxConcurrency < 1 || input.maxConcurrency > 20) throw new Error("Maximum concurrency must be between 1 and 20")
     if (!Number.isInteger(input.historyRetentionDays) || input.historyRetentionDays < 1 || input.historyRetentionDays > 365) throw new Error("History retention must be between 1 and 365 days")
     if (!Number.isInteger(input.maxHistory) || input.maxHistory < 100 || input.maxHistory > 10000) throw new Error("Maximum history must be between 100 and 10000")
+    if (!Number.isInteger(input.webhookPort) || input.webhookPort < 1024 || input.webhookPort > 65535) throw new Error("Webhook port must be between 1024 and 65535")
+    const previousWebhookPort = this.webhookPort
     const database = this.db()
     database.exec("BEGIN IMMEDIATE")
     try {
@@ -180,6 +207,9 @@ export class TaskScheduler {
       throw error
     }
     this.loadSettings()
+    if (!this.webhookServer || previousWebhookPort !== this.webhookPort) {
+      void this.stopWebhookServer().then(() => this.startWebhookServer())
+    }
     this.pruneHistory()
     return this.settings()
   }
@@ -238,6 +268,7 @@ export class TaskScheduler {
       await this.fetchJson(server, `/session/${encodeURIComponent(sessionID)}/abort${query}`, { method: "POST" }).catch(() => undefined)
     }
     this.finishRun(id, "cancelled", "Cancelled by user")
+    this.announceRun(task, id)
     return this.getRun(id)
   }
 
@@ -251,18 +282,21 @@ export class TaskScheduler {
     this.validate(input)
     const now = Date.now()
     const id = crypto.randomUUID()
+    this.validateReferences(id, input)
     this.db().prepare(`
       INSERT INTO scheduled_task (
         id, title, prompt, cron, timezone, server_id, server_name, server_url, directory,
         execution_mode, worktree_cleanup, branch, permission_profile, retry_count, retry_delay_seconds,
         completion_timeout_minutes, overlap_policy, max_concurrent_runs, missed_run_policy, catch_up_window_minutes,
+        trigger_type, trigger_task_id, dependency_task_ids, notification_channels, notification_webhook_url, webhook_secret,
         model_provider_id, model_id, variant, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, input.title.trim(), input.prompt.trim(), input.cron.trim(), input.timezone,
       input.serverId, input.serverName.trim(), normalizeServerUrl(input.serverUrl), input.directory.trim(),
       input.executionMode, input.worktreeCleanup, input.branch.trim(), input.permissionProfile, input.retryCount, input.retryDelaySeconds,
       input.completionTimeoutMinutes, input.overlapPolicy, input.maxConcurrentRuns, input.missedRunPolicy, input.catchUpWindowMinutes,
+      input.triggerType, input.triggerTaskId, JSON.stringify(input.dependencyTaskIds), JSON.stringify(input.notificationChannels), input.notificationWebhookUrl.trim(), crypto.randomUUID(),
       input.modelProviderID, input.modelID, input.variant, Number(input.enabled), now, now,
     )
     const task = this.get(id)
@@ -273,6 +307,7 @@ export class TaskScheduler {
   update(id: string, input: TaskInput) {
     this.validate(input)
     this.require(id)
+    this.validateReferences(id, input)
     this.jobs.get(id)?.stop()
     this.jobs.delete(id)
     this.db().prepare(`
@@ -280,7 +315,8 @@ export class TaskScheduler {
         title = ?, prompt = ?, cron = ?, timezone = ?, server_id = ?, server_name = ?, server_url = ?,
         directory = ?, execution_mode = ?, worktree_cleanup = ?, branch = ?, permission_profile = ?, retry_count = ?,
         retry_delay_seconds = ?, completion_timeout_minutes = ?, overlap_policy = ?, max_concurrent_runs = ?,
-        missed_run_policy = ?, catch_up_window_minutes = ?, model_provider_id = ?, model_id = ?,
+        missed_run_policy = ?, catch_up_window_minutes = ?, trigger_type = ?, trigger_task_id = ?,
+        dependency_task_ids = ?, notification_channels = ?, notification_webhook_url = ?, model_provider_id = ?, model_id = ?,
         variant = ?, enabled = ?, last_error = NULL, updated_at = ?
       WHERE id = ?
     `).run(
@@ -288,6 +324,7 @@ export class TaskScheduler {
       input.serverId, input.serverName.trim(), normalizeServerUrl(input.serverUrl), input.directory.trim(),
       input.executionMode, input.worktreeCleanup, input.branch.trim(), input.permissionProfile, input.retryCount, input.retryDelaySeconds,
       input.completionTimeoutMinutes, input.overlapPolicy, input.maxConcurrentRuns, input.missedRunPolicy, input.catchUpWindowMinutes,
+      input.triggerType, input.triggerTaskId, JSON.stringify(input.dependencyTaskIds), JSON.stringify(input.notificationChannels), input.notificationWebhookUrl.trim(),
       input.modelProviderID, input.modelID, input.variant, Number(input.enabled), Date.now(), id,
     )
     const task = this.get(id)
@@ -298,6 +335,8 @@ export class TaskScheduler {
   remove(id: string) {
     this.require(id)
     if ((this.running.get(id) ?? 0) > 0) throw new Error("Stop the running task before deleting it")
+    const reference = this.list().find((task) => task.id !== id && (task.triggerTaskId === id || task.dependencyTaskIds.includes(id)))
+    if (reference) throw new Error(`Automation is referenced by: ${reference.title}`)
     this.jobs.get(id)?.stop()
     this.jobs.delete(id)
     this.db().prepare("DELETE FROM scheduled_task WHERE id = ?").run(id)
@@ -349,6 +388,12 @@ export class TaskScheduler {
       maxConcurrentRuns: Number(row.max_concurrent_runs),
       missedRunPolicy: normalizeMissedRunPolicy(row.missed_run_policy),
       catchUpWindowMinutes: Number(row.catch_up_window_minutes),
+      triggerType: normalizeTriggerType(row.trigger_type),
+      triggerTaskId: String(row.trigger_task_id ?? ""),
+      dependencyTaskIds: stringArray(row.dependency_task_ids),
+      notificationChannels: notificationChannels(row.notification_channels),
+      notificationWebhookUrl: String(row.notification_webhook_url ?? ""),
+      webhookUrl: this.webhookAddress && row.webhook_secret ? `${this.webhookAddress}/automation/${encodeURIComponent(id)}/${encodeURIComponent(String(row.webhook_secret))}` : "",
       modelProviderID: String(row.model_provider_id),
       modelID: String(row.model_id),
       variant: String(row.variant),
@@ -369,8 +414,10 @@ export class TaskScheduler {
     if (!input.serverId || !input.serverName.trim()) throw new Error("Server is required")
     normalizeServerUrl(input.serverUrl)
     if (!input.modelProviderID || !input.modelID) throw new Error("Model is required")
+    if (input.executionMode !== "current" && input.executionMode !== "worktree") throw new Error("Invalid execution mode")
     if (input.executionMode === "worktree" && !input.directory.trim()) throw new Error("Worktree tasks require a project directory")
     if (input.worktreeCleanup !== "always" && input.worktreeCleanup !== "on-success" && input.worktreeCleanup !== "never") throw new Error("Invalid worktree cleanup policy")
+    if (!["ask", "writes", "risk", "full"].includes(input.permissionProfile)) throw new Error("Invalid permission profile")
     if (!Number.isInteger(input.retryCount) || input.retryCount < 0 || input.retryCount > 10) throw new Error("Retry count must be between 0 and 10")
     if (!Number.isInteger(input.retryDelaySeconds) || input.retryDelaySeconds < 1 || input.retryDelaySeconds > 3600) throw new Error("Retry delay must be between 1 and 3600 seconds")
     if (!Number.isInteger(input.completionTimeoutMinutes) || input.completionTimeoutMinutes < 1 || input.completionTimeoutMinutes > 1440) throw new Error("Completion timeout must be between 1 and 1440 minutes")
@@ -378,17 +425,68 @@ export class TaskScheduler {
     if (!Number.isInteger(input.maxConcurrentRuns) || input.maxConcurrentRuns < 1 || input.maxConcurrentRuns > 5) throw new Error("Maximum concurrent runs must be between 1 and 5")
     if (!["skip", "run-once"].includes(input.missedRunPolicy)) throw new Error("Invalid missed run policy")
     if (!Number.isInteger(input.catchUpWindowMinutes) || input.catchUpWindowMinutes < 1 || input.catchUpWindowMinutes > 10080) throw new Error("Catch-up window must be between 1 and 10080 minutes")
+    if (!["schedule", "task-success", "task-failure", "webhook"].includes(input.triggerType)) throw new Error("Invalid trigger type")
+    if ((input.triggerType === "task-success" || input.triggerType === "task-failure") && !input.triggerTaskId) throw new Error("Triggered automations require a source task")
+    if (!Array.isArray(input.dependencyTaskIds) || !input.dependencyTaskIds.every(id => typeof id === "string" && id.length > 0) || new Set(input.dependencyTaskIds).size !== input.dependencyTaskIds.length) throw new Error("Invalid task dependencies")
+    if (!Array.isArray(input.notificationChannels) || !input.notificationChannels.every(channel => channel === "desktop" || channel === "webhook")) throw new Error("Invalid notification channels")
+    if (typeof input.enabled !== "boolean") throw new Error("Invalid enabled state")
+    if (input.notificationChannels.includes("webhook")) normalizeWebhookUrl(input.notificationWebhookUrl)
     const job = new Cron(input.cron.trim(), { timezone: input.timezone, paused: true })
     job.stop()
   }
 
+  private validateReferences(id: string, input: TaskInput) {
+    const references = [...new Set([
+      ...(input.triggerType === "task-success" || input.triggerType === "task-failure" ? [input.triggerTaskId] : []),
+      ...input.dependencyTaskIds,
+    ].filter(Boolean))]
+    const tasks = new Map(this.list().map((task) => [task.id, task]))
+    const missing = references.find((reference) => !tasks.has(reference))
+    if (missing) throw new Error(`Referenced automation does not exist: ${missing}`)
+    const next = new Map(tasks)
+    const current = tasks.get(id)
+    next.set(id, {
+      ...(current ?? this.readInputAsTask(id, input)),
+      triggerType: input.triggerType,
+      triggerTaskId: input.triggerTaskId,
+      dependencyTaskIds: input.dependencyTaskIds,
+    })
+    const visit = (taskID: string, path: Set<string>): boolean => {
+      if (path.has(taskID)) return true
+      const task = next.get(taskID)
+      if (!task) return false
+      const linked = [
+        ...(task.triggerType === "task-success" || task.triggerType === "task-failure" ? [task.triggerTaskId] : []),
+        ...task.dependencyTaskIds,
+      ].filter(Boolean)
+      return linked.some((linkedID) => visit(linkedID, new Set(path).add(taskID)))
+    }
+    if (visit(id, new Set())) throw new Error("Automation dependencies must not contain a cycle")
+  }
+
+  private readInputAsTask(id: string, input: TaskInput): ScheduledTask {
+    const now = Date.now()
+    return {
+      id,
+      ...input,
+      webhookUrl: "",
+      status: input.enabled ? "enabled" : "paused",
+      lastRunAt: null,
+      nextRunAt: null,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }
+
   private register(task: ScheduledTask) {
+    if (task.triggerType !== "schedule") return
     const job = new Cron(task.cron, { timezone: task.timezone }, () => this.launch(task))
     this.jobs.set(task.id, job)
   }
 
   private catchUp(task: ScheduledTask) {
-    if (task.missedRunPolicy !== "run-once" || !task.lastRunAt) return
+    if (task.triggerType !== "schedule" || task.missedRunPolicy !== "run-once" || !task.lastRunAt) return
     const now = Date.now()
     const windowStart = now - task.catchUpWindowMinutes * 60_000
     const probe = new Cron(task.cron, { timezone: task.timezone, paused: true })
@@ -424,6 +522,12 @@ export class TaskScheduler {
       await this.acquireCapacity()
       globalCapacity = true
       this.requireNotCancelled(runID)
+      const dependencyError = this.dependencyError(task)
+      if (dependencyError) {
+        this.finishRun(runID, "blocked", dependencyError)
+        this.announceRun(task, runID)
+        return
+      }
       const outcome = await this.executeWithRetry(task, 1, runID)
       if (!outcome.ok) {
         if (!outcome.cancelled) this.recordFailure(task.id, outcome.message)
@@ -444,7 +548,10 @@ export class TaskScheduler {
 
   private async executeWithRetry(task: ScheduledTask, attempt: number, existingRunID?: string): Promise<AttemptResult> {
     const outcome = await this.executeAttempt(task, attempt, existingRunID)
-    if (outcome.ok || !outcome.retryable || attempt > task.retryCount) return outcome
+    if (outcome.ok || !outcome.retryable || attempt > task.retryCount) {
+      if (!isActiveStatus(this.getRun(outcome.runID).status)) this.announceRun(task, outcome.runID)
+      return outcome
+    }
     await delay(task.retryDelaySeconds * 1000)
     return this.executeWithRetry(task, attempt + 1)
   }
@@ -520,11 +627,11 @@ export class TaskScheduler {
       await this.runHooks(server, task.directory, "automation.after", runID)
       await this.runHooks(server, task.directory, "notification", runID)
       if (execution.worktreeDirectory && task.worktreeCleanup !== "never") await this.cleanupWorktree(server, task.directory, execution.worktreeDirectory, runID)
-      return { ok: true }
+      return { ok: true, runID }
     } catch (error) {
       if (error instanceof ScheduledTaskStoppingError) {
         this.appendRunLog(runID, "Application is stopping; the session will be monitored after restart")
-        return { ok: false, message: error.message, retryable: false, cancelled: true }
+        return { ok: false, runID, message: error.message, retryable: false, cancelled: true }
       }
       const message = error instanceof Error ? error.message : String(error)
       const status: RunStatus = error instanceof ScheduledTaskCancelledError
@@ -535,7 +642,7 @@ export class TaskScheduler {
       if (hookServer) await this.runHooks(hookServer, task.directory, "notification", runID)
       const worktreeDirectory = this.getRun(runID).worktreeDirectory
       if (worktreeDirectory && task.worktreeCleanup === "always") await this.cleanupWorktree(await this.resolveServer(task), task.directory, worktreeDirectory, runID)
-      return { ok: false, message, retryable: !submitted && status !== "cancelled", cancelled: status === "cancelled" }
+      return { ok: false, runID, message, retryable: !submitted && status !== "cancelled", cancelled: status === "cancelled" }
     } finally {
       this.cancelledRuns.delete(runID)
     }
@@ -701,10 +808,42 @@ export class TaskScheduler {
     this.db().prepare("UPDATE scheduled_task_run SET status = ?, error = ?, completed_at = ?, updated_at = ? WHERE id = ?")
       .run(status, error, now, now, id)
     this.appendRunLog(id, error ? `${status}: ${error}` : status)
-    const run = this.getRun(id)
     this.onChanged()
-    this.onFinished?.(run)
     this.pruneHistory()
+  }
+
+  private announceRun(task: ScheduledTask, runID: string) {
+    const run = this.getRun(runID)
+    this.onFinished?.(run, task)
+    if (task.notificationChannels.includes("webhook")) {
+      void this.sendNotificationWebhook(task, run).catch((error) => {
+        this.appendRunLog(runID, `Notification webhook failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
+    const trigger = run.status === "completed" ? "task-success" : run.status === "failed" || run.status === "timed_out" ? "task-failure" : undefined
+    if (!trigger) return
+    this.list().filter(candidate => candidate.enabled && candidate.triggerType === trigger && candidate.triggerTaskId === task.id)
+      .forEach(candidate => void this.launch(candidate))
+  }
+
+  private async sendNotificationWebhook(task: ScheduledTask, run: ScheduledTaskRun) {
+    const url = normalizeWebhookUrl(task.notificationWebhookUrl)
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "User-Agent": "OpenCodex-Automation/1" },
+      body: JSON.stringify({ event: "automation.finished", task: { id: task.id, title: task.title }, run: { id: run.id, sessionID: run.sessionID, status: run.status, error: run.error, completedAt: run.completedAt } }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    this.appendRunLog(run.id, "Notification webhook delivered")
+  }
+
+  private dependencyError(task: ScheduledTask) {
+    const missing = task.dependencyTaskIds.filter(id => {
+      const row = this.db().prepare("SELECT status FROM scheduled_task_run WHERE task_id = ? ORDER BY created_at DESC LIMIT 1").get(id) as { status?: string } | undefined
+      return row?.status !== "completed"
+    })
+    return missing.length ? `Dependencies have not completed successfully: ${missing.join(", ")}` : ""
   }
 
   private pruneHistory() {
@@ -723,6 +862,62 @@ export class TaskScheduler {
     this.maxConcurrency = bounded(values.maxConcurrency, 1, 20, 3)
     this.historyRetentionDays = bounded(values.historyRetentionDays, 1, 365, 90)
     this.maxHistory = bounded(values.maxHistory, 100, 10000, 1000)
+    this.webhookPort = bounded(values.webhookPort, 1024, 65535, 49832)
+  }
+
+  private startWebhookServer() {
+    if (this.webhookServer) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const server = createServer((request, response) => void this.handleWebhookRequest(request, response))
+      server.once("error", () => {
+        this.webhookAddress = ""
+        this.onChanged()
+        resolve()
+      })
+      server.listen(this.webhookPort, "127.0.0.1", () => {
+        this.webhookServer = server
+        this.webhookAddress = `http://127.0.0.1:${this.webhookPort}`
+        this.onChanged()
+        resolve()
+      })
+    })
+  }
+
+  private stopWebhookServer() {
+    const server = this.webhookServer
+    this.webhookServer = undefined
+    this.webhookAddress = ""
+    if (!server) return Promise.resolve()
+    return new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+
+  private handleWebhookRequest(request: IncomingMessage, response: ServerResponse) {
+    request.resume()
+    if (request.method !== "POST" || !request.url) {
+      response.writeHead(405).end()
+      return
+    }
+    const parts = new URL(request.url, this.webhookAddress || "http://127.0.0.1").pathname.split("/").filter(Boolean)
+    if (parts.length !== 3 || parts[0] !== "automation") {
+      response.writeHead(404).end()
+      return
+    }
+    const taskID = parts[1]
+    const secret = parts[2]
+    const row = this.db().prepare("SELECT webhook_secret FROM scheduled_task WHERE id = ?").get(taskID) as { webhook_secret?: string } | undefined
+    const expected = Buffer.from(row?.webhook_secret ?? "")
+    const provided = Buffer.from(secret)
+    if (!expected.length || expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
+      response.writeHead(404).end()
+      return
+    }
+    const task = this.get(taskID)
+    if (!task.enabled || task.triggerType !== "webhook") {
+      response.writeHead(409).end()
+      return
+    }
+    response.writeHead(202, { "Content-Type": "application/json" }).end(JSON.stringify({ accepted: true, taskID }))
+    void this.launch(task)
   }
 
   private requireNotCancelled(runID: string) {
@@ -777,13 +972,16 @@ export class TaskScheduler {
         return
       }
       if (run.sessionID.startsWith("pending:")) {
+        const task = this.get(run.taskID)
         this.finishRun(run.id, "failed", "Application stopped before the session was submitted")
+        this.announceRun(task, run.id)
         return
       }
       const task = this.get(run.taskID)
       const server = await this.resolveServer(task)
       if (!server) {
         this.finishRun(run.id, "failed", `Server is unavailable: ${run.serverName}`)
+        this.announceRun(task, run.id)
         return
       }
       this.db().prepare("UPDATE scheduled_task_run SET status = 'recovering', updated_at = ? WHERE id = ?").run(Date.now(), run.id)
@@ -795,6 +993,7 @@ export class TaskScheduler {
         this.db().prepare("UPDATE scheduled_task SET last_run_at = ?, last_error = NULL, updated_at = ? WHERE id = ?")
           .run(now, now, task.id)
         await this.runHooks(server, task.directory, "notification", run.id)
+        this.announceRun(task, run.id)
       } catch (error) {
         if (error instanceof ScheduledTaskStoppingError) {
           this.appendRunLog(run.id, "Recovery monitoring paused because the application is stopping")
@@ -804,6 +1003,7 @@ export class TaskScheduler {
         this.finishRun(run.id, error instanceof ScheduledTaskCancelledError ? "cancelled" : error instanceof ScheduledTaskTimeoutError ? "timed_out" : "failed", message)
         this.recordFailure(task.id, message)
         await this.runHooks(server, task.directory, "notification", run.id)
+        this.announceRun(task, run.id)
       }
     }))
   }
@@ -864,12 +1064,44 @@ function normalizeMissedRunPolicy(value: unknown): MissedRunPolicy {
   return value === "run-once" ? "run-once" : "skip"
 }
 
+function normalizeTriggerType(value: unknown): TriggerType {
+  if (value === "task-success" || value === "task-failure" || value === "webhook") return value
+  return "schedule"
+}
+
+function stringArray(value: unknown) {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string")
+  if (typeof value !== "string") return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []
+  } catch {
+    return []
+  }
+}
+
+function notificationChannels(value: unknown): NotificationChannel[] {
+  const channels = stringArray(value).filter((item): item is NotificationChannel => item === "desktop" || item === "webhook")
+  return [...new Set(channels)]
+}
+
 function normalizeServerUrl(value: string) {
   const normalized = value.trim().replace(/\/+$/, "")
   if (!URL.canParse(normalized)) throw new Error("Server URL is invalid")
   const url = new URL(normalized)
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Server URL must use HTTP or HTTPS")
   if (url.username || url.password) throw new Error("Server URL must not contain credentials")
+  return normalized
+}
+
+function normalizeWebhookUrl(value: string) {
+  const normalized = value.trim()
+  if (!URL.canParse(normalized)) throw new Error("Notification webhook URL is invalid")
+  const url = new URL(normalized)
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1"))) {
+    throw new Error("Notification webhook URL must use HTTPS (HTTP is only allowed for loopback addresses)")
+  }
+  if (url.username || url.password) throw new Error("Notification webhook URL must not contain credentials")
   return normalized
 }
 

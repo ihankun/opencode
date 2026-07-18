@@ -1,5 +1,5 @@
 import { app, safeStorage } from "electron"
-import { readFile, rename, writeFile } from "node:fs/promises"
+import { chmod, copyFile, readFile, rename, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 
 export type ServerCredential = {
@@ -36,6 +36,7 @@ export function setServerCredential(id: string, credential: ServerCredential | n
     const file = credentialFilePath()
     const temporary = `${file}.tmp`
     await writeFile(temporary, `${JSON.stringify(stored, null, 2)}\n`, { mode: 0o600 })
+    await copyFile(file, `${file}.bak`).then(() => chmod(`${file}.bak`, 0o600)).catch(() => undefined)
     await rename(temporary, file)
   })
   writeQueue = operation.catch(() => undefined)
@@ -47,8 +48,10 @@ function credentialFilePath() {
 }
 
 function readCredentialFile(): Promise<CredentialFile> {
-  return readFile(credentialFilePath(), "utf8")
+  const file = credentialFilePath()
+  return readFile(file, "utf8")
     .then(text => normalizeCredentialFile(JSON.parse(text)))
+    .catch(() => readFile(`${file}.bak`, "utf8").then(text => normalizeCredentialFile(JSON.parse(text))))
     .catch(() => ({ version: 1, credentials: {} }))
 }
 

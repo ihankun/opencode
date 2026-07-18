@@ -59,12 +59,15 @@ if (document.readyState === 'loading') {
   requestAnimationFrame(initOverlayScrollbars)
 }
 
-// 注册 active server 入口变化 → 清理 server-specific 状态 + 重建 SDK/SSE
-serverStore.onServerChange(() => {
-  abortInFlightApiRequests()
-  invalidateSDKClient()
+// 注册 active server 入口变化 → 只中止受影响服务器请求，并保留其他服务器的客户端缓存
+let previousActiveServerId = serverStore.getActiveServerId()
+serverStore.onServerChange((serverId, reason) => {
+  const invalidatedServerId = reason === 'server-switch' ? previousActiveServerId : serverId
+  abortInFlightApiRequests('Server endpoint changed', invalidatedServerId)
+  if (reason !== 'server-switch') invalidateSDKClient(serverId)
+  previousActiveServerId = serverId
   if (isTauri()) {
-    void getSDKClientAsync().catch(err => apiErrorHandler('reinitialize sdk client after server endpoint change', err))
+    void getSDKClientAsync(serverId).catch(err => apiErrorHandler('reinitialize sdk client after server endpoint change', err))
   }
 
   // 1. 清空内存中的 session/消息数据

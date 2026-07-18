@@ -20,6 +20,7 @@ import { replyPermission } from '../api/permission'
 import { autoApproveStore } from '../store/autoApproveStore'
 import type { ApiMessage, ApiPart, ApiPermissionRequest, ApiQuestionRequest, SessionErrorPayload } from '../api/types'
 import type { SessionStatusMap } from '../types/api/session'
+import i18n from '../i18n'
 
 // ============================================
 // Session-level pub/sub 消费者注册
@@ -476,7 +477,7 @@ export function useGlobalEvents(directories?: string[]) {
           const detail =
             typeof error.data === 'string' && error.data.trim()
               ? error.data.trim()
-              : error.name || '请查看会话详情后重试。'
+              : error.name || i18n.t('chat:notification.detailRetry')
           // 当前会话也要显示错误；否则用户只能看到发送后没有回复。
           notificationStore.push('error', sessionLabel, detail, error.sessionID, meta?.directory)
           if (belongsToCurrentSession(error.sessionID) && isSessionDirectlyOpen(error.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
@@ -550,7 +551,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知 — 不属于当前 session family 的才弹
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('permission', `${sessionLabel} — 权限请求`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('permission', `${sessionLabel} — ${i18n.t('chat:notification.permissionTitle')}`, desc, request.sessionID, meta?.directory)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           // 当前会话：如果开启了当前会话提示音
           playNotificationSoundDeduped('permission')
@@ -574,7 +575,7 @@ export function useGlobalEvents(directories?: string[]) {
       onQuestionAsked: request => {
         const meta = activeSessionStore.getSessionMeta(request.sessionID)
         const sessionLabel = meta?.title || request.sessionID.slice(0, 8)
-        const desc = request.questions?.[0]?.header || 'AI 正在等待你的输入'
+        const desc = request.questions?.[0]?.header || i18n.t('chat:notification.questionWaiting')
 
         // Active 列表：注册 pending request
         activeSessionStore.addPendingRequest(request.id, request.sessionID, 'question', desc)
@@ -591,7 +592,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('question', `${sessionLabel} — 需要回答`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('question', `${sessionLabel} — ${i18n.t('chat:notification.questionTitle')}`, desc, request.sessionID, meta?.directory)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           playNotificationSoundDeduped('question')
         }
@@ -637,7 +638,7 @@ export function useGlobalEvents(directories?: string[]) {
         if (wasBusy && data.status.type === 'idle' && !belongsToCurrentSession(data.sessionID)) {
           const meta = activeSessionStore.getSessionMeta(data.sessionID)
           const sessionLabel = meta?.title || data.sessionID.slice(0, 8)
-          notificationStore.push('completed', sessionLabel, '会话已完成', data.sessionID, meta?.directory)
+          notificationStore.push('completed', sessionLabel, i18n.t('chat:notification.completedBody'), data.sessionID, meta?.directory)
         } else if (
           wasBusy &&
           data.status.type === 'idle' &&

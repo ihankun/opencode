@@ -375,6 +375,14 @@ class ServerStore {
     return this._activeServerSnapshot
   }
 
+  getServer(serverId: string): ServerConfig | null {
+    return this._serversSnapshot.find(server => server.id === serverId) ?? null
+  }
+
+  whenCredentialsReady(): Promise<void> {
+    return this.credentialsReady
+  }
+
   getLocalServer(): ServerConfig | null {
     return this._serversSnapshot.find(s => s.id === this.DEFAULT_SERVER_ID) ?? null
   }

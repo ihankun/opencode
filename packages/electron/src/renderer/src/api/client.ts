@@ -5,6 +5,7 @@
 
 import { getSDKClient, unwrap } from './sdk'
 import { formatPathForApi } from '../utils/directoryUtils'
+import { serverStore } from '../store/serverStore'
 import type { ModelInfo, ApiProject, ApiPath } from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,8 +55,9 @@ export * from './controlPlane'
 // 基于 SDK: config.providers()
 // ============================================
 
-export async function getActiveModels(directory?: string): Promise<ModelInfo[]> {
-  const sdk = getSDKClient()
+export async function getActiveModels(directory?: string, serverId?: string): Promise<ModelInfo[]> {
+  await serverStore.whenCredentialsReady()
+  const sdk = getSDKClient(serverId)
   const data = requireRecord(
     unwrap(await sdk.config.providers({ directory: formatPathForApi(directory) })),
     'Invalid OpenCode providers response',
@@ -99,8 +101,9 @@ export async function getActiveModels(directory?: string): Promise<ModelInfo[]> 
   return models
 }
 
-export async function getDefaultModels(directory?: string): Promise<Record<string, string>> {
-  const sdk = getSDKClient()
+export async function getDefaultModels(directory?: string, serverId?: string): Promise<Record<string, string>> {
+  await serverStore.whenCredentialsReady()
+  const sdk = getSDKClient(serverId)
   const data = requireRecord(
     unwrap(await sdk.config.providers({ directory: formatPathForApi(directory) })),
     'Invalid OpenCode providers response',
@@ -117,16 +120,18 @@ export async function getDefaultModels(directory?: string): Promise<Record<strin
 /**
  * 获取当前项目
  */
-export async function getCurrentProject(directory?: string): Promise<ApiProject> {
-  const sdk = getSDKClient()
+export async function getCurrentProject(directory?: string, serverId?: string): Promise<ApiProject> {
+  await serverStore.whenCredentialsReady()
+  const sdk = getSDKClient(serverId)
   return unwrap(await sdk.project.current({ directory: formatPathForApi(directory) }))
 }
 
 /**
  * 获取项目列表
  */
-export async function getProjects(directory?: string): Promise<ApiProject[]> {
-  const sdk = getSDKClient()
+export async function getProjects(directory?: string, serverId?: string): Promise<ApiProject[]> {
+  await serverStore.whenCredentialsReady()
+  const sdk = getSDKClient(serverId)
   return requireArray<ApiProject>(unwrap(await sdk.project.list({ directory: formatPathForApi(directory) })), 'Invalid OpenCode project list response')
 }
 

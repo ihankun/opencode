@@ -29,6 +29,12 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
         max_concurrent_runs INTEGER NOT NULL DEFAULT 1,
         missed_run_policy TEXT NOT NULL DEFAULT 'skip',
         catch_up_window_minutes INTEGER NOT NULL DEFAULT 60,
+        trigger_type TEXT NOT NULL DEFAULT 'schedule',
+        trigger_task_id TEXT NOT NULL DEFAULT '',
+        dependency_task_ids TEXT NOT NULL DEFAULT '[]',
+        notification_channels TEXT NOT NULL DEFAULT '["desktop"]',
+        notification_webhook_url TEXT NOT NULL DEFAULT '',
+        webhook_secret TEXT NOT NULL DEFAULT '',
         model_provider_id TEXT NOT NULL,
         model_id TEXT NOT NULL,
         variant TEXT NOT NULL DEFAULT '',
@@ -87,6 +93,13 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     ensureColumn(database, "scheduled_task", "max_concurrent_runs", "INTEGER NOT NULL DEFAULT 1")
     ensureColumn(database, "scheduled_task", "missed_run_policy", "TEXT NOT NULL DEFAULT 'skip'")
     ensureColumn(database, "scheduled_task", "catch_up_window_minutes", "INTEGER NOT NULL DEFAULT 60")
+    ensureColumn(database, "scheduled_task", "trigger_type", "TEXT NOT NULL DEFAULT 'schedule'")
+    ensureColumn(database, "scheduled_task", "trigger_task_id", "TEXT NOT NULL DEFAULT ''")
+    ensureColumn(database, "scheduled_task", "dependency_task_ids", "TEXT NOT NULL DEFAULT '[]'")
+    ensureColumn(database, "scheduled_task", "notification_channels", "TEXT NOT NULL DEFAULT '[\"desktop\"]'")
+    ensureColumn(database, "scheduled_task", "notification_webhook_url", "TEXT NOT NULL DEFAULT ''")
+    ensureColumn(database, "scheduled_task", "webhook_secret", "TEXT NOT NULL DEFAULT ''")
+    database.exec("UPDATE scheduled_task SET webhook_secret = lower(hex(randomblob(16))) WHERE webhook_secret = ''")
     ensureColumn(database, "scheduled_task", "enabled", "INTEGER NOT NULL DEFAULT 1")
     ensureColumn(database, "scheduled_task", "last_run_at", "INTEGER")
     ensureColumn(database, "scheduled_task", "last_error", "TEXT")
@@ -114,7 +127,7 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_task_id_idx ON scheduled_task_run(task_id)")
     database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_active_idx ON scheduled_task_run(archived, created_at DESC)")
     database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_task_active_idx ON scheduled_task_run(task_id, archived, created_at DESC)")
-    database.exec("PRAGMA user_version = 9")
+    database.exec("PRAGMA user_version = 10")
     database.exec("COMMIT")
   } catch (error) {
     database.exec("ROLLBACK")

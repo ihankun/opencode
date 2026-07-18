@@ -10,8 +10,8 @@
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk/v2/client'
 import { serverStore, makeBasicAuthHeader } from '../store/serverStore'
 import { platformFetch, preparePlatformNetwork } from '../platform'
-let _apiRequestGeneration = 0
-const _apiRequestControllers = new Set<AbortController>()
+const _apiRequestGenerations = new Map<string, number>()
+const _apiRequestControllers = new Map<AbortController, string>()
 
 function getFetchImpl(): typeof globalThis.fetch {
   return platformFetch as typeof globalThis.fetch
@@ -21,7 +21,11 @@ function createAbortError(message: string) {
   return new DOMException(message, 'AbortError')
 }
 
-async function trackedFetch(input: RequestInfo | URL, init: RequestInit | undefined, generation: number): Promise<Response> {
+function requestGeneration(serverId: string) {
+  return _apiRequestGenerations.get(serverId) ?? 0
+}
+
+async function trackedFetch(input: RequestInfo | URL, init: RequestInit | undefined, serverId: string, generation: number): Promise<Response> {
   const controller = new AbortController()
   const externalSignal = init?.signal
   const abortFromExternal = () => controller.abort(externalSignal?.reason)
@@ -32,10 +36,10 @@ async function trackedFetch(input: RequestInfo | URL, init: RequestInit | undefi
     externalSignal?.addEventListener('abort', abortFromExternal, { once: true })
   }
 
-  _apiRequestControllers.add(controller)
+  _apiRequestControllers.set(controller, serverId)
 
   try {
-    if (generation !== _apiRequestGeneration) {
+    if (generation !== requestGeneration(serverId)) {
       throw createAbortError('Stale API request')
     }
 
@@ -49,28 +53,35 @@ async function trackedFetch(input: RequestInfo | URL, init: RequestInit | undefi
   }
 }
 
-export function abortInFlightApiRequests(reason = 'Server endpoint changed'): void {
-  _apiRequestGeneration++
-  for (const controller of _apiRequestControllers) {
+export function abortInFlightApiRequests(reason = 'Server endpoint changed', serverId?: string): void {
+  const targets = serverId ? [serverId] : serverStore.getServers().map(server => server.id)
+  targets.forEach(id => _apiRequestGenerations.set(id, requestGeneration(id) + 1))
+  for (const [controller, requestServerId] of _apiRequestControllers) {
+    if (serverId && requestServerId !== serverId) continue
     controller.abort(createAbortError(reason))
+    _apiRequestControllers.delete(controller)
   }
-  _apiRequestControllers.clear()
 }
 
 // Client 缓存：按 "baseUrl + authHash" 缓存实例，避免重复创建
-let _cachedClient: OpencodeClient | null = null
-let _cachedKey = ''
+const _cachedClients = new Map<string, { key: string; client: OpencodeClient }>()
 
-function buildCacheKey(): string {
-  const baseUrl = serverStore.getActiveBaseUrl()
-  const auth = serverStore.getActiveAuth()
-  const authPart = auth?.password ? `${auth.username}:${auth.password}` : ''
-  return `${baseUrl}|${authPart}`
+function requireServer(serverId: string) {
+  const server = serverStore.getServer(serverId)
+  if (server) return server
+  throw new Error(`Server not found: ${serverId}`)
 }
 
-function buildHeaders(): Record<string, string> {
+function buildCacheKey(serverId: string): string {
+  const server = requireServer(serverId)
+  const auth = server.auth
+  const authPart = auth?.password ? `${auth.username}:${auth.password}` : ''
+  return `${server.url}|${authPart}`
+}
+
+function buildHeaders(serverId: string): Record<string, string> {
   const headers: Record<string, string> = {}
-  const auth = serverStore.getActiveAuth()
+  const auth = requireServer(serverId).auth
   if (auth?.password) {
     headers['Authorization'] = makeBasicAuthHeader(auth)
   }
@@ -81,33 +92,32 @@ function buildHeaders(): Record<string, string> {
  * 同步获取 SDK client（浏览器环境 or tauri fetch 已加载）
  * 如果 tauri fetch 还没加载完，先用原生 fetch
  */
-export function getSDKClient(): OpencodeClient {
-  const key = buildCacheKey()
-  if (_cachedClient && _cachedKey === key) {
-    return _cachedClient
-  }
+export function getSDKClient(serverId = serverStore.getActiveServerId()): OpencodeClient {
+  const key = buildCacheKey(serverId)
+  const cached = _cachedClients.get(serverId)
+  if (cached?.key === key) return cached.client
 
-  const baseUrl = serverStore.getActiveBaseUrl()
-  const headers = buildHeaders()
-  const generation = _apiRequestGeneration
-  const fetchImpl = ((input, init) => trackedFetch(input, init, generation)) as typeof globalThis.fetch
+  const server = requireServer(serverId)
+  const headers = buildHeaders(serverId)
+  const generation = requestGeneration(serverId)
+  const fetchImpl = ((input, init) => trackedFetch(input, init, serverId, generation)) as typeof globalThis.fetch
 
-  _cachedClient = createOpencodeClient({
-    baseUrl,
+  const client = createOpencodeClient({
+    baseUrl: server.url,
     headers,
     fetch: fetchImpl,
   })
-  _cachedKey = key
-  return _cachedClient
+  _cachedClients.set(serverId, { key, client })
+  return client
 }
 
-export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetchJson<T>(path: string, init?: RequestInit, serverId = serverStore.getActiveServerId()): Promise<T> {
+  await serverStore.whenCredentialsReady()
   await preparePlatformNetwork()
 
-  const baseUrl = serverStore.getActiveBaseUrl()
-  const url = new URL(path, baseUrl)
+  const url = new URL(path, requireServer(serverId).url)
   const headers = new Headers(init?.headers)
-  for (const [key, value] of Object.entries(buildHeaders())) {
+  for (const [key, value] of Object.entries(buildHeaders(serverId))) {
     headers.set(key, value)
   }
   if (init?.body && !headers.has('content-type')) {
@@ -123,7 +133,8 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
       ...init,
       headers,
     },
-    _apiRequestGeneration,
+    serverId,
+    requestGeneration(serverId),
   )
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
@@ -137,20 +148,22 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
  * 异步获取 SDK client（确保 tauri fetch 已加载）
  * 在应用初始化时应该先调一次这个
  */
-export async function getSDKClientAsync(): Promise<OpencodeClient> {
+export async function getSDKClientAsync(serverId = serverStore.getActiveServerId()): Promise<OpencodeClient> {
+  await serverStore.whenCredentialsReady()
   await preparePlatformNetwork()
-  // 使 cache 失效以便用新的 tauri fetch 重建
-  _cachedClient = null
-  _cachedKey = ''
-  return getSDKClient()
+  _cachedClients.delete(serverId)
+  return getSDKClient(serverId)
 }
 
 /**
  * 强制重建 client（服务器切换时调用）
  */
-export function invalidateSDKClient(): void {
-  _cachedClient = null
-  _cachedKey = ''
+export function invalidateSDKClient(serverId?: string): void {
+  if (serverId) {
+    _cachedClients.delete(serverId)
+    return
+  }
+  _cachedClients.clear()
 }
 
 /**

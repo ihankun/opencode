@@ -161,6 +161,7 @@ const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
 // ============================================
 
 function TabContent({ tab }: { tab: SettingsTab }) {
+  const { t } = useTranslation(['common'])
   const content = (() => {
     switch (tab) {
     case 'agent':
@@ -201,7 +202,7 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return null
     }
   })()
-  return <Suspense fallback={<div className="flex min-h-48 items-center justify-center text-[length:var(--fs-sm)] text-text-400">Loading…</div>}>{content}</Suspense>
+  return <Suspense fallback={<div className="flex min-h-48 items-center justify-center text-[length:var(--fs-sm)] text-text-400">{t('common:loading')}</div>}>{content}</Suspense>
 }
 
 // ============================================

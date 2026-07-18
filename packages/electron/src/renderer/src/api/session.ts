@@ -29,7 +29,7 @@ function normalizeSessionList(value: unknown): ApiSession[] {
 }
 
 export function isScheduledTaskSession(session: Pick<ApiSession, 'title'>) {
-  return session.title.startsWith('[定时任务] ')
+  return session.title.startsWith('[自动化] ') || session.title.startsWith('[定时任务] ')
 }
 
 // ============================================

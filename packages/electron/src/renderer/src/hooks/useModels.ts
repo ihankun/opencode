@@ -1,14 +1,7 @@
-import { useSyncExternalStore, useCallback } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { getActiveModels, type ModelInfo } from '../api'
 import { getSDKClientAsync } from '../api/sdk'
 import { serverStore } from '../store/serverStore'
-
-// ============================================
-// Global singleton so every ChatPane shares one models array.
-// Prevents duplicate API requests and the race condition where a
-// late-mounting pane sees an empty models list, falls back to
-// models[0], and overwrites the persisted model selection.
-// ============================================
 
 interface ModelsState {
   models: ModelInfo[]
@@ -18,90 +11,83 @@ interface ModelsState {
 
 type Listener = () => void
 
-let _state: ModelsState = { models: [], isLoading: true, error: null }
-let _fetchPromise: Promise<void> | null = null
-let _fetchGeneration = 0
-const _listeners = new Set<Listener>()
+const initialState: ModelsState = { models: [], isLoading: true, error: null }
+const states = new Map<string, ModelsState>()
+const fetchPromises = new Map<string, Promise<void>>()
+const fetchGenerations = new Map<string, number>()
+const listeners = new Set<Listener>()
 const FETCH_RETRY_DELAYS = [0, 500, 1500]
 
-function _notify() {
-  for (const fn of _listeners) fn()
+function notify() {
+  listeners.forEach(listener => listener())
 }
 
-function _setState(patch: Partial<ModelsState>) {
-  _state = { ..._state, ...patch }
-  _notify()
+function stateFor(serverId: string) {
+  return states.get(serverId) ?? initialState
 }
 
-async function _fetchModels(force = false) {
-  if (_fetchPromise && !force) return _fetchPromise
+function setState(serverId: string, patch: Partial<ModelsState>) {
+  states.set(serverId, { ...stateFor(serverId), ...patch })
+  notify()
+}
 
-  const generation = ++_fetchGeneration
+async function fetchModels(serverId: string, force = false) {
+  const pending = fetchPromises.get(serverId)
+  if (pending && !force) return pending
+  const current = stateFor(serverId)
+  if (!force && current.models.length > 0 && !current.error) return
 
-  _fetchPromise = (async () => {
-    _setState({ isLoading: true, error: null })
-
+  const generation = (fetchGenerations.get(serverId) ?? 0) + 1
+  fetchGenerations.set(serverId, generation)
+  const promise = (async () => {
+    setState(serverId, { isLoading: true, error: null })
     try {
       for (const [index, delay] of FETCH_RETRY_DELAYS.entries()) {
         if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
-        if (generation !== _fetchGeneration) return
-
+        if (generation !== fetchGenerations.get(serverId)) return
         try {
-          await getSDKClientAsync()
-          const data = await getActiveModels()
-          if (data.length === 0) throw new Error('Server returned no active models')
-          if (generation === _fetchGeneration) {
-            _setState({ models: data, isLoading: false })
-          }
+          await getSDKClientAsync(serverId)
+          const models = await getActiveModels(undefined, serverId)
+          if (models.length === 0) throw new Error('Server returned no active models')
+          if (generation === fetchGenerations.get(serverId)) setState(serverId, { models, isLoading: false, error: null })
           return
         } catch (error) {
-          if (generation !== _fetchGeneration) return
-          const normalizedError = error instanceof Error ? error : new Error('Failed to fetch models')
-          const finalAttempt = index === FETCH_RETRY_DELAYS.length - 1
-          if (finalAttempt) {
-            console.error('[models] Failed to fetch models after retries:', normalizedError)
-            _setState({ error: normalizedError, isLoading: false })
+          if (generation !== fetchGenerations.get(serverId)) return
+          const normalized = error instanceof Error ? error : new Error('Failed to fetch models')
+          if (index === FETCH_RETRY_DELAYS.length - 1) {
+            console.error(`[models:${serverId}] Failed to fetch models after retries:`, normalized)
+            setState(serverId, { error: normalized, isLoading: false })
             return
           }
-          console.warn(`[models] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalizedError)
+          console.warn(`[models:${serverId}] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalized)
         }
       }
     } finally {
-      if (generation === _fetchGeneration) {
-        _fetchPromise = null
-      }
+      if (generation === fetchGenerations.get(serverId)) fetchPromises.delete(serverId)
     }
   })()
 
-  return _fetchPromise
+  fetchPromises.set(serverId, promise)
+  return promise
 }
 
-export function refreshModels() {
-  return _fetchModels(true)
+export function refreshModels(serverId = serverStore.getActiveServerId()) {
+  return fetchModels(serverId, true)
 }
 
 export function initializeModels() {
-  return _fetchModels()
+  return fetchModels(serverStore.getActiveServerId())
 }
 
-serverStore.onServerChange(() => {
-  // Other server-change listeners abort stale requests and invalidate the SDK client.
-  // Start the model refresh after all synchronous listeners have completed.
-  queueMicrotask(() => void refreshModels())
+serverStore.onServerChange((serverId, reason) => {
+  if (reason !== 'server-switch') states.delete(serverId)
+  queueMicrotask(() => void fetchModels(serverId, reason !== 'server-switch'))
 })
 
-function _subscribe(listener: Listener) {
-  _listeners.add(listener)
-  return () => _listeners.delete(listener)
+function subscribe(listener: Listener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
 }
-
-function _getSnapshot(): ModelsState {
-  return _state
-}
-
-// ============================================
-// Hook — drop-in replacement, same return type
-// ============================================
 
 interface UseModelsResult {
   models: ModelInfo[]
@@ -110,14 +96,19 @@ interface UseModelsResult {
   refetch: () => Promise<void>
 }
 
-export function useModels(): UseModelsResult {
-  const state = useSyncExternalStore(_subscribe, _getSnapshot)
-  const refetch = useCallback(() => refreshModels(), [])
+export function useModels(serverId?: string): UseModelsResult {
+  const activeServerId = useSyncExternalStore(
+    serverStore.subscribe.bind(serverStore),
+    () => serverStore.getActiveServerId(),
+    () => serverStore.getActiveServerId(),
+  )
+  const resolvedServerId = serverId ?? activeServerId
+  const state = useSyncExternalStore(subscribe, () => stateFor(resolvedServerId), () => stateFor(resolvedServerId))
 
-  return {
-    models: state.models,
-    isLoading: state.isLoading,
-    error: state.error,
-    refetch,
-  }
+  useEffect(() => {
+    void fetchModels(resolvedServerId)
+  }, [resolvedServerId])
+
+  const refetch = useCallback(() => refreshModels(resolvedServerId), [resolvedServerId])
+  return { ...state, refetch }
 }
