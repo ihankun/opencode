@@ -928,6 +928,12 @@ function GitActions({
   const [action, setAction] = useState<string | null>(null)
   const [commitOpen, setCommitOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
+  const [pullRequestOpen, setPullRequestOpen] = useState(false)
+  const [pullRequestTitle, setPullRequestTitle] = useState('')
+  const [pullRequestBody, setPullRequestBody] = useState('')
+  const [pullRequestDraft, setPullRequestDraft] = useState(false)
+  const [operationDialog, setOperationDialog] = useState<'create-branch' | 'merge' | null>(null)
+  const [operationArgument, setOperationArgument] = useState('')
   const [discardFiles, setDiscardFiles] = useState<string[]>([])
   const [history, setHistory] = useState<VcsHistoryItem[] | null>(null)
   const mutationsSupported = serverStore.supports('vcsMutations')
@@ -1027,36 +1033,22 @@ function GitActions({
             <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}>{t('sessionChanges.pull')}</button>
             <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stash', () => runVcsOperation('stash', undefined, directory))}>{t('sessionChanges.stash')}</button>
             <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stashPop', () => runVcsOperation('stash-pop', undefined, directory))}>{t('sessionChanges.stashPop')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { const branch = window.prompt(t('sessionChanges.branchNamePrompt')); if (branch) void run('createBranch', () => runVcsOperation('create-branch', branch, directory)) }}>{t('sessionChanges.createBranch')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { const branch = window.prompt(t('sessionChanges.mergeBranchPrompt')); if (branch) void run('merge', () => runVcsOperation('merge', branch, directory)) }}>{t('sessionChanges.mergeBranch')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('create-branch') }}>{t('sessionChanges.createBranch')}</button>
+            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('merge') }}>{t('sessionChanges.mergeBranch')}</button>
             <button type="button" role="menuitem" className={`${menuItemClass} !text-danger-100`} onClick={() => void run('mergeAbort', () => runVcsOperation('merge-abort', undefined, directory))}>{t('sessionChanges.mergeAbort')}</button>
             <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); void getVcsHistory(directory).then(setHistory).catch(error => onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))) }}>{t('sessionChanges.history')}</button>
           </> : null}
           <button
             type="button"
             role="menuitem"
-            disabled={!pullRequestUrl}
+            disabled={!pullRequestUrl || !serverStore.supports('pullRequests')}
             className={menuItemClass}
             title={pullRequestUrl ? undefined : t('sessionChanges.pullRequestUnavailable')}
-            onClick={() =>
-              void run('createPr', async () => {
-                const output = await pushVcsBranch(directory)
-                const title = window.prompt(t('sessionChanges.pullRequestTitlePrompt'), vcsInfo?.branch || '')
-                if (!title) return output
-                if (typeof window.customOpenCode?.createPullRequest !== 'function') {
-                  await openUrl(pullRequestUrl!)
-                  return output
-                }
-                const result = await window.customOpenCode.createPullRequest({
-                  remoteUrl: vcsInfo!.remote_url!,
-                  sourceBranch: vcsInfo!.branch!,
-                  targetBranch: vcsInfo!.default_branch!,
-                  title,
-                })
-                await openUrl(result.url)
-                return result.url
-              })
-            }
+            onClick={() => {
+              setIsOpen(false)
+              setPullRequestTitle(vcsInfo?.branch?.replace(/[-_]+/g, ' ') || '')
+              setPullRequestOpen(true)
+            }}
           >
             {t('sessionChanges.createPullRequest')}
           </button>
@@ -1104,6 +1096,57 @@ function GitActions({
               {t('sessionChanges.commit')}
             </Button>
           </div>
+        </form>
+      </Dialog>
+
+      <Dialog isOpen={operationDialog !== null} onClose={() => setOperationDialog(null)} title={t(operationDialog === 'merge' ? 'sessionChanges.mergeBranch' : 'sessionChanges.createBranch')} width={440}>
+        <form className="space-y-4" onSubmit={event => {
+          event.preventDefault()
+          const argument = operationArgument.trim()
+          if (!operationDialog || !argument) return
+          const label = operationDialog === 'merge' ? 'merge' : 'createBranch'
+          void run(label, () => runVcsOperation(operationDialog, argument, directory)).then(success => {
+            if (success) setOperationDialog(null)
+          })
+        }}>
+          <label className="block"><span className="mb-1.5 block text-[length:var(--fs-xs)] text-text-300">{t(operationDialog === 'merge' ? 'sessionChanges.mergeBranchPrompt' : 'sessionChanges.branchNamePrompt')}</span><input value={operationArgument} onChange={event => setOperationArgument(event.target.value)} maxLength={255} autoFocus className="h-9 w-full rounded-lg border border-border-200 bg-bg-100 px-3 font-mono text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100" /></label>
+          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setOperationDialog(null)}>{t('common:cancel')}</Button><Button type="submit" disabled={!operationArgument.trim()} isLoading={action === 'merge' || action === 'createBranch'}>{t(operationDialog === 'merge' ? 'sessionChanges.mergeBranch' : 'sessionChanges.createBranch')}</Button></div>
+        </form>
+      </Dialog>
+
+      <Dialog isOpen={pullRequestOpen} onClose={() => setPullRequestOpen(false)} title={t('sessionChanges.pullRequestTitle')} width={520}>
+        <form className="space-y-4" onSubmit={event => {
+          event.preventDefault()
+          if (!pullRequestTitle.trim() || !pullRequestUrl) return
+          void run('createPr', async () => {
+            const output = await pushVcsBranch(directory)
+            if (typeof window.customOpenCode?.createPullRequest !== 'function') {
+              await openUrl(pullRequestUrl)
+              return output
+            }
+            const result = await window.customOpenCode.createPullRequest({
+              remoteUrl: vcsInfo!.remote_url!,
+              sourceBranch: vcsInfo!.branch!,
+              targetBranch: vcsInfo!.default_branch!,
+              title: pullRequestTitle.trim(),
+              body: pullRequestBody.trim(),
+              draft: pullRequestDraft,
+            })
+            await openUrl(result.url)
+            return result.url
+          }).then(success => {
+            if (!success) return
+            setPullRequestOpen(false)
+            setPullRequestTitle('')
+            setPullRequestBody('')
+            setPullRequestDraft(false)
+          })
+        }}>
+          <div><label className="mb-1.5 block text-[length:var(--fs-xs)] font-medium text-text-300">{t('sessionChanges.pullRequestTitleLabel')}</label><input value={pullRequestTitle} onChange={event => setPullRequestTitle(event.target.value)} maxLength={500} autoFocus className="h-9 w-full rounded-lg border border-border-200 bg-bg-100 px-3 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100" /></div>
+          <div><label className="mb-1.5 block text-[length:var(--fs-xs)] font-medium text-text-300">{t('sessionChanges.pullRequestBodyLabel')}</label><textarea value={pullRequestBody} onChange={event => setPullRequestBody(event.target.value)} rows={7} maxLength={100000} placeholder={t('sessionChanges.pullRequestBodyPlaceholder')} className="w-full resize-y rounded-lg border border-border-200 bg-bg-100 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100" /></div>
+          <label className="flex items-center gap-2 text-[length:var(--fs-sm)] text-text-300"><input type="checkbox" checked={pullRequestDraft} onChange={event => setPullRequestDraft(event.target.checked)} />{t('sessionChanges.pullRequestDraft')}</label>
+          <div className="rounded-lg bg-bg-200/40 px-3 py-2 text-[length:var(--fs-xs)] text-text-400">{vcsInfo?.branch} → {vcsInfo?.default_branch}</div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setPullRequestOpen(false)} disabled={action !== null}>{t('common:cancel')}</Button><Button type="submit" disabled={!pullRequestTitle.trim()} isLoading={action === 'createPr'}>{t('sessionChanges.pushAndCreatePullRequest')}</Button></div>
         </form>
       </Dialog>
 

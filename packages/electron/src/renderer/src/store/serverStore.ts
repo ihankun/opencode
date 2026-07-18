@@ -25,6 +25,7 @@ export interface ServerConfig {
   name: string // 显示名称
   url: string // 服务器 URL (不含尾部斜杠)
   isDefault?: boolean // 是否为默认服务器
+  allowInsecureHttp?: boolean // 非本机 HTTP 需要显式授权
   auth?: ServerAuth // 认证信息 (可选)
 }
 
@@ -81,7 +82,7 @@ interface ServerClockCalibration {
 }
 
 type Listener = () => void
-export type ServerChangeReason = 'server-switch' | 'local-runtime-url' | 'credential-change'
+export type ServerChangeReason = 'server-switch' | 'server-update' | 'local-runtime-url' | 'credential-change'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -215,7 +216,11 @@ class ServerStore {
       // 加载服务器列表
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        this.servers = JSON.parse(stored)
+        const value: unknown = JSON.parse(stored)
+        this.servers = Array.isArray(value) ? value.filter(isStoredServer).map(server => ({
+          ...server,
+          allowInsecureHttp: server.allowInsecureHttp === true || isRemoteHttpUrl(server.url),
+        })) : []
       }
 
       // 如果没有服务器，添加默认的本地服务器
@@ -262,6 +267,7 @@ class ServerStore {
             name: server.name,
             url: server.url,
             isDefault: server.isDefault,
+            allowInsecureHttp: server.allowInsecureHttp,
           }))
         : this.servers
       localStorage.setItem(STORAGE_KEY, JSON.stringify(servers))
@@ -453,7 +459,7 @@ class ServerStore {
     const server: ServerConfig = {
       ...config,
       id,
-      url: config.url.replace(/\/+$/, ''), // 移除尾部斜杠
+      url: validateServerUrl(config.url, config.allowInsecureHttp),
     }
     this.servers.push(server)
     if (server.auth) this.persistCredential(server.id, server.auth)
@@ -474,7 +480,7 @@ class ServerStore {
       ...server,
       ...updates,
       id: server.id, // 确保 id 不被覆盖
-      url: updates.url ? updates.url.replace(/\/+$/, '') : server.url,
+      url: updates.url ? validateServerUrl(updates.url, updates.allowInsecureHttp ?? server.allowInsecureHttp) : server.url,
     }
     if (id === this.DEFAULT_SERVER_ID && updates.url) {
       this.localServerUrlOverride = null
@@ -484,6 +490,9 @@ class ServerStore {
     }
     this.saveToStorage()
     this.notify()
+    if (this.activeServerId === id && (updates.url !== undefined || Object.prototype.hasOwnProperty.call(updates, 'auth'))) {
+      this.notifyServerChange(id, updates.url !== undefined ? 'server-update' : 'credential-change')
+    }
     return true
   }
 
@@ -516,12 +525,14 @@ class ServerStore {
     this.persistCredential(id, null)
 
     // 如果删除的是当前选中的，切换到默认
-    if (this.activeServerId === id) {
+    const activeRemoved = this.activeServerId === id
+    if (activeRemoved) {
       this.activeServerId = this.servers[0]?.id ?? null
     }
 
     this.saveToStorage()
     this.notify()
+    if (activeRemoved && this.activeServerId) this.notifyServerChange(this.activeServerId, 'server-switch')
     return true
   }
 
@@ -572,7 +583,7 @@ class ServerStore {
     const server = this.withRuntimeServerUrl(storedServer)
     const checkSeq = (this.healthCheckSeqMap.get(serverId) ?? 0) + 1
     this.healthCheckSeqMap.set(serverId, checkSeq)
-    const healthUrl = `${server.url}/global/health`
+    const healthUrl = `${validateServerUrl(server.url, server.allowInsecureHttp)}/global/health`
 
     const commitHealth = (health: ServerHealth) => {
       if (this.healthCheckSeqMap.get(serverId) === checkSeq) {
@@ -725,6 +736,7 @@ function normalizeServerBackup(raw: unknown): ServerSettingsBackup {
           name: item.name,
           url: item.url.replace(/\/+$/, ''),
           isDefault: item.isDefault === true,
+          allowInsecureHttp: item.allowInsecureHttp === true || isRemoteHttpUrl(item.url),
           auth:
             item.auth &&
             typeof item.auth === 'object' &&
@@ -764,6 +776,7 @@ export function exportServerSettingsBackup(): ServerSettingsBackup {
       name: server.name,
       url: server.url,
       isDefault: server.isDefault,
+      allowInsecureHttp: server.allowInsecureHttp,
     })),
     activeServerId: serverStore.getActiveServerId(),
   }
@@ -785,6 +798,7 @@ export async function importServerSettingsBackup(raw: unknown): Promise<void> {
         name: server.name,
         url: server.url,
         isDefault: server.isDefault,
+        allowInsecureHttp: server.allowInsecureHttp,
       }))
     : normalized.servers
   localStorage.setItem(STORAGE_KEY, JSON.stringify(servers))
@@ -802,6 +816,36 @@ export async function importServerSettingsBackup(raw: unknown): Promise<void> {
  */
 export function makeBasicAuthHeader(auth: ServerAuth): string {
   return 'Basic ' + btoa(`${auth.username}:${auth.password}`)
+}
+
+function isStoredServer(value: unknown): value is ServerConfig {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string' && typeof value.name === 'string' && typeof value.url === 'string'
+}
+
+function isRemoteHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' && !isLoopbackHost(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+function isLoopbackHost(hostname: string) {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  return normalized === 'localhost' || normalized === '::1' || normalized.startsWith('127.')
+}
+
+function validateServerUrl(value: string, allowInsecureHttp = false) {
+  const normalized = value.trim().replace(/\/+$/, '')
+  const url = new URL(normalized)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Server URL must use HTTP or HTTPS')
+  if (url.username || url.password) throw new Error('Server credentials must not be embedded in the URL')
+  if (url.protocol === 'http:' && !isLoopbackHost(url.hostname) && !allowInsecureHttp) {
+    throw new Error('Remote HTTP sends traffic without encryption. Explicitly allow insecure HTTP or use HTTPS.')
+  }
+  return normalized
 }
 
 function normalizeServerTimestamp(timestamp: unknown): number | null {

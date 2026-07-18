@@ -470,6 +470,8 @@ import type {
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
+  WorktreeDetailsErrors,
+  WorktreeDetailsResponses,
   WorktreeListErrors,
   WorktreeListResponses,
   WorktreeRemoveErrors,
@@ -2002,6 +2004,8 @@ export class Experimental extends HeyApiClient {
         event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
         command: string
         enabled: boolean
+        approved: boolean
+        sandbox: boolean
         timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       }>
     },
@@ -2521,6 +2525,36 @@ export class Worktree extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Inspect worktrees
+   *
+   * List worktrees with branch, dirty state, ownership, disk usage, and timestamps.
+   */
+  public details<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorktreeDetailsResponses, WorktreeDetailsErrors, ThrowOnError>({
+      url: "/experimental/worktree/details",
+      ...options,
+      ...params,
     })
   }
 

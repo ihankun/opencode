@@ -39,6 +39,7 @@ import { notificationStore } from '../store'
 import type { Skill } from '../types/api/skill'
 import { useDirectory } from '../hooks'
 import { apiErrorHandler, getDirectoryName } from '../utils'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 
 // ============================================
 // SkillPanel Component
@@ -478,6 +479,7 @@ function MarketplaceDetailDialog(props: {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [forceAction, setForceAction] = useState<'install' | 'remove' | null>(null)
 
   useEffect(() => {
     getMarketplaceDetail(props.summary.id, props.summary.provider, props.directory)
@@ -501,8 +503,8 @@ function MarketplaceDetailDialog(props: {
       if (action === 'remove') props.onClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      if (!force && /conflict|local skill files have changes/i.test(message) && window.confirm(t('skillPanel.forceConflict'))) {
-        await mutate(action, true)
+      if (!force && /conflict|local skill files have changes/i.test(message)) {
+        setForceAction(action)
         return
       }
       setError(message)
@@ -512,6 +514,7 @@ function MarketplaceDetailDialog(props: {
   }
 
   return (
+    <>
     <SkillDialogFrame title={props.summary.name || props.summary.slug} onClose={props.onClose}>
       {loading ? <PanelStatus icon={<SpinnerIcon size={18} className="animate-spin" />} text={t('skillPanel.loadingPreview')} /> : detail && (
         <>
@@ -544,6 +547,8 @@ function MarketplaceDetailDialog(props: {
         </button>
       </div>
     </SkillDialogFrame>
+    <ConfirmDialog isOpen={forceAction !== null} onClose={() => setForceAction(null)} onConfirm={() => { const action = forceAction; setForceAction(null); if (action) void mutate(action, true) }} title={t('skillPanel.localChanges')} description={t('skillPanel.forceConflict')} confirmText={t('common:confirm')} variant="danger" isLoading={submitting} />
+    </>
   )
 }
 
@@ -1389,25 +1394,29 @@ const SkillItem = memo(function SkillItem(props: {
   const skill = props.skill
   const [expanded, setExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const canDelete = isUserSkill(skill, props.homeDirectory) && typeof window.customOpenCode?.deleteSkill === 'function'
 
   const deleteSkill = async () => {
     if (!canDelete) return
-    if (!window.confirm(t('skillPanel.deleteSkillConfirm', { name: skill.name }))) return
     try {
       setDeleting(true)
+      setDeleteError('')
       await window.customOpenCode.deleteSkill(skill.location)
       await restartElectronServer()
       await props.onDeleted(skill.name)
+      setDeleteConfirm(false)
     } catch (err) {
       apiErrorHandler('delete skill', err)
-      window.alert(err instanceof Error ? err.message : t('skillPanel.failedToDelete'))
+      setDeleteError(err instanceof Error ? err.message : t('skillPanel.failedToDelete'))
     } finally {
       setDeleting(false)
     }
   }
 
   return (
+    <>
     <div className="group">
       <div className="flex items-start rounded-md px-2 py-2 hover:bg-bg-200/50 transition-colors">
         <button
@@ -1429,7 +1438,7 @@ const SkillItem = memo(function SkillItem(props: {
         {canDelete && (
           <button
             type="button"
-            onClick={deleteSkill}
+            onClick={() => setDeleteConfirm(true)}
             disabled={deleting}
             aria-label={t('skillPanel.deleteSkill')}
             title={t('skillPanel.deleteSkill')}
@@ -1448,7 +1457,10 @@ const SkillItem = memo(function SkillItem(props: {
           </div>
         </div>
       )}
+      {deleteError ? <div className="mx-2 mb-2 rounded-md bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">{deleteError}</div> : null}
     </div>
+    <ConfirmDialog isOpen={deleteConfirm} onClose={() => setDeleteConfirm(false)} onConfirm={() => void deleteSkill()} title={t('skillPanel.deleteSkill')} description={t('skillPanel.deleteSkillConfirm', { name: skill.name })} confirmText={t('common:delete')} variant="danger" isLoading={deleting} />
+    </>
   )
 })
 

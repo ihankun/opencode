@@ -29,13 +29,14 @@ const auditedMessages = new Set<string>()
 
 export async function sandboxCommand(command: string, cwd: string, worktree: string, shell: string, bypass: boolean) {
   const current = await load()
-  if (!current.sandbox.enabled || bypass) return { command, sandboxed: false, unavailable: false }
-  if (!(await initialize(current))) return { command, sandboxed: false, unavailable: true }
+  if (!current.sandbox.enabled) return { command, sandboxed: false, unavailable: false, configured: false }
+  if (bypass) return { command, sandboxed: false, unavailable: false, configured: true }
+  if (!(await initialize(current))) return { command, sandboxed: false, unavailable: true, configured: true }
   return SandboxManager.wrapWithSandbox(command, shell, runtime(current, cwd, worktree))
-    .then((wrapped) => ({ command: wrapped, sandboxed: true, unavailable: false }))
+    .then((wrapped) => ({ command: wrapped, sandboxed: true, unavailable: false, configured: true }))
     .catch((error) => {
       console.error("[security:sandbox] failed to wrap command", error)
-      return { command, sandboxed: false, unavailable: true }
+      return { command, sandboxed: false, unavailable: true, configured: true }
     })
 }
 

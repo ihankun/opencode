@@ -17,9 +17,9 @@ export function ExtensionCenterSettings() {
   const [tab, setTab] = useState<ExtensionTab>('mcp')
   const health = activeServer ? getHealth(activeServer.id) : null
   const tabs: Array<{ id: ExtensionTab; label: string }> = [
-    { id: 'mcp', label: 'MCP' },
-    { id: 'skills', label: 'Skills' },
-    { id: 'plugins', label: 'Plugins' },
+    { id: 'mcp', label: t('extensions.mcp') },
+    { id: 'skills', label: t('extensions.skills') },
+    { id: 'plugins', label: t('extensions.plugins') },
     { id: 'kits', label: t('extensions.expertKits') },
   ]
 

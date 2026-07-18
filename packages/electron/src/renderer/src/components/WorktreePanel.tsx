@@ -20,7 +20,8 @@ import {
 import { getCurrentProject } from '../api/client'
 import { disposeInstance } from '../api/global'
 import { listPtySessions, removePtySession } from '../api/pty'
-import { listWorktrees, createWorktree, removeWorktree, resetWorktree } from '../api/worktree'
+import { listWorktreeDetails, listWorktrees, createWorktree, removeWorktree, resetWorktree } from '../api/worktree'
+import type { WorktreeDetail } from '../api/worktree'
 import { subscribeToEvents } from '../api/events'
 import { useDirectory, useVcsInfo, requestGitWorkspaceCatalogRefresh } from '../hooks'
 import { getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../utils'
@@ -38,16 +39,17 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
   const { t } = useTranslation(['components', 'common'])
   const { currentDirectory, addDirectory, setCurrentDirectory } = useDirectory()
   const { vcsInfo, refresh: refreshVcs } = useVcsInfo(currentDirectory)
-  const [worktrees, setWorktrees] = useState<string[]>([])
+  const [worktrees, setWorktrees] = useState<WorktreeDetail[]>([])
   const [rootDirectory, setRootDirectory] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const loadRequestIdRef = useRef(0)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; directory: string | null }>({
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; directory: string | null; dirty: boolean }>({
     isOpen: false,
     directory: null,
+    dirty: false,
   })
   const [resetConfirm, setResetConfirm] = useState<{ isOpen: boolean; directory: string | null }>({
     isOpen: false,
@@ -85,7 +87,10 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
         return
       }
 
-      const list = await listWorktrees(baseDirectory)
+      const list = await listWorktreeDetails(baseDirectory).catch(async () => (await listWorktrees(baseDirectory)).map(directory => ({
+        name: getDirectoryName(directory), directory, dirty: false, managed: false, sizeBytes: 0, fileCount: 0,
+        measuredCompletely: false, createdAt: 0, modifiedAt: 0,
+      })))
       if (requestId !== loadRequestIdRef.current) return
 
       setWorktrees(list)
@@ -181,7 +186,7 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
 
   // 删除 worktree
   const handleDelete = useCallback(
-    async (directory: string) => {
+    async (directory: string, force: boolean) => {
       if (!currentDirectory) return
 
       setActionLoading(`delete-${directory}`)
@@ -194,14 +199,14 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
         }
 
         await releaseWorktreeResources(directory)
-        await removeWorktree({ directory }, baseDirectory)
+        await removeWorktree({ directory, ...(force ? { force: true } : {}) }, baseDirectory)
         await loadWorktrees()
         requestGitWorkspaceCatalogRefresh()
       } catch (e) {
         setError(e instanceof Error ? e.message : t('worktreePanel.failedToRemove'))
       } finally {
         setActionLoading(null)
-        setDeleteConfirm({ isOpen: false, directory: null })
+        setDeleteConfirm({ isOpen: false, directory: null, dirty: false })
       }
     },
     [currentDirectory, loadWorktrees, releaseWorktreeResources, requireRootDirectory, setCurrentDirectory, t],
@@ -349,13 +354,12 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
           <div className="p-1">
             {worktrees.map(wt => (
               <WorktreeItem
-                key={wt}
-                directory={wt}
-                name={getDirectoryName(wt)}
-                isLoading={actionLoading === `delete-${wt}` || actionLoading === `reset-${wt}`}
-                onOpenSession={() => handleOpenSession(wt)}
-                onDelete={() => setDeleteConfirm({ isOpen: true, directory: wt })}
-                onReset={() => setResetConfirm({ isOpen: true, directory: wt })}
+                key={wt.directory}
+                worktree={wt}
+                isLoading={actionLoading === `delete-${wt.directory}` || actionLoading === `reset-${wt.directory}`}
+                onOpenSession={() => handleOpenSession(wt.directory)}
+                onDelete={() => setDeleteConfirm({ isOpen: true, directory: wt.directory, dirty: wt.dirty })}
+                onReset={() => setResetConfirm({ isOpen: true, directory: wt.directory })}
               />
             ))}
           </div>
@@ -365,16 +369,16 @@ export const WorktreePanel = memo(function WorktreePanel({ isResizing: _isResizi
       {/* Delete Confirm */}
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
-        onClose={() => setDeleteConfirm({ isOpen: false, directory: null })}
+        onClose={() => setDeleteConfirm({ isOpen: false, directory: null, dirty: false })}
         onConfirm={() => {
           if (deleteConfirm.directory) {
-            handleDelete(deleteConfirm.directory)
+            handleDelete(deleteConfirm.directory, deleteConfirm.dirty)
           }
         }}
         title={t('worktreePanel.removeWorktree')}
-        description={t('worktreePanel.removeWorktreeConfirm', {
+        description={`${t('worktreePanel.removeWorktreeConfirm', {
           name: deleteConfirm.directory ? getDirectoryName(deleteConfirm.directory) : '',
-        })}
+        })}${deleteConfirm.dirty ? ` ${t('worktreePanel.removeDirtyWarning')}` : ''}`}
         confirmText={t('common:remove')}
         variant="danger"
       />
@@ -470,8 +474,7 @@ function CreateWorktreeForm({ onSubmit, onCancel, isLoading }: CreateWorktreeFor
 // ============================================
 
 interface WorktreeItemProps {
-  directory: string
-  name: string
+  worktree: WorktreeDetail
   isLoading: boolean
   onOpenSession: () => void
   onDelete: () => void
@@ -479,8 +482,7 @@ interface WorktreeItemProps {
 }
 
 const WorktreeItem = memo(function WorktreeItem({
-  directory,
-  name,
+  worktree,
   isLoading,
   onOpenSession,
   onDelete,
@@ -497,9 +499,10 @@ const WorktreeItem = memo(function WorktreeItem({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-[length:var(--fs-sm)] text-text-100 font-medium truncate">{name}</div>
-        <div className="text-[length:var(--fs-xxs)] text-text-400/70 font-mono truncate" title={directory}>
-          {directory}
+        <div className="flex items-center gap-1.5 text-[length:var(--fs-sm)] text-text-100 font-medium"><span className="truncate">{worktree.name}</span>{worktree.dirty ? <span className="shrink-0 rounded bg-warning-100/10 px-1 text-[length:var(--fs-xxs)] text-warning-100">{t('worktreePanel.dirty')}</span> : null}</div>
+        <div className="truncate text-[length:var(--fs-xxs)] text-text-400">{worktree.branch || t('worktreePanel.detached')} · {formatBytes(worktree.sizeBytes)} · {worktree.fileCount.toLocaleString()} {t('worktreePanel.files')}</div>
+        <div className="text-[length:var(--fs-xxs)] text-text-400/70 font-mono truncate" title={worktree.directory}>
+          {worktree.directory}
         </div>
       </div>
 
@@ -534,3 +537,10 @@ const WorktreeItem = memo(function WorktreeItem({
     </div>
   )
 })
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`
+}

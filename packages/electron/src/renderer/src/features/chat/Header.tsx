@@ -15,7 +15,8 @@ import {
   GitCommitIcon,
   RestoreIcon,
 } from '../../components/Icons'
-import { IconButton } from '../../components/ui'
+import { Dialog, IconButton } from '../../components/ui'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { messageStore, useMessageStore } from '../../store'
 import { useLayoutStore, layoutStore } from '../../store/layoutStore'
 import { useSessionContext } from '../../contexts/useSessionContext'
@@ -226,6 +227,9 @@ export function Header({
   const [editTitle, setEditTitle] = useState('')
   const [checkpoints, setCheckpoints] = useState<WorkspaceCheckpoint[]>([])
   const [checkpointBusy, setCheckpointBusy] = useState(false)
+  const [checkpointConfirm, setCheckpointConfirm] = useState<{ kind: 'restore' | 'delete'; checkpoint: WorkspaceCheckpoint } | null>(null)
+  const [checkpointDiff, setCheckpointDiff] = useState<{ label: string; content: string } | null>(null)
+  const [handoffConfirm, setHandoffConfirm] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const sessionMenuRef = useRef<HTMLDivElement>(null)
   const locationMenuRef = useRef<HTMLDivElement>(null)
@@ -354,7 +358,6 @@ export function Header({
 
   const handleHandoff = async () => {
     if (!sessionId || !executionTarget?.sourceDirectory) return
-    if (!window.confirm(t('header.handoffConfirm'))) return
     try {
       const destination = executionTarget.sourceDirectory
       await moveSession(sessionId, destination, true)
@@ -369,6 +372,7 @@ export function Header({
       setCurrentDirectory(destination)
       navigateToSession(sessionId, destination)
       setSessionMenuOpen(false)
+      setHandoffConfirm(false)
       await refresh()
     } catch (error) {
       uiErrorHandler('handoff session', error)
@@ -390,12 +394,12 @@ export function Header({
   }
 
   const handleRestoreCheckpoint = async (checkpoint: WorkspaceCheckpoint) => {
-    if (!window.confirm(t('header.restoreCheckpointConfirm', { label: checkpoint.label }))) return
     setCheckpointBusy(true)
     try {
       await restoreWorkspaceCheckpoint(checkpoint.id, checkpoint.directory)
       setCheckpoints(await listWorkspaceCheckpoints(checkpoint.sessionID, checkpoint.directory))
       setSessionMenuOpen(false)
+      setCheckpointConfirm(null)
       window.dispatchEvent(new CustomEvent('opencodex:workspace-restored', { detail: checkpoint.directory }))
     } catch (error) {
       uiErrorHandler('restore workspace checkpoint', error)
@@ -405,11 +409,11 @@ export function Header({
   }
 
   const handleDeleteCheckpoint = async (checkpoint: WorkspaceCheckpoint) => {
-    if (!window.confirm(t('header.deleteCheckpointConfirm', { label: checkpoint.label }))) return
     setCheckpointBusy(true)
     try {
       await deleteWorkspaceCheckpoint(checkpoint.id, checkpoint.directory)
       setCheckpoints(await listWorkspaceCheckpoints(checkpoint.sessionID, checkpoint.directory))
+      setCheckpointConfirm(null)
     } catch (error) {
       uiErrorHandler('delete workspace checkpoint', error)
     } finally {
@@ -421,7 +425,7 @@ export function Header({
     setCheckpointBusy(true)
     try {
       const diff = await getWorkspaceCheckpointDiff(checkpoint.id, checkpoint.directory)
-      window.alert(diff || t('header.checkpointNoDiff'))
+      setCheckpointDiff({ label: checkpoint.label, content: diff || t('header.checkpointNoDiff') })
     } catch (error) {
       uiErrorHandler('diff workspace checkpoint', error)
     } finally {
@@ -490,13 +494,13 @@ export function Header({
       onToggleSessionMenu={() => setSessionMenuOpen(open => !open)}
       onPin={handlePin}
       onArchive={() => void handleArchive()}
-      onHandoff={executionTarget?.executionMode === 'worktree' && executionTarget.sourceDirectory ? () => void handleHandoff() : undefined}
+      onHandoff={executionTarget?.executionMode === 'worktree' && executionTarget.sourceDirectory ? () => setHandoffConfirm(true) : undefined}
       checkpoints={checkpoints}
       checkpointBusy={checkpointBusy}
       checkpointsSupported={checkpointsSupported}
       onCreateCheckpoint={() => void handleCreateCheckpoint()}
-      onRestoreCheckpoint={checkpoint => void handleRestoreCheckpoint(checkpoint)}
-      onDeleteCheckpoint={checkpoint => void handleDeleteCheckpoint(checkpoint)}
+      onRestoreCheckpoint={checkpoint => setCheckpointConfirm({ kind: 'restore', checkpoint })}
+      onDeleteCheckpoint={checkpoint => setCheckpointConfirm({ kind: 'delete', checkpoint })}
       onDiffCheckpoint={checkpoint => void handleDiffCheckpoint(checkpoint)}
       clickToRenameTitle={t('header.clickToRename')}
       sessionActionsTitle={t('header.sessionActions')}
@@ -512,6 +516,7 @@ export function Header({
   )
 
   return (
+    <>
     <div
       data-chat-header="true"
       className={`mobile-safe-topbar-14 window-drag-region flex justify-between items-center z-[60] bg-[hsl(var(--chat-bg))] transition-colors duration-200 relative ${isCompact ? 'px-2' : 'px-4'}`}
@@ -600,5 +605,24 @@ export function Header({
 
       <div className="absolute top-full left-0 right-0 h-8 bg-gradient-to-b from-bg-100 to-transparent pointer-events-none z-10" />
     </div>
+    <ConfirmDialog
+      isOpen={checkpointConfirm !== null}
+      onClose={() => setCheckpointConfirm(null)}
+      onConfirm={() => {
+        if (!checkpointConfirm) return
+        if (checkpointConfirm.kind === 'restore') void handleRestoreCheckpoint(checkpointConfirm.checkpoint)
+        if (checkpointConfirm.kind === 'delete') void handleDeleteCheckpoint(checkpointConfirm.checkpoint)
+      }}
+      title={checkpointConfirm?.kind === 'restore' ? t('header.restoreCheckpoint') : t('header.deleteCheckpoint')}
+      description={checkpointConfirm ? t(checkpointConfirm.kind === 'restore' ? 'header.restoreCheckpointConfirm' : 'header.deleteCheckpointConfirm', { label: checkpointConfirm.checkpoint.label }) : ''}
+      confirmText={t(checkpointConfirm?.kind === 'restore' ? 'header.restoreCheckpoint' : 'header.deleteCheckpoint')}
+      variant={checkpointConfirm?.kind === 'delete' ? 'danger' : 'warning'}
+      isLoading={checkpointBusy}
+    />
+    <ConfirmDialog isOpen={handoffConfirm} onClose={() => setHandoffConfirm(false)} onConfirm={() => void handleHandoff()} title={t('header.handoffSession')} description={t('header.handoffConfirm')} confirmText={t('header.handoffSession')} variant="warning" />
+    <Dialog isOpen={checkpointDiff !== null} onClose={() => setCheckpointDiff(null)} title={t('header.checkpointDiffTitle', { label: checkpointDiff?.label })} width={760}>
+      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg bg-bg-200/40 p-3 font-mono text-[length:var(--fs-xs)] leading-5 text-text-200">{checkpointDiff?.content}</pre>
+    </Dialog>
+    </>
   )
 }

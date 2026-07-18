@@ -12,6 +12,8 @@
     "handoffConfirm": "Move this task and its uncommitted changes back to the source workspace? The source worktree changes will be cleared after transfer.",
     "createCheckpoint": "Save workspace checkpoint",
     "restoreCheckpoint": "Restore workspace checkpoint",
+    "deleteCheckpoint": "Delete workspace checkpoint",
+    "checkpointDiffTitle": "Changes since {{label}}",
     "restoreCheckpointConfirm": "Restore the workspace checkpoint from {{label}}? Current unsaved file changes will be replaced. Conversation history is not reverted.",
     "deleteCheckpointConfirm": "Delete workspace checkpoint {{label}}?",
     "checkpointNoDiff": "The workspace has no differences from this checkpoint.",

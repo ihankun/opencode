@@ -12,6 +12,8 @@
     "handoffConfirm": "是否将此任务及未提交更改移回源工作区？迁移成功后，隔离 Worktree 中的更改会被清理。",
     "createCheckpoint": "保存工作区检查点",
     "restoreCheckpoint": "恢复工作区检查点",
+    "deleteCheckpoint": "删除工作区检查点",
+    "checkpointDiffTitle": "相对 {{label}} 的变更",
     "restoreCheckpointConfirm": "恢复到 {{label}} 的工作区检查点？当前未保存的文件更改会被替换，此操作不会回退对话记录。",
     "deleteCheckpointConfirm": "删除工作区检查点 {{label}}？",
     "checkpointNoDiff": "当前工作区与该检查点没有差异。",

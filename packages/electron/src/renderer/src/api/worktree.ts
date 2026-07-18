@@ -5,6 +5,20 @@
 import { getSDKClient, unwrap } from './sdk'
 import type { Worktree, WorktreeCreateInput, WorktreeRemoveInput, WorktreeResetInput } from '../types/api/worktree'
 import { formatPathForApi } from '../utils/directoryUtils'
+import { apiFetchJson } from './sdk'
+
+export type WorktreeDetail = {
+  name: string
+  branch?: string
+  directory: string
+  dirty: boolean
+  managed: boolean
+  sizeBytes: number
+  fileCount: number
+  measuredCompletely: boolean
+  createdAt: number
+  modifiedAt: number
+}
 
 /**
  * 获取所有 worktree 列表
@@ -12,6 +26,12 @@ import { formatPathForApi } from '../utils/directoryUtils'
 export async function listWorktrees(directory?: string): Promise<string[]> {
   const sdk = getSDKClient()
   return unwrap(await sdk.worktree.list({ directory: formatPathForApi(directory) }))
+}
+
+export async function listWorktreeDetails(directory?: string): Promise<WorktreeDetail[]> {
+  const formatted = formatPathForApi(directory)
+  const query = formatted ? `?${new URLSearchParams({ directory: formatted }).toString()}` : ''
+  return apiFetchJson<WorktreeDetail[]>(`/experimental/worktree/details${query}`)
 }
 
 /**

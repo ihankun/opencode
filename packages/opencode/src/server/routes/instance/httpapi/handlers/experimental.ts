@@ -16,6 +16,7 @@ import { Hash } from "@opencode-ai/core/util/hash"
 import type { SessionID } from "@/session/schema"
 import { ToolJsonSchema } from "@/tool/json-schema"
 import { ToolRegistry } from "@/tool/registry"
+import { DurableJson } from "@/util/durable-json"
 import { Worktree } from "@/worktree"
 import { Duration, Effect, Option } from "effect"
 import { mkdir } from "node:fs/promises"
@@ -56,7 +57,10 @@ function checkpointRegistryFile(projectID: string, worktree: string) {
 }
 
 async function readCheckpointRegistry(file: string): Promise<CheckpointEntry[]> {
-  const value = await Bun.file(file).json().catch(() => []) as unknown
+  return normalizeCheckpointRegistry(await DurableJson.read<unknown>(file, []))
+}
+
+function normalizeCheckpointRegistry(value: unknown): CheckpointEntry[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item): CheckpointEntry[] => {
     if (!item || typeof item !== "object") return []
@@ -70,9 +74,11 @@ async function readCheckpointRegistry(file: string): Promise<CheckpointEntry[]> 
   })
 }
 
-async function writeCheckpointRegistry(file: string, entries: CheckpointEntry[]) {
-  await mkdir(path.dirname(file), { recursive: true })
-  await Bun.write(file, `${JSON.stringify(entries, null, 2)}\n`)
+async function updateCheckpointRegistry<R>(file: string, change: (entries: CheckpointEntry[]) => { entries: CheckpointEntry[]; result: R }) {
+  return DurableJson.update<unknown, R>(file, [], (value) => {
+    const next = change(normalizeCheckpointRegistry(value))
+    return { value: next.entries, result: next.result }
+  })
 }
 
 type MemorySourceID = "global" | "project" | "workspace"
@@ -423,11 +429,12 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
         label: input.payload.label.trim() || new Date().toISOString(),
         createdAt: Date.now(),
       }
-      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
-      const next = [entry, ...entries].filter((item, index, all) =>
-        index < 100 && all.slice(0, index).filter((previous) => previous.sessionID === item.sessionID).length < 20,
-      )
-      yield* Effect.promise(() => writeCheckpointRegistry(file, next))
+      yield* Effect.promise(() => updateCheckpointRegistry(file, (entries) => ({
+        entries: [entry, ...entries].filter((item, index, all) =>
+          index < 100 && all.slice(0, index).filter((previous) => previous.sessionID === item.sessionID).length < 20,
+        ),
+        result: undefined,
+      })))
       return entry
     })
 
@@ -436,23 +443,25 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     }) {
       const state = yield* InstanceState.context
       const file = checkpointRegistryFile(state.project.id, state.worktree)
-      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
-      const target = entries.find((entry) => entry.id === ctx.payload.id)
-      if (!target) return yield* Effect.fail(new HttpApiError.BadRequest({}))
       const snapshot = yield* snapshots.track()
       if (!snapshot) return yield* Effect.fail(new HttpApiError.BadRequest({}))
-      const backup: CheckpointEntry = {
-        id: crypto.randomUUID(),
-        snapshot,
-        sessionID: target.sessionID,
-        directory: state.directory,
-        label: `Before restore: ${target.label}`,
-        createdAt: Date.now(),
-      }
-      yield* Effect.promise(() => writeCheckpointRegistry(file, [backup, ...entries].slice(0, 100)))
-      const patch = yield* snapshots.patch(target.snapshot)
+      const restore = yield* Effect.promise(() => updateCheckpointRegistry(file, (entries) => {
+        const target = entries.find((entry) => entry.id === ctx.payload.id)
+        if (!target) return { entries, result: undefined }
+        const backup: CheckpointEntry = {
+          id: crypto.randomUUID(),
+          snapshot,
+          sessionID: target.sessionID,
+          directory: state.directory,
+          label: `Before restore: ${target.label}`,
+          createdAt: Date.now(),
+        }
+        return { entries: [backup, ...entries].slice(0, 100), result: { target, backup } }
+      }))
+      if (!restore) return yield* Effect.fail(new HttpApiError.BadRequest({}))
+      const patch = yield* snapshots.patch(restore.target.snapshot)
       yield* snapshots.revert([patch])
-      return { backupID: backup.id }
+      return { backupID: restore.backup.id }
     })
 
     const checkpointDelete = Effect.fn("ExperimentalHttpApi.checkpointDelete")(function* (input: {
@@ -460,10 +469,10 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     }) {
       const ctx = yield* InstanceState.context
       const file = checkpointRegistryFile(ctx.project.id, ctx.worktree)
-      const entries = yield* Effect.promise(() => readCheckpointRegistry(file))
-      if (!entries.some((entry) => entry.id === input.params.checkpointID)) return false
-      yield* Effect.promise(() => writeCheckpointRegistry(file, entries.filter((entry) => entry.id !== input.params.checkpointID)))
-      return true
+      return yield* Effect.promise(() => updateCheckpointRegistry(file, (entries) => ({
+        entries: entries.filter((entry) => entry.id !== input.params.checkpointID),
+        result: entries.some((entry) => entry.id === input.params.checkpointID),
+      })))
     })
 
     const checkpointDiff = Effect.fn("ExperimentalHttpApi.checkpointDiff")(function* (input: {
@@ -526,6 +535,10 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
     const worktree = Effect.fn("ExperimentalHttpApi.worktree")(function* () {
       const ctx = yield* InstanceState.context
       return yield* project.sandboxes(ctx.project.id)
+    })
+
+    const worktreeDetails = Effect.fn("ExperimentalHttpApi.worktreeDetails")(function* () {
+      return yield* mapWorktreeError(worktreeSvc.details())
     })
 
     const worktreeCreate = Effect.fn("ExperimentalHttpApi.worktreeCreate")(function* (ctx: {
@@ -618,6 +631,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("hooksUpdate", hooksUpdate)
       .handle("hooksRun", hooksRun)
       .handle("worktree", worktree)
+      .handle("worktreeDetails", worktreeDetails)
       .handle("worktreeCreate", worktreeCreate)
       .handle("worktreeRemove", worktreeRemove)
       .handle("worktreeReset", worktreeReset)

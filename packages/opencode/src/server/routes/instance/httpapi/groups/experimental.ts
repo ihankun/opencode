@@ -235,6 +235,7 @@ export const ExperimentalPaths = {
   hooks: "/experimental/hooks",
   hooksRun: "/experimental/hooks/run",
   worktree: "/experimental/worktree",
+  worktreeDetails: "/experimental/worktree/details",
   worktreeReset: "/experimental/worktree/reset",
   session: "/experimental/session",
   sessionBackground: "/experimental/session/:sessionID/background",
@@ -511,6 +512,17 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "worktree.list",
             summary: "List worktrees",
             description: "List all sandbox worktrees for the current project.",
+          }),
+        ),
+        HttpApiEndpoint.get("worktreeDetails", ExperimentalPaths.worktreeDetails, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(Worktree.Detail), "Detailed worktree inventory"),
+          error: WorktreeApiError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "worktree.details",
+            summary: "Inspect worktrees",
+            description: "List worktrees with branch, dirty state, ownership, disk usage, and timestamps.",
           }),
         ),
         HttpApiEndpoint.post("worktreeCreate", ExperimentalPaths.worktree, {

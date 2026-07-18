@@ -283,16 +283,16 @@ export const PluginPanel = memo(function PluginPanel() {
   )
 
   const handleInstallSearchResult = useCallback(
-    async (spec: string) => {
+    async (result: PluginSearchResult) => {
       if (!canUseElectronInstaller) return
-      setInstallingSpec(spec)
+      setInstallingSpec(result.name)
       setSearchError(null)
       setInstallMessage(null)
       try {
-        const result = await window.customOpenCode.installPlugin(spec)
+        const installed = await window.customOpenCode.installPlugin(result.version ? `${result.name}@${result.version}` : result.name)
         setInstallMessage(t('pluginPanel.restartingAfterInstall'))
         await restartElectronServer()
-        setInstallMessage(t('pluginPanel.installedTo', { dir: result.configDir }))
+        setInstallMessage(t('pluginPanel.installedTo', { dir: installed.configDir }))
         setLoading(true)
         await loadPlugins()
       } catch (err) {
@@ -387,7 +387,7 @@ export const PluginPanel = memo(function PluginPanel() {
                     installed={configuredSpecs.has(pluginPackage(result.name))}
                     installing={installingSpec === result.name}
                     disabled={Boolean(installingSpec) || result.compatibility === 'unsupported'}
-                    onInstall={() => void handleInstallSearchResult(result.name)}
+                    onInstall={() => void handleInstallSearchResult(result)}
                     onRemove={() => void savePlugins(plugins.filter(plugin => pluginPackage(pluginSpec(plugin)) !== pluginPackage(result.name)))}
                   />
                 ))}
@@ -505,7 +505,7 @@ function PluginSearchRow({
         <div className="mt-0.5 line-clamp-2 text-text-400 text-[length:var(--fs-xs)]">
           {result.description || t('pluginPanel.noDescription')}
         </div>
-        <div className="mt-1 flex gap-2 text-[length:var(--fs-xxs)] text-text-500"><span>来源：{result.source}</span><span>近 30 天 {result.downloads.toLocaleString()} 次下载</span>{result.publisher && <span>作者：{result.publisher}</span>}</div>
+        <div className="mt-1 flex gap-2 text-[length:var(--fs-xxs)] text-text-500"><span>{t('pluginPanel.source', { source: result.source })}</span><span>{t('pluginPanel.downloads', { count: result.downloads.toLocaleString() })}</span>{result.publisher && <span>{t('pluginPanel.publisher', { publisher: result.publisher })}</span>}</div>
       </div>
       <button
         type="button"

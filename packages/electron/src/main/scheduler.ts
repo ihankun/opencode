@@ -2,12 +2,14 @@ import { app } from "electron"
 import { DatabaseSync } from "node:sqlite"
 import { join } from "node:path"
 import { Cron } from "croner"
-import { migrateScheduledTaskDatabase } from "./schedulerDatabase"
+import { migrateScheduledTaskDatabase, verifyScheduledTaskDatabase } from "./schedulerDatabase"
 
 type ExecutionMode = "current" | "worktree"
 type WorktreeCleanup = "always" | "on-success" | "never"
 type PermissionProfile = "ask" | "writes" | "risk" | "full"
-type RunStatus = "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
+type OverlapPolicy = "skip" | "queue" | "parallel"
+type MissedRunPolicy = "skip" | "run-once"
+type RunStatus = "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
 
 export type ScheduledTask = {
   id: string
@@ -26,6 +28,10 @@ export type ScheduledTask = {
   retryCount: number
   retryDelaySeconds: number
   completionTimeoutMinutes: number
+  overlapPolicy: OverlapPolicy
+  maxConcurrentRuns: number
+  missedRunPolicy: MissedRunPolicy
+  catchUpWindowMinutes: number
   modelProviderID: string
   modelID: string
   variant: string
@@ -65,6 +71,12 @@ export type ScheduledTaskRun = {
   completedAt: number | null
 }
 
+export type ScheduledTaskSettings = {
+  maxConcurrency: number
+  historyRetentionDays: number
+  maxHistory: number
+}
+
 type TaskInput = Pick<
   ScheduledTask,
   | "title"
@@ -82,6 +94,10 @@ type TaskInput = Pick<
   | "retryCount"
   | "retryDelaySeconds"
   | "completionTimeoutMinutes"
+  | "overlapPolicy"
+  | "maxConcurrentRuns"
+  | "missedRunPolicy"
+  | "catchUpWindowMinutes"
   | "modelProviderID"
   | "modelID"
   | "variant"
@@ -94,10 +110,16 @@ type AttemptResult = { ok: true } | { ok: false; message: string; retryable: boo
 export class TaskScheduler {
   private database?: DatabaseSync
   private jobs = new Map<string, Cron>()
-  private running = new Set<string>()
+  private running = new Map<string, number>()
+  private taskWaiters = new Map<string, Array<() => void>>()
   private cancelledRuns = new Set<string>()
   private capacityWaiters: Array<() => void> = []
-  private readonly maxConcurrency = 3
+  private globalRunning = 0
+  private stopping = false
+  private activeExecutions = new Set<Promise<void>>()
+  private maxConcurrency = 3
+  private historyRetentionDays = 90
+  private maxHistory = 1000
 
   constructor(
     private readonly resolveServer: (task: ScheduledTask) => Promise<ServerState | undefined>,
@@ -106,16 +128,26 @@ export class TaskScheduler {
   ) {}
 
   start() {
+    this.stopping = false
     this.database = new DatabaseSync(join(app.getPath("userData"), "scheduled-tasks.sqlite"))
     migrateScheduledTaskDatabase(this.database)
-    this.list().filter((task) => task.enabled).forEach((task) => this.register(task))
-    void this.recoverInterruptedRuns()
+    verifyScheduledTaskDatabase(this.database)
+    this.loadSettings()
+    this.pruneHistory()
+    const tasks = this.list().filter((task) => task.enabled)
+    tasks.forEach((task) => this.register(task))
+    const recovery = this.recoverInterruptedRuns().then(() => tasks.forEach((task) => this.catchUp(this.get(task.id))))
+    this.track(recovery)
     void this.cleanupOrphanedWorktrees()
   }
 
-  stop() {
+  async stop() {
+    this.stopping = true
     this.jobs.forEach((job) => job.stop())
     this.jobs.clear()
+    await Promise.race([Promise.allSettled([...this.activeExecutions]), delay(5_000)])
+    if (this.activeExecutions.size > 0) return
+    this.database?.exec("PRAGMA wal_checkpoint(TRUNCATE)")
     this.database?.close()
     this.database = undefined
   }
@@ -125,11 +157,42 @@ export class TaskScheduler {
     return rows.map((row) => this.read(row))
   }
 
+  settings(): ScheduledTaskSettings {
+    return {
+      maxConcurrency: this.maxConcurrency,
+      historyRetentionDays: this.historyRetentionDays,
+      maxHistory: this.maxHistory,
+    }
+  }
+
+  updateSettings(input: ScheduledTaskSettings) {
+    if (!Number.isInteger(input.maxConcurrency) || input.maxConcurrency < 1 || input.maxConcurrency > 20) throw new Error("Maximum concurrency must be between 1 and 20")
+    if (!Number.isInteger(input.historyRetentionDays) || input.historyRetentionDays < 1 || input.historyRetentionDays > 365) throw new Error("History retention must be between 1 and 365 days")
+    if (!Number.isInteger(input.maxHistory) || input.maxHistory < 100 || input.maxHistory > 10000) throw new Error("Maximum history must be between 100 and 10000")
+    const database = this.db()
+    database.exec("BEGIN IMMEDIATE")
+    try {
+      const statement = database.prepare("INSERT INTO scheduled_task_setting (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      Object.entries(input).forEach(([key, value]) => statement.run(key, String(value)))
+      database.exec("COMMIT")
+    } catch (error) {
+      database.exec("ROLLBACK")
+      throw error
+    }
+    this.loadSettings()
+    this.pruneHistory()
+    return this.settings()
+  }
+
   listRuns(taskID?: string): ScheduledTaskRun[] {
     const rows = (taskID
       ? this.db().prepare("SELECT * FROM scheduled_task_run WHERE task_id = ? AND archived = 0 ORDER BY created_at DESC").all(taskID)
       : this.db().prepare("SELECT * FROM scheduled_task_run WHERE archived = 0 ORDER BY created_at DESC").all()) as Array<Record<string, unknown>>
-    return rows.map((row) => ({
+    return rows.map((row) => this.readRun(row))
+  }
+
+  private readRun(row: Record<string, unknown>): ScheduledTaskRun {
+    return {
       id: String(row.id),
       taskID: String(row.task_id),
       taskTitle: String(row.task_title),
@@ -154,7 +217,7 @@ export class TaskScheduler {
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at || row.created_at),
       completedAt: typeof row.completed_at === "number" ? row.completed_at : null,
-    }))
+    }
   }
 
   setRunArchived(sessionID: string, archived: boolean) {
@@ -192,13 +255,15 @@ export class TaskScheduler {
       INSERT INTO scheduled_task (
         id, title, prompt, cron, timezone, server_id, server_name, server_url, directory,
         execution_mode, worktree_cleanup, branch, permission_profile, retry_count, retry_delay_seconds,
-        completion_timeout_minutes, model_provider_id, model_id, variant, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        completion_timeout_minutes, overlap_policy, max_concurrent_runs, missed_run_policy, catch_up_window_minutes,
+        model_provider_id, model_id, variant, enabled, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, input.title.trim(), input.prompt.trim(), input.cron.trim(), input.timezone,
       input.serverId, input.serverName.trim(), normalizeServerUrl(input.serverUrl), input.directory.trim(),
       input.executionMode, input.worktreeCleanup, input.branch.trim(), input.permissionProfile, input.retryCount, input.retryDelaySeconds,
-      input.completionTimeoutMinutes, input.modelProviderID, input.modelID, input.variant, Number(input.enabled), now, now,
+      input.completionTimeoutMinutes, input.overlapPolicy, input.maxConcurrentRuns, input.missedRunPolicy, input.catchUpWindowMinutes,
+      input.modelProviderID, input.modelID, input.variant, Number(input.enabled), now, now,
     )
     const task = this.get(id)
     if (task.enabled) this.register(task)
@@ -214,14 +279,16 @@ export class TaskScheduler {
       UPDATE scheduled_task SET
         title = ?, prompt = ?, cron = ?, timezone = ?, server_id = ?, server_name = ?, server_url = ?,
         directory = ?, execution_mode = ?, worktree_cleanup = ?, branch = ?, permission_profile = ?, retry_count = ?,
-        retry_delay_seconds = ?, completion_timeout_minutes = ?, model_provider_id = ?, model_id = ?,
+        retry_delay_seconds = ?, completion_timeout_minutes = ?, overlap_policy = ?, max_concurrent_runs = ?,
+        missed_run_policy = ?, catch_up_window_minutes = ?, model_provider_id = ?, model_id = ?,
         variant = ?, enabled = ?, last_error = NULL, updated_at = ?
       WHERE id = ?
     `).run(
       input.title.trim(), input.prompt.trim(), input.cron.trim(), input.timezone,
       input.serverId, input.serverName.trim(), normalizeServerUrl(input.serverUrl), input.directory.trim(),
       input.executionMode, input.worktreeCleanup, input.branch.trim(), input.permissionProfile, input.retryCount, input.retryDelaySeconds,
-      input.completionTimeoutMinutes, input.modelProviderID, input.modelID, input.variant, Number(input.enabled), Date.now(), id,
+      input.completionTimeoutMinutes, input.overlapPolicy, input.maxConcurrentRuns, input.missedRunPolicy, input.catchUpWindowMinutes,
+      input.modelProviderID, input.modelID, input.variant, Number(input.enabled), Date.now(), id,
     )
     const task = this.get(id)
     if (task.enabled) this.register(task)
@@ -230,7 +297,7 @@ export class TaskScheduler {
 
   remove(id: string) {
     this.require(id)
-    if (this.running.has(id)) throw new Error("Stop the running task before deleting it")
+    if ((this.running.get(id) ?? 0) > 0) throw new Error("Stop the running task before deleting it")
     this.jobs.get(id)?.stop()
     this.jobs.delete(id)
     this.db().prepare("DELETE FROM scheduled_task WHERE id = ?").run(id)
@@ -238,8 +305,7 @@ export class TaskScheduler {
   }
 
   async run(id: string) {
-    if (this.running.has(id)) throw new Error("Scheduled task is already running")
-    await this.execute(this.get(id))
+    void this.launch(this.get(id))
     return this.get(id)
   }
 
@@ -279,11 +345,15 @@ export class TaskScheduler {
       retryCount: Number(row.retry_count),
       retryDelaySeconds: Number(row.retry_delay_seconds),
       completionTimeoutMinutes: Number(row.completion_timeout_minutes),
+      overlapPolicy: normalizeOverlapPolicy(row.overlap_policy),
+      maxConcurrentRuns: Number(row.max_concurrent_runs),
+      missedRunPolicy: normalizeMissedRunPolicy(row.missed_run_policy),
+      catchUpWindowMinutes: Number(row.catch_up_window_minutes),
       modelProviderID: String(row.model_provider_id),
       modelID: String(row.model_id),
       variant: String(row.variant),
       enabled: Boolean(row.enabled),
-      status: this.running.has(id) ? "running" : row.last_error ? "error" : row.enabled ? "enabled" : "paused",
+      status: (this.running.get(id) ?? 0) > 0 ? "running" : row.last_error ? "error" : row.enabled ? "enabled" : "paused",
       lastRunAt: typeof row.last_run_at === "number" ? row.last_run_at : null,
       nextRunAt: job?.nextRun()?.getTime() ?? null,
       lastError: typeof row.last_error === "string" ? row.last_error : null,
@@ -304,26 +374,57 @@ export class TaskScheduler {
     if (!Number.isInteger(input.retryCount) || input.retryCount < 0 || input.retryCount > 10) throw new Error("Retry count must be between 0 and 10")
     if (!Number.isInteger(input.retryDelaySeconds) || input.retryDelaySeconds < 1 || input.retryDelaySeconds > 3600) throw new Error("Retry delay must be between 1 and 3600 seconds")
     if (!Number.isInteger(input.completionTimeoutMinutes) || input.completionTimeoutMinutes < 1 || input.completionTimeoutMinutes > 1440) throw new Error("Completion timeout must be between 1 and 1440 minutes")
+    if (!["skip", "queue", "parallel"].includes(input.overlapPolicy)) throw new Error("Invalid overlap policy")
+    if (!Number.isInteger(input.maxConcurrentRuns) || input.maxConcurrentRuns < 1 || input.maxConcurrentRuns > 5) throw new Error("Maximum concurrent runs must be between 1 and 5")
+    if (!["skip", "run-once"].includes(input.missedRunPolicy)) throw new Error("Invalid missed run policy")
+    if (!Number.isInteger(input.catchUpWindowMinutes) || input.catchUpWindowMinutes < 1 || input.catchUpWindowMinutes > 10080) throw new Error("Catch-up window must be between 1 and 10080 minutes")
     const job = new Cron(input.cron.trim(), { timezone: input.timezone, paused: true })
     job.stop()
   }
 
   private register(task: ScheduledTask) {
-    const job = new Cron(task.cron, { timezone: task.timezone, protect: true }, () => this.execute(task))
+    const job = new Cron(task.cron, { timezone: task.timezone }, () => this.launch(task))
     this.jobs.set(task.id, job)
   }
 
-  private async execute(task: ScheduledTask) {
-    if (this.running.has(task.id)) return
-    await this.acquireCapacity()
-    if (this.running.has(task.id)) {
-      this.releaseCapacity()
-      return
-    }
-    this.running.add(task.id)
+  private catchUp(task: ScheduledTask) {
+    if (task.missedRunPolicy !== "run-once" || !task.lastRunAt) return
+    const now = Date.now()
+    const windowStart = now - task.catchUpWindowMinutes * 60_000
+    const probe = new Cron(task.cron, { timezone: task.timezone, paused: true })
+    const missed = probe.nextRun(new Date(Math.max(task.lastRunAt, windowStart) - 1))
+    probe.stop()
+    if (!missed || missed.getTime() <= task.lastRunAt || missed.getTime() > now) return
+    void this.launch(task)
+  }
+
+  private launch(task: ScheduledTask, existingRunID?: string) {
+    if (this.stopping) return Promise.resolve()
+    const execution = this.execute(task, existingRunID)
+    this.track(execution)
+    return execution
+  }
+
+  private track(execution: Promise<void>) {
+    this.activeExecutions.add(execution)
+    void execution.then(
+      () => this.activeExecutions.delete(execution),
+      () => this.activeExecutions.delete(execution),
+    )
+  }
+
+  private async execute(task: ScheduledTask, existingRunID?: string) {
+    const skip = task.overlapPolicy === "skip"
+    if (skip && !(await this.acquireTaskCapacity(task))) return
+    const runID = existingRunID ?? this.createQueuedRun(task)
+    if (!skip && !(await this.acquireTaskCapacity(task))) return
+    let globalCapacity = false
     this.onChanged()
     try {
-      const outcome = await this.executeWithRetry(task, 1)
+      await this.acquireCapacity()
+      globalCapacity = true
+      this.requireNotCancelled(runID)
+      const outcome = await this.executeWithRetry(task, 1, runID)
       if (!outcome.ok) {
         if (!outcome.cancelled) this.recordFailure(task.id, outcome.message)
         return
@@ -331,34 +432,43 @@ export class TaskScheduler {
       const now = Date.now()
       this.db().prepare("UPDATE scheduled_task SET last_run_at = ?, last_error = NULL, updated_at = ? WHERE id = ?")
         .run(now, now, task.id)
+    } catch (error) {
+      this.cancelledRuns.delete(runID)
+      if (!(error instanceof ScheduledTaskCancelledError) && !(error instanceof ScheduledTaskStoppingError)) throw error
     } finally {
-      this.running.delete(task.id)
-      this.releaseCapacity()
+      this.releaseTaskCapacity(task.id)
+      if (globalCapacity) this.releaseCapacity()
       this.onChanged()
     }
   }
 
-  private async executeWithRetry(task: ScheduledTask, attempt: number): Promise<AttemptResult> {
-    const outcome = await this.executeAttempt(task, attempt)
+  private async executeWithRetry(task: ScheduledTask, attempt: number, existingRunID?: string): Promise<AttemptResult> {
+    const outcome = await this.executeAttempt(task, attempt, existingRunID)
     if (outcome.ok || !outcome.retryable || attempt > task.retryCount) return outcome
     await delay(task.retryDelaySeconds * 1000)
     return this.executeWithRetry(task, attempt + 1)
   }
 
-  private async executeAttempt(task: ScheduledTask, attempt: number): Promise<AttemptResult> {
-    const runID = crypto.randomUUID()
+  private async executeAttempt(task: ScheduledTask, attempt: number, existingRunID?: string): Promise<AttemptResult> {
+    const runID = existingRunID ?? crypto.randomUUID()
     const createdAt = Date.now()
-    this.db().prepare(`
-      INSERT INTO scheduled_task_run (
-        id, task_id, task_title, prompt, session_id, server_id, server_name, server_url, directory,
-        execution_directory, execution_mode, worktree_directory, branch, permission_profile, attempt, model_provider_id,
-        model_id, variant, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, 'running', ?)
-    `).run(
-      runID, task.id, task.title, task.prompt, `pending:${runID}`, task.serverId, task.serverName, task.serverUrl,
-      task.directory, task.directory, task.executionMode, task.branch, task.permissionProfile, attempt,
-      task.modelProviderID, task.modelID, task.variant, createdAt,
-    )
+    if (existingRunID) {
+      this.db().prepare("UPDATE scheduled_task_run SET status = 'running', attempt = ?, updated_at = ? WHERE id = ?")
+        .run(attempt, createdAt, runID)
+    }
+    if (!existingRunID) {
+      this.db().prepare(`
+        INSERT INTO scheduled_task_run (
+          id, task_id, task_title, prompt, session_id, server_id, server_name, server_url, directory,
+          execution_directory, execution_mode, worktree_directory, branch, permission_profile, attempt, model_provider_id,
+          model_id, variant, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, 'running', ?)
+      `).run(
+        runID, task.id, task.title, task.prompt, `pending:${runID}`, task.serverId, task.serverName, task.serverUrl,
+        task.directory, task.directory, task.executionMode, task.branch, task.permissionProfile, attempt,
+        task.modelProviderID, task.modelID, task.variant, createdAt,
+      )
+    }
     this.onChanged()
     this.appendRunLog(runID, `Attempt ${attempt} started on ${task.serverName}`)
 
@@ -412,6 +522,10 @@ export class TaskScheduler {
       if (execution.worktreeDirectory && task.worktreeCleanup !== "never") await this.cleanupWorktree(server, task.directory, execution.worktreeDirectory, runID)
       return { ok: true }
     } catch (error) {
+      if (error instanceof ScheduledTaskStoppingError) {
+        this.appendRunLog(runID, "Application is stopping; the session will be monitored after restart")
+        return { ok: false, message: error.message, retryable: false, cancelled: true }
+      }
       const message = error instanceof Error ? error.message : String(error)
       const status: RunStatus = error instanceof ScheduledTaskCancelledError
         ? "cancelled"
@@ -525,6 +639,24 @@ export class TaskScheduler {
       .run(now, message, now, id)
   }
 
+  private createQueuedRun(task: ScheduledTask) {
+    const runID = crypto.randomUUID()
+    const now = Date.now()
+    this.db().prepare(`
+      INSERT INTO scheduled_task_run (
+        id, task_id, task_title, prompt, session_id, server_id, server_name, server_url, directory,
+        execution_directory, execution_mode, worktree_directory, branch, permission_profile, attempt, model_provider_id,
+        model_id, variant, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, 1, ?, ?, ?, 'queued', ?, ?)
+    `).run(
+      runID, task.id, task.title, task.prompt, `pending:${runID}`, task.serverId, task.serverName, task.serverUrl,
+      task.directory, task.directory, task.executionMode, task.branch, task.permissionProfile,
+      task.modelProviderID, task.modelID, task.variant, now, now,
+    )
+    this.appendRunLog(runID, "Queued and waiting for scheduler capacity")
+    return runID
+  }
+
   private async cleanupWorktree(server: ServerState | undefined, sourceDirectory: string, worktreeDirectory: string, runID: string) {
     if (!server) return
     try {
@@ -557,13 +689,9 @@ export class TaskScheduler {
     return this.readRun(row)
   }
 
-  private readRun(row: Record<string, unknown>): ScheduledTaskRun {
-    return this.listRuns().find((run) => run.id === String(row.id)) ?? (() => { throw new Error("Scheduled task run not found") })()
-  }
-
   private appendRunLog(id: string, message: string) {
     const timestamp = new Date().toISOString()
-    this.db().prepare("UPDATE scheduled_task_run SET log = log || ?, updated_at = ? WHERE id = ?")
+    this.db().prepare("UPDATE scheduled_task_run SET log = substr(log || ?, -2000000), updated_at = ? WHERE id = ?")
       .run(`${timestamp} ${message}\n`, Date.now(), id)
     this.onChanged()
   }
@@ -576,24 +704,78 @@ export class TaskScheduler {
     const run = this.getRun(id)
     this.onChanged()
     this.onFinished?.(run)
+    this.pruneHistory()
+  }
+
+  private pruneHistory() {
+    const database = this.db()
+    database.prepare("DELETE FROM scheduled_task_run WHERE archived = 1 AND completed_at < ?")
+      .run(Date.now() - this.historyRetentionDays * 24 * 60 * 60 * 1000)
+    database.prepare(`
+      DELETE FROM scheduled_task_run
+      WHERE status NOT IN ('queued', 'running', 'submitted', 'recovering')
+        AND id NOT IN (SELECT id FROM scheduled_task_run ORDER BY created_at DESC LIMIT ?)
+    `).run(this.maxHistory)
+  }
+
+  private loadSettings() {
+    const values = Object.fromEntries((this.db().prepare("SELECT key, value FROM scheduled_task_setting").all() as Array<{ key: string; value: string }>).map((item) => [item.key, Number(item.value)]))
+    this.maxConcurrency = bounded(values.maxConcurrency, 1, 20, 3)
+    this.historyRetentionDays = bounded(values.historyRetentionDays, 1, 365, 90)
+    this.maxHistory = bounded(values.maxHistory, 100, 10000, 1000)
   }
 
   private requireNotCancelled(runID: string) {
+    if (this.stopping) throw new ScheduledTaskStoppingError("Application is stopping")
     if (this.cancelledRuns.has(runID)) throw new ScheduledTaskCancelledError("Cancelled by user")
   }
 
   private acquireCapacity() {
-    if (this.running.size < this.maxConcurrency) return Promise.resolve()
-    return new Promise<void>((resolve) => this.capacityWaiters.push(resolve))
+    if (this.globalRunning < this.maxConcurrency) {
+      this.globalRunning++
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => this.capacityWaiters.push(() => {
+      this.globalRunning++
+      resolve()
+    }))
   }
 
   private releaseCapacity() {
+    this.globalRunning = Math.max(0, this.globalRunning - 1)
     this.capacityWaiters.shift()?.()
+  }
+
+  private async acquireTaskCapacity(task: ScheduledTask) {
+    const limit = task.overlapPolicy === "parallel" ? task.maxConcurrentRuns : 1
+    if (task.overlapPolicy === "skip" && (this.running.get(task.id) ?? 0) >= limit) return false
+    while ((this.running.get(task.id) ?? 0) >= limit) {
+      await new Promise<void>((resolve) => {
+        const waiters = this.taskWaiters.get(task.id) ?? []
+        waiters.push(resolve)
+        this.taskWaiters.set(task.id, waiters)
+      })
+    }
+    this.running.set(task.id, (this.running.get(task.id) ?? 0) + 1)
+    return true
+  }
+
+  private releaseTaskCapacity(taskID: string) {
+    const remaining = (this.running.get(taskID) ?? 1) - 1
+    if (remaining > 0) this.running.set(taskID, remaining)
+    if (remaining <= 0) this.running.delete(taskID)
+    const waiters = this.taskWaiters.get(taskID)
+    waiters?.shift()?.()
+    if (waiters?.length === 0) this.taskWaiters.delete(taskID)
   }
 
   private async recoverInterruptedRuns() {
     const runs = this.listRuns().filter((run) => isActiveStatus(run.status))
     await Promise.all(runs.map(async (run) => {
+      if (run.status === "queued") {
+        void this.launch(this.get(run.taskID), run.id)
+        return
+      }
       if (run.sessionID.startsWith("pending:")) {
         this.finishRun(run.id, "failed", "Application stopped before the session was submitted")
         return
@@ -609,10 +791,18 @@ export class TaskScheduler {
       try {
         await this.waitForCompletion(server, run.sessionID, run.executionDirectory, task.completionTimeoutMinutes, run.id)
         this.finishRun(run.id, "completed", null)
+        const now = Date.now()
+        this.db().prepare("UPDATE scheduled_task SET last_run_at = ?, last_error = NULL, updated_at = ? WHERE id = ?")
+          .run(now, now, task.id)
         await this.runHooks(server, task.directory, "notification", run.id)
       } catch (error) {
+        if (error instanceof ScheduledTaskStoppingError) {
+          this.appendRunLog(run.id, "Recovery monitoring paused because the application is stopping")
+          return
+        }
         const message = error instanceof Error ? error.message : String(error)
         this.finishRun(run.id, error instanceof ScheduledTaskCancelledError ? "cancelled" : error instanceof ScheduledTaskTimeoutError ? "timed_out" : "failed", message)
+        this.recordFailure(task.id, message)
         await this.runHooks(server, task.directory, "notification", run.id)
       }
     }))
@@ -641,9 +831,10 @@ export class TaskScheduler {
 
 class ScheduledTaskTimeoutError extends Error {}
 class ScheduledTaskCancelledError extends Error {}
+class ScheduledTaskStoppingError extends Error {}
 
 function isActiveStatus(status: RunStatus) {
-  return status === "running" || status === "submitted" || status === "recovering"
+  return status === "queued" || status === "running" || status === "submitted" || status === "recovering"
 }
 
 function delay(milliseconds: number) {
@@ -664,6 +855,15 @@ function normalizePermissionProfile(value: unknown): PermissionProfile {
   return "risk"
 }
 
+function normalizeOverlapPolicy(value: unknown): OverlapPolicy {
+  if (value === "queue" || value === "parallel") return value
+  return "skip"
+}
+
+function normalizeMissedRunPolicy(value: unknown): MissedRunPolicy {
+  return value === "run-once" ? "run-once" : "skip"
+}
+
 function normalizeServerUrl(value: string) {
   const normalized = value.trim().replace(/\/+$/, "")
   if (!URL.canParse(normalized)) throw new Error("Server URL is invalid")
@@ -671,6 +871,10 @@ function normalizeServerUrl(value: string) {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Server URL must use HTTP or HTTPS")
   if (url.username || url.password) throw new Error("Server URL must not contain credentials")
   return normalized
+}
+
+function bounded(value: number, minimum: number, maximum: number, fallback: number) {
+  return Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback
 }
 
 function permissionRules(profile: PermissionProfile) {

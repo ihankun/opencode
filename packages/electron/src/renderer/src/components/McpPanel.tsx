@@ -36,6 +36,8 @@ import { useDirectory } from '../hooks'
 import { logger } from '../utils/logger'
 import { apiErrorHandler } from '../utils'
 import { openUrl } from '../utils/browserOpen'
+import { Button, Dialog } from './ui'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 
 // ============================================
 // Types
@@ -45,6 +47,8 @@ interface ServerEntry {
   name: string
   status: MCPStatus
 }
+
+type McpMarketItem = Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['data'][number]
 
 // ============================================
 // McpPanel Component
@@ -71,6 +75,8 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
   const [marketCategories, setMarketCategories] = useState<Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['categories']>([])
   const [marketCursor, setMarketCursor] = useState<string | null>(null)
   const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
+  const [marketInstall, setMarketInstall] = useState<McpMarketItem | null>(null)
+  const [environmentDraft, setEnvironmentDraft] = useState<Record<string, string>>({})
 
   // 加载 MCP 状态
   const loadStatus = useCallback(async () => {
@@ -215,20 +221,30 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
     return () => window.clearTimeout(timer)
   }, [handleMarketSearch, tab])
 
-  const handleMarketInstall = useCallback(async (item: Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['data'][number]) => {
+  const installMarketItem = useCallback(async (item: McpMarketItem, environment: Record<string, string>) => {
     setActionLoading(item.name)
     try {
-      const environment = Object.fromEntries(item.requiredEnvironment.map(name => [name, window.prompt(`请输入 ${name}`) ?? '']))
-      if (item.requiredEnvironment.length > 0 && Object.values(environment).some(value => !value)) return
       const config = item.config.type === 'local' && item.requiredEnvironment.length > 0 ? { ...item.config, environment } : item.config
       await addMcpServer(item.name, config as McpServerConfig, currentDirectory)
       await window.customOpenCode.setMcpMarketplaceSource({ directory: currentDirectory, name: item.name, provider: item.provider })
       await window.customOpenCode.restartServer()
       await loadStatus()
+      setMarketInstall(null)
+    } catch (cause) {
+      setMarketError(cause instanceof Error ? cause.message : t('mcpPanel.marketplaceFailed'))
     } finally {
       setActionLoading(null)
     }
-  }, [currentDirectory, loadStatus])
+  }, [currentDirectory, loadStatus, t])
+
+  const handleMarketInstall = useCallback((item: McpMarketItem) => {
+    if (item.requiredEnvironment.length === 0) {
+      void installMarketItem(item, {})
+      return
+    }
+    setEnvironmentDraft(Object.fromEntries(item.requiredEnvironment.map(name => [name, ''])))
+    setMarketInstall(item)
+  }, [installMarketItem])
 
   const handleRemoveServer = useCallback(async (name: string) => {
     setActionLoading(name)
@@ -305,7 +321,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
             return <div key={`${item.provider}-${item.name}-${item.version}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-border-200/40 bg-bg-200/20 px-2.5 py-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-200 text-text-300"><PlugIcon size={15} /></div>
               <div className="min-w-0 flex-1"><div className="flex gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{item.name}</span>{item.version && <span className="text-[length:var(--fs-xs)] text-text-400">v{item.version}</span>}</div><div className="line-clamp-2 text-[length:var(--fs-xs)] text-text-400">{item.description}</div><div className="mt-1 flex flex-wrap gap-x-2 text-[length:var(--fs-xxs)] text-text-500"><span>{t(`mcpPanel.provider_${item.provider}`)} · {item.source}</span>{item.category && <span>{item.category}</span>}{item.downloads > 0 && <span>{t('mcpPanel.monthlyDownloads', { count: item.downloads.toLocaleString() })}</span>}{item.requiredEnvironment.length > 0 && <span className="text-warning-100">{t('mcpPanel.requiresConfig')}: {item.requiredEnvironment.join(', ')}</span>}</div></div>
-              <button disabled={Boolean(actionLoading)} onClick={() => void (installed ? handleRemoveServer(item.name) : handleMarketInstall(item))} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-300 hover:bg-bg-200 disabled:opacity-50">{actionLoading === item.name ? <SpinnerIcon size={13} className="animate-spin" /> : installed ? <TrashIcon size={13} /> : <DownloadIcon size={13} />}</button>
+              <button disabled={Boolean(actionLoading)} onClick={() => installed ? void handleRemoveServer(item.name) : handleMarketInstall(item)} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-300 hover:bg-bg-200 disabled:opacity-50">{actionLoading === item.name ? <SpinnerIcon size={13} className="animate-spin" /> : installed ? <TrashIcon size={13} /> : <DownloadIcon size={13} />}</button>
             </div>
           })}</div>}
           {marketCursor && <div className="mt-3 flex justify-center"><button type="button" disabled={marketLoading} onClick={() => void handleMarketSearch(marketCursor, true)} className="rounded-md border border-border-200/60 bg-bg-000 px-3 py-1.5 text-[length:var(--fs-xs)] text-text-300 disabled:opacity-50">{t('mcpPanel.loadMore')}</button></div>}
@@ -366,6 +382,18 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
           </div>
         )}
       </div>
+      <Dialog isOpen={marketInstall !== null} onClose={() => setMarketInstall(null)} title={t('mcpPanel.configureInstall')} width={480}>
+        <form className="space-y-4" onSubmit={event => {
+          event.preventDefault()
+          if (!marketInstall || Object.values(environmentDraft).some(value => !value.trim())) return
+          void installMarketItem(marketInstall, environmentDraft)
+        }}>
+          <p className="text-[length:var(--fs-sm)] leading-relaxed text-text-300">{t('mcpPanel.environmentDescription', { name: marketInstall?.name })}</p>
+          <div className="space-y-3">{marketInstall?.requiredEnvironment.map(name => <label key={name} className="block"><span className="mb-1 block font-mono text-[length:var(--fs-xs)] text-text-300">{name}</span><input type="password" autoComplete="off" value={environmentDraft[name] ?? ''} onChange={event => setEnvironmentDraft(current => ({ ...current, [name]: event.target.value }))} className="h-9 w-full rounded-md border border-border-200 bg-bg-000 px-3 font-mono text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100" /></label>)}</div>
+          <p className="rounded-md bg-warning-bg px-3 py-2 text-[length:var(--fs-xs)] leading-relaxed text-warning-100">{t('mcpPanel.environmentStorageWarning')}</p>
+          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setMarketInstall(null)}>{t('common:cancel')}</Button><Button type="submit" disabled={Object.values(environmentDraft).some(value => !value.trim())} isLoading={actionLoading === marketInstall?.name}>{t('mcpPanel.install')}</Button></div>
+        </form>
+      </Dialog>
     </div>
   )
 })
@@ -585,6 +613,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
   const { t } = useTranslation(['components', 'common'])
   const { name, status } = server
   const [expanded, setExpanded] = useState(false)
+  const [removeConfirm, setRemoveConfirm] = useState(false)
 
   // 获取错误信息（如果有）
   const getErrorMessage = (): string | null => {
@@ -689,6 +718,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
   }
 
   return (
+    <>
     <div className="group">
       {/* Main row */}
       <div
@@ -722,7 +752,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 shrink-0">{renderActions()}<button onClick={e => { e.stopPropagation(); if (confirm(`移除 MCP 服务器“${name}”？`)) onRemove(name) }} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 opacity-0 transition-opacity hover:bg-danger-100/10 hover:text-danger-100 group-hover:opacity-100" title="卸载"><TrashIcon size={11} /></button></div>
+        <div className="flex items-center gap-1 shrink-0">{renderActions()}<button onClick={e => { e.stopPropagation(); setRemoveConfirm(true) }} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 opacity-0 transition-opacity hover:bg-danger-100/10 hover:text-danger-100 group-hover:opacity-100" title={t('mcpPanel.remove')}><TrashIcon size={11} /></button></div>
       </div>
 
       {/* Expanded Error Details */}
@@ -732,5 +762,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
         </div>
       )}
     </div>
+    <ConfirmDialog isOpen={removeConfirm} onClose={() => setRemoveConfirm(false)} onConfirm={() => { setRemoveConfirm(false); onRemove(name) }} title={t('mcpPanel.remove')} description={t('mcpPanel.removeConfirm', { name })} confirmText={t('common:remove')} variant="danger" />
+    </>
   )
 })

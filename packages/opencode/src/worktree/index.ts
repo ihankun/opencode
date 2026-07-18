@@ -17,6 +17,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { AppProcess } from "@opencode-ai/core/process"
 import { InstanceState } from "@/effect/instance-state"
 import { WorktreeEvent } from "@opencode-ai/schema/worktree-event"
+import { join } from "node:path"
 
 export const Event = WorktreeEvent
 
@@ -26,6 +27,20 @@ export const Info = Schema.Struct({
   directory: Schema.String,
 }).annotate({ identifier: "Worktree" })
 export type Info = Schema.Schema.Type<typeof Info>
+
+export const Detail = Schema.Struct({
+  name: Schema.String,
+  branch: Schema.optional(Schema.String),
+  directory: Schema.String,
+  dirty: Schema.Boolean,
+  managed: Schema.Boolean,
+  sizeBytes: Schema.Number,
+  fileCount: Schema.Number,
+  measuredCompletely: Schema.Boolean,
+  createdAt: Schema.Number,
+  modifiedAt: Schema.Number,
+}).annotate({ identifier: "WorktreeDetail" })
+export type Detail = Schema.Schema.Type<typeof Detail>
 
 export const CreateInput = Schema.Struct({
   name: Schema.optional(Schema.String),
@@ -38,6 +53,7 @@ export type CreateInput = Schema.Schema.Type<typeof CreateInput>
 
 export const RemoveInput = Schema.Struct({
   directory: Schema.String,
+  force: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "WorktreeRemoveInput" })
 export type RemoveInput = Schema.Schema.Type<typeof RemoveInput>
 
@@ -122,6 +138,7 @@ export interface Interface {
   readonly createFromInfo: (info: Info, startCommand?: string, baseBranch?: string) => Effect.Effect<void, Error>
   readonly create: (input?: CreateInput) => Effect.Effect<Info, Error>
   readonly list: () => Effect.Effect<(Omit<Info, "branch"> & { branch?: string })[], Error>
+  readonly details: () => Effect.Effect<Detail[], Error>
   readonly remove: (input: RemoveInput) => Effect.Effect<boolean, Error>
   readonly reset: (input: ResetInput) => Effect.Effect<boolean, Error>
 }
@@ -362,6 +379,26 @@ const layer: Layer.Layer<
       ).pipe(Effect.map((items) => items.filter((item) => item !== undefined)))
     })
 
+    const details = Effect.fn("Worktree.details")(function* () {
+      const ctx = yield* InstanceState.context
+      const worktrees = yield* list()
+      const managedRoot = yield* canonical(pathSvc.join(Global.Path.data, "worktree", ctx.project.id))
+      return yield* Effect.forEach(worktrees, (worktree) => Effect.gen(function* () {
+        const status = yield* git(["status", "--porcelain"], { cwd: worktree.directory })
+        const measured = yield* Effect.tryPromise({
+          try: () => measureDirectory(worktree.directory),
+          catch: (error) => new ListFailedError({ message: errorMessage(error) }),
+        })
+        const directory = yield* canonical(worktree.directory)
+        return {
+          ...worktree,
+          dirty: Boolean(status.text.trim()),
+          managed: directory === managedRoot || directory.startsWith(`${managedRoot}${pathSvc.sep}`),
+          ...measured,
+        }
+      }), { concurrency: 4 })
+    })
+
     function stopFsmonitor(target: string) {
       return fs.exists(target).pipe(
         Effect.orDie,
@@ -407,6 +444,13 @@ const layer: Layer.Layer<
 
       const entries = parseWorktreeList(list.text)
       const entry = yield* locateWorktree(entries, directory)
+
+      if (entry?.path && !input.force) {
+        const status = yield* git(["status", "--porcelain"], { cwd: entry.path })
+        if (status.text.trim()) {
+          return yield* new RemoveFailedError({ message: "Worktree has uncommitted changes; confirm force removal to continue" })
+        }
+      }
 
       if (!entry?.path) {
         const directoryExists = yield* fs.exists(directory).pipe(Effect.orDie)
@@ -614,9 +658,37 @@ const layer: Layer.Layer<
       return true
     })
 
-    return Service.of({ makeWorktreeInfo, createFromInfo, create, list, remove, reset })
+    return Service.of({ makeWorktreeInfo, createFromInfo, create, list, details, remove, reset })
   }),
 )
+
+async function measureDirectory(root: string) {
+  const { lstat, readdir } = await import("node:fs/promises")
+  const queue = [root]
+  const limit = 100_000
+  let sizeBytes = 0
+  let fileCount = 0
+  let modifiedAt = 0
+  let createdAt = Number.POSITIVE_INFINITY
+  while (queue.length > 0 && fileCount < limit) {
+    const current = queue.pop()!
+    const info = await lstat(current)
+    sizeBytes += info.size
+    fileCount++
+    modifiedAt = Math.max(modifiedAt, info.mtimeMs)
+    createdAt = Math.min(createdAt, info.birthtimeMs || info.ctimeMs)
+    if (!info.isDirectory() || info.isSymbolicLink()) continue
+    const entries = await readdir(current)
+    entries.forEach((entry) => queue.push(join(current, entry)))
+  }
+  return {
+    sizeBytes,
+    fileCount,
+    measuredCompletely: queue.length === 0,
+    createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+    modifiedAt,
+  }
+}
 
 export const node = LayerNode.make({
   service: Service,

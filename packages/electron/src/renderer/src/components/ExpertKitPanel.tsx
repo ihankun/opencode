@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { CustomOpenCodeExpertKit } from '../../../preload'
 import { AlertCircleIcon, CloseIcon, DownloadIcon, SearchIcon, SpinnerIcon, TeachIcon, TrashIcon } from './Icons'
 import { apiErrorHandler } from '../utils'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 
 export const ExpertKitPanel = memo(function ExpertKitPanel() {
   const { t } = useTranslation(['components', 'common'])
@@ -12,6 +13,7 @@ export const ExpertKitPanel = memo(function ExpertKitPanel() {
   const [loading, setLoading] = useState(true)
   const [action, setAction] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [forceAction, setForceAction] = useState<{ kit: CustomOpenCodeExpertKit; mode: 'install' | 'remove' } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -43,8 +45,8 @@ export const ExpertKitPanel = memo(function ExpertKitPanel() {
       await load()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
-      if (!force && /already exists|local changes/i.test(message) && window.confirm(t('expertKit.forceConflict'))) {
-        await mutate(kit, mode, true)
+      if (!force && /already exists|local changes/i.test(message)) {
+        setForceAction({ kit, mode })
         return
       }
       setError(message)
@@ -73,6 +75,7 @@ export const ExpertKitPanel = memo(function ExpertKitPanel() {
       <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4"><p className="text-[length:var(--fs-sm)] leading-5 text-text-300">{selected.description}</p><div><div className="mb-2 text-[length:var(--fs-xs)] font-medium text-text-200">{t('expertKit.includedSkills')}</div><div className="space-y-2">{selected.skills.map(skill => <div key={skill.id} className="rounded-md border border-border-200/40 bg-bg-100 p-2"><div className="text-[length:var(--fs-sm)] font-medium text-text-100">{skill.name}</div>{skill.description && <div className="mt-0.5 text-[length:var(--fs-xs)] text-text-400">{skill.description}</div>}</div>)}</div></div>{selected.tryAsking.length > 0 && <div><div className="mb-2 text-[length:var(--fs-xs)] font-medium text-text-200">{t('expertKit.tryAsking')}</div><div className="flex flex-wrap gap-2">{selected.tryAsking.map(prompt => <span key={prompt} className="rounded-md bg-bg-200/60 px-2 py-1 text-[length:var(--fs-xs)] text-text-300">{prompt}</span>)}</div></div>}</div>
       <div className="flex justify-end gap-2 border-t border-border-200/50 px-4 py-3">{selected.installed && <button type="button" disabled={Boolean(action)} onClick={() => void mutate(selected, 'remove')} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger-100/30 px-3 text-[length:var(--fs-sm)] text-danger-100 disabled:opacity-50">{action === selected.id ? <SpinnerIcon size={12} className="animate-spin" /> : <TrashIcon size={12} />}{t('expertKit.uninstall')}</button>}<button type="button" disabled={Boolean(action)} onClick={() => void mutate(selected, 'install')} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-main-100 px-3 text-[length:var(--fs-sm)] text-white disabled:opacity-50">{action === selected.id ? <SpinnerIcon size={12} className="animate-spin" /> : <DownloadIcon size={12} />}{selected.installed ? selected.updateAvailable ? t('expertKit.update') : t('expertKit.reinstall') : t('expertKit.install')}</button></div>
     </div></div>}
+    <ConfirmDialog isOpen={forceAction !== null} onClose={() => setForceAction(null)} onConfirm={() => { const pending = forceAction; setForceAction(null); if (pending) void mutate(pending.kit, pending.mode, true) }} title={t('expertKit.title')} description={t('expertKit.forceConflict')} confirmText={t('common:confirm')} variant="danger" isLoading={Boolean(action)} />
   </div>
 })
 

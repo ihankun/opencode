@@ -29,6 +29,17 @@ function isHttpsIpUrl(url: string): boolean {
   }
 }
 
+function isRemoteHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    const loopback = hostname === 'localhost' || hostname === '::1' || hostname.startsWith('127.')
+    return parsed.protocol === 'http:' && !loopback
+  } catch {
+    return false
+  }
+}
+
 // ============================================
 // Server Item
 // ============================================
@@ -47,7 +58,7 @@ function ServerItem({
   isActive: boolean
   onSelect: () => void
   onDelete: () => void
-  onEdit: (updates: { name: string; url: string; username?: string; password?: string }) => void
+  onEdit: (updates: { name: string; url: string; allowInsecureHttp: boolean; username?: string; password?: string }) => void
   onCheckHealth: () => void
 }) {
   const { t } = useTranslation(['settings', 'common'])
@@ -205,7 +216,7 @@ function EditServerForm({
   onCancel,
 }: {
   server: ServerConfig
-  onSave: (updates: { name: string; url: string; username?: string; password?: string }) => void
+  onSave: (updates: { name: string; url: string; allowInsecureHttp: boolean; username?: string; password?: string }) => void
   onCancel: () => void
 }) {
   const { t } = useTranslation(['settings', 'common'])
@@ -214,6 +225,7 @@ function EditServerForm({
   const [username, setUsername] = useState(server.auth?.username || '')
   const [password, setPassword] = useState(server.auth?.password || '')
   const [showAuth, setShowAuth] = useState(!!server.auth?.password)
+  const [allowInsecureHttp, setAllowInsecureHttp] = useState(server.allowInsecureHttp === true)
   const [error, setError] = useState('')
   const showHttpsIpWarning = isHttpsIpUrl(url)
 
@@ -228,14 +240,20 @@ function EditServerForm({
       return
     }
     try {
-      new URL(url)
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('protocol')
     } catch {
       setError(t('servers.invalidUrl'))
+      return
+    }
+    if (isRemoteHttpUrl(url) && !allowInsecureHttp) {
+      setError(t('servers.insecureHttpRequired'))
       return
     }
     onSave({
       name: name.trim(),
       url: url.trim(),
+      allowInsecureHttp,
       username: password.trim() ? username.trim() || 'opencode' : undefined,
       password: password.trim() || undefined,
     })
@@ -323,6 +341,13 @@ function EditServerForm({
         </div>
       )}
 
+      {isRemoteHttpUrl(url) && (
+        <label className="flex items-start gap-2 rounded-md border border-warning-100/20 bg-warning-bg px-2.5 py-2 text-[length:var(--fs-xs)] text-warning-100">
+          <input type="checkbox" checked={allowInsecureHttp} onChange={event => setAllowInsecureHttp(event.target.checked)} className="mt-0.5" />
+          <span>{t('servers.allowInsecureHttp')}</span>
+        </label>
+      )}
+
       {error && <p className="text-[length:var(--fs-xs)] text-danger-100">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
@@ -344,7 +369,7 @@ function AddServerForm({
   onAdd,
   onCancel,
 }: {
-  onAdd: (name: string, url: string, username?: string, password?: string) => void
+  onAdd: (name: string, url: string, allowInsecureHttp: boolean, username?: string, password?: string) => void
   onCancel: () => void
 }) {
   const { t } = useTranslation(['settings', 'common'])
@@ -353,6 +378,7 @@ function AddServerForm({
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showAuth, setShowAuth] = useState(false)
+  const [allowInsecureHttp, setAllowInsecureHttp] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -366,15 +392,21 @@ function AddServerForm({
       return
     }
     try {
-      new URL(url)
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('protocol')
     } catch {
       setError(t('servers.invalidUrl'))
+      return
+    }
+    if (isRemoteHttpUrl(url) && !allowInsecureHttp) {
+      setError(t('servers.insecureHttpRequired'))
       return
     }
 
     onAdd(
       name.trim(),
       url.trim(),
+      allowInsecureHttp,
       password.trim() ? username.trim() || 'opencode' : undefined,
       password.trim() || undefined,
     )
@@ -484,6 +516,14 @@ function AddServerForm({
         <div className="text-[length:var(--fs-xs)] text-warning-100 bg-warning-bg border border-warning-100/20 rounded-md px-2.5 py-2 leading-relaxed">
           {t('servers.httpsIpWarning')}
         </div>
+      )}
+
+
+      {isRemoteHttpUrl(url) && (
+        <label className="flex items-start gap-2 rounded-md border border-warning-100/20 bg-warning-bg px-2.5 py-2 text-[length:var(--fs-xs)] text-warning-100">
+          <input type="checkbox" checked={allowInsecureHttp} onChange={event => setAllowInsecureHttp(event.target.checked)} className="mt-0.5" />
+          <span>{t('servers.allowInsecureHttp')}</span>
+        </label>
       )}
 
       {error && <p className="text-[length:var(--fs-xs)] text-danger-100">{error}</p>}
@@ -596,7 +636,7 @@ export function ServersSettings() {
                 const auth = updates.password
                   ? { username: updates.username || 'opencode', password: updates.password }
                   : undefined
-                updateServer(s.id, { name: updates.name, url: updates.url, auth })
+                updateServer(s.id, { name: updates.name, url: updates.url, allowInsecureHttp: updates.allowInsecureHttp, auth })
                 void checkHealth(s.id)
               }}
               onCheckHealth={() => void checkHealth(s.id)}
@@ -605,9 +645,9 @@ export function ServersSettings() {
 
           {addingServer && (
             <AddServerForm
-              onAdd={(n, u, user, pass) => {
+              onAdd={(n, u, allowInsecureHttp, user, pass) => {
                 const auth = pass ? { username: user || 'opencode', password: pass } : undefined
-                const s = addServer({ name: n, url: u, auth })
+                const s = addServer({ name: n, url: u, allowInsecureHttp, auth })
                 setAddingServer(false)
                 void checkHealth(s.id)
               }}

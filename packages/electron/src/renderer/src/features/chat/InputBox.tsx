@@ -405,6 +405,14 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
   }, [activeHealth, activeServer, checkHealth])
 
   useEffect(() => {
+    if (!activeServer) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void checkHealth(activeServer.id)
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [activeServer, checkHealth])
+
+  useEffect(() => {
     if (supportsWorktree || executionMode === 'current') return
     setExecutionMode('current')
   }, [executionMode, supportsWorktree])
@@ -573,7 +581,11 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
         <button
           type="button"
           disabled={switching}
-          onClick={() => setMenu(value => (value === 'server' ? undefined : 'server'))}
+          onClick={() => setMenu(value => {
+            if (value === 'server') return undefined
+            void Promise.all(servers.map(server => checkHealth(server.id)))
+            return 'server'
+          })}
           className={triggerClass}
           aria-haspopup="menu"
           aria-expanded={menu === 'server'}
@@ -595,6 +607,7 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
             </div>
             {servers.map(server => {
               const selected = server.id === activeServer?.id
+              const health = getHealth(server.id)
               return (
                 <button
                   key={server.id}
@@ -606,8 +619,9 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
                 >
                   {isLoopbackServer(server.url) ? <LaptopIcon size={14} /> : <GlobeIcon size={14} />}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{isLoopbackServer(server.url) ? t('emptyState.localServer') : server.name}</span>
+                    <span className="flex items-center gap-1.5"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${health?.status === 'online' ? 'bg-success-100' : health?.status === 'checking' ? 'animate-pulse bg-warning-100' : health ? 'bg-danger-100' : 'bg-text-500'}`} /><span className="truncate">{isLoopbackServer(server.url) ? t('emptyState.localServer') : server.name}</span>{health?.latency !== undefined ? <span className="shrink-0 text-[length:var(--fs-xxs)] text-text-500">{health.latency}ms</span> : null}</span>
                     <span className="block truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{server.url}</span>
+                    {health?.status === 'online' ? <span className="block truncate text-[length:var(--fs-xxs)] text-text-500">OpenCode {health.version || '—'} · {health.compatibility || 'unknown'}</span> : health?.error ? <span className="block truncate text-[length:var(--fs-xxs)] text-danger-100">{health.error}</span> : null}
                   </span>
                 </button>
               )

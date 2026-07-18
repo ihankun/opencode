@@ -7,6 +7,7 @@ import { saveData } from '../../../utils/downloadUtils'
 import { exportSettingsBackup, importSettingsBackup, previewBackupMeta } from '../../../utils/settingsBackup'
 import { openUrl } from '../../../utils/browserOpen'
 import { SettingsCard, SettingsSection } from './SettingsUI'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 
 export function AboutSettings() {
   const { i18n, t } = useTranslation(['settings'])
@@ -18,6 +19,7 @@ export function AboutSettings() {
   const [backupError, setBackupError] = useState<string | null>(null)
   const [logBusy, setLogBusy] = useState(false)
   const [logError, setLogError] = useState<string | null>(null)
+  const [pendingBackup, setPendingBackup] = useState<{ file: File; createdAt?: string } | null>(null)
 
   useEffect(() => {
     void updateStore.checkForUpdates()
@@ -60,15 +62,7 @@ export function AboutSettings() {
 
       try {
         const { createdAt } = await previewBackupMeta(file)
-        const confirmed = window.confirm(
-          createdAt
-            ? t('about.backupImportConfirmWithDate', { date: new Date(createdAt).toLocaleString() })
-            : t('about.backupImportConfirm'),
-        )
-        if (!confirmed) return
-
-        await importSettingsBackup(file)
-        window.location.reload()
+        setPendingBackup({ file, createdAt: createdAt ?? undefined })
       } catch (error) {
         setBackupError(error instanceof Error ? error.message : t('about.backupImportFailed'))
       } finally {
@@ -77,6 +71,21 @@ export function AboutSettings() {
     },
     [t],
   )
+
+  const confirmImportBackup = useCallback(async () => {
+    if (!pendingBackup) return
+    setBackupBusy('import')
+    setBackupError(null)
+    try {
+      await importSettingsBackup(pendingBackup.file)
+      window.location.reload()
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : t('about.backupImportFailed'))
+      setPendingBackup(null)
+    } finally {
+      setBackupBusy(null)
+    }
+  }, [pendingBackup, t])
 
   const handleExportLogs = useCallback(async () => {
     setLogError(null)
@@ -201,6 +210,7 @@ export function AboutSettings() {
           </div>
         </SettingsCard>
       </SettingsSection>
+      <ConfirmDialog isOpen={pendingBackup !== null} onClose={() => setPendingBackup(null)} onConfirm={() => void confirmImportBackup()} title={t('about.importBackup')} description={pendingBackup?.createdAt ? t('about.backupImportConfirmWithDate', { date: new Date(pendingBackup.createdAt).toLocaleString() }) : t('about.backupImportConfirm')} confirmText={t('about.importBackup')} variant="warning" isLoading={backupBusy === 'import'} />
     </div>
   )
 }

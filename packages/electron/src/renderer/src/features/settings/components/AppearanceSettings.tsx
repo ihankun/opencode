@@ -9,6 +9,7 @@ import type { CustomCSSSnippet } from '../../../store/themeStore'
 import { FONT_SCALE_MIN, FONT_SCALE_MAX } from '../../../store/themeStore'
 import { saveData } from '../../../utils/downloadUtils'
 import { I18nTrans } from '../../../components/I18nTrans'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 
 // ============================================
 // Theme Preset Card
@@ -522,6 +523,7 @@ export function AppearanceSettings() {
     snippetId: activeSnippetId,
     name: activeSnippetName,
   })
+  const [deleteSnippet, setDeleteSnippet] = useState<CustomCSSSnippet | null>(null)
   const snippetName = snippetDraft.snippetId === activeSnippetId ? snippetDraft.name : activeSnippetName
 
   const handleImportCSS = (css: string) => {
@@ -548,9 +550,7 @@ export function AppearanceSettings() {
   }
 
   const handleDeleteSnippet = (snippet: CustomCSSSnippet) => {
-    const confirmed = window.confirm(t('appearance.deleteOverrideConfirm', { name: snippet.name }))
-    if (!confirmed) return
-    deleteCustomCSSSnippet(snippet.id)
+    setDeleteSnippet(snippet)
   }
 
   const handleExportSnippet = (snippet: CustomCSSSnippet) => {
@@ -727,6 +727,7 @@ export function AppearanceSettings() {
           </div>
         </SettingRow>
       </SettingsSection>
+      <ConfirmDialog isOpen={deleteSnippet !== null} onClose={() => setDeleteSnippet(null)} onConfirm={() => { if (!deleteSnippet) return; deleteCustomCSSSnippet(deleteSnippet.id); setDeleteSnippet(null) }} title={t('appearance.deleteOverride')} description={deleteSnippet ? t('appearance.deleteOverrideConfirm', { name: deleteSnippet.name }) : ''} confirmText={t('common:delete')} variant="danger" />
     </div>
   )
 }

@@ -1,6 +1,17 @@
 # Custom OpenCode Electron
 
-Independent Electron frontend for the local opencode server.
+Independent Electron frontend for local and remote OpenCode servers.
+
+## Desktop capabilities
+
+- Manage multiple local or remote servers, verify health and compatibility, and select a default server for new tasks.
+- Choose the execution server, project, Git branch, approval profile, and current-directory or isolated-Worktree mode when creating a task.
+- Run durable scheduled automations with retry, timeout, overlap, catch-up, concurrency, cancellation, retention, import, and export controls.
+- Review session, turn, branch, and working-tree changes; stage, commit, fetch, fast-forward pull, push, stash, merge, and create draft or ready pull requests.
+- Manage checkpoints, hooks, memory, MCP servers, skills, plugins, and expert kits from the application UI.
+- Preview local development servers in isolated tabs with navigation history, port discovery, element references, screenshots, and external-browser fallback.
+
+Remote plain HTTP endpoints require an explicit per-server opt-in. Credentials and sensitive hook output are redacted from application logs. The debug-log export includes runtime diagnostics but replaces user-data paths and recognized secrets.
 
 ## Development
 
@@ -23,6 +34,17 @@ bun electron:package
 ```
 
 This repository currently requires `bun@^1.3.14` for the opencode server build scripts.
+
+Run Electron checks from this package rather than the repository root:
+
+```bash
+cd packages/electron
+bun typecheck
+bun test
+bun run build
+```
+
+Packaging, signing, notarization, and application updates are separate release operations and are not required for local development builds.
 
 ## Skill marketplace
 

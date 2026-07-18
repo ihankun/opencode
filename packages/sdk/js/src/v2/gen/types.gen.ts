@@ -2213,6 +2213,19 @@ export type WorktreeError = {
   }
 }
 
+export type WorktreeDetail = {
+  name: string
+  branch?: string
+  directory: string
+  dirty: boolean
+  managed: boolean
+  sizeBytes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  fileCount: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  measuredCompletely: boolean
+  createdAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  modifiedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
 export type WorktreeCreateInput = {
   name?: string
   baseBranch?: string
@@ -2230,6 +2243,7 @@ export type Worktree = {
 
 export type WorktreeRemoveInput = {
   directory: string
+  force?: boolean
 }
 
 export type WorktreeResetInput = {
@@ -8527,6 +8541,8 @@ export type ExperimentalHooksGetResponses = {
       event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
       command: string
       enabled: boolean
+      approved: boolean
+      sandbox: boolean
       timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     }>
     runs: Array<{
@@ -8534,7 +8550,8 @@ export type ExperimentalHooksGetResponses = {
       hookID: string
       hookName: string
       event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
-      status: "completed" | "failed" | "timed_out"
+      status: "completed" | "failed" | "timed_out" | "blocked"
+      sandboxed: boolean
       output: string
       startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -8552,6 +8569,8 @@ export type ExperimentalHooksUpdateData = {
       event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
       command: string
       enabled: boolean
+      approved: boolean
+      sandbox: boolean
       timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     }>
   }
@@ -8583,6 +8602,8 @@ export type ExperimentalHooksUpdateResponses = {
       event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
       command: string
       enabled: boolean
+      approved: boolean
+      sandbox: boolean
       timeoutSeconds: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     }>
     runs: Array<{
@@ -8590,7 +8611,8 @@ export type ExperimentalHooksUpdateResponses = {
       hookID: string
       hookName: string
       event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
-      status: "completed" | "failed" | "timed_out"
+      status: "completed" | "failed" | "timed_out" | "blocked"
+      sandboxed: boolean
       output: string
       startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -8630,7 +8652,8 @@ export type ExperimentalHooksRunResponses = {
     hookID: string
     hookName: string
     event: "automation.before" | "automation.after" | "git.before" | "git.after" | "notification"
-    status: "completed" | "failed" | "timed_out"
+    status: "completed" | "failed" | "timed_out" | "blocked"
+    sandboxed: boolean
     output: string
     startedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     completedAt: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -8722,6 +8745,34 @@ export type WorktreeCreateResponses = {
 }
 
 export type WorktreeCreateResponse = WorktreeCreateResponses[keyof WorktreeCreateResponses]
+
+export type WorktreeDetailsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/worktree/details"
+}
+
+export type WorktreeDetailsErrors = {
+  /**
+   * WorktreeError | InvalidRequestError
+   */
+  400: WorktreeError | InvalidRequestError
+}
+
+export type WorktreeDetailsError = WorktreeDetailsErrors[keyof WorktreeDetailsErrors]
+
+export type WorktreeDetailsResponses = {
+  /**
+   * Detailed worktree inventory
+   */
+  200: Array<WorktreeDetail>
+}
+
+export type WorktreeDetailsResponse = WorktreeDetailsResponses[keyof WorktreeDetailsResponses]
 
 export type WorktreeResetData = {
   body?: WorktreeResetInput

@@ -1,6 +1,10 @@
 import type { DatabaseSync } from "node:sqlite"
 
 export function migrateScheduledTaskDatabase(database: DatabaseSync) {
+  database.exec("PRAGMA busy_timeout = 5000")
+  database.exec("PRAGMA journal_mode = WAL")
+  database.exec("PRAGMA synchronous = FULL")
+  database.exec("PRAGMA foreign_keys = ON")
   database.exec("BEGIN IMMEDIATE")
   try {
     database.exec(`
@@ -21,6 +25,10 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
         retry_count INTEGER NOT NULL DEFAULT 0,
         retry_delay_seconds INTEGER NOT NULL DEFAULT 30,
         completion_timeout_minutes INTEGER NOT NULL DEFAULT 60,
+        overlap_policy TEXT NOT NULL DEFAULT 'skip',
+        max_concurrent_runs INTEGER NOT NULL DEFAULT 1,
+        missed_run_policy TEXT NOT NULL DEFAULT 'skip',
+        catch_up_window_minutes INTEGER NOT NULL DEFAULT 60,
         model_provider_id TEXT NOT NULL,
         model_id TEXT NOT NULL,
         variant TEXT NOT NULL DEFAULT '',
@@ -58,6 +66,12 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
         created_at INTEGER NOT NULL
       )
     `)
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS scheduled_task_setting (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `)
     ensureColumn(database, "scheduled_task", "variant", "TEXT NOT NULL DEFAULT ''")
     ensureColumn(database, "scheduled_task", "server_id", "TEXT NOT NULL DEFAULT 'local'")
     ensureColumn(database, "scheduled_task", "server_name", "TEXT NOT NULL DEFAULT 'Local'")
@@ -69,6 +83,10 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     ensureColumn(database, "scheduled_task", "retry_count", "INTEGER NOT NULL DEFAULT 0")
     ensureColumn(database, "scheduled_task", "retry_delay_seconds", "INTEGER NOT NULL DEFAULT 30")
     ensureColumn(database, "scheduled_task", "completion_timeout_minutes", "INTEGER NOT NULL DEFAULT 60")
+    ensureColumn(database, "scheduled_task", "overlap_policy", "TEXT NOT NULL DEFAULT 'skip'")
+    ensureColumn(database, "scheduled_task", "max_concurrent_runs", "INTEGER NOT NULL DEFAULT 1")
+    ensureColumn(database, "scheduled_task", "missed_run_policy", "TEXT NOT NULL DEFAULT 'skip'")
+    ensureColumn(database, "scheduled_task", "catch_up_window_minutes", "INTEGER NOT NULL DEFAULT 60")
     ensureColumn(database, "scheduled_task", "enabled", "INTEGER NOT NULL DEFAULT 1")
     ensureColumn(database, "scheduled_task", "last_run_at", "INTEGER")
     ensureColumn(database, "scheduled_task", "last_error", "TEXT")
@@ -94,12 +112,20 @@ export function migrateScheduledTaskDatabase(database: DatabaseSync) {
     ensureColumn(database, "scheduled_task_run", "created_at", "INTEGER NOT NULL DEFAULT 0")
     ensureColumn(database, "scheduled_task_run", "completed_at", "INTEGER")
     database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_task_id_idx ON scheduled_task_run(task_id)")
-    database.exec("PRAGMA user_version = 7")
+    database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_active_idx ON scheduled_task_run(archived, created_at DESC)")
+    database.exec("CREATE INDEX IF NOT EXISTS scheduled_task_run_task_active_idx ON scheduled_task_run(task_id, archived, created_at DESC)")
+    database.exec("PRAGMA user_version = 9")
     database.exec("COMMIT")
   } catch (error) {
     database.exec("ROLLBACK")
     throw error
   }
+}
+
+export function verifyScheduledTaskDatabase(database: DatabaseSync) {
+  const result = database.prepare("PRAGMA quick_check").get() as Record<string, unknown> | undefined
+  if (result && Object.values(result).some((value) => value === "ok")) return
+  throw new Error(`Scheduled task database integrity check failed: ${JSON.stringify(result ?? {})}`)
 }
 
 function ensureColumn(database: DatabaseSync, table: "scheduled_task" | "scheduled_task_run", column: string, definition: string) {

@@ -6,7 +6,7 @@ import { openUrl } from '../utils/browserOpen'
 import { useMessageStore } from '../store'
 import { insertComposerDraft } from '../utils/composerDraft'
 
-type PreviewPage = { id: string; url: string }
+type PreviewPage = { id: string; url: string; history: string[]; historyIndex: number }
 
 function normalizePreviewUrl(value: string) {
   const input = value.trim()
@@ -30,7 +30,7 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
   const { t } = useTranslation('components')
   const { sessionId } = useMessageStore()
   const initialUrl = safePreviewUrl(url)
-  const [pages, setPages] = useState<PreviewPage[]>(() => [{ id: crypto.randomUUID(), url: initialUrl }])
+  const [pages, setPages] = useState<PreviewPage[]>(() => [{ id: crypto.randomUUID(), url: initialUrl, history: initialUrl ? [initialUrl] : [], historyIndex: initialUrl ? 0 : -1 }])
   const [activeId, setActiveId] = useState(() => pages[0].id)
   const active = pages.find(page => page.id === activeId) ?? pages[0]
   const [input, setInput] = useState(active.url)
@@ -38,14 +38,12 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
   const [error, setError] = useState('')
   const [ports, setPorts] = useState<string[]>([])
   const [logs, setLogs] = useState<string[]>([])
-  const [history, setHistory] = useState<string[]>(initialUrl ? [initialUrl] : [])
-  const [historyIndex, setHistoryIndex] = useState(initialUrl ? 0 : -1)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
     const next = safePreviewUrl(url)
     if (!next || pages.some(page => page.url === next)) return
-    const page = { id: crypto.randomUUID(), url: next }
+    const page = { id: crypto.randomUUID(), url: next, history: [next], historyIndex: 0 }
     setPages(current => [...current, page])
     setActiveId(page.id)
   }, [pages, url])
@@ -65,13 +63,14 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
   }, [active.url])
 
   const setActiveUrl = (next: string, record = true) => {
-    setPages(current => current.map(page => page.id === active.id ? { ...page, url: next } : page))
+    setPages(current => current.map(page => {
+      if (page.id !== active.id) return page
+      if (!record) return { ...page, url: next }
+      const history = [...page.history.slice(0, page.historyIndex + 1), next]
+      return { ...page, url: next, history, historyIndex: history.length - 1 }
+    }))
     layoutStore.updateTab(tabId, { previewUrl: next })
     setLogs(current => [`${new Date().toLocaleTimeString()} navigate ${next}`, ...current].slice(0, 100))
-    if (!record) return
-    const nextHistory = [...history.slice(0, historyIndex + 1), next]
-    setHistory(nextHistory)
-    setHistoryIndex(nextHistory.length - 1)
   }
 
   const navigate = () => {
@@ -87,12 +86,12 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
   }
 
   const moveHistory = (offset: number) => {
-    const index = historyIndex + offset
-    const next = history[index]
+    const index = active.historyIndex + offset
+    const next = active.history[index]
     if (!next) return
-    setHistoryIndex(index)
+    setPages(current => current.map(page => page.id === active.id ? { ...page, url: next, historyIndex: index } : page))
     setInput(next)
-    setActiveUrl(next, false)
+    layoutStore.updateTab(tabId, { previewUrl: next })
   }
 
   const discover = async () => {
@@ -101,7 +100,12 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
       return
     }
     const host = hostname || '127.0.0.1'
-    setPorts(await window.customOpenCode.discoverPreviewPorts(host))
+    try {
+      setPorts(await window.customOpenCode.discoverPreviewPorts(host))
+      setError('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('preview.invalidUrl'))
+    }
   }
 
   const capture = async () => {
@@ -111,7 +115,12 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
     }
     const rect = iframeRef.current?.getBoundingClientRect()
     if (!rect) return
-    await window.customOpenCode.capturePreview({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })
+    try {
+      await window.customOpenCode.capturePreview({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })
+      setError('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('preview.desktopBridgeUnavailable'))
+    }
   }
 
   const referenceElement = () => {
@@ -136,7 +145,7 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
   }
 
   const addPage = () => {
-    const page = { id: crypto.randomUUID(), url: '' }
+    const page = { id: crypto.randomUUID(), url: '', history: [], historyIndex: -1 }
     setPages(current => [...current, page])
     setActiveId(page.id)
   }
@@ -155,8 +164,8 @@ export function PreviewPanel({ tabId, url }: { tabId: string; url?: string }) {
       <button type="button" onClick={addPage} className="mb-0.5 rounded p-1 text-text-500 hover:bg-bg-200 hover:text-text-100"><PlusIcon size={12} /></button>
     </div>
     <div className="flex shrink-0 items-center gap-1 border-b border-border-100 px-2 py-1.5">
-      <button type="button" onClick={() => moveHistory(-1)} disabled={historyIndex <= 0} className="rounded p-1 text-text-400 disabled:opacity-25"><ChevronLeftIcon size={14} /></button>
-      <button type="button" onClick={() => moveHistory(1)} disabled={historyIndex < 0 || historyIndex >= history.length - 1} className="rounded p-1 text-text-400 disabled:opacity-25"><ChevronRightIcon size={14} /></button>
+      <button type="button" onClick={() => moveHistory(-1)} disabled={active.historyIndex <= 0} className="rounded p-1 text-text-400 disabled:opacity-25"><ChevronLeftIcon size={14} /></button>
+      <button type="button" onClick={() => moveHistory(1)} disabled={active.historyIndex < 0 || active.historyIndex >= active.history.length - 1} className="rounded p-1 text-text-400 disabled:opacity-25"><ChevronRightIcon size={14} /></button>
       <GlobeIcon size={14} className="shrink-0 text-text-400" />
       <input value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') navigate() }} placeholder={t('preview.placeholder')} aria-label={t('preview.address')} className="min-w-0 flex-1 rounded-md border border-border-200 bg-bg-200/40 px-2 py-1 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100" />
       <button type="button" onClick={() => setReloadKey(value => value + 1)} disabled={!active.url} title={t('preview.reload')} className="rounded-md p-1.5 text-text-400 hover:bg-bg-200 hover:text-text-100 disabled:opacity-30"><RetryIcon size={14} /></button>

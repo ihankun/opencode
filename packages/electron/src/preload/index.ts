@@ -145,6 +145,10 @@ export type CustomOpenCodeScheduledTask = {
   retryCount: number
   retryDelaySeconds: number
   completionTimeoutMinutes: number
+  overlapPolicy: "skip" | "queue" | "parallel"
+  maxConcurrentRuns: number
+  missedRunPolicy: "skip" | "run-once"
+  catchUpWindowMinutes: number
   modelProviderID: string
   modelID: string
   variant: string
@@ -157,7 +161,7 @@ export type CustomOpenCodeScheduledTask = {
   updatedAt: number
 }
 
-export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "worktreeCleanup" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "modelProviderID" | "modelID" | "variant" | "enabled">
+export type CustomOpenCodeScheduledTaskInput = Pick<CustomOpenCodeScheduledTask, "title" | "prompt" | "cron" | "timezone" | "serverId" | "serverName" | "serverUrl" | "directory" | "executionMode" | "worktreeCleanup" | "branch" | "permissionProfile" | "retryCount" | "retryDelaySeconds" | "completionTimeoutMinutes" | "overlapPolicy" | "maxConcurrentRuns" | "missedRunPolicy" | "catchUpWindowMinutes" | "modelProviderID" | "modelID" | "variant" | "enabled">
 
 export type CustomOpenCodeScheduledTaskRun = {
   id: string
@@ -178,13 +182,15 @@ export type CustomOpenCodeScheduledTaskRun = {
   modelProviderID: string
   modelID: string
   variant: string
-  status: "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
+  status: "queued" | "running" | "submitted" | "recovering" | "completed" | "failed" | "timed_out" | "cancelled"
   error: string | null
   log: string
   createdAt: number
   updatedAt: number
   completedAt: number | null
 }
+
+export type CustomOpenCodeScheduledTaskSettings = { maxConcurrency: number; historyRetentionDays: number; maxHistory: number }
 
 export type CustomOpenCodeSecurityConfig = {
   sandbox: {
@@ -214,7 +220,7 @@ export type CustomOpenCodeApi = {
   setServerCredential(id: string, credential: CustomOpenCodeServerCredential | null): Promise<void>
   hostingCredentials(): Promise<Record<CustomOpenCodeHostingProvider, boolean>>
   setHostingCredential(provider: CustomOpenCodeHostingProvider, credential: CustomOpenCodeServerCredential | null): Promise<void>
-  createPullRequest(input: { remoteUrl: string; sourceBranch: string; targetBranch: string; title: string; body?: string }): Promise<{ url: string; provider: CustomOpenCodeHostingProvider }>
+  createPullRequest(input: { remoteUrl: string; sourceBranch: string; targetBranch: string; title: string; body?: string; draft?: boolean }): Promise<{ url: string; provider: CustomOpenCodeHostingProvider }>
   onServerUpdated(callback: (state: CustomOpenCodeServerState) => void): () => void
   searchPlugins(query: string): Promise<CustomOpenCodePluginSearchResult[]>
   inspectPlugins(specs: string[]): Promise<CustomOpenCodePluginMetadata[]>
@@ -226,6 +232,8 @@ export type CustomOpenCodeApi = {
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   listTasks(): Promise<CustomOpenCodeScheduledTask[]>
   listTaskRuns(taskID?: string): Promise<CustomOpenCodeScheduledTaskRun[]>
+  taskSettings(): Promise<CustomOpenCodeScheduledTaskSettings>
+  updateTaskSettings(input: CustomOpenCodeScheduledTaskSettings): Promise<CustomOpenCodeScheduledTaskSettings>
   setTaskRunArchived(sessionID: string, archived: boolean): Promise<void>
   createTask(input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
   updateTask(id: string, input: CustomOpenCodeScheduledTaskInput): Promise<CustomOpenCodeScheduledTask>
@@ -288,6 +296,8 @@ const api: CustomOpenCodeApi = {
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   listTasks: () => ipcRenderer.invoke("task:list"),
   listTaskRuns: (taskID) => ipcRenderer.invoke("task:run-list", taskID),
+  taskSettings: () => ipcRenderer.invoke("task:settings"),
+  updateTaskSettings: (input) => ipcRenderer.invoke("task:settings-update", input),
   setTaskRunArchived: (sessionID, archived) => ipcRenderer.invoke("task:run-archive", sessionID, archived),
   createTask: (input) => ipcRenderer.invoke("task:create", input),
   updateTask: (id, input) => ipcRenderer.invoke("task:update", id, input),

@@ -426,6 +426,12 @@ ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => rem
 ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
 ipcMain.handle("task:list", () => taskScheduler.list())
 ipcMain.handle("task:run-list", (_event, taskID: unknown) => taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined))
+ipcMain.handle("task:settings", () => taskScheduler.settings())
+ipcMain.handle("task:settings-update", (_event, input: Parameters<TaskScheduler["updateSettings"]>[0]) => {
+  const settings = taskScheduler.updateSettings(input)
+  notifyTasksChanged()
+  return settings
+})
 ipcMain.handle("task:run-archive", (_event, sessionID: unknown, archived: unknown) => {
   taskScheduler.setRunArchived(String(sessionID), Boolean(archived))
   notifyTasksChanged()
@@ -496,8 +502,7 @@ app.on("before-quit", (event) => {
   event.preventDefault()
   isQuitting = true
   isStoppingForQuit = true
-  taskScheduler.stop()
-  void stopServer().finally(() => app.exit(0))
+  void taskScheduler.stop().then(stopServer).finally(() => app.exit(0))
 })
 
 app.on("window-all-closed", () => {
@@ -1413,12 +1418,16 @@ async function createHostedPullRequest(rawInput: unknown) {
   const targetBranch = typeof rawInput.targetBranch === "string" ? rawInput.targetBranch.trim() : ""
   const title = typeof rawInput.title === "string" ? rawInput.title.trim() : ""
   const body = typeof rawInput.body === "string" ? rawInput.body : ""
+  const draft = rawInput.draft === true
   if (!remoteUrl || remoteUrl.protocol !== "https:") throw new Error("A valid HTTPS Git remote is required")
-  if (!sourceBranch || !targetBranch || sourceBranch === targetBranch || !title) throw new Error("Source branch, target branch, and title are required")
+  const validRef = (value: string) => value.length > 0 && value.length <= 255 && !value.startsWith("-") && !/[\0\r\n]/.test(value)
+  if (!validRef(sourceBranch) || !validRef(targetBranch) || sourceBranch === targetBranch || !title || title.length > 500 || body.length > 100_000) {
+    throw new Error("Valid source branch, target branch, title, and description are required")
+  }
 
   const provider = remoteUrl.hostname === "bitbucket.org"
     ? "bitbucket" as const
-    : remoteUrl.hostname.includes("gitlab") ? "gitlab" as const : remoteUrl.hostname.includes("github") ? "github" as const : undefined
+    : remoteUrl.hostname === "gitlab.com" ? "gitlab" as const : remoteUrl.hostname === "github.com" ? "github" as const : undefined
   if (!provider) throw new Error("Only GitHub, GitLab, and Bitbucket repositories are supported")
   const repository = remoteUrl.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "")
   const repositoryParts = repository.split("/").filter(Boolean)
@@ -1429,17 +1438,15 @@ async function createHostedPullRequest(rawInput: unknown) {
 
   const request = provider === "github"
     ? {
-        url: remoteUrl.hostname === "github.com"
-          ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`
-          : `https://${remoteUrl.hostname}/api/v3/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`,
+        url: `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`,
         headers: { Authorization: `Bearer ${credential.password}`, Accept: "application/vnd.github+json" },
-        body: { title, head: sourceBranch, base: targetBranch, body },
+        body: { title, head: sourceBranch, base: targetBranch, body, draft },
       }
     : provider === "gitlab"
       ? {
           url: `https://${remoteUrl.hostname}/api/v4/projects/${encodeURIComponent(repository)}/merge_requests`,
           headers: { "PRIVATE-TOKEN": credential.password },
-          body: { title, source_branch: sourceBranch, target_branch: targetBranch, description: body },
+          body: { title: draft ? `Draft: ${title}` : title, source_branch: sourceBranch, target_branch: targetBranch, description: body },
         }
       : {
           url: `https://api.bitbucket.org/2.0/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pullrequests`,
@@ -1482,6 +1489,10 @@ function normalizeGitRemoteUrl(value: string) {
 async function openInternalUrl(rawUrl: string) {
   const url = new URL(rawUrl)
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
+  if (url.username || url.password) throw new Error("URLs with embedded credentials are not allowed")
+  if (url.hostname === "169.254.169.254" || url.hostname.toLowerCase() === "metadata.google.internal") {
+    throw new Error("Cloud metadata endpoints are blocked")
+  }
 
   if (!internalBrowserWindow || internalBrowserWindow.isDestroyed()) {
     internalBrowserWindow = new BrowserWindow({
@@ -1532,6 +1543,9 @@ async function openInternalUrl(rawUrl: string) {
 async function discoverPreviewPorts(rawHost: string) {
   const host = rawHost.trim().replace(/^\[|\]$/g, "")
   if (!host || !/^[a-zA-Z0-9.:-]+$/.test(host)) throw new Error("Invalid preview host")
+  if (host.toLowerCase() !== "localhost" && host !== "::1" && !host.startsWith("127.")) {
+    throw new Error("Automatic port discovery is limited to the local machine")
+  }
   const hostname = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host
   const ports = [3000, 3001, 4000, 4173, 5000, 5173, 5174, 8000, 8080]
   const checks = ports.map(async port => {
