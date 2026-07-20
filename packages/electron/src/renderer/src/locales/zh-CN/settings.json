@@ -49,10 +49,12 @@
     "aboutDesc": "版本信息、更新检查和发布页入口"
   },
   "groups": {
-    "core": "核心",
-    "general": "通用",
-    "advanced": "高级",
-    "archived": "已归档"
+    "basic": "基础设置",
+    "agent": "智能体设置",
+    "advanced": "高级设置",
+    "general": "常规设置",
+    "archived": "归档列表",
+    "security": "安全设置"
   },
   "archived": {
     "title": "已归档对话",

@@ -49,10 +49,12 @@
     "aboutDesc": "Version info, update checks, and release links"
   },
   "groups": {
-    "core": "Core",
-    "general": "General",
-    "advanced": "Advanced",
-    "archived": "Archived"
+    "basic": "Basic Settings",
+    "agent": "Agent Settings",
+    "advanced": "Advanced Settings",
+    "general": "General Settings",
+    "archived": "Archive",
+    "security": "Security Settings"
   },
   "archived": {
     "title": "Archived Chats",

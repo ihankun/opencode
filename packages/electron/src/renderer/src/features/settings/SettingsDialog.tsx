@@ -99,22 +99,21 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
 
 const TAB_IDS: SettingsTab[] = [
   'servers',
-  'hosting',
-  'imBot',
   'providers',
   'models',
   'agent',
   'chat',
-  'archived',
-  'memory',
-  'hooks',
-  'security',
   'workspace',
+  'memory',
+  'hosting',
+  'imBot',
+  'hooks',
   'appearance',
   'notifications',
-  'service',
-  'config',
   'keybindings',
+  'archived',
+  'security',
+  'config',
   'about',
 ]
 
@@ -161,10 +160,12 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'memory', 'workspace', 'hosting', 'imBot'] },
-  { labelKey: 'groups.general', tabs: ['appearance', 'notifications'] },
-  { labelKey: 'groups.advanced', tabs: ['security', 'hooks', 'service', 'config', 'keybindings', 'about'] },
+  { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models'] },
+  { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
+  { labelKey: 'groups.advanced', tabs: ['hosting', 'imBot', 'hooks'] },
+  { labelKey: 'groups.general', tabs: ['appearance', 'notifications', 'keybindings'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
+  { labelKey: 'groups.security', tabs: ['security', 'config', 'about'] },
 ]
 
 // ============================================
