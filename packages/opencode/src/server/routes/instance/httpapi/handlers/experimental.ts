@@ -19,7 +19,7 @@ import { ToolRegistry } from "@/tool/registry"
 import { DurableJson } from "@/util/durable-json"
 import { Worktree } from "@/worktree"
 import { Duration, Effect, Option } from "effect"
-import { mkdir } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
@@ -94,9 +94,11 @@ function memorySourceDefinitions(ctx: { directory: string; worktree: string }) {
 async function readMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID) {
   const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
   if (!source) throw new Error("Memory source not found")
-  const file = Bun.file(source.path)
-  const exists = await file.exists()
-  return { ...source, exists, content: exists ? await file.text() : "" }
+  const content = await readFile(source.path, "utf8").catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined
+    throw error
+  })
+  return { ...source, exists: content !== undefined, content: content ?? "" }
 }
 
 async function writeMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID, content: string) {
@@ -104,7 +106,7 @@ async function writeMemorySource(ctx: { directory: string; worktree: string }, i
   const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
   if (!source) throw new Error("Memory source not found")
   await mkdir(path.dirname(source.path), { recursive: true })
-  await Bun.write(source.path, content)
+  await writeFile(source.path, content)
   return readMemorySource(ctx, id)
 }
 

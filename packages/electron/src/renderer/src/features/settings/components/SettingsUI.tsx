@@ -1,5 +1,8 @@
 import type React from 'react'
 
+export const settingsSearchInputClass =
+  'h-8 w-full rounded-md border border-border-200 bg-transparent pl-8 pr-8 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-400 transition-colors hover:border-border-300 focus-visible:border-accent-main-100 focus-visible:ring-1 focus-visible:ring-accent-main-100/30'
+
 // ============================================
 // Shared Settings UI Primitives
 // section + border-bottom 分隔，

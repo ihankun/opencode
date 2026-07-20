@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CloseIcon, SearchIcon } from '../../components/Icons'
+import { settingsSearchInputClass } from './components/SettingsUI'
 import { filterSettingsSearchItems, type SearchMenuItem } from './settingsSearchCatalog'
 
 function scrollItemIntoView(container: HTMLElement, item: HTMLElement) {
@@ -131,7 +132,7 @@ export function SettingsSearch<T extends SearchMenuItem>({ items, placeholder, c
           }
         }}
         placeholder={placeholder}
-        className="h-8 w-full rounded-md border border-border-200 bg-transparent pl-8 pr-8 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-400 transition-colors hover:border-border-300 focus-visible:border-accent-main-100 focus-visible:ring-1 focus-visible:ring-accent-main-100/30"
+        className={settingsSearchInputClass}
       />
       {query && (
         <button

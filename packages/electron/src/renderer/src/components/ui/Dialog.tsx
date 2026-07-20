@@ -40,6 +40,7 @@ export function Dialog({
   const titleId = useId()
   const previousFocusedElementRef = useRef<HTMLElement | null>(null)
   const previousFocusedElementIdRef = useRef<string | null>(null)
+  const hasOpenedRef = useRef(false)
   const restoreFocusTimerRef = useRef<number | null>(null)
   const handoffFocusTimerRef = useRef<number | null>(null)
 
@@ -229,6 +230,7 @@ export function Dialog({
   useEffect(() => {
     if (!isOpen) return
 
+    hasOpenedRef.current = true
     if (restoreFocusTimerRef.current !== null) {
       clearTimeout(restoreFocusTimerRef.current)
       restoreFocusTimerRef.current = null
@@ -262,7 +264,8 @@ export function Dialog({
   }, [isOpen, isVisible, focusDialogContent])
 
   useEffect(() => {
-    if (isOpen || shouldRender) return
+    if (isOpen || shouldRender || !hasOpenedRef.current) return
+    hasOpenedRef.current = false
 
     const timerId = window.setTimeout(() => {
       const activeDialog = getTopOpenDialog()
