@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
+import { isIP } from "node:net"
 import { homedir, tmpdir } from "node:os"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { spawn } from "node:child_process"
@@ -53,6 +54,8 @@ type SecurityConfig = {
     denyWrite: string[]
     allowedDomains: string[]
     deniedDomains: string[]
+    allowedIPs: string[]
+    deniedIPs: string[]
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean
@@ -1189,6 +1192,8 @@ function defaultSecurityConfig(): SecurityConfig {
       denyWrite: [],
       allowedDomains: ["registry.npmjs.org", "*.npmjs.org", "registry.yarnpkg.com", "pypi.org", "*.pypi.org", "crates.io", "*.crates.io", "github.com", "*.github.com", "gitlab.com", "*.gitlab.com", "bitbucket.org", "*.bitbucket.org", "api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com", "*.googleapis.com"],
       deniedDomains: [],
+      allowedIPs: [],
+      deniedIPs: [],
       allowUnixSockets: [],
       allowAllUnixSockets: false,
       allowLocalBinding: false,
@@ -1211,6 +1216,21 @@ function normalizeSecurityConfig(value: unknown): SecurityConfig {
   const sandbox = isRecord(value.sandbox) ? value.sandbox : {}
   const audit = isRecord(value.audit) ? value.audit : {}
   const strings = (input: unknown, fallback: string[]) => Array.isArray(input) ? input.filter(isString) : fallback
+  const ipRules = (input: unknown, fallback: string[], allowAll: boolean) => {
+    const values = strings(input, fallback)
+    const invalid = values.find((rule) => {
+      if (allowAll && rule === "*") return false
+      const slash = rule.lastIndexOf("/")
+      const address = (slash === -1 ? rule : rule.slice(0, slash)).replace(/^\[|\]$/g, "")
+      const family = isIP(address)
+      if (!family) return true
+      if (slash === -1) return false
+      const prefix = rule.slice(slash + 1)
+      return !/^\d+$/.test(prefix) || Number(prefix) > (family === 4 ? 32 : 128)
+    })
+    if (invalid) throw new Error(`Invalid IP or CIDR rule: ${invalid}`)
+    return values
+  }
   return {
     sandbox: {
       enabled: typeof sandbox.enabled === "boolean" ? sandbox.enabled : defaults.sandbox.enabled,
@@ -1220,6 +1240,8 @@ function normalizeSecurityConfig(value: unknown): SecurityConfig {
       denyWrite: strings(sandbox.denyWrite, defaults.sandbox.denyWrite),
       allowedDomains: strings(sandbox.allowedDomains, defaults.sandbox.allowedDomains),
       deniedDomains: strings(sandbox.deniedDomains, defaults.sandbox.deniedDomains),
+      allowedIPs: ipRules(sandbox.allowedIPs, defaults.sandbox.allowedIPs, false),
+      deniedIPs: ipRules(sandbox.deniedIPs, defaults.sandbox.deniedIPs, true),
       allowUnixSockets: strings(sandbox.allowUnixSockets, defaults.sandbox.allowUnixSockets),
       allowAllUnixSockets: typeof sandbox.allowAllUnixSockets === "boolean" ? sandbox.allowAllUnixSockets : defaults.sandbox.allowAllUnixSockets,
       allowLocalBinding: typeof sandbox.allowLocalBinding === "boolean" ? sandbox.allowLocalBinding : defaults.sandbox.allowLocalBinding,

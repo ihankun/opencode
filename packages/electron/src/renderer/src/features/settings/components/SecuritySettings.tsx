@@ -9,6 +9,7 @@ export function SecuritySettings() {
   const { t } = useTranslation('settings')
   const [config, setConfig] = useState<CustomOpenCodeSecurityConfig>()
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveError, setSaveError] = useState('')
   const [windowsSandbox, setWindowsSandbox] = useState<CustomOpenCodeWindowsSandboxStatus>()
   const [windowsSandboxBusy, setWindowsSandboxBusy] = useState(false)
 
@@ -22,10 +23,12 @@ export function SecuritySettings() {
   const setSandbox = (value: Partial<CustomOpenCodeSecurityConfig['sandbox']>) => {
     setConfig({ ...config, sandbox: { ...config.sandbox, ...value } })
     setStatus('idle')
+    setSaveError('')
   }
   const setAudit = (value: Partial<CustomOpenCodeSecurityConfig['audit']>) => {
     setConfig({ ...config, audit: { ...config.audit, ...value } })
     setStatus('idle')
+    setSaveError('')
   }
   const listField = (label: string, description: string, value: string[], onChange: (value: string[]) => void) => (
     <label className="flex flex-col gap-2">
@@ -102,8 +105,13 @@ export function SecuritySettings() {
         {listField(t('security.allowRead'), t('security.allowReadDescription'), config.sandbox.allowRead, allowRead => setSandbox({ allowRead }))}
         {listField(t('security.allowWrite'), t('security.allowWriteDescription'), config.sandbox.allowWrite, allowWrite => setSandbox({ allowWrite }))}
         {listField(t('security.denyWrite'), t('security.denyWriteDescription'), config.sandbox.denyWrite, denyWrite => setSandbox({ denyWrite }))}
+        <div className="rounded-lg border border-accent-main-100/25 bg-accent-main-100/5 px-3 py-2 text-[length:var(--fs-sm)] text-text-300">
+          {t('security.strictNetworkDescription')}
+        </div>
         {listField(t('security.allowedDomains'), t('security.allowedDomainsDescription'), config.sandbox.allowedDomains, allowedDomains => setSandbox({ allowedDomains }))}
         {listField(t('security.deniedDomains'), t('security.deniedDomainsDescription'), config.sandbox.deniedDomains, deniedDomains => setSandbox({ deniedDomains }))}
+        {listField(t('security.allowedIPs'), t('security.allowedIPsDescription'), config.sandbox.allowedIPs, allowedIPs => setSandbox({ allowedIPs }))}
+        {listField(t('security.deniedIPs'), t('security.deniedIPsDescription'), config.sandbox.deniedIPs, deniedIPs => setSandbox({ deniedIPs }))}
         {listField(t('security.unixSockets'), t('security.unixSocketsDescription'), config.sandbox.allowUnixSockets, allowUnixSockets => setSandbox({ allowUnixSockets }))}
         <SettingRow label={t('security.allUnixSockets')} description={t('security.allUnixSocketsDescription')}>
           <Toggle enabled={config.sandbox.allowAllUnixSockets} onChange={() => setSandbox({ allowAllUnixSockets: !config.sandbox.allowAllUnixSockets })} />
@@ -128,7 +136,7 @@ export function SecuritySettings() {
 
       <div className="flex items-center justify-end gap-3">
         <span className={`text-sm ${status === 'error' ? 'text-danger-100' : 'text-text-400'}`}>
-          {t(`security.status_${status}`)}
+          {status === 'error' && saveError ? saveError : t(`security.status_${status}`)}
         </span>
         <button
           type="button"
@@ -136,10 +144,14 @@ export function SecuritySettings() {
           className="rounded-lg bg-accent-main-100 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           onClick={() => {
             setStatus('saving')
+            setSaveError('')
             void window.customOpenCode.updateSecurity(config).then(value => {
               setConfig(value)
               setStatus('saved')
-            }, () => setStatus('error'))
+            }, error => {
+              setSaveError(error instanceof Error ? error.message : String(error))
+              setStatus('error')
+            })
           }}
         >
           {t('security.save')}

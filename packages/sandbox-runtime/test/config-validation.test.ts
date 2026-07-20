@@ -36,6 +36,42 @@ describe('Config Validation', () => {
     expect(result.success).toBe(true)
   })
 
+  test('should validate exact IP addresses and CIDR ranges', () => {
+    const config = {
+      network: {
+        allowedDomains: ['example.com'],
+        deniedDomains: [],
+        allowedIPs: ['192.168.1.10', '2001:db8::1'],
+        deniedIPs: ['10.0.0.0/8', '2001:db8::/32'],
+      },
+      filesystem: {
+        denyRead: [],
+        allowWrite: [],
+        denyWrite: [],
+      },
+    }
+
+    expect(SandboxRuntimeConfigSchema.safeParse(config).success).toBe(true)
+  })
+
+  test('should reject invalid IP ranges', () => {
+    const config = {
+      network: {
+        allowedDomains: [],
+        deniedDomains: [],
+        allowedIPs: ['192.168.1.1/33'],
+        deniedIPs: [],
+      },
+      filesystem: {
+        denyRead: [],
+        allowWrite: [],
+        denyWrite: [],
+      },
+    }
+
+    expect(SandboxRuntimeConfigSchema.safeParse(config).success).toBe(false)
+  })
+
   test('should reject invalid domain patterns', () => {
     const config = {
       network: {

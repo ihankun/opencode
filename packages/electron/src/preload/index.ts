@@ -210,6 +210,8 @@ export type CustomOpenCodeSecurityConfig = {
     denyWrite: string[]
     allowedDomains: string[]
     deniedDomains: string[]
+    allowedIPs: string[]
+    deniedIPs: string[]
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean

@@ -102,6 +102,23 @@ describe('proxy auth + network deny semantics', () => {
     expect((await proxyRequest(port, 'nope.net')).statusCode).toBe(403)
     expect(asked).toBe(false)
   })
+
+  it('enforces direct IP allowlists and denylist CIDRs', async () => {
+    await SandboxManager.initialize({
+      network: {
+        allowedDomains: [],
+        deniedDomains: [],
+        allowedIPs: ['127.0.0.0/8'],
+        deniedIPs: ['127.0.0.2/32'],
+        strictAllowlist: true,
+      },
+      filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
+    })
+    const port = SandboxManager.getProxyPort()!
+    expect((await proxyRequest(port, '127.0.0.1')).statusCode).not.toBe(403)
+    expect((await proxyRequest(port, '127.0.0.2')).statusCode).toBe(403)
+    expect((await proxyRequest(port, '192.168.1.1')).statusCode).toBe(403)
+  })
 })
 
 describe('SandboxManager.updateConfig', () => {

@@ -7,7 +7,10 @@ import type { FilterRequestCallback } from './request-filter.js'
 
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
-import { isInjectHostCoveredByAllowedDomains } from './domain-pattern.js'
+import {
+  isInjectHostCoveredByAllowedDomains,
+  isIPPattern,
+} from './domain-pattern.js'
 
 /**
  * Schema for domain patterns (e.g., "example.com", "*.npmjs.org")
@@ -53,6 +56,11 @@ const domainPatternSchema = z.string().refine(
       'Invalid domain pattern. Must be a valid domain (e.g., "example.com") or wildcard (e.g., "*.example.com"). Overly broad patterns like "*.com" or "*" are not allowed for security reasons.',
   },
 )
+
+const ipPatternSchema = z.string().refine(isIPPattern, {
+  message:
+    'Invalid IP pattern. Must be an IPv4/IPv6 address or CIDR range (e.g., "192.168.1.10", "10.0.0.0/8", or "2001:db8::/32").',
+})
 
 /**
  * Schema for filesystem paths
@@ -334,6 +342,16 @@ export const NetworkConfigSchema = z.object({
     .array(z.union([z.literal('*'), domainPatternSchema]))
     .describe(
       'List of denied domains. Unlike allowedDomains, a bare "*" is accepted here (deny-all).',
+    ),
+  allowedIPs: z
+    .array(ipPatternSchema)
+    .optional()
+    .describe('List of allowed IPv4/IPv6 addresses or CIDR ranges.'),
+  deniedIPs: z
+    .array(z.union([z.literal('*'), ipPatternSchema]))
+    .optional()
+    .describe(
+      'List of denied IPv4/IPv6 addresses or CIDR ranges. A bare "*" denies all direct IP connections.',
     ),
   strictAllowlist: z
     .boolean()

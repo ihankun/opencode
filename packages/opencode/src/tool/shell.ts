@@ -87,7 +87,6 @@ type RunInput = {
   command: string
   argv?: string[]
   displayCommand?: string
-  hostCommand?: string
   cwd: string
   env: NodeJS.ProcessEnv
   timeout: number
@@ -582,15 +581,6 @@ export const ShellTool = Tool.define(
       }
       if (aborted) meta.push("User aborted the command")
       const raw = list.map((item) => item.text).join("")
-      if (input.hostCommand && sandboxViolation(raw)) {
-        yield* ctx.ask({
-          permission: "sandbox",
-          patterns: [`command:${input.hostCommand}`],
-          always: [`command:${input.hostCommand}`],
-          metadata: { command: input.hostCommand, reason: "sandbox_violation" },
-        })
-        return yield* run({ ...input, command: input.hostCommand, argv: undefined, hostCommand: undefined }, ctx)
-      }
       const end = tail(raw, limits.maxLines, limits.maxBytes)
       if (end.cut) cut = true
       if (!file && end.cut) {
@@ -642,7 +632,7 @@ export const ShellTool = Tool.define(
               }
               const timeout = params.timeout ?? defaultTimeoutMs
               const ps = Shell.ps(shell)
-              const bypassSandbox = yield* Effect.scoped(
+              const relaxFilesystem = yield* Effect.scoped(
                 Effect.gen(function* () {
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
@@ -664,15 +654,10 @@ export const ShellTool = Tool.define(
               )
 
               const sandbox = yield* Effect.promise(() =>
-                sandboxCommand(params.command, cwd, instanceCtx.worktree, shell, bypassSandbox, ctx.abort),
+                sandboxCommand(params.command, cwd, instanceCtx.worktree, shell, relaxFilesystem, ctx.abort),
               )
               if (sandbox.unavailable) {
-                yield* ctx.ask({
-                  permission: "sandbox",
-                  patterns: ["runtime:unavailable"],
-                  always: [],
-                  metadata: { command: params.command, reason: "sandbox_unavailable", error: sandbox.error },
-                })
+                throw new Error(`Sandbox runtime unavailable: ${sandbox.error ?? "unknown error"}`)
               }
 
               const env = yield* shellEnv(ctx, cwd)
@@ -683,7 +668,6 @@ export const ShellTool = Tool.define(
                   command: sandbox.command,
                   argv: sandbox.argv,
                   displayCommand: params.command,
-                  hostCommand: sandbox.sandboxed ? params.command : undefined,
                   cwd,
                   env: sandbox.env ? { ...env, ...sandbox.env } : env,
                   timeout,
@@ -695,7 +679,3 @@ export const ShellTool = Tool.define(
       })
   }),
 )
-
-function sandboxViolation(output: string) {
-  return /sandbox|operation not permitted|permission denied|read-only file system|connection blocked by network allowlist/i.test(output)
-}

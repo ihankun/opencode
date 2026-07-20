@@ -12,6 +12,8 @@ type Config = {
     denyWrite: string[]
     allowedDomains: string[]
     deniedDomains: string[]
+    allowedIPs: string[]
+    deniedIPs: string[]
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean
@@ -44,24 +46,27 @@ export async function sandboxCommand(
   cwd: string,
   worktree: string,
   shell: string,
-  bypass: boolean,
+  relaxFilesystem: boolean,
   abortSignal?: AbortSignal,
 ): Promise<SandboxedCommand> {
   const current = await load()
   if (!current.sandbox.enabled) return { command, sandboxed: false, unavailable: false, configured: false }
-  if (bypass) return { command, sandboxed: false, unavailable: false, configured: true }
   const ready = await initialize(current, cwd, worktree)
   if (!ready.ok) {
     return { command, sandboxed: false, unavailable: true, configured: true, error: ready.error }
   }
 
+  const base = runtime(current, cwd, worktree)
+  const execution = relaxFilesystem
+    ? { ...base, filesystem: { ...base.filesystem, disabled: true } }
+    : base
   const wrapped = process.platform === "win32"
-    ? SandboxManager.wrapWithSandboxArgv(command, shell, undefined, abortSignal, cwd).then((value) => ({
+    ? SandboxManager.wrapWithSandboxArgv(command, shell, execution, abortSignal, cwd).then((value) => ({
         command,
         argv: [...value.argv],
         env: value.env,
       }))
-    : SandboxManager.wrapWithSandbox(command, shell, runtime(current, cwd, worktree), abortSignal).then((value) => ({
+    : SandboxManager.wrapWithSandbox(command, shell, execution, abortSignal).then((value) => ({
         command: value,
       }))
 
@@ -86,15 +91,7 @@ export async function sandboxRisks(command: string) {
   const deniedPaths = [...current.sandbox.denyRead, ...current.sandbox.denyWrite]
     .map(expanded)
     .filter((item) => command.includes(item) || command.includes(item.replace(os.homedir(), "~")))
-  const hosts = [...command.matchAll(/https?:\/\/([^\s/'"`]+)/gi)].map((match) => match[1].split(":")[0].toLowerCase())
-  const deniedHosts = hosts.filter((host) =>
-    current.sandbox.deniedDomains.some((pattern) => matches(host, pattern)) ||
-    !current.sandbox.allowedDomains.some((pattern) => matches(host, pattern)),
-  )
-  return [
-    ...deniedPaths.map((item) => `filesystem:${item}`),
-    ...deniedHosts.map((item) => `network:${item}`),
-  ]
+  return deniedPaths.map((item) => `filesystem:${item}`)
 }
 
 export type SandboxFilesystemRequest = {
@@ -235,6 +232,8 @@ async function load() {
         denyWrite: [],
         allowedDomains: [],
         deniedDomains: [],
+        allowedIPs: [],
+        deniedIPs: [],
         allowUnixSockets: [],
         allowAllUnixSockets: false,
         allowLocalBinding: false,
@@ -244,7 +243,7 @@ async function load() {
   return config
 }
 
-function runtime(current: Config, cwd: string, worktree: string): Partial<SandboxRuntimeConfig> {
+function runtime(current: Config, cwd: string, worktree: string): SandboxRuntimeConfig {
   const root = process.env.OPENCODE_SANDBOX_RUNTIME_ROOT
   const arch = process.arch === "x64" || process.arch === "arm64" ? process.arch : undefined
   return {
@@ -257,6 +256,9 @@ function runtime(current: Config, cwd: string, worktree: string): Partial<Sandbo
     network: {
       allowedDomains: current.sandbox.allowedDomains,
       deniedDomains: current.sandbox.deniedDomains,
+      allowedIPs: current.sandbox.allowedIPs,
+      deniedIPs: current.sandbox.deniedIPs,
+      strictAllowlist: true,
       allowUnixSockets: current.sandbox.allowUnixSockets,
       allowAllUnixSockets: current.sandbox.allowAllUnixSockets,
       allowLocalBinding: current.sandbox.allowLocalBinding,
@@ -267,7 +269,7 @@ function runtime(current: Config, cwd: string, worktree: string): Partial<Sandbo
 }
 
 function initialize(current: Config, cwd: string, worktree: string) {
-  initialized ??= SandboxManager.initialize(runtime(current, cwd, worktree) as SandboxRuntimeConfig)
+  initialized ??= SandboxManager.initialize(runtime(current, cwd, worktree))
     .then(() => ({ ok: true as const }))
     .catch((error) => {
       console.error("[security:sandbox] initialization failed", error)
@@ -278,12 +280,6 @@ function initialize(current: Config, cwd: string, worktree: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
-}
-
-function matches(host: string, pattern: string) {
-  const normalized = pattern.toLowerCase()
-  if (normalized.startsWith("*.")) return host === normalized.slice(2) || host.endsWith(normalized.slice(1))
-  return host === normalized
 }
 
 async function canonical(value: string) {

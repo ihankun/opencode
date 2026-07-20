@@ -5,8 +5,51 @@
  * in sandbox-manager (which imports the schema — circular).
  */
 
-import { isIP } from 'node:net'
+import { BlockList, isIP } from 'node:net'
 import { stripBrackets } from './parent-proxy.js'
+
+const ipPatternCache = new Map<
+  string,
+  { blockList: BlockList; type: 'ipv4' | 'ipv6' }
+>()
+
+export function isIPPattern(pattern: string): boolean {
+  const slash = pattern.lastIndexOf('/')
+  const address = stripBrackets(
+    slash === -1 ? pattern : pattern.slice(0, slash),
+  )
+  const family = isIP(address)
+  if (!family) return false
+  if (slash === -1) return true
+  const prefix = pattern.slice(slash + 1)
+  if (!/^\d+$/.test(prefix)) return false
+  const bits = Number(prefix)
+  return bits >= 0 && bits <= (family === 4 ? 32 : 128)
+}
+
+export function matchesIPPattern(hostname: string, pattern: string): boolean {
+  const host = stripBrackets(hostname)
+  const family = isIP(host)
+  if (!family || !isIPPattern(pattern)) return false
+  const cached = ipPatternCache.get(pattern)
+  const entry = cached ?? createIPBlockList(pattern)
+  if (!cached) ipPatternCache.set(pattern, entry)
+  return entry.blockList.check(host, family === 4 ? 'ipv4' : 'ipv6')
+}
+
+function createIPBlockList(pattern: string) {
+  const slash = pattern.lastIndexOf('/')
+  const address = stripBrackets(
+    slash === -1 ? pattern : pattern.slice(0, slash),
+  )
+  const type = isIP(address) === 4 ? ('ipv4' as const) : ('ipv6' as const)
+  const blockList = new BlockList()
+  if (slash === -1) blockList.addAddress(address, type)
+  if (slash !== -1) {
+    blockList.addSubnet(address, Number(pattern.slice(slash + 1)), type)
+  }
+  return { blockList, type }
+}
 
 /**
  * Match a hostname against a domain pattern.

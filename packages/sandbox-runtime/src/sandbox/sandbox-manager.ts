@@ -73,10 +73,11 @@ import {
   redactUrl,
   resolveParentProxy,
 } from './parent-proxy.js'
-import { matchesDomainPattern } from './domain-pattern.js'
+import { matchesDomainPattern, matchesIPPattern } from './domain-pattern.js'
 import type { ChildProcess } from 'node:child_process'
 import type { ResolvedParentProxy } from './parent-proxy.js'
 import { EOL } from 'node:os'
+import { isIP } from 'node:net'
 import { dirname } from 'node:path'
 
 interface HostNetworkManagerContext {
@@ -192,10 +193,29 @@ async function filterNetworkRequest(
     }
   }
 
+  // Direct IP connections have a separate exact/CIDR policy. Domain rules
+  // intentionally do not grant access to an IP literal with the same text.
+  for (const deniedIP of config.network.deniedIPs ?? []) {
+    if (
+      (deniedIP === '*' && isIP(canonicalHost)) ||
+      matchesIPPattern(canonicalHost, deniedIP)
+    ) {
+      logForDebugging(`Denied by IP config rule: ${host}:${port}`)
+      return false
+    }
+  }
+
   // Check allowed domains
   for (const allowedDomain of config.network.allowedDomains) {
     if (matchesDomainPattern(canonicalHost, allowedDomain)) {
       logForDebugging(`Allowed by config rule: ${host}:${port}`)
+      return true
+    }
+  }
+
+  for (const allowedIP of config.network.allowedIPs ?? []) {
+    if (matchesIPPattern(canonicalHost, allowedIP)) {
+      logForDebugging(`Allowed by IP config rule: ${host}:${port}`)
       return true
     }
   }
