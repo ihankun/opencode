@@ -16,6 +16,7 @@ import { TaskScheduler } from "./scheduler"
 import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
 import { getServerCredential, listServerCredentialIDs, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
+import { shouldUseMockKeychain } from "./keychain"
 
 let mainWindow: BrowserWindow | undefined
 let internalBrowserWindow: BrowserWindow | undefined
@@ -362,14 +363,15 @@ function allowedOrigins(url: string) {
   }
 }
 
-if (process.platform === "darwin" && process.env.OPENCODE_USE_MOCK_KEYCHAIN === "1") {
+const usesMockKeychain = shouldUseMockKeychain({ override: process.env.OPENCODE_USE_MOCK_KEYCHAIN })
+if (usesMockKeychain) {
   app.commandLine.appendSwitch("use-mock-keychain")
 }
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
 initLogging()
-writeLog("main", "app boot", { userData: app.getPath("userData") })
+writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 
 process.on("uncaughtException", (error) => {
   writeLog("main", "uncaughtException", error)
