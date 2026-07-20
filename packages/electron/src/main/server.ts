@@ -134,7 +134,7 @@ function createEnv() {
   return env
 }
 
-function sandboxRuntimeRoot() {
+export function sandboxRuntimeRoot() {
   if (app.isPackaged) return join(process.resourcesPath, "sandbox-runtime")
   return join(dirname(fileURLToPath(import.meta.url)), "../../../sandbox-runtime")
 }

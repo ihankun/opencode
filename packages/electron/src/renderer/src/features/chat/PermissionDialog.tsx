@@ -34,6 +34,10 @@ export function PermissionDialog({
   // 从 metadata 中提取 diff 信息
   const metadata = request.metadata
   const filepath = metadata?.filepath as string | undefined
+  const sandboxUnavailable = request.permission === 'sandbox' && metadata?.reason === 'sandbox_unavailable'
+  const sandboxCommand = sandboxUnavailable && typeof metadata?.command === 'string' ? metadata.command : undefined
+  const sandboxError = sandboxUnavailable && typeof metadata?.error === 'string' ? metadata.error : undefined
+  const requestContent = sandboxCommand || request.patterns?.map(p => p.replace(/\\n/g, '\n')).join('\n\n')
   let diffData = metadata?.diff as string | undefined
 
   // Extract structured filediff if available
@@ -154,12 +158,22 @@ export function PermissionDialog({
               )}
 
               {/* Request */}
-              {request.patterns && request.patterns.length > 0 && (
+              {requestContent && (
                 <ContentBlock
                   label={t('permissionDialog.request')}
-                  content={request.patterns.map(p => p.replace(/\\n/g, '\n')).join('\n\n')}
+                  content={requestContent}
                   language="bash"
                   maxHeight={150}
+                  collapsible={false}
+                />
+              )}
+
+              {sandboxError && (
+                <ContentBlock
+                  label={t('permissionDialog.sandboxRuntimeError')}
+                  content={sandboxError}
+                  language="text"
+                  maxHeight={120}
                   collapsible={false}
                 />
               )}

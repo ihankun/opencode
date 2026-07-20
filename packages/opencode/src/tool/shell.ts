@@ -85,6 +85,7 @@ type Chunk = {
 type RunInput = {
   shell: string
   command: string
+  argv?: string[]
   displayCommand?: string
   hostCommand?: string
   cwd: string
@@ -301,20 +302,30 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
   })
 })
 
-function cmd(shell: string, command: string, cwd: string, env: NodeJS.ProcessEnv) {
-  if (process.platform === "win32" && Shell.ps(shell)) {
-    return ChildProcess.make(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], {
-      cwd,
-      env,
+function cmd(input: RunInput) {
+  if (input.argv?.length) {
+    return ChildProcess.make(input.argv[0], input.argv.slice(1), {
+      shell: false,
+      cwd: input.cwd,
+      env: input.env,
       stdin: "ignore",
       detached: false,
     })
   }
 
-  return ChildProcess.make(command, [], {
-    shell,
-    cwd,
-    env,
+  if (process.platform === "win32" && Shell.ps(input.shell)) {
+    return ChildProcess.make(input.shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", input.command], {
+      cwd: input.cwd,
+      env: input.env,
+      stdin: "ignore",
+      detached: false,
+    })
+  }
+
+  return ChildProcess.make(input.command, [], {
+    shell: input.shell,
+    cwd: input.cwd,
+    env: input.env,
     stdin: "ignore",
     detached: process.platform !== "win32",
   })
@@ -486,7 +497,7 @@ export const ShellTool = Tool.define(
       const code: number | null = yield* Effect.scoped(
         Effect.gen(function* () {
           yield* Effect.addFinalizer(closeSink)
-          const handle = yield* spawner.spawn(cmd(input.shell, input.command, input.cwd, input.env))
+          const handle = yield* spawner.spawn(cmd(input))
 
           yield* Effect.forkScoped(
             Stream.runForEach(Stream.decodeText(handle.all), (chunk) => {
@@ -578,7 +589,7 @@ export const ShellTool = Tool.define(
           always: [`command:${input.hostCommand}`],
           metadata: { command: input.hostCommand, reason: "sandbox_violation" },
         })
-        return yield* run({ ...input, command: input.hostCommand, hostCommand: undefined }, ctx)
+        return yield* run({ ...input, command: input.hostCommand, argv: undefined, hostCommand: undefined }, ctx)
       }
       const end = tail(raw, limits.maxLines, limits.maxBytes)
       if (end.cut) cut = true
@@ -653,25 +664,28 @@ export const ShellTool = Tool.define(
               )
 
               const sandbox = yield* Effect.promise(() =>
-                sandboxCommand(params.command, cwd, instanceCtx.worktree, shell, bypassSandbox),
+                sandboxCommand(params.command, cwd, instanceCtx.worktree, shell, bypassSandbox, ctx.abort),
               )
               if (sandbox.unavailable) {
                 yield* ctx.ask({
                   permission: "sandbox",
                   patterns: ["runtime:unavailable"],
                   always: [],
-                  metadata: { command: params.command, reason: "sandbox_unavailable" },
+                  metadata: { command: params.command, reason: "sandbox_unavailable", error: sandbox.error },
                 })
               }
+
+              const env = yield* shellEnv(ctx, cwd)
 
               return yield* run(
                 {
                   shell,
                   command: sandbox.command,
+                  argv: sandbox.argv,
                   displayCommand: params.command,
                   hostCommand: sandbox.sandboxed ? params.command : undefined,
                   cwd,
-                  env: yield* shellEnv(ctx, cwd),
+                  env: sandbox.env ? { ...env, ...sandbox.env } : env,
                   timeout,
                 },
                 ctx,

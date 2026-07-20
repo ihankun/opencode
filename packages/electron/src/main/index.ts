@@ -10,7 +10,7 @@ import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { exportDebugLogs, initLogging, writeLog } from "./logging"
-import { spawnServer } from "./server"
+import { sandboxRuntimeRoot, spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
 import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
@@ -448,6 +448,15 @@ ipcMain.handle("security:set", async (_event, value: unknown) => {
   await writeSecurityConfig(config)
   await restartServer()
   return config
+})
+ipcMain.handle("security:windows-sandbox-status", windowsSandboxStatus)
+ipcMain.handle("security:windows-sandbox-install", async () => {
+  if (process.platform !== "win32") throw new Error("Windows sandbox installation is only available on Windows")
+  const result = await runWindowsSandbox(["install", "--force"])
+  if (result.code === 10) return { ...(await windowsSandboxStatus()), cancelled: true }
+  if (result.code !== 0) throw new Error(result.stderr || result.stdout || `srt-win install exited ${result.code}`)
+  await restartServer()
+  return windowsSandboxStatus()
 })
 ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
 ipcMain.handle("plugin:inspect", (_event, specs: unknown) => inspectPlugins(specs))
@@ -1111,6 +1120,63 @@ function pluginConfigDir() {
 
 function securityConfigFile() {
   return join(app.getPath("userData"), "security.json")
+}
+
+async function windowsSandboxStatus() {
+  if (process.platform !== "win32") {
+    return { supported: false, available: false, installed: false }
+  }
+  const executable = windowsSandboxExecutable()
+  const available = await access(executable).then(() => true, () => false)
+  if (!available) {
+    return { supported: true, available: false, installed: false, error: `srt-win.exe not found: ${executable}` }
+  }
+  const result = await runWindowsSandbox(["user", "status"])
+  if (result.code !== 0) {
+    return {
+      supported: true,
+      available: true,
+      installed: false,
+      error: result.stderr || result.stdout || `srt-win user status exited ${result.code}`,
+    }
+  }
+  try {
+    const value = JSON.parse(result.stdout) as unknown
+    const root = isRecord(value) ? value : {}
+    const user = isRecord(root.user) ? root.user : {}
+    return {
+      supported: true,
+      available: true,
+      installed: user.exists === true && root.cred_present === true,
+    }
+  } catch (error) {
+    return {
+      supported: true,
+      available: true,
+      installed: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+function windowsSandboxExecutable() {
+  const arch = process.arch === "arm64" ? "arm64" : "x64"
+  return join(sandboxRuntimeRoot(), "vendor", "srt-win", arch, "srt-win.exe")
+}
+
+function runWindowsSandbox(args: string[]) {
+  return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+    const child = spawnProcess(windowsSandboxExecutable(), args, {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+    let stderr = ""
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk) })
+    child.stderr?.on("data", (chunk) => { stderr += String(chunk) })
+    child.once("error", reject)
+    child.once("exit", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }))
+  })
 }
 
 function defaultSecurityConfig(): SecurityConfig {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { CustomOpenCodeSecurityConfig } from '../../../../../preload'
+import type { CustomOpenCodeSecurityConfig, CustomOpenCodeWindowsSandboxStatus } from '../../../../../preload'
 import { SegmentedControl, SettingRow, SettingsSection, Toggle } from './SettingsUI'
 import { useTranslation } from 'react-i18next'
 
@@ -9,9 +9,12 @@ export function SecuritySettings() {
   const { t } = useTranslation('settings')
   const [config, setConfig] = useState<CustomOpenCodeSecurityConfig>()
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [windowsSandbox, setWindowsSandbox] = useState<CustomOpenCodeWindowsSandboxStatus>()
+  const [windowsSandboxBusy, setWindowsSandboxBusy] = useState(false)
 
   useEffect(() => {
     void window.customOpenCode.security().then(setConfig)
+    void window.customOpenCode.windowsSandboxStatus().then(setWindowsSandbox)
   }, [])
 
   if (!config) return <div className="text-sm text-text-400">{t('security.loading')}</div>
@@ -49,6 +52,52 @@ export function SecuritySettings() {
         <div className="rounded-lg border border-accent-main-100/25 bg-accent-main-100/5 px-3 py-2 text-[length:var(--fs-sm)] text-text-300">
           {t('security.permissionDescription')}
         </div>
+        {windowsSandbox?.supported && (
+          <>
+            <SettingRow
+              label={t('security.windowsRuntime')}
+              description={t(
+                windowsSandbox.installed
+                  ? 'security.windowsRuntimeReady'
+                  : windowsSandbox.available
+                    ? 'security.windowsRuntimeNeedsInstall'
+                    : 'security.windowsRuntimeMissing',
+              )}
+            >
+              <button
+                type="button"
+                disabled={windowsSandboxBusy || !windowsSandbox.available}
+                className="rounded-lg border border-border-200 bg-bg-000 px-3 py-1.5 text-[length:var(--fs-sm)] font-medium text-text-100 hover:bg-bg-100 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setWindowsSandboxBusy(true)
+                  void window.customOpenCode.installWindowsSandbox().then(value => {
+                    setWindowsSandbox(value)
+                    setWindowsSandboxBusy(false)
+                  }, error => {
+                    setWindowsSandbox({
+                      ...windowsSandbox,
+                      error: error instanceof Error ? error.message : String(error),
+                    })
+                    setWindowsSandboxBusy(false)
+                  })
+                }}
+              >
+                {t(
+                  windowsSandboxBusy
+                    ? 'security.windowsRuntimeInstalling'
+                    : windowsSandbox.installed
+                      ? 'security.windowsRuntimeRepair'
+                      : 'security.windowsRuntimeInstall',
+                )}
+              </button>
+            </SettingRow>
+            {(windowsSandbox.error || windowsSandbox.cancelled) && (
+              <div className="rounded-lg border border-danger-100/25 bg-danger-100/5 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100">
+                {windowsSandbox.cancelled ? t('security.windowsRuntimeCancelled') : windowsSandbox.error}
+              </div>
+            )}
+          </>
+        )}
         {listField(t('security.denyRead'), t('security.denyReadDescription'), config.sandbox.denyRead, denyRead => setSandbox({ denyRead }))}
         {listField(t('security.allowRead'), t('security.allowReadDescription'), config.sandbox.allowRead, allowRead => setSandbox({ allowRead }))}
         {listField(t('security.allowWrite'), t('security.allowWriteDescription'), config.sandbox.allowWrite, allowWrite => setSandbox({ allowWrite }))}

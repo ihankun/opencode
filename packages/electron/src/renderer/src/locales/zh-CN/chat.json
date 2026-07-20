@@ -211,6 +211,7 @@
     "fromSubtask": "来自 Subtask：{{title}}",
     "changesPreview": "变更预览",
     "request": "请求",
+    "sandboxRuntimeError": "沙箱运行时错误",
     "rule": "规则",
     "allowOnce": "允许一次",
     "alwaysAllow": "始终允许",

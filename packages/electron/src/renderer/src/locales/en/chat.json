@@ -213,6 +213,7 @@
     "fromSubtask": "From subtask: {{title}}",
     "changesPreview": "Changes preview",
     "request": "Request",
+    "sandboxRuntimeError": "Sandbox runtime error",
     "rule": "Rule",
     "allowOnce": "Allow once",
     "alwaysAllow": "Always allow",

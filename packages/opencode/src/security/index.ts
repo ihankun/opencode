@@ -23,20 +23,59 @@ type Config = {
 }
 
 let config: Promise<Config> | undefined
-let initialized: Promise<boolean> | undefined
+type Initialization = { ok: true } | { ok: false; error: string }
+
+type SandboxedCommand = {
+  command: string
+  argv?: string[]
+  env?: NodeJS.ProcessEnv
+  sandboxed: boolean
+  unavailable: boolean
+  configured: boolean
+  error?: string
+}
+
+let initialized: Promise<Initialization> | undefined
 let auditWrite = Promise.resolve()
 const auditedMessages = new Set<string>()
 
-export async function sandboxCommand(command: string, cwd: string, worktree: string, shell: string, bypass: boolean) {
+export async function sandboxCommand(
+  command: string,
+  cwd: string,
+  worktree: string,
+  shell: string,
+  bypass: boolean,
+  abortSignal?: AbortSignal,
+): Promise<SandboxedCommand> {
   const current = await load()
   if (!current.sandbox.enabled) return { command, sandboxed: false, unavailable: false, configured: false }
   if (bypass) return { command, sandboxed: false, unavailable: false, configured: true }
-  if (!(await initialize(current))) return { command, sandboxed: false, unavailable: true, configured: true }
-  return SandboxManager.wrapWithSandbox(command, shell, runtime(current, cwd, worktree))
-    .then((wrapped) => ({ command: wrapped, sandboxed: true, unavailable: false, configured: true }))
+  const ready = await initialize(current, cwd, worktree)
+  if (!ready.ok) {
+    return { command, sandboxed: false, unavailable: true, configured: true, error: ready.error }
+  }
+
+  const wrapped = process.platform === "win32"
+    ? SandboxManager.wrapWithSandboxArgv(command, shell, undefined, abortSignal, cwd).then((value) => ({
+        command,
+        argv: [...value.argv],
+        env: value.env,
+      }))
+    : SandboxManager.wrapWithSandbox(command, shell, runtime(current, cwd, worktree), abortSignal).then((value) => ({
+        command: value,
+      }))
+
+  return wrapped
+    .then((value) => ({ ...value, sandboxed: true, unavailable: false, configured: true }))
     .catch((error) => {
       console.error("[security:sandbox] failed to wrap command", error)
-      return { command, sandboxed: false, unavailable: true, configured: true }
+      return {
+        command,
+        sandboxed: false,
+        unavailable: true,
+        configured: true,
+        error: errorMessage(error),
+      }
     })
 }
 
@@ -227,14 +266,18 @@ function runtime(current: Config, cwd: string, worktree: string): Partial<Sandbo
   }
 }
 
-function initialize(current: Config) {
-  initialized ??= SandboxManager.initialize(runtime(current, os.tmpdir(), os.tmpdir()) as SandboxRuntimeConfig)
-    .then(() => true)
+function initialize(current: Config, cwd: string, worktree: string) {
+  initialized ??= SandboxManager.initialize(runtime(current, cwd, worktree) as SandboxRuntimeConfig)
+    .then(() => ({ ok: true as const }))
     .catch((error) => {
       console.error("[security:sandbox] initialization failed", error)
-      return false
+      return { ok: false as const, error: errorMessage(error) }
     })
   return initialized
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function matches(host: string, pattern: string) {

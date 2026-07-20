@@ -37,6 +37,9 @@ export const InlinePermission = memo(function InlinePermission({
   const metadata = request.metadata
   const diff = metadata?.diff as string | undefined
   const filepath = metadata?.filepath as string | undefined
+  const sandboxUnavailable = request.permission === 'sandbox' && metadata?.reason === 'sandbox_unavailable'
+  const sandboxCommand = sandboxUnavailable && typeof metadata?.command === 'string' ? metadata.command : undefined
+  const sandboxError = sandboxUnavailable && typeof metadata?.error === 'string' ? metadata.error : undefined
 
   let diffData: { before: string; after: string } | string | undefined
   if (metadata?.filediff && typeof metadata.filediff === 'object') {
@@ -54,7 +57,7 @@ export const InlinePermission = memo(function InlinePermission({
 
   const isFileEdit = request.permission === 'edit' || request.permission === 'write'
   const hasPatterns = request.patterns && request.patterns.length > 0
-  const patternsText = hasPatterns ? request.patterns.map(p => p.replace(/\\n/g, '\n')).join('\n\n') : ''
+  const patternsText = sandboxCommand || (hasPatterns ? request.patterns.map(p => p.replace(/\\n/g, '\n')).join('\n\n') : '')
 
   const handleAlways = () => {
     if (autoApproveStore.enabled) {
@@ -92,6 +95,17 @@ export const InlinePermission = memo(function InlinePermission({
             compact={isCompact}
           />
         ) : null)}
+
+      {!contentHidden && sandboxError && (
+        <ContentBlock
+          stateKey={`permission:${request.sessionID}:${request.id}:sandbox-error`}
+          label={t('permissionDialog.sandboxRuntimeError')}
+          content={sandboxError}
+          language="text"
+          collapsible={false}
+          compact={isCompact}
+        />
+      )}
 
       {/* 操作按钮 / 已批准状态 */}
       {resolved ? (

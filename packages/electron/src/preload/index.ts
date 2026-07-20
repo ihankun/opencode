@@ -220,6 +220,14 @@ export type CustomOpenCodeSecurityConfig = {
   }
 }
 
+export type CustomOpenCodeWindowsSandboxStatus = {
+  supported: boolean
+  available: boolean
+  installed: boolean
+  cancelled?: boolean
+  error?: string
+}
+
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
@@ -232,6 +240,8 @@ export type CustomOpenCodeApi = {
   onImBridgeStateChanged(callback: (state: ImBridgeState) => void): () => void
   security(): Promise<CustomOpenCodeSecurityConfig>
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
+  windowsSandboxStatus(): Promise<CustomOpenCodeWindowsSandboxStatus>
+  installWindowsSandbox(): Promise<CustomOpenCodeWindowsSandboxStatus>
   serverCredential(id: string): Promise<CustomOpenCodeServerCredential | undefined>
   setServerCredential(id: string, credential: CustomOpenCodeServerCredential | null): Promise<void>
   hostingCredentials(): Promise<Record<CustomOpenCodeHostingProvider, boolean>>
@@ -303,6 +313,8 @@ const api: CustomOpenCodeApi = {
   },
   security: () => ipcRenderer.invoke("security:get"),
   updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
+  windowsSandboxStatus: () => ipcRenderer.invoke("security:windows-sandbox-status"),
+  installWindowsSandbox: () => ipcRenderer.invoke("security:windows-sandbox-install"),
   serverCredential: (id) => ipcRenderer.invoke("credential:get", id),
   setServerCredential: (id, credential) => ipcRenderer.invoke("credential:set", id, credential),
   hostingCredentials: () => ipcRenderer.invoke("hosting:credentials"),
