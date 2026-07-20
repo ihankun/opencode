@@ -85,9 +85,9 @@ function FieldRenderer({
   const handleBlur = (event: React.FocusEvent<HTMLElement>) => onFieldBlur?.(field.key, event.currentTarget, event.relatedTarget)
   if (field.drill) {
     const d = field.drill
-    return <DrillRow label={field.label} desc={field.desc} badge={field.badge} preview={d.preview} onClick={() => onEnter(field)} onFocus={handleFocus} onBlur={handleBlur} />
+    return <div data-config-field={field.key}><DrillRow label={field.label} desc={field.desc} badge={field.badge} preview={d.preview} onClick={() => onEnter(field)} onFocus={handleFocus} onBlur={handleBlur} /></div>
   }
-  return <FieldRow label={field.label} desc={field.desc} badge={field.badge} block={field.block} control={field.control} onFocus={handleFocus} onBlur={handleBlur} />
+  return <div data-config-field={field.key}><FieldRow label={field.label} desc={field.desc} badge={field.badge} block={field.block} control={field.control} onFocus={handleFocus} onBlur={handleBlur} /></div>
 }
 
 export function GroupedFields({
@@ -176,7 +176,7 @@ export function SectionShell({ id, lang, drillKey, children }: { id: SectionID; 
   const target = useContext(ValidationDrillTargetContext)
   const activeTarget = target?.section === id ? target : null
   return (
-    <div className="min-w-0">
+    <div data-config-section={id} className="min-w-0">
       <div className="mb-4">
         <h3 className="text-[length:var(--fs-heading-2)] font-semibold text-text-100">{tx(meta.en, meta.zh, lang)}</h3>
         <p className="mt-1 text-[length:var(--fs-sm)] leading-relaxed text-text-400">{tx(meta.descEn, meta.descZh, lang)}</p>

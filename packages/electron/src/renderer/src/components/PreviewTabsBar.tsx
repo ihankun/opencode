@@ -100,9 +100,16 @@ export const PreviewTabsBar = memo(function PreviewTabsBar({
                 key={item.id}
                 data-preview-tab-id={item.id}
                 onPointerDown={event => {
+                  if (event.button !== 0) return
                   const target = event.target as HTMLElement
                   if (target.closest('button')) return
                   startInternalDrag(event, { kind: 'preview-tab', id: item.id })
+                }}
+                onMouseDown={event => {
+                  if (event.button !== 1) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onClose(item.id)
                 }}
                 className={
                   isActive

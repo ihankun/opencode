@@ -17,9 +17,12 @@ import {
   CogIcon,
   ArchiveIcon,
   ShieldIcon,
+  GitBranchIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
+import { SettingsSearch } from './SettingsSearch'
+import { SETTINGS_SEARCH_DEFINITIONS, type SettingsSearchItem } from './settingsSearchCatalog'
 const KeybindingsSection = lazy(() => import('./KeybindingsSection').then(module => ({ default: module.KeybindingsSection })))
 const AgentSettings = lazy(() => import('./components/AgentSettings').then(module => ({ default: module.AgentSettings })))
 const AppearanceSettings = lazy(() => import('./components/AppearanceSettings').then(module => ({ default: module.AppearanceSettings })))
@@ -30,13 +33,13 @@ const NotificationSettings = lazy(() => import('./components/NotificationSetting
 const ProviderSettings = lazy(() => import('./components/ProviderSettings').then(module => ({ default: module.ProviderSettings })))
 const ServiceSettings = lazy(() => import('./components/ServiceSettings').then(module => ({ default: module.ServiceSettings })))
 const ServersSettings = lazy(() => import('./components/ServersSettings').then(module => ({ default: module.ServersSettings })))
+const HostingSettings = lazy(() => import('./components/HostingSettings').then(module => ({ default: module.HostingSettings })))
 const WorkspaceSettings = lazy(() => import('./components/WorkspaceSettings').then(module => ({ default: module.WorkspaceSettings })))
 const ConfigSettings = lazy(() => import('./components/ConfigSettings').then(module => ({ default: module.ConfigSettings })))
 const ArchivedSessionsSettings = lazy(() => import('./components/ArchivedSessionsSettings').then(module => ({ default: module.ArchivedSessionsSettings })))
 const SecuritySettings = lazy(() => import('./components/SecuritySettings').then(module => ({ default: module.SecuritySettings })))
 const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
-const ExtensionCenterSettings = lazy(() => import('./components/ExtensionCenterSettings').then(module => ({ default: module.ExtensionCenterSettings })))
 
 // ============================================
 // Types
@@ -52,13 +55,13 @@ export type SettingsTab =
   | 'service'
   | 'config'
   | 'servers'
+  | 'hosting'
   | 'keybindings'
   | 'workspace'
   | 'archived'
   | 'security'
   | 'memory'
   | 'hooks'
-  | 'extensions'
   | 'about'
 
 interface SettingsDialogProps {
@@ -73,6 +76,7 @@ interface SettingsDialogProps {
 
 const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   servers: <GlobeIcon size={15} />,
+  hosting: <GitBranchIcon size={15} />,
   agent: <AgentIcon size={15} />,
   chat: <MessageSquareIcon size={15} />,
   models: <CpuIcon size={15} />,
@@ -88,11 +92,11 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   security: <ShieldIcon size={15} />,
   memory: <AgentIcon size={15} />,
   hooks: <PlugIcon size={15} />,
-  extensions: <PlugIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
   'servers',
+  'hosting',
   'providers',
   'models',
   'agent',
@@ -100,7 +104,6 @@ const TAB_IDS: SettingsTab[] = [
   'archived',
   'memory',
   'hooks',
-  'extensions',
   'security',
   'workspace',
   'appearance',
@@ -113,6 +116,7 @@ const TAB_IDS: SettingsTab[] = [
 
 const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   servers: 'tabs.servers',
+  hosting: 'tabs.hosting',
   agent: 'tabs.agent',
   chat: 'tabs.chat',
   models: 'tabs.models',
@@ -128,11 +132,11 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.security',
   memory: 'tabs.memory',
   hooks: 'tabs.hooks',
-  extensions: 'tabs.extensions',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   servers: 'tabs.serversDesc',
+  hosting: 'tabs.hostingDesc',
   agent: 'tabs.agentDesc',
   chat: 'tabs.chatDesc',
   models: 'tabs.modelsDesc',
@@ -148,11 +152,10 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.securityDesc',
   memory: 'tabs.memoryDesc',
   hooks: 'tabs.hooksDesc',
-  extensions: 'tabs.extensionsDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'archived', 'memory', 'extensions', 'workspace', 'appearance', 'notifications'] },
+  { labelKey: 'groups.core', tabs: ['servers', 'hosting', 'providers', 'models', 'agent', 'chat', 'archived', 'memory', 'workspace', 'appearance', 'notifications'] },
   { labelKey: 'groups.advanced', tabs: ['security', 'hooks', 'service', 'config', 'keybindings', 'about'] },
 ]
 
@@ -182,6 +185,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ConfigSettings />
     case 'servers':
       return <ServersSettings />
+    case 'hosting':
+      return <HostingSettings />
     case 'keybindings':
       return <KeybindingsSection />
     case 'workspace':
@@ -194,8 +199,6 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <MemorySettings />
     case 'hooks':
       return <HooksSettings />
-    case 'extensions':
-      return <ExtensionCenterSettings />
     case 'about':
       return <AboutSettings />
     default:
@@ -214,6 +217,8 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
   const isMobile = useIsMobile()
   const isTauriDesktop = isTauri() && !isMobile
   const scrollRef = useRef<HTMLDivElement>(null)
+  const highlightFrameRef = useRef<number | null>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const normalizeTab = useCallback((next: SettingsDialogProps['initialTab']): SettingsTab => {
     if (!next || next === 'general') return 'chat'
     return next
@@ -247,6 +252,24 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     [visibleTabs, t],
   )
 
+  const searchItems = useMemo<SettingsSearchItem[]>(() => {
+    const tabsById = new Map(visibleTabs.map(visibleTab => [visibleTab.id, visibleTab]))
+    return SETTINGS_SEARCH_DEFINITIONS.flatMap(definition => {
+      const visibleTab = tabsById.get(definition.tab)
+      if (!visibleTab) return []
+      return [{
+        id: `${definition.tab}:${definition.labelKey}:${definition.contextKey ?? ''}`,
+        tab: definition.tab,
+        label: t(definition.labelKey),
+        tabLabel: definition.contextKey ? `${visibleTab.label} · ${t(definition.contextKey)}` : visibleTab.label,
+        description: visibleTab.description,
+        targetLabel: t(definition.targetKey ?? definition.labelKey),
+        fallbackLabel: definition.fallbackKey ? t(definition.fallbackKey) : undefined,
+        targetContext: definition.contextKey ? t(definition.contextKey) : undefined,
+      }]
+    })
+  }, [t, visibleTabs])
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -277,6 +300,23 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     return () => cancelAnimationFrame(frameId)
   }, [isOpen, tab])
 
+  useEffect(
+    () => () => {
+      if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (isOpen) return
+    if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    highlightFrameRef.current = null
+    highlightTimerRef.current = null
+    scrollRef.current?.querySelector('.settings-search-highlight')?.classList.remove('settings-search-highlight')
+  }, [isOpen])
+
   // 切换 tab 时重置滚动位置
   const switchTab = useCallback((nextTab: SettingsTab) => {
     setTab(nextTab)
@@ -284,6 +324,37 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
       scrollRef.current?.scrollTo({ top: 0 })
     })
   }, [])
+
+  const selectSearchItem = useCallback((item: SettingsSearchItem) => {
+    switchTab(item.tab)
+    if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+
+    const locate = (remaining: number) => {
+      const candidates = Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-setting-label]') ?? [])
+      const matching = candidates.filter(candidate =>
+        candidate.dataset.settingLabel === item.targetLabel &&
+        (!item.targetContext || candidate.dataset.settingContext === item.targetContext),
+      )
+      const target = matching[0] ?? candidates.find(candidate => candidate.dataset.settingLabel === item.fallbackLabel)
+      if (!target && remaining > 0) {
+        highlightFrameRef.current = requestAnimationFrame(() => locate(remaining - 1))
+        return
+      }
+      highlightFrameRef.current = null
+      if (!target) return
+      scrollRef.current?.querySelector('.settings-search-highlight')?.classList.remove('settings-search-highlight')
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      target.classList.add('settings-search-highlight')
+      const focusTarget = Array.from(target.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled):not([type="hidden"]):not([tabindex="-1"]), select:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled):not([tabindex="-1"])')).find(candidate => !candidate.closest('[hidden], .hidden, [aria-hidden="true"]'))
+      focusTarget?.focus({ preventScroll: true })
+      highlightTimerRef.current = setTimeout(() => {
+        target.classList.remove('settings-search-highlight')
+        highlightTimerRef.current = null
+      }, 1800)
+    }
+    highlightFrameRef.current = requestAnimationFrame(() => locate(30))
+  }, [switchTab])
 
   const handleTabKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -304,6 +375,15 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
 
   const activeTabMeta = visibleTabs.find(vt => vt.id === tab) || visibleTabs[0]
   const activePanelId = `settings-panel-${tab}`
+  const search = (
+    <SettingsSearch
+      items={searchItems}
+      placeholder={t('search.placeholder')}
+      clearLabel={t('search.clear')}
+      noResultsLabel={t('search.noResults')}
+      onSelect={selectSearchItem}
+    />
+  )
 
   // 移动端：全屏体验，顶部 sticky tab
   if (isMobile) {
@@ -325,6 +405,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
             <div className="flex items-center justify-center px-4 pt-3 pb-2">
               <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{t('title')}</div>
             </div>
+            <div className="px-4 pb-2">{search}</div>
 
             {/* Tab Bar - horizontal scroll with padding for visual safety */}
             <div className="relative">
@@ -401,6 +482,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
               {t('subtitle')}
             </div>
           </div>
+          <div className="px-2.5 xl:px-3 mb-4">{search}</div>
           <div className="space-y-3">
             {groupedTabs.map(group => (
               <div key={group.label}>

@@ -9,7 +9,7 @@ import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 import onigWasmUrl from 'shiki/onig.wasm?url'
 import { bundledLanguagesBase, bundledLanguagesAlias } from 'shiki/langs'
-import type { BundledTheme } from 'shiki/themes'
+import { bundledThemesInfo, type BundledTheme } from 'shiki/themes'
 
 export type ShikiThemeInput = BundledTheme
 
@@ -18,6 +18,11 @@ export type ShikiThemeInput = BundledTheme
 let highlighter: HighlighterCore | null = null
 let initPromise: Promise<HighlighterCore> | null = null
 let onigWasmPromise: Promise<ArrayBuffer> | null = null
+const loadedThemes = new Set<string>(['github-dark-default', 'github-light-default'])
+const loadingThemes = new Map<string, Promise<void>>()
+const themeLoaders = new Map<string, () => Promise<{ default: unknown }>>(
+  bundledThemesInfo.map(theme => [theme.id, theme.import as () => Promise<{ default: unknown }>]),
+)
 
 function loadOnigWasm(): Promise<ArrayBuffer> {
   onigWasmPromise ??= fetch(onigWasmUrl).then(response => {
@@ -94,11 +99,29 @@ export async function ensureLang(lang: string): Promise<boolean> {
   return h.getLoadedLanguages().includes(lang)
 }
 
+async function ensureTheme(theme: BundledTheme) {
+  const h = await getHighlighter()
+  if (loadedThemes.has(theme)) return
+  const pending = loadingThemes.get(theme)
+  if (pending) return pending
+  const loader = themeLoaders.get(theme)
+  if (!loader) throw new Error(`Unsupported Shiki theme: ${theme}`)
+  const promise = loader().then(module => h.loadTheme(module.default as Parameters<HighlighterCore['loadTheme']>[0])).then(() => {
+    loadedThemes.add(theme)
+    loadingThemes.delete(theme)
+  }, error => {
+    loadingThemes.delete(theme)
+    throw error
+  })
+  loadingThemes.set(theme, promise)
+  return promise
+}
+
 // ── 高亮 API（对外封装）────────────────────────────────────
 
 export async function codeToHtml(code: string, opts: { lang: string; theme: ShikiThemeInput }): Promise<string> {
   const h = await getHighlighter()
-  const loaded = await ensureLang(opts.lang)
+  const [loaded] = await Promise.all([ensureLang(opts.lang), ensureTheme(opts.theme)])
   if (!loaded) throw new Error(`Unsupported Shiki language: ${opts.lang}`)
 
   return h.codeToHtml(code, { lang: opts.lang, theme: opts.theme })
@@ -116,15 +139,15 @@ export function codeToHtmlSyncIfLoaded(code: string, opts: { lang: string; theme
 
 export async function codeToTokens(code: string, opts: { lang: string; theme: ShikiThemeInput }) {
   const h = await getHighlighter()
-  const loaded = await ensureLang(opts.lang)
+  const [loaded] = await Promise.all([ensureLang(opts.lang), ensureTheme(opts.theme)])
   if (!loaded) throw new Error(`Unsupported Shiki language: ${opts.lang}`)
 
   return h.codeToTokens(code, { lang: opts.lang, theme: opts.theme })
 }
 
-export async function getLoadedHighlighterForLanguage(lang: string): Promise<HighlighterCore | null> {
+export async function getLoadedHighlighterForLanguage(lang: string, theme?: BundledTheme): Promise<HighlighterCore | null> {
   const h = await getHighlighter()
-  const loaded = await ensureLang(lang)
+  const [loaded] = await Promise.all([ensureLang(lang), theme ? ensureTheme(theme) : Promise.resolve()])
   return loaded ? h : null
 }
 

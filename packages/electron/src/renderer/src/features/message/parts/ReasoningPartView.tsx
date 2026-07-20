@@ -118,6 +118,15 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
       : isPartStreaming
         ? 'text-[length:var(--fs-sm)] leading-5 text-text-200 whitespace-nowrap overflow-hidden text-ellipsis'
         : 'text-[length:var(--fs-sm)] leading-5 text-text-300 whitespace-nowrap overflow-hidden text-ellipsis'
+    const collapsedMarkdownClassName = [
+      'max-h-5 min-w-0 overflow-hidden text-[length:var(--fs-sm)] leading-5',
+      '[&_.markdown-stream-block]:!my-0 [&_.markdown-stream-block]:!leading-5',
+      '[&_p]:!my-0 [&_p]:inline [&_p]:!leading-5',
+      '[&_pre]:!my-0 [&_pre]:inline [&_pre]:whitespace-nowrap',
+      '[&_ul]:!my-0 [&_ul]:inline [&_ol]:!my-0 [&_ol]:inline',
+      '[&_li]:inline [&_li]:after:content-["_·_"] [&_li:last-child]:after:content-none',
+      isPartStreaming ? 'reasoning-shimmer-text' : '',
+    ].join(' ')
 
     const content = shouldUseToggle ? (
       <>
@@ -128,13 +137,21 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
           className="group/reasoning flex w-full min-w-0 items-start gap-2 m-0 border-0 bg-transparent p-0 text-left cursor-pointer text-text-400 hover:text-text-200"
         >
           <div ref={summaryContainerRef} className="relative min-w-0 flex-1 overflow-hidden">
-            <span className="relative inline-block min-w-0 max-w-full align-top">
-              <span
-                className={`block min-w-0 ${isMarkdownMode ? '' : 'italic '} ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}
-              >
-                {expanded ? expandedMetaText : summaryText}
-              </span>
-            </span>
+            <div className="relative inline-block min-w-0 max-w-full align-top">
+              {expanded ? (
+                <span className={`block min-w-0 ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}>
+                  {expandedMetaText}
+                </span>
+              ) : isMarkdownMode ? (
+                <div className={collapsedMarkdownClassName}>
+                  <LazyMarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
+                </div>
+              ) : (
+                <span className={`block min-w-0 italic ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}>
+                  {summaryText}
+                </span>
+              )}
+            </div>
             <span
               ref={summaryMeasureRef}
               aria-hidden="true"

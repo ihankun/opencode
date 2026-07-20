@@ -115,6 +115,7 @@ export interface SettingRowProps {
 export function SettingRow({ label, description, icon, children, onClick, className }: SettingRowProps) {
   return (
     <div
+      data-setting-label={label}
       className={`w-full flex flex-row gap-x-8 gap-y-3 justify-between items-center
         ${onClick ? 'cursor-pointer' : ''}
         ${className || ''}`}
@@ -138,7 +139,7 @@ export function SettingRow({ label, description, icon, children, onClick, classN
  */
 export function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-5 border-b border-border-200/50 last:!border-b-0 mb-7 pb-7 last:mb-0 last:pb-0">
+    <section data-setting-label={title} className="flex flex-col gap-5 border-b border-border-200/50 last:!border-b-0 mb-7 pb-7 last:mb-0 last:pb-0">
       <h2 className="text-[length:var(--fs-base)] font-semibold text-text-100">{title}</h2>
       {children}
     </section>
@@ -162,7 +163,7 @@ export function SettingsCard({
   className?: string
 }) {
   return (
-    <section className={`rounded-xl border border-border-200/55 bg-bg-050/55 p-3.5 ${className || ''}`}>
+    <section data-setting-label={title} className={`rounded-xl border border-border-200/55 bg-bg-050/55 p-3.5 ${className || ''}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <div className="text-[length:var(--fs-md)] font-semibold text-text-100">{title}</div>

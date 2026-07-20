@@ -77,6 +77,7 @@ function McpDetail({ config, setConfig, lang, name }: { config: Config; setConfi
       : type === 'local'
       ? [
           { key: 'command', label: 'command', badge: tx('required', '必填', lang), block: true, desc: tx('Command and arguments, one per line.', '命令和参数，每行一个。', lang), control: <StringListField value={value.command} onChange={v => set({ ...value, command: v })} mono placeholder="npx" /> },
+          { key: 'cwd', label: 'cwd', desc: tx('Working directory for the MCP process.', 'MCP 进程的工作目录。', lang), control: <TextField value={value.cwd} onChange={v => set({ ...value, cwd: v })} mono /> },
           { key: 'environment', label: 'environment', desc: tx('Environment variables for the server process.', '服务进程的环境变量。', lang), drill: { title: 'environment', preview: previewValue(value.environment, lang), render: () => <StringMapField value={value.environment} onChange={v => set({ ...value, environment: v })} /> } },
         ]
       : [

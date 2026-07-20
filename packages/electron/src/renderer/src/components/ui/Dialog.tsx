@@ -185,9 +185,11 @@ export function Dialog({
   const handleFocusTrap = useCallback((e: KeyboardEvent) => {
     if (e.key !== 'Tab' || !dialogRef.current) return
 
-    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    )
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])',
+      ),
+    ).filter(element => !element.hidden && element.getClientRects().length > 0 && !element.closest('[aria-hidden="true"]'))
     if (focusable.length === 0) return
 
     const first = focusable[0]

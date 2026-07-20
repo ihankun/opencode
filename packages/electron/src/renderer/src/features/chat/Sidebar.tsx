@@ -276,6 +276,7 @@ export const Sidebar = memo(function Sidebar({
               onOpenSkills={onOpenSkills}
               onOpenPlugins={onOpenPlugins}
               onOpenTasks={onOpenTasks}
+              onExpandSidebar={onOpen}
               activeNavigation={activeNavigation}
             />
           </div>
@@ -334,6 +335,7 @@ export const Sidebar = memo(function Sidebar({
             onOpenSkills={onOpenSkills}
             onOpenPlugins={onOpenPlugins}
             onOpenTasks={onOpenTasks}
+            onExpandSidebar={onOpen}
             activeNavigation={activeNavigation}
           />
         </div>
@@ -374,6 +376,7 @@ export const Sidebar = memo(function Sidebar({
           onOpenSkills={onOpenSkills}
           onOpenPlugins={onOpenPlugins}
           onOpenTasks={onOpenTasks}
+          onExpandSidebar={onOpen}
           activeNavigation={activeNavigation}
         />
 

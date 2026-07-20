@@ -68,6 +68,7 @@ interface SidePanelProps {
   onOpenSkills?: () => void
   onOpenPlugins?: () => void
   onOpenTasks?: () => void
+  onExpandSidebar?: () => void
   activeNavigation?: 'new' | 'skills' | 'plugins' | 'tasks' | null
   isMobile?: boolean
   isExpanded?: boolean
@@ -259,6 +260,7 @@ export function SidePanel({
   onOpenSkills,
   onOpenPlugins,
   onOpenTasks,
+  onExpandSidebar,
   activeNavigation,
   isMobile = false,
   isExpanded = true,
@@ -1384,6 +1386,35 @@ export function SidePanel({
           <span className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300" style={{ opacity: showLabels ? 1 : 0 }}>{t('sidebar.tasks')}</span>
           {showLabels && enabledTaskCount > 0 && <span className="ml-auto inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100" title={`${enabledTaskCount} 个已开启任务`}>{enabledTaskCount}</span>}
         </button>
+
+        {!showLabels && (
+          <>
+            <button
+              type="button"
+              onClick={onExpandSidebar}
+              aria-label={t('sidebar.projects')}
+              className={navigationItemClass(false)}
+              style={{ width: 32, paddingLeft: 6, paddingRight: 6 }}
+              title={t('sidebar.projects')}
+            >
+              <span className="size-5 flex items-center justify-center shrink-0">
+                <FolderIcon size={16} />
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              aria-label={t('sidebar.search')}
+              className={navigationItemClass(false)}
+              style={{ width: 32, paddingLeft: 6, paddingRight: 6 }}
+              title={t('sidebar.search')}
+            >
+              <span className="size-5 flex items-center justify-center shrink-0">
+                <SearchIcon size={16} />
+              </span>
+            </button>
+          </>
+        )}
 
         {showLabels && (
           <section className="mt-2">

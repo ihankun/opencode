@@ -23,6 +23,29 @@ export function sameValue(a: unknown, b: unknown) {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 }
 
+export function hasOwn(value: unknown, key: string): boolean {
+  return isRecord(value) && Object.prototype.hasOwnProperty.call(value, key)
+}
+
+export function createMergePatch(before: unknown, after: unknown): JsonRecord {
+  const previous = isRecord(before) ? before : {}
+  const next = isRecord(after) ? after : {}
+  return Object.entries(next).reduce<JsonRecord>((patch, [key, value]) => {
+    if (!(key in previous)) {
+      patch[key] = clone(value)
+      return patch
+    }
+    const oldValue = previous[key]
+    if (isRecord(oldValue) && isRecord(value)) {
+      const child = createMergePatch(oldValue, value)
+      if (Object.keys(child).length > 0) patch[key] = child
+      return patch
+    }
+    if (!sameValue(oldValue, value)) patch[key] = clone(value)
+    return patch
+  }, {})
+}
+
 export function getObject(source: unknown, key: string): JsonRecord {
   const value = isRecord(source) ? source[key] : undefined
   return isRecord(value) ? value : {}

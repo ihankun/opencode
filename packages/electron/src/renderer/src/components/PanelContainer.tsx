@@ -547,12 +547,22 @@ const PanelTabButton = memo(function PanelTabButton({
 
   const handlePointerDragStart = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (isEditing) return
+      if (isEditing || event.button !== 0) return
       const target = event.target as HTMLElement
       if (target.closest('button, input')) return
       startInternalDrag(event, { kind: 'panel-tab', position, tabId: tab.id })
     },
     [isEditing, position, tab.id],
+  )
+
+  const handleMiddleClose = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 1 || !onClose) return
+      event.preventDefault()
+      event.stopPropagation()
+      onClose(event)
+    },
+    [onClose],
   )
 
   return (
@@ -562,6 +572,7 @@ const PanelTabButton = memo(function PanelTabButton({
       title={tab.type === 'terminal' ? label : undefined}
       aria-label={tab.type === 'terminal' ? label : undefined}
       onPointerDown={handlePointerDragStart}
+      onMouseDown={handleMiddleClose}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDoubleClick={canRename ? onDoubleClick : undefined}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircleIcon, CheckIcon, CloseIcon, SettingsIcon, UndoIcon } from '../../../components/Icons'
 import { Dialog } from '../../../components/ui/Dialog'
+import { SettingsSearch } from '../SettingsSearch'
 import { getConfig, getGlobalConfig, getProviderConfigs, listAvailableShells, updateGlobalConfig } from '../../../api'
 import type { Config } from '../../../types/api/config'
 import { useCurrentDirectory, useIsMobile } from '../../../hooks'
@@ -10,9 +11,10 @@ import { validateConfig, validationDrillTargetForError, type ValidationDrillTarg
 import { ValidationDrillTargetContext } from './configEditorDrillState'
 import { JsonDraftErrorContext } from './configEditorJsonDraft'
 import { SECTION_IDS, SECTION_META } from './configEditorMeta'
+import { buildConfigEditorSearchItems, type ConfigEditorSearchItem } from './configEditorSearch'
 import { SectionRouter } from './configEditorSections'
 import type { Choice, JsonRecord, SectionID } from './configEditorTypes'
-import { clone, getObject, isRecord, sameValue, tx } from './configEditorUtils'
+import { clone, createMergePatch, getObject, isRecord, sameValue, tx } from './configEditorUtils'
 
 function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { t, i18n } = useTranslation('settings')
@@ -34,7 +36,14 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [validationDrillTarget, setValidationDrillTarget] = useState<ValidationDrillTarget | null>(null)
   const [jsonDraftErrors, setJsonDraftErrors] = useState<Set<string>>(() => new Set())
+  const loadRequestRef = useRef(0)
+  const saveRequestRef = useRef(0)
+  const scrollRef = useRef<HTMLElement>(null)
+  const highlightFrameRef = useRef<number | null>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirty = !sameValue(config, original)
+  const deferredConfig = useDeferredValue(config)
+  const searchItems = useMemo(() => buildConfigEditorSearchItems(deferredConfig as JsonRecord, lang), [deferredConfig, lang])
 
   const reportJsonDraftError = useCallback((id: string, invalid: boolean) => {
     setJsonDraftErrors(prev => {
@@ -51,8 +60,24 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     setValidationDrillTarget(null)
   }, [])
 
+  const canNavigate = useCallback(() => {
+    if (jsonDraftErrors.size === 0) return true
+    setError(tx('Fix the current invalid JSON editor before leaving it.', '离开当前页面前，请先修复无效的 JSON 编辑框。', lang))
+    return false
+  }, [jsonDraftErrors, lang])
+
+  const switchSection = useCallback((next: SectionID) => {
+    if (!canNavigate()) return false
+    setSection(next)
+    setValidationDrillTarget(null)
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0 }))
+    return true
+  }, [canNavigate])
+
   const load = useCallback(async () => {
     if (!isOpen) return
+    const request = ++loadRequestRef.current
+    saveRequestRef.current += 1
     setLoading(true)
     setError(null)
     setSchemaWarning(null)
@@ -74,6 +99,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
           }
         }
       }
+      if (request !== loadRequestRef.current) return
       setOriginal(clone(global))
       setConfig(clone(global))
       setJsonDraftErrors(new Set())
@@ -90,17 +116,31 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       ])
       setModels(modelChoices)
     } catch (err) {
+      if (request !== loadRequestRef.current) return
       setError(err instanceof Error ? err.message : t('config.loadFailed'))
     } finally {
-      setLoading(false)
+      if (request === loadRequestRef.current) setLoading(false)
     }
   }, [directory, isOpen, t])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    if (isOpen) void load()
+    else {
+      loadRequestRef.current += 1
+      saveRequestRef.current += 1
+    }
+  }, [isOpen, load])
+
+  useEffect(
+    () => () => {
+      if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    },
+    [],
+  )
 
   const save = async () => {
+    const request = ++saveRequestRef.current
     setError(null)
     setSchemaWarning(null)
     setValidationErrors([])
@@ -109,11 +149,12 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       setError(tx('Fix invalid JSON editors before saving.', '保存前请先修复无效 JSON 编辑框。', lang))
       return
     }
+    const snapshot = clone(config)
     setValidating(true)
     let officialResult: { errors: ValidationError[]; unavailable?: string }
     try {
       const { validateAgainstOfficialConfigSchema } = await import('./configOfficialValidator')
-      officialResult = await validateAgainstOfficialConfigSchema(config)
+      officialResult = await validateAgainstOfficialConfigSchema(snapshot)
     } catch (error) {
       officialResult = { errors: [], unavailable: error instanceof Error ? error.message : String(error) }
     } finally {
@@ -122,7 +163,8 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     const schemaUnavailableMessage = officialResult.unavailable
       ? tx('Official schema could not be loaded; this save relies on OpenCode server validation.', '无法加载官方 schema；本次保存将依赖 OpenCode 服务端校验。', lang)
       : null
-    const nextValidationErrors = [...officialResult.errors, ...validateConfig(config, lang, original)]
+    if (request !== saveRequestRef.current) return
+    const nextValidationErrors = [...officialResult.errors, ...validateConfig(snapshot, lang, original)]
     if (nextValidationErrors.length > 0) {
       if (schemaUnavailableMessage) setSchemaWarning(schemaUnavailableMessage)
       setValidationErrors(nextValidationErrors)
@@ -130,16 +172,20 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     }
     setSaving(true)
     try {
-      const saved = await updateGlobalConfig(config)
+      const saved = await updateGlobalConfig(createMergePatch(original, snapshot) as Config)
+      if (request !== saveRequestRef.current) return
       setOriginal(clone(saved))
-      setConfig(clone(saved))
-      setEffective(await getConfig(directory))
+      setConfig(current => sameValue(current, snapshot) ? clone(saved) : current)
+      const nextEffective = await getConfig(directory)
+      if (request !== saveRequestRef.current) return
+      setEffective(nextEffective)
       setSchemaWarning(null)
     } catch (err) {
+      if (request !== saveRequestRef.current) return
       if (schemaUnavailableMessage) setSchemaWarning(schemaUnavailableMessage)
       setError(err instanceof Error ? err.message : t('config.saveFailed'))
     } finally {
-      setSaving(false)
+      if (request === saveRequestRef.current) setSaving(false)
     }
   }
 
@@ -158,10 +204,48 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   }, [config, effective])
 
   const openValidationError = (error: ValidationError) => {
+    if (!canNavigate()) return
     const target = validationDrillTargetForError(error)
     setSection(target.section)
     setValidationDrillTarget({ ...target, key: `${error.path}:${Date.now()}` })
   }
+
+  const openSearchItem = useCallback((item: ConfigEditorSearchItem) => {
+    if (!canNavigate()) return false
+    setSection(item.section)
+    setValidationDrillTarget({ section: item.section, stack: item.stack, key: `search:${item.id}:${Date.now()}` })
+    if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    const locate = (remaining: number) => {
+      const fields = Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-config-field]') ?? [])
+      const matches = item.fieldKey ? fields.filter(field => field.dataset.configField === item.fieldKey) : []
+      const target = matches.at(-1) ?? scrollRef.current?.querySelector<HTMLElement>(`[data-config-section="${item.section}"]`)
+      if (!target && remaining > 0) {
+        highlightFrameRef.current = requestAnimationFrame(() => locate(remaining - 1))
+        return
+      }
+      highlightFrameRef.current = null
+      if (!target) return
+      scrollRef.current?.querySelector('.settings-search-highlight')?.classList.remove('settings-search-highlight')
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      target.classList.add('settings-search-highlight')
+      highlightTimerRef.current = setTimeout(() => {
+        target.classList.remove('settings-search-highlight')
+        highlightTimerRef.current = null
+      }, 1800)
+    }
+    highlightFrameRef.current = requestAnimationFrame(() => locate(20))
+  }, [canNavigate])
+
+  const search = (
+    <SettingsSearch
+      items={searchItems}
+      placeholder={tx('Search config fields or JSON paths', '搜索配置字段或 JSON 路径', lang)}
+      clearLabel={tx('Clear search', '清除搜索', lang)}
+      noResultsLabel={tx('No matching config', '没有匹配的配置', lang)}
+      onSelect={openSearchItem}
+    />
+  )
 
   return (
     <Dialog
@@ -187,6 +271,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                     {dirty && <div className="mt-0.5 text-[length:var(--fs-xs)] text-warning-100">{t('config.unsaved')}</div>}
                   </div>
                 </div>
+                <div className="px-4 pb-2">{search}</div>
                 <div className="relative">
                   <div
                     role="tablist"
@@ -199,7 +284,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                         type="button"
                         role="tab"
                         aria-selected={section === id}
-                        onClick={() => setSection(id)}
+                        onClick={() => switchSection(id)}
                         className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[length:var(--fs-md)] font-medium transition-colors ${
                           section === id
                             ? 'border-accent-main-100/30 bg-accent-main-100/10 text-accent-main-100'
@@ -268,7 +353,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             {loading && <div className="border-b border-border-200/50 px-4 py-2 text-[length:var(--fs-xs)] text-text-400">{t('config.loading')}</div>}
             {isMobile ? (
               <>
-                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar overscroll-contain">
+                <main ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar overscroll-contain">
                   <SectionRouter section={section} config={config} setConfig={updateConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
                 </main>
                 <div className="relative shrink-0 px-4 py-3">
@@ -298,12 +383,13 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             ) : (
               <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
                 <aside className="min-w-0 border-r border-border-200/50 p-2">
+                  <div className="mb-2">{search}</div>
                   <div className="space-y-0.5">
                     {SECTION_IDS.map(id => (
                       <button
                         key={id}
                         type="button"
-                        onClick={() => setSection(id)}
+                        onClick={() => switchSection(id)}
                         className={`w-full rounded-lg px-3 py-2 text-left text-[length:var(--fs-sm)] transition-colors ${
                           section === id ? 'bg-accent-main-100/12 font-medium text-accent-main-100' : 'text-text-300 hover:bg-bg-100 hover:text-text-100'
                         }`}
@@ -313,7 +399,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                     ))}
                   </div>
                 </aside>
-                <main className="min-h-0 min-w-0 overflow-y-auto p-5 custom-scrollbar xl:px-6">
+                <main ref={scrollRef} className="min-h-0 min-w-0 overflow-y-auto p-5 custom-scrollbar xl:px-6">
                   <SectionRouter section={section} config={config} setConfig={updateConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
                 </main>
               </div>

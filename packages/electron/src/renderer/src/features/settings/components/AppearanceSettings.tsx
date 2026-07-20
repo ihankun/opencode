@@ -10,6 +10,7 @@ import { FONT_SCALE_MIN, FONT_SCALE_MAX } from '../../../store/themeStore'
 import { saveData } from '../../../utils/downloadUtils'
 import { I18nTrans } from '../../../components/I18nTrans'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { CodeBlockThemeSettings } from './CodeBlockThemeSettings'
 
 // ============================================
 // Theme Preset Card
@@ -600,15 +601,15 @@ export function AppearanceSettings() {
               <p className="text-[length:var(--fs-sm)] text-text-400">{t('appearance.savedOverridesDesc')}</p>
             </div>
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <input
-                  value={snippetName}
-                  onChange={e => setSnippetDraft({ snippetId: activeSnippetId, name: e.target.value })}
-                  placeholder={t('appearance.overrideNamePlaceholder')}
+            <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+              <input
+                value={snippetName}
+                onChange={e => setSnippetDraft({ snippetId: activeSnippetId, name: e.target.value })}
+                placeholder={t('appearance.overrideNamePlaceholder')}
                 className="flex-1 min-w-0 px-3 py-2 text-[length:var(--fs-sm)] bg-bg-200/50 border border-border-200 rounded-lg text-text-100 placeholder:text-text-500 focus:outline-none focus:border-accent-main-100/50"
               />
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap justify-end gap-1.5">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -657,6 +658,8 @@ export function AppearanceSettings() {
           </div>
         </div>
       </SettingsSection>
+
+      <CodeBlockThemeSettings />
 
       <SettingsSection title={t('appearance.display')}>
         <div>

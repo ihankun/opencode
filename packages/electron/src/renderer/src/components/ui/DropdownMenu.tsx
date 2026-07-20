@@ -13,6 +13,7 @@ interface DropdownMenuProps {
   width?: number | string
   minWidth?: number | string
   maxWidth?: number | string
+  zIndex?: number
   /** 移动端（<640px）全宽展开，左右留 gap 间距 */
   mobileFullWidth?: boolean
   /** 约束菜单在此容器的边界内（宽度 ≤ 容器 65%，不溢出左右） */
@@ -33,6 +34,7 @@ export function DropdownMenu({
   width,
   minWidth = '200px',
   maxWidth = 'min(320px, 90vw)',
+  zIndex = 100,
   mobileFullWidth = false,
   constrainToRef,
   className = '',
@@ -168,7 +170,7 @@ export function DropdownMenu({
     <div
       aria-hidden={!isOpen}
       className={`
-        fixed z-[100]
+        fixed
         p-1 glass border border-border-200/60 rounded-xl shadow-lg
         transition-all duration-200 cubic-bezier(0.34, 1.15, 0.64, 1)
         ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
@@ -177,6 +179,7 @@ export function DropdownMenu({
       style={{
         ...posStyle,
         ...sizeStyle,
+        zIndex,
         visibility: isOpen ? 'visible' : 'hidden',
         pointerEvents: isOpen ? 'auto' : 'none',
       }}

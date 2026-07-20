@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useSyncExternalStore } from 'react'
 import { ShikiStreamTokenizer } from 'shiki-stream'
 import {
   codeToHtml,
@@ -10,6 +10,7 @@ import {
 } from '../lib/shiki'
 import { normalizeLanguage } from '../utils/languageUtils'
 import { THEME_SWITCH_DISABLE_MS } from '../constants'
+import { themeStore } from '../store/themeStore'
 
 export type HighlightTokens = Awaited<ReturnType<typeof codeToTokens>>['tokens']
 type FlatShikiToken = HighlightTokens[number][number]
@@ -197,12 +198,23 @@ export function clearHighlightCache() {
 // ============================================
 
 // 根据明暗模式选择 Shiki 官方完整主题。官方主题不依赖项目 preset/customCSS，缓存 key 不应跟这些变化。
-export function getShikiTheme(isDark: boolean): { theme: ShikiThemeInput; key: string } {
-  const theme = isDark ? 'github-dark-default' : 'github-light-default'
+export function getShikiTheme(isDark: boolean, light: string, dark: string): { theme: ShikiThemeInput; key: string } {
+  const theme = (isDark ? dark : light) as ShikiThemeInput
   return {
     theme,
     key: theme,
   }
+}
+
+function codeBlockThemeSnapshot() {
+  const state = themeStore.getState()
+  return `${state.codeBlockThemeLight}|${state.codeBlockThemeDark}`
+}
+
+function useCodeBlockThemes() {
+  useSyncExternalStore(themeStore.subscribe, codeBlockThemeSnapshot)
+  const state = themeStore.getState()
+  return { light: state.codeBlockThemeLight, dark: state.codeBlockThemeDark }
 }
 
 // ============================================
@@ -367,10 +379,11 @@ export function useStreamingSyntaxHighlight(
   const { lang = 'text', theme, enabled = true } = options
   const normalizedLang = normalizeLanguage(lang)
   const isDark = useIsDarkMode()
+  const codeBlockThemes = useCodeBlockThemes()
   const resolvedTheme = useMemo(() => {
     if (theme) return { theme, key: theme }
-    return getShikiTheme(isDark)
-  }, [theme, isDark])
+    return getShikiTheme(isDark, codeBlockThemes.light, codeBlockThemes.dark)
+  }, [theme, isDark, codeBlockThemes.light, codeBlockThemes.dark])
 
   const [outputState, setOutputState] = useState<{ code: string; tokens: HighlightTokens } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -435,7 +448,7 @@ export function useStreamingSyntaxHighlight(
     setIsLoading(true)
 
     async function initTokenizer() {
-      const highlighter = await getLoadedHighlighterForLanguage(normalizedLang)
+      const highlighter = await getLoadedHighlighterForLanguage(normalizedLang, resolvedTheme.theme)
       if (!highlighter || cancelled) {
         if (!cancelled) setIsLoading(false)
         return
@@ -500,14 +513,15 @@ export function useSyntaxHighlight(code: string, options: HighlightOptions & { m
 
   // 自动检测当前主题模式
   const isDark = useIsDarkMode()
+  const codeBlockThemes = useCodeBlockThemes()
 
   // 如果没有指定主题，则根据 isDark 自动选择
   const resolvedTheme = useMemo(() => {
     if (theme) {
       return { theme, key: theme }
     }
-    return getShikiTheme(isDark)
-  }, [theme, isDark])
+    return getShikiTheme(isDark, codeBlockThemes.light, codeBlockThemes.dark)
+  }, [theme, isDark, codeBlockThemes.light, codeBlockThemes.dark])
 
   const cacheKey = useMemo(
     () => getCacheKey(code, normalizedLang, resolvedTheme.key),
@@ -642,12 +656,13 @@ export function useSyntaxHighlightRef(
   const normalizedLang = normalizeLanguage(lang)
 
   const isDark = useIsDarkMode()
+  const codeBlockThemes = useCodeBlockThemes()
   const resolvedTheme = useMemo(() => {
     if (theme) {
       return { theme, key: theme }
     }
-    return getShikiTheme(isDark)
-  }, [theme, isDark])
+    return getShikiTheme(isDark, codeBlockThemes.light, codeBlockThemes.dark)
+  }, [theme, isDark, codeBlockThemes.light, codeBlockThemes.dark])
 
   const tokensRef = useRef<HighlightTokens | null>(null)
   const [version, setVersion] = useState(0)

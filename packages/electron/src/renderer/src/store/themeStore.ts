@@ -10,6 +10,7 @@
 
 import { getThemePreset, themeColorsToCSSVars, builtinThemes, DEFAULT_THEME_ID } from '../themes'
 import type { ThemePreset, ThemeColors } from '../themes'
+import { DEFAULT_CODE_BLOCK_THEME_DARK, DEFAULT_CODE_BLOCK_THEME_LIGHT, normalizeCodeBlockTheme } from '../lib/codeBlockThemes'
 
 // ============================================
 // Color Conversion Utility
@@ -108,20 +109,20 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
 
 const DEFAULT_COMPLETED_AT_FORMAT: CompletedAtFormat = 'time'
 
-const DEFAULT_REASONING_DISPLAY_MODE: ReasoningDisplayMode = 'capsule'
+const DEFAULT_REASONING_DISPLAY_MODE: ReasoningDisplayMode = 'markdown'
 const DEFAULT_RENDER_USER_MARKDOWN = false
 const DEFAULT_DIFF_STYLE: DiffStyle = 'markers'
-const DEFAULT_DESCRIPTIVE_TOOL_STEPS = false
-const DEFAULT_INLINE_TOOL_REQUESTS = false
+const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
+const DEFAULT_INLINE_TOOL_REQUESTS = true
 const DEFAULT_CODE_WORD_WRAP = false
 const DEFAULT_UI_FONT_SCALE = 0
 const DEFAULT_CODE_FONT_SCALE = 0
 
 /** 工具输出渲染风格：classic = 经典（input+output 分离），compact = 精简（只展示 output，header 更矮） */
 export type ToolCardStyle = 'classic' | 'compact'
-const DEFAULT_TOOL_CARD_STYLE: ToolCardStyle = 'classic'
-const DEFAULT_IMMERSIVE_MODE = false
-const DEFAULT_COMPACT_INLINE_PERMISSION = false
+const DEFAULT_TOOL_CARD_STYLE: ToolCardStyle = 'compact'
+const DEFAULT_IMMERSIVE_MODE = true
+const DEFAULT_COMPACT_INLINE_PERMISSION = true
 const DEFAULT_GLASS_EFFECT = true
 const DEFAULT_QUEUE_FOLLOWUP_MESSAGES = true
 const DEFAULT_MANUAL_TERMINAL_TITLES = false
@@ -179,6 +180,10 @@ export interface ThemeState {
   externalFileDropMode: ExternalFileDropMode
   /** 是否在对话历史导航中高亮当前对话位置 */
   outlineCurrentHighlight: boolean
+  /** 亮色模式代码块 Shiki 主题 */
+  codeBlockThemeLight: string
+  /** 暗色模式代码块 Shiki 主题 */
+  codeBlockThemeDark: string
 }
 
 export type ThemeBackup = ThemeState
@@ -212,6 +217,8 @@ const STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES = 'queue-followup-messages'
 const STORAGE_KEY_MANUAL_TERMINAL_TITLES = 'manual-terminal-titles'
 const STORAGE_KEY_EXTERNAL_FILE_DROP_MODE = 'external-file-drop-mode'
 const STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT = 'outline-current-highlight'
+const STORAGE_KEY_CODE_BLOCK_THEME_LIGHT = 'code-block-theme-light'
+const STORAGE_KEY_CODE_BLOCK_THEME_DARK = 'code-block-theme-dark'
 
 // ============================================
 // DOM Style Element IDs
@@ -267,7 +274,7 @@ class ThemeStore {
       savedRenderUserMarkdown === null ? DEFAULT_RENDER_USER_MARKDOWN : savedRenderUserMarkdown === 'true'
     const savedReasoningDisplay = localStorage.getItem(STORAGE_KEY_REASONING_DISPLAY_MODE)
     const reasoningDisplayMode: ReasoningDisplayMode =
-      savedReasoningDisplay === 'italic' || savedReasoningDisplay === 'markdown'
+      savedReasoningDisplay === 'capsule' || savedReasoningDisplay === 'italic' || savedReasoningDisplay === 'markdown'
         ? savedReasoningDisplay
         : DEFAULT_REASONING_DISPLAY_MODE
 
@@ -312,7 +319,7 @@ class ThemeStore {
         : DEFAULT_TOOL_CARD_STYLE
 
     const savedImmersiveMode = localStorage.getItem(STORAGE_KEY_IMMERSIVE_MODE)
-    const immersiveMode = savedImmersiveMode === 'true' ? true : DEFAULT_IMMERSIVE_MODE
+    const immersiveMode = savedImmersiveMode === null ? DEFAULT_IMMERSIVE_MODE : savedImmersiveMode === 'true'
 
     const savedCompactInlinePermission = localStorage.getItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION)
     const compactInlinePermission =
@@ -341,6 +348,15 @@ class ThemeStore {
         ? DEFAULT_OUTLINE_CURRENT_HIGHLIGHT
         : savedOutlineCurrentHighlight === 'true'
 
+    const codeBlockThemeLight = normalizeCodeBlockTheme(
+      localStorage.getItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT) || DEFAULT_CODE_BLOCK_THEME_LIGHT,
+      DEFAULT_CODE_BLOCK_THEME_LIGHT,
+    )
+    const codeBlockThemeDark = normalizeCodeBlockTheme(
+      localStorage.getItem(STORAGE_KEY_CODE_BLOCK_THEME_DARK) || DEFAULT_CODE_BLOCK_THEME_DARK,
+      DEFAULT_CODE_BLOCK_THEME_DARK,
+    )
+
     this.state = {
       presetId: normalizedPreset,
       colorMode: savedMode,
@@ -367,6 +383,8 @@ class ThemeStore {
       manualTerminalTitles,
       externalFileDropMode,
       outlineCurrentHighlight,
+      codeBlockThemeLight,
+      codeBlockThemeDark,
     }
   }
 
@@ -450,6 +468,12 @@ class ThemeStore {
   }
   get outlineCurrentHighlight() {
     return this.state.outlineCurrentHighlight
+  }
+  get codeBlockThemeLight() {
+    return this.state.codeBlockThemeLight
+  }
+  get codeBlockThemeDark() {
+    return this.state.codeBlockThemeDark
   }
 
   /** 获取当前主题预设（内置主题返回对象，自定义返回 undefined） */
@@ -732,6 +756,22 @@ class ThemeStore {
     this.emit()
   }
 
+  setCodeBlockThemeLight(id: string) {
+    const next = normalizeCodeBlockTheme(id, DEFAULT_CODE_BLOCK_THEME_LIGHT)
+    if (this.state.codeBlockThemeLight === next) return
+    this.state = { ...this.state, codeBlockThemeLight: next }
+    localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT, next)
+    this.emit()
+  }
+
+  setCodeBlockThemeDark(id: string) {
+    const next = normalizeCodeBlockTheme(id, DEFAULT_CODE_BLOCK_THEME_DARK)
+    if (this.state.codeBlockThemeDark === next) return
+    this.state = { ...this.state, codeBlockThemeDark: next }
+    localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_DARK, next)
+    this.emit()
+  }
+
   // ---- Theme Application ----
 
   /** 初始化：应用当前主题到 DOM */
@@ -943,7 +983,9 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
         : DEFAULT_STEP_FINISH_DISPLAY,
     completedAtFormat: parsed?.completedAtFormat === 'dateTime' ? 'dateTime' : DEFAULT_COMPLETED_AT_FORMAT,
     reasoningDisplayMode:
-      parsed?.reasoningDisplayMode === 'italic' || parsed?.reasoningDisplayMode === 'markdown'
+      parsed?.reasoningDisplayMode === 'capsule' ||
+      parsed?.reasoningDisplayMode === 'italic' ||
+      parsed?.reasoningDisplayMode === 'markdown'
         ? parsed.reasoningDisplayMode
         : DEFAULT_REASONING_DISPLAY_MODE,
     wideMode: parsed?.wideMode === true,
@@ -980,6 +1022,14 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       typeof parsed?.outlineCurrentHighlight === 'boolean'
         ? parsed.outlineCurrentHighlight
         : DEFAULT_OUTLINE_CURRENT_HIGHLIGHT,
+    codeBlockThemeLight: normalizeCodeBlockTheme(
+      typeof parsed?.codeBlockThemeLight === 'string' ? parsed.codeBlockThemeLight : DEFAULT_CODE_BLOCK_THEME_LIGHT,
+      DEFAULT_CODE_BLOCK_THEME_LIGHT,
+    ),
+    codeBlockThemeDark: normalizeCodeBlockTheme(
+      typeof parsed?.codeBlockThemeDark === 'string' ? parsed.codeBlockThemeDark : DEFAULT_CODE_BLOCK_THEME_DARK,
+      DEFAULT_CODE_BLOCK_THEME_DARK,
+    ),
   }
 }
 
@@ -1023,4 +1073,6 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_MANUAL_TERMINAL_TITLES, String(backup.manualTerminalTitles))
   localStorage.setItem(STORAGE_KEY_EXTERNAL_FILE_DROP_MODE, backup.externalFileDropMode)
   localStorage.setItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT, String(backup.outlineCurrentHighlight))
+  localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT, backup.codeBlockThemeLight)
+  localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_DARK, backup.codeBlockThemeDark)
 }

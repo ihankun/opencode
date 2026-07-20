@@ -214,6 +214,37 @@ describe("experimental HttpApi", () => {
     }),
   )
 
+  it.instance("persists workspace hooks through the experimental API", () =>
+    Effect.gen(function* () {
+      const tmp = yield* TestInstance
+      const initial = yield* request(ExperimentalPaths.hooks, tmp.directory)
+      expect(initial.status).toBe(200)
+      expect(yield* json(initial)).toEqual({ hooks: [], runs: [] })
+
+      const hook = {
+        id: "hook-test",
+        name: "Typecheck",
+        event: "automation.before",
+        command: "bun typecheck",
+        enabled: false,
+        approved: false,
+        sandbox: true,
+        timeoutSeconds: 30,
+      }
+      const updated = yield* request(ExperimentalPaths.hooks, tmp.directory, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hooks: [hook] }),
+      })
+      expect(updated.status).toBe(200)
+      expect(yield* json(updated)).toEqual({ hooks: [hook], runs: [] })
+
+      const persisted = yield* request(ExperimentalPaths.hooks, tmp.directory)
+      expect(persisted.status).toBe(200)
+      expect(yield* json(persisted)).toEqual({ hooks: [hook], runs: [] })
+    }),
+  )
+
   it.instance(
     "serves Console org switch through the default server app",
     () =>

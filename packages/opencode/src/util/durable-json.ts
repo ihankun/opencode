@@ -1,10 +1,10 @@
 import { Flock } from "@opencode-ai/core/util/flock"
 import path from "node:path"
-import { chmod, mkdir, rename, rm } from "node:fs/promises"
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 
 export async function read<T>(file: string, fallback: T): Promise<T> {
   for (const candidate of [file, backup(file)]) {
-    const value = await Bun.file(candidate).json().catch(() => undefined) as T | undefined
+    const value = await readFile(candidate, "utf8").then((text) => JSON.parse(text) as T).catch(() => undefined)
     if (value !== undefined) return value
   }
   return fallback
@@ -24,14 +24,11 @@ export async function update<T, R>(file: string, fallback: T, change: (value: T)
 
 async function writeUnlocked<T>(file: string, value: T) {
   await mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
-  const current = Bun.file(file)
-  if (await current.exists()) {
-    const text = await current.text()
-    if (isJson(text)) await Bun.write(backup(file), text)
-  }
+  const current = await readFile(file, "utf8").catch(() => undefined)
+  if (current !== undefined && isJson(current)) await writeFile(backup(file), current)
 
   const temporary = `${file}.${process.pid}.${Date.now()}.tmp`
-  await Bun.write(temporary, `${JSON.stringify(value, null, 2)}\n`)
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`)
   await chmod(temporary, 0o600).catch(() => undefined)
   await rename(temporary, file).catch(async (error) => {
     await rm(temporary, { force: true }).catch(() => undefined)
