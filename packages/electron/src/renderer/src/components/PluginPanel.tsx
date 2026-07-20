@@ -19,6 +19,7 @@ import { abortInFlightApiRequests, invalidateSDKClient } from '../api/sdk'
 import { useDirectory } from '../hooks'
 import { apiErrorHandler } from '../utils'
 import type { Config } from '../types/api/config'
+import { serverStore } from '../store/serverStore'
 
 type PluginOptions = Record<string, unknown>
 type PluginEntry = string | [string, PluginOptions]
@@ -96,6 +97,34 @@ function parseOptions(value: string) {
   }
 }
 
+async function protectPluginOptions(spec: string, options: PluginOptions, directory?: string) {
+  const secrets: Record<string, string> = {}
+  const visit = (value: unknown, path: string[]): unknown => {
+    if (Array.isArray(value)) return value.map((item, index) => visit(item, [...path, String(index)]))
+    if (!isPlainObject(value)) return value
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+      if (typeof item === 'string' && /(api.?key|token|secret|password|credential|private.?key)/i.test(key) && !/^\{env:[^}]+\}$/.test(item)) {
+        const environmentName = securePluginEnvironmentName(spec, [...path, key].join('_'))
+        if (item) secrets[environmentName] = item
+        return [key, item ? `{env:${environmentName}}` : '']
+      }
+      return [key, visit(item, [...path, key])]
+    }))
+  }
+  const protectedOptions = visit(options, []) as PluginOptions
+  if (!Object.keys(secrets).length) return protectedOptions
+  if (serverStore.getActiveServerId() !== 'local') {
+    throw new Error('远程服务器插件密钥必须在远程主机上配置，OpenCodex 不会把密钥写入远程配置。')
+  }
+  await window.customOpenCode.setSecureEnvironment(`plugin:${directory ?? 'global'}:${spec}`, secrets)
+  return protectedOptions
+}
+
+function securePluginEnvironmentName(spec: string, path: string) {
+  const segment = (value: string) => value.toUpperCase().replace(/[^A-Z0-9_]+/g, '_').replace(/^\d/, '_$&').slice(0, 48)
+  return `OPENCODEX_PLUGIN_${segment(spec)}_${segment(path)}`
+}
+
 async function restartElectronServer() {
   await window.customOpenCode.restartServer()
   abortInFlightApiRequests('Electron server restarted')
@@ -122,6 +151,7 @@ export const PluginPanel = memo(function PluginPanel() {
   const [installMessage, setInstallMessage] = useState<string | null>(null)
   const [pluginMetadata, setPluginMetadata] = useState<Record<string, PluginMetadata>>({})
   const [tab, setTab] = useState<'installed' | 'marketplace'>('installed')
+  const [trustedOnly, setTrustedOnly] = useState(false)
 
   const plugins = useMemo(() => readPlugins(config), [config])
   const configuredSpecs = useMemo(() => new Set(plugins.map(plugin => pluginPackage(pluginSpec(plugin)))), [plugins])
@@ -238,7 +268,14 @@ export const PluginPanel = memo(function PluginPanel() {
       return
     }
 
-    const entry: PluginEntry = hasOptions(options) ? [spec, options] : spec
+    let secureOptions = options
+    try {
+      secureOptions = await protectPluginOptions(spec, options, currentDirectory)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t('pluginPanel.failedToSave'))
+      return
+    }
+    const entry: PluginEntry = hasOptions(secureOptions) ? [spec, secureOptions] : spec
     const nextPlugins =
       dialog?.mode === 'edit'
         ? plugins.map((plugin, index) => (index === dialog.index ? entry : plugin))
@@ -251,22 +288,25 @@ export const PluginPanel = memo(function PluginPanel() {
     } catch {
       setFormError(t('pluginPanel.failedToSave'))
     }
-  }, [dialog, optionsDraft, plugins, savePlugins, specDraft, t])
+  }, [currentDirectory, dialog, optionsDraft, plugins, savePlugins, specDraft, t])
 
   const handleRemove = useCallback(
     async (index: number) => {
       try {
+        const plugin = plugins[index]
+        if (plugin) await window.customOpenCode.setSecureEnvironment(`plugin:${currentDirectory ?? 'global'}:${pluginSpec(plugin)}`, null)
         await savePlugins(plugins.filter((_, pluginIndex) => pluginIndex !== index))
       } catch {
         setError(t('pluginPanel.failedToSave'))
       }
     },
-    [plugins, savePlugins, t],
+    [currentDirectory, plugins, savePlugins, t],
   )
 
   const handleUpdate = useCallback(
     async (index: number, metadata: PluginMetadata) => {
       if (!metadata.latestVersion) return
+      if (metadata.updateChanges.length && !window.confirm(`${t('pluginPanel.updateReview')}\n\n${metadata.updateChanges.join('\n')}`)) return
       const plugin = plugins[index]
       if (!plugin) return
       const options = pluginOptions(plugin)
@@ -285,6 +325,7 @@ export const PluginPanel = memo(function PluginPanel() {
   const handleInstallSearchResult = useCallback(
     async (result: PluginSearchResult) => {
       if (!canUseElectronInstaller) return
+      if (!result.trustedPublisher && !window.confirm(t('pluginPanel.untrustedConfirm', { name: result.name }))) return
       setInstallingSpec(result.name)
       setSearchError(null)
       setInstallMessage(null)
@@ -373,6 +414,7 @@ export const PluginPanel = memo(function PluginPanel() {
                 {searching ? <SpinnerIcon size={12} className="animate-spin" /> : <SearchIcon size={12} />}
                 {t('pluginPanel.search')}
               </button>
+              <label className="flex shrink-0 items-center gap-1.5 text-[length:var(--fs-xs)] text-text-400"><input type="checkbox" checked={trustedOnly} onChange={event => setTrustedOnly(event.target.checked)} />{t('pluginPanel.trustedOnly')}</label>
             </div>
 
             {searchError && <div className="mt-2 text-danger-100 text-[length:var(--fs-xs)]">{searchError}</div>}
@@ -380,7 +422,7 @@ export const PluginPanel = memo(function PluginPanel() {
 
             {searchResults.length > 0 && (
               <div className="mt-3 space-y-1">
-                {searchResults.map(result => (
+                {searchResults.filter(result => !trustedOnly || result.trustedPublisher).map(result => (
                   <PluginSearchRow
                     key={result.name}
                     result={result}
@@ -506,6 +548,7 @@ function PluginSearchRow({
           {result.description || t('pluginPanel.noDescription')}
         </div>
         <div className="mt-1 flex gap-2 text-[length:var(--fs-xxs)] text-text-500"><span>{t('pluginPanel.source', { source: result.source })}</span><span>{t('pluginPanel.downloads', { count: result.downloads.toLocaleString() })}</span>{result.publisher && <span>{t('pluginPanel.publisher', { publisher: result.publisher })}</span>}</div>
+        <div className="mt-1 flex flex-wrap gap-1 text-[length:var(--fs-xxs)]"><span className={`rounded px-1.5 py-0.5 ${result.trustedPublisher ? 'bg-success-100/10 text-success-100' : 'bg-warning-100/10 text-warning-100'}`}>{result.trustedPublisher ? t('pluginPanel.trustedPublisher') : t('pluginPanel.communityPublisher')}</span><span className={`rounded px-1.5 py-0.5 ${result.signatureStatus === 'signed' ? 'bg-success-100/10 text-success-100' : result.signatureStatus === 'integrity' ? 'bg-accent-main-100/10 text-accent-main-100' : 'bg-danger-100/10 text-danger-100'}`}>{t(`pluginPanel.signature_${result.signatureStatus}`)}</span></div>
       </div>
       <button
         type="button"
@@ -565,6 +608,9 @@ function PluginRow({
             {metadata.updateAvailable && <span className="text-warning-100">{t('pluginPanel.updateAvailable')}</span>}
           </div>
         )}
+        {metadata && <div className="mt-1 flex flex-wrap gap-1 text-[length:var(--fs-xxs)]"><span className={`rounded px-1.5 py-0.5 ${metadata.trustedPublisher ? 'bg-success-100/10 text-success-100' : 'bg-warning-100/10 text-warning-100'}`}>{metadata.trustedPublisher ? t('pluginPanel.trustedPublisher') : t('pluginPanel.communityPublisher')}</span><span className="rounded bg-bg-200 px-1.5 py-0.5 text-text-400">{t(`pluginPanel.signature_${metadata.signatureStatus}`)}</span>{metadata.permissions.map(permission => <span key={permission} className="rounded bg-danger-100/5 px-1.5 py-0.5 text-warning-100">{permission}</span>)}</div>}
+        {metadata?.integrity && <div className="mt-1 truncate font-mono text-[length:var(--fs-xxs)] text-text-600" title={metadata.integrity}>{metadata.integrity}</div>}
+        {metadata?.updateAvailable && metadata.updateChanges.length > 0 && <details className="mt-1 text-[length:var(--fs-xxs)] text-text-400"><summary className="cursor-pointer text-warning-100">{t('pluginPanel.updateDiff')}</summary><ul className="mt-1 list-disc pl-4">{metadata.updateChanges.map(change => <li key={change}>{change}</li>)}</ul></details>}
         {metadata?.source === 'local' && <div className="mt-0.5 truncate text-text-500 text-[length:var(--fs-xxs)]">{t('pluginPanel.localPath')}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

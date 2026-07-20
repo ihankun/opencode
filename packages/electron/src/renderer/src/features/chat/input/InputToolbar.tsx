@@ -16,6 +16,7 @@ import {
   HandIcon,
   ShieldIcon,
   PermissionListIcon,
+  MicrophoneIcon,
 } from '../../../components/Icons'
 import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../components/ui'
 import { CircularProgress } from '../../../components/CircularProgress'
@@ -61,6 +62,9 @@ interface InputToolbarProps {
   modelSelectorRef?: React.RefObject<ModelSelectorHandle | null>
   contextStats?: SessionStats
   hasMessages?: boolean
+  voiceSupported?: boolean
+  voiceListening?: boolean
+  onVoiceToggle?: () => void
 }
 
 const approvalModes: ApprovalMode[] = ['ask', 'writes', 'risk', 'full']
@@ -294,6 +298,9 @@ export function InputToolbar({
   modelSelectorRef,
   contextStats,
   hasMessages = false,
+  voiceSupported = false,
+  voiceListening = false,
+  onVoiceToggle,
 }: InputToolbarProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { presentation } = useChatViewport()
@@ -707,6 +714,7 @@ export function InputToolbar({
       {/* Action Buttons */}
       <div className="flex items-center gap-1 min-w-0">
         <ContextUsageIndicator stats={contextStats} hasMessages={hasMessages} />
+        {voiceSupported && <button type="button" onClick={onVoiceToggle} disabled={controlsDisabled} aria-pressed={voiceListening} aria-label={t(voiceListening ? 'inputToolbar.stopVoice' : 'inputToolbar.startVoice')} title={t(voiceListening ? 'inputToolbar.stopVoice' : 'inputToolbar.startVoice')} className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${voiceListening ? 'bg-danger-100/10 text-danger-100' : 'text-text-400 hover:bg-bg-200 hover:text-text-100'}`}><MicrophoneIcon size={15} />{voiceListening && <span className="absolute right-1 top-1 h-1.5 w-1.5 animate-pulse rounded-full bg-danger-100" />}</button>}
         {onModelChange && (
           <div className="min-w-0 max-w-[180px]">
             <ModelSelector

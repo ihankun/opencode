@@ -62,6 +62,11 @@ export interface SettingsBackupFile {
   kind: typeof BACKUP_KIND
   schemaVersion: typeof BACKUP_SCHEMA_VERSION
   createdAt: string
+  manifest?: {
+    included: string[]
+    excluded: string[]
+    containsSecrets: false
+  }
   modules: SettingsBackupModules
 }
 
@@ -158,6 +163,11 @@ export async function exportSettingsBackup(): Promise<{ fileName: string; data: 
     kind: BACKUP_KIND,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     createdAt,
+    manifest: {
+      included: ['theme', 'layout', 'server profiles (without credentials)', 'per-server UI preferences', 'service preferences', 'keybindings', 'notifications', 'sound', 'update preferences'],
+      excluded: ['credentials and API keys', 'OpenCode provider authentication', 'IM bot secrets', 'automations and run history', 'hooks', 'memory files', 'security policy', 'OpenCode project configuration'],
+      containsSecrets: false,
+    },
     modules: {
       theme: exportThemeBackup(),
       layout: exportLayoutBackup(),

@@ -1,6 +1,6 @@
 import { app, utilityProcess } from "electron"
 import type { Details, UtilityProcess } from "electron"
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
@@ -9,6 +9,8 @@ import { writeLog } from "./logging"
 const READY_TEXT = "OhMyOpenclaw started — channels active"
 const STOP_TIMEOUT = 8_000
 const LOG_LIMIT = 300
+const SECRET_MASK = "••••••••"
+const SECRET_CREDENTIAL_ID = "im-bridge.channels"
 
 export class ImBridgeService {
   private child?: UtilityProcess
@@ -18,6 +20,8 @@ export class ImBridgeService {
   constructor(
     private readonly notify: (state: ImBridgeState) => void,
     private readonly credential: (serverId: string) => Promise<{ username: string; password: string } | undefined>,
+    private readonly secretCredential: (id: string) => Promise<Record<string, string> | undefined>,
+    private readonly saveSecretCredential: (id: string, credential: Record<string, string> | null) => Promise<void>,
   ) {}
 
   state() {
@@ -25,19 +29,26 @@ export class ImBridgeService {
   }
 
   async config() {
-    return normalizeConfig(await readFile(this.configFile(), "utf8").then(JSON.parse, () => ({})))
+    const config = await this.resolvedConfig()
+    return applySecrets(config, Object.fromEntries(Object.entries(extractSecrets(config)).map(([key, value]) => [key, value ? SECRET_MASK : ""])))
   }
 
   async save(raw: unknown) {
     const config = normalizeConfig(raw)
+    const existing = await this.secretCredential(SECRET_CREDENTIAL_ID) ?? {}
+    const secrets = Object.fromEntries(Object.entries(extractSecrets(config)).flatMap(([key, value]) => {
+      const next = value === SECRET_MASK ? existing[key] ?? "" : value
+      return next ? [[key, next]] : []
+    }))
+    await this.saveSecretCredential(SECRET_CREDENTIAL_ID, Object.keys(secrets).length ? secrets : null)
     await mkdir(this.root(), { recursive: true, mode: 0o700 })
-    await writeFile(this.configFile(), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+    await writeFile(this.configFile(), `${JSON.stringify(applySecrets(config, {}), null, 2)}\n`, { mode: 0o600 })
     await chmod(this.configFile(), 0o600)
-    return config
+    return applySecrets(config, Object.fromEntries(Object.keys(secrets).map(key => [key, SECRET_MASK])))
   }
 
   async autoStart(localServerUrl?: string) {
-    const config = await this.config()
+    const config = await this.resolvedConfig()
     if (!config.autoStart || this.child) return this.state()
     if (config.serverId === "local" && !localServerUrl) return this.state()
     return this.start(localServerUrl)
@@ -64,6 +75,7 @@ export class ImBridgeService {
       new Promise<void>((resolve) => setTimeout(resolve, STOP_TIMEOUT)),
     ])
     if (this.child === child) this.child = undefined
+    await unlink(this.runtimeConfigFile()).catch(() => undefined)
     this.update({ status: "stopped", logs: this.stateValue.logs })
     return this.state()
   }
@@ -74,7 +86,7 @@ export class ImBridgeService {
   }
 
   private async spawn(localServerUrl?: string) {
-    const config = await this.config()
+    const config = await this.resolvedConfig()
     validateConfig(config)
     const serverUrl = config.serverId === "local" ? localServerUrl : config.serverUrl
     if (!serverUrl) throw new Error("所选 OpenCode 服务器地址不可用")
@@ -101,6 +113,7 @@ export class ImBridgeService {
       app.off("child-process-gone", onProcessGone)
       if (this.child !== child) return
       this.child = undefined
+      void unlink(this.runtimeConfigFile()).catch(() => undefined)
       const stopped = this.stateValue.status === "stopped"
       this.update(stopped
         ? { status: "stopped", logs: this.stateValue.logs }
@@ -158,6 +171,20 @@ export class ImBridgeService {
     await writeFile(this.runtimeConfigFile(), `${JSON.stringify(runtime, null, 2)}\n`, { mode: 0o600 })
     await chmod(this.runtimeConfigFile(), 0o600)
   }
+
+  private async resolvedConfig() {
+    const stored = normalizeConfig(await readFile(this.configFile(), "utf8").then(JSON.parse, () => ({})))
+    const legacy = extractSecrets(stored)
+    const encrypted = await this.secretCredential(SECRET_CREDENTIAL_ID) ?? {}
+    const secrets = { ...legacy, ...encrypted }
+    if (Object.values(legacy).some(Boolean)) {
+      await this.saveSecretCredential(SECRET_CREDENTIAL_ID, secrets)
+      await mkdir(this.root(), { recursive: true, mode: 0o700 })
+      await writeFile(this.configFile(), `${JSON.stringify(applySecrets(stored, {}), null, 2)}\n`, { mode: 0o600 })
+      await chmod(this.configFile(), 0o600)
+    }
+    return applySecrets(stored, secrets)
+  }
 }
 
 function createEnv(config: ImBridgeConfig, serverUrl: string, configPath: string, credential?: { username: string; password: string }) {
@@ -202,6 +229,36 @@ function validateConfig(config: ImBridgeConfig) {
     || config.wechat.enabled
     || (config.dingtalk.enabled && config.dingtalk.appKey && config.dingtalk.appSecret)
   if (!valid) throw new Error("请至少启用并完整配置一个 IM 机器人")
+}
+
+function extractSecrets(config: ImBridgeConfig) {
+  return {
+    "feishu.appSecret": config.feishu.appSecret,
+    "feishu.verificationToken": config.feishu.verificationToken,
+    "feishu.encryptKey": config.feishu.encryptKey,
+    "qq.secret": config.qq.secret,
+    "telegram.botToken": config.telegram.botToken,
+    "discord.botToken": config.discord.botToken,
+    "wechat.token": config.wechat.token,
+    "dingtalk.appSecret": config.dingtalk.appSecret,
+  }
+}
+
+function applySecrets(config: ImBridgeConfig, secrets: Record<string, string>): ImBridgeConfig {
+  return {
+    ...config,
+    feishu: {
+      ...config.feishu,
+      appSecret: secrets["feishu.appSecret"] ?? "",
+      verificationToken: secrets["feishu.verificationToken"] ?? "",
+      encryptKey: secrets["feishu.encryptKey"] ?? "",
+    },
+    qq: { ...config.qq, secret: secrets["qq.secret"] ?? "" },
+    telegram: { ...config.telegram, botToken: secrets["telegram.botToken"] ?? "" },
+    discord: { ...config.discord, botToken: secrets["discord.botToken"] ?? "" },
+    wechat: { ...config.wechat, token: secrets["wechat.token"] ?? "" },
+    dingtalk: { ...config.dingtalk, appSecret: secrets["dingtalk.appSecret"] ?? "" },
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

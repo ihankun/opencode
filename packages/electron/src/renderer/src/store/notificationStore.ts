@@ -9,6 +9,7 @@
 // 由 useGlobalEvents 统一推送，不再由 activeSessionStore 管通知
 
 import { useSyncExternalStore } from 'react'
+import { notificationPolicyStore } from './notificationPolicyStore'
 
 // ============================================
 // Types
@@ -149,21 +150,26 @@ class NotificationStore {
       read: false,
     }
 
-    // 加到历史
-    const notifications = [entry, ...this.state.notifications].slice(0, MAX_NOTIFICATIONS)
+    const grouped = notificationPolicyStore.getSnapshot().groupBySession && sessionId
+      ? this.state.notifications.find(item => item.sessionId === sessionId && item.type === type && Date.now() - item.timestamp < 120_000)
+      : undefined
+    const notifications = grouped
+      ? [{ ...grouped, title, body, timestamp: Date.now(), read: false }, ...this.state.notifications.filter(item => item.id !== grouped.id)].slice(0, MAX_NOTIFICATIONS)
+      : [entry, ...this.state.notifications].slice(0, MAX_NOTIFICATIONS)
 
     // 弹 toast（仅开关打开时）
-    if (this.toastEnabled) {
+    const showToast = this.toastEnabled && notificationPolicyStore.canDeliver('inApp')
+    if (showToast) {
       const toasts = [...this.state.toasts]
       if (toasts.length >= MAX_TOASTS) {
         const oldest = toasts.pop()
         if (oldest) this.clearToastTimer(oldest.notification.id)
       }
-      toasts.unshift({ notification: entry, exiting: false })
+      toasts.unshift({ notification: grouped ? notifications[0] : entry, exiting: false })
       this.state = { ...this.state, toasts, notifications }
       this.persist()
       this.notify()
-      this.scheduleToastDismiss(entry.id)
+      this.scheduleToastDismiss(grouped ? notifications[0].id : entry.id)
     } else {
       this.state = { ...this.state, notifications }
       this.persist()
@@ -171,7 +177,7 @@ class NotificationStore {
     }
 
     // 触发 push 后回调（声音播放等）
-    this.pushListeners.forEach(fn => {
+    if (notificationPolicyStore.canDeliver('sound')) this.pushListeners.forEach(fn => {
       try {
         fn(type)
       } catch {

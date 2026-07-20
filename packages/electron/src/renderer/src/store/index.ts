@@ -35,6 +35,10 @@ export type { AutoApproveRule } from './autoApproveStore'
 
 export { serverStore, makeBasicAuthHeader, exportServerSettingsBackup, importServerSettingsBackup } from './serverStore'
 export { executionTargetStore } from './executionTargetStore'
+export { projectProfileStore, useProjectProfiles } from './projectProfileStore'
+export type { ProjectProfile } from './projectProfileStore'
+export { projectEnvironmentStore, useProjectEnvironmentSnapshots } from './projectEnvironmentStore'
+export type { ProjectEnvironmentSnapshot } from './projectEnvironmentStore'
 export type { ServerConfig, ServerHealth, ServerAuth, ServerSettingsBackup } from './serverStore'
 
 export {
@@ -50,6 +54,8 @@ export type { KeybindingAction, KeybindingBackup, KeybindingConfig, ParsedKeybin
 
 export { themeStore, exportThemeBackup, importThemeBackup } from './themeStore'
 export type { ColorMode, ThemeBackup, ThemeState } from './themeStore'
+export { accessibilityStore, useAccessibilitySettings } from './accessibilityStore'
+export type { AccessibilitySettings } from './accessibilityStore'
 
 export { todoStore, useTodos, useTodoStats, useCurrentTask } from './todoStore'
 export type { SessionTodos } from './todoStore'
@@ -86,6 +92,8 @@ export type {
   NotificationEventConfig,
   NotificationEventSettingsBackup,
 } from './notificationEventSettingsStore'
+export { notificationPolicyStore, useNotificationPolicy } from './notificationPolicyStore'
+export type { NotificationPolicy } from './notificationPolicyStore'
 
 export { followupQueueStore, useFollowupQueue } from './followupQueueStore'
 export type { QueuedFollowupDraft } from './followupQueueStore'

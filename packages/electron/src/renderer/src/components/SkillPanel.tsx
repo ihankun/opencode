@@ -18,6 +18,7 @@ import {
   DownloadIcon,
   CloseIcon,
   TrashIcon,
+  PencilIcon,
 } from './Icons'
 import {
   getMarketplaceDetail,
@@ -583,6 +584,7 @@ function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void;
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
+  const [scaffold, setScaffold] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -595,6 +597,7 @@ function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void;
         name,
         description,
         content,
+        scaffold,
       })
       await props.onDone(skillName)
     } catch (err) {
@@ -624,6 +627,11 @@ function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void;
         onChange={setContent}
         placeholder={t('skillPanel.skillInstructionsPlaceholder')}
       />
+      <label className="flex items-start gap-2 rounded-md border border-border-200/50 bg-bg-100/60 px-3 py-2 text-[length:var(--fs-xs)] text-text-300">
+        <input type="checkbox" checked={scaffold} onChange={event => setScaffold(event.target.checked)} className="mt-0.5" />
+        <span><strong className="block text-text-200">{t('skillPanel.fullScaffold')}</strong>{t('skillPanel.fullScaffoldDesc')}</span>
+      </label>
+      <SkillDiagnostics name={name} description={description} content={content} />
       <SkillDialogActions
         error={error}
         submitting={submitting}
@@ -783,6 +791,7 @@ async function createLocalSkill(input: {
   name: string
   description: string
   content: string
+  scaffold: boolean
 }) {
   const directory = requireHomeDirectory(input.homeDirectory)
   const name = normalizeSkillName(input.name)
@@ -796,8 +805,73 @@ async function createLocalSkill(input: {
     input.content.trim() || `Use this skill for ${name}.`,
     '',
   ].join('\n')
-  await writeSkillFiles(skillDir, [{ path: 'SKILL.md', content: body }])
+  await writeSkillFiles(skillDir, [
+    { path: 'SKILL.md', content: body },
+    ...(input.scaffold ? [
+      { path: 'scripts/example.ts', content: 'export function run(input: string) {\n  return input\n}\n' },
+      { path: 'references/README.md', content: '# References\n\nPut focused reference material used by this skill here.\n' },
+      { path: 'assets/README.md', content: '# Assets\n\nPlace reusable templates and static assets here.\n' },
+    ] : []),
+  ])
   return name
+}
+
+function SkillDiagnostics(props: { name: string; description: string; content: string }) {
+  const { t } = useTranslation(['components'])
+  const diagnostics = validateSkillDraft(props)
+  return (
+    <div className={`rounded-md border px-3 py-2 text-[length:var(--fs-xs)] ${diagnostics.length ? 'border-warning-100/30 bg-warning-100/5 text-warning-100' : 'border-success-100/30 bg-success-100/5 text-success-100'}`}>
+      <div className="font-medium">{t('skillPanel.lintResult')}</div>
+      <div className="mt-1">{diagnostics.length ? diagnostics.join(' · ') : t('skillPanel.lintPassed')}</div>
+    </div>
+  )
+}
+
+function validateSkillDraft(input: { name: string; description: string; content: string }) {
+  return [
+    ...(!input.name.trim() ? ['name is required'] : []),
+    ...(input.name.trim() && !/^[a-z0-9][a-z0-9._-]*$/.test(input.name.trim().toLowerCase().replace(/\s+/g, '-')) ? ['name is invalid'] : []),
+    ...(!input.description.trim() ? ['description is required'] : []),
+    ...(input.description.trim().length > 280 ? ['description is too long'] : []),
+    ...(!input.content.trim() ? ['instructions are empty'] : []),
+    ...(input.content.includes('../') ? ['unsafe relative reference'] : []),
+  ]
+}
+
+function SkillEditDialog(props: { skill: Skill; onClose: () => void; onDone: () => void | Promise<void> }) {
+  const { t } = useTranslation(['components', 'common'])
+  const [description, setDescription] = useState(props.skill.description ?? '')
+  const [content, setContent] = useState(props.skill.content ?? '')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const diagnostics = validateSkillDraft({ name: props.skill.name, description, content })
+  const submit = async () => {
+    if (diagnostics.length) {
+      setError(diagnostics.join(' · '))
+      return
+    }
+    try {
+      setSubmitting(true)
+      setError(null)
+      const location = normalizePath(props.skill.location)
+      const root = location.toLowerCase().endsWith('/skill.md') ? dirname(location) : location
+      await writeSkillFiles(root, [{ path: 'SKILL.md', content: ['---', `name: ${yamlString(props.skill.name)}`, `description: ${yamlString(description.trim())}`, '---', '', content.trim(), ''].join('\n') }])
+      await restartElectronServer()
+      await props.onDone()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('skillPanel.failedToSave'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+  return <SkillDialogFrame title={t('skillPanel.editSkill')} onClose={props.onClose}>
+    <SkillTextField label={t('skillPanel.skillName')} value={props.skill.name} onChange={() => undefined} placeholder="" />
+    <SkillTextField label={t('skillPanel.skillDescription')} value={description} onChange={setDescription} placeholder={t('skillPanel.skillDescriptionPlaceholder')} />
+    <SkillTextArea label={t('skillPanel.skillInstructions')} value={content} onChange={setContent} placeholder={t('skillPanel.skillInstructionsPlaceholder')} />
+    <SkillDiagnostics name={props.skill.name} description={description} content={content} />
+    <div className="rounded-md bg-bg-200/40 px-3 py-2 font-mono text-[length:var(--fs-xxs)] text-text-500">{props.skill.location}</div>
+    <SkillDialogActions error={error} submitting={submitting} submitLabel={t('common:save')} onCancel={props.onClose} onSubmit={() => void submit()} />
+  </SkillDialogFrame>
 }
 
 function yamlString(value: string) {
@@ -1396,6 +1470,7 @@ const SkillItem = memo(function SkillItem(props: {
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [editing, setEditing] = useState(false)
   const canDelete = isUserSkill(skill, props.homeDirectory) && typeof window.customOpenCode?.deleteSkill === 'function'
 
   const deleteSkill = async () => {
@@ -1435,6 +1510,13 @@ const SkillItem = memo(function SkillItem(props: {
             <div className="text-[length:var(--fs-sm)] text-text-400 truncate">{skill.description ?? ''}</div>
           </div>
         </button>
+        {canDelete && <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label={t('skillPanel.editSkill')}
+          title={t('skillPanel.editSkill')}
+          className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-500 opacity-0 transition-all hover:bg-bg-200 hover:text-text-100 group-hover:opacity-100 focus:opacity-100"
+        ><PencilIcon size={13} /></button>}
         {canDelete && (
           <button
             type="button"
@@ -1460,6 +1542,7 @@ const SkillItem = memo(function SkillItem(props: {
       {deleteError ? <div className="mx-2 mb-2 rounded-md bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">{deleteError}</div> : null}
     </div>
     <ConfirmDialog isOpen={deleteConfirm} onClose={() => setDeleteConfirm(false)} onConfirm={() => void deleteSkill()} title={t('skillPanel.deleteSkill')} description={t('skillPanel.deleteSkillConfirm', { name: skill.name })} confirmText={t('common:delete')} variant="danger" isLoading={deleting} />
+    {editing && <SkillEditDialog skill={skill} onClose={() => setEditing(false)} onDone={async () => { setEditing(false); await props.onDeleted(skill.name) }} />}
     </>
   )
 })

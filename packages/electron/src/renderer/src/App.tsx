@@ -993,7 +993,17 @@ function App() {
       <Suspense fallback={null}>
         {utilityPage === 'tasks' ? <TaskPanel onOpenSession={(sessionID, directory) => handleSelectSession({ id: sessionID, directory })} /> : utilityPage === 'plugins' ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="window-drag-region flex shrink-0 items-center gap-1 border-b border-border-200/60 px-5 py-2.5">
+            <div className="window-drag-region shrink-0 border-b border-border-200/60 px-5 pb-3 pt-2.5">
+              <div className="mb-2 flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[length:var(--fs-md)] font-semibold text-text-100">{t('components:extensionHub.title')}</div>
+                  <div className="mt-0.5 text-[length:var(--fs-xs)] text-text-400">{t(`components:extensionHub.${pluginPageTab}Description`)}</div>
+                </div>
+                <div className="rounded-md border border-warning-100/20 bg-warning-100/5 px-2 py-1 text-[length:var(--fs-xxs)] text-warning-100">
+                  {t('components:extensionHub.reviewHint')}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setPluginPageTab('plugins')}
@@ -1015,6 +1025,7 @@ function App() {
               >
                 {t('components:expertKit.nav')}
               </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {pluginPageTab === 'plugins' ? <PluginPanel /> : pluginPageTab === 'mcp' ? <McpPanel /> : <ExpertKitPanel />}
@@ -1033,6 +1044,7 @@ function App() {
       data-sidebar-expanded={sidebarExpanded ? 'true' : 'false'}
       style={appShellStyle}
     >
+      <button type="button" className="skip-to-composer" onClick={() => document.querySelector<HTMLTextAreaElement>('[data-composer-input]')?.focus()}>{t('chat:inputToolbar.skipToComposer')}</button>
       <DesktopTitlebar />
       {isElectron() && getDesktopPlatform() === 'windows' ? (
         <ElectronWindowsTitlebar

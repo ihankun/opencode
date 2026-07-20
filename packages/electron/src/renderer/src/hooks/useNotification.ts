@@ -15,6 +15,7 @@ import {
   STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED,
 } from '../constants/storage'
 import { isTauri } from '../utils/tauri'
+import { notificationPolicyStore } from '../store/notificationPolicyStore'
 
 // ============================================
 // Types
@@ -270,6 +271,7 @@ export function useNotification() {
     async (title: string, body: string, data?: NotificationData, options?: NotificationSendOptions) => {
       if (!enabledRef.current) return false
       if (!options?.bypassFocusCheck && onlyWhenUnfocusedRef.current && isAppVisibleAndFocused()) return false
+      if (!notificationPolicyStore.canDeliver('system', { bypassQuiet: options?.bypassFocusCheck })) return false
 
       // Electron/macOS 原生通知
       if (hasElectronNotificationBridge()) {

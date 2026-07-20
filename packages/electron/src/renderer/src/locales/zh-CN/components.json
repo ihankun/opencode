@@ -1,4 +1,11 @@
 {
+  "extensionHub": {
+    "title": "扩展与能力",
+    "pluginsDescription": "运行时插件可以扩展 OpenCode 的行为；安装前请检查来源、权限和配置变更。",
+    "mcpDescription": "MCP 连接为智能体提供外部工具和数据源，凭据会单独加密保存。",
+    "kitsDescription": "专家包是一组经过组织的技能与配置，可一次安装或更新。",
+    "reviewHint": "安装即授予代码执行能力，请先审查"
+  },
   "commandPalette": {
     "placeholder": "输入命令...",
     "noCommandsFound": "未找到命令"
@@ -65,6 +72,7 @@
     "desktopBridgeUnavailable": "当前平台不支持端口发现或预览截图。"
   },
   "sessionChanges": {
+    "exportArtifact": "导出变更审查产物",
     "loadingChanges": "加载变更中...",
     "failedToLoad": "加载变更失败",
     "failedToInitGit": "初始化 Git 仓库失败",
@@ -150,6 +158,10 @@
     "addToConversation": "加入对话"
   },
   "taskPanel": {
+    "artifacts": "产物",
+    "exportManifest": "导出清单",
+    "noArtifacts": "运行日志或输出中的截图、视频、链接和 PR 会集中显示在这里",
+    "openArtifact": "打开产物",
     "title": "自动化",
     "subtitle": "按计划自动启动 OpenCodex 任务",
     "loadFailed": "读取自动化任务失败",
@@ -234,6 +246,12 @@
     "removeConfirm": "移除 MCP 服务器“{{name}}”？它的配置会被删除。"
   },
   "skillPanel": {
+    "fullScaffold": "创建完整技能脚手架",
+    "fullScaffoldDesc": "同时创建 scripts、references 与 assets 目录，便于后续扩展和版本管理。",
+    "lintResult": "技能检查",
+    "lintPassed": "结构、命名和必填内容检查通过",
+    "editSkill": "编辑技能",
+    "failedToSave": "保存技能失败",
     "title": "技能",
     "filterPlaceholder": "筛选技能...",
     "loadingSkills": "加载技能...",
@@ -329,6 +347,15 @@
     "forceConflict": "套件中的技能已存在或有本地修改。继续会覆盖冲突内容，确定继续吗？"
   },
   "pluginPanel": {
+    "trustedOnly": "仅可信发布者",
+    "trustedPublisher": "可信发布者",
+    "communityPublisher": "社区发布者",
+    "signature_signed": "签名已验证",
+    "signature_integrity": "完整性校验",
+    "signature_unverified": "未验证",
+    "updateDiff": "更新差异",
+    "updateReview": "安装更新前请审查以下差异：",
+    "untrustedConfirm": "{{name}} 不是内置信任的发布者。插件拥有代码执行、文件和环境访问能力，确认继续安装？",
     "installed": "已安装",
     "marketplace": "插件市场",
     "marketplaceHint": "搜索插件市场中的插件",

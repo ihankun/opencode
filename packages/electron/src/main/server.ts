@@ -25,7 +25,7 @@ const SIDECAR_SERVICE_NAME = "opencodex server"
 const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
-export async function spawnServer(userDataPath: string, cors: string[]): Promise<SidecarHandle> {
+export async function spawnServer(userDataPath: string, cors: string[], secureEnvironment: Record<string, string> = {}): Promise<SidecarHandle> {
   // Port 0 keeps 4096 as the preferred address, then lets the server fall back
   // to an OS-assigned free port when another OpenCodex instance is running.
   const port = 0
@@ -34,7 +34,7 @@ export async function spawnServer(userDataPath: string, cors: string[]): Promise
   writeLog("server", "spawning opencode sidecar", { cors, port, workspacePath })
   const child = utilityProcess.fork(join(dirname(fileURLToPath(import.meta.url)), "sidecar.js"), [], {
     cwd: workspacePath,
-    env: createEnv(),
+    env: createEnv(secureEnvironment),
     serviceName: SIDECAR_SERVICE_NAME,
     stdio: "pipe",
   })
@@ -123,7 +123,7 @@ export async function spawnServer(userDataPath: string, cors: string[]): Promise
   }
 }
 
-function createEnv() {
+function createEnv(secureEnvironment: Record<string, string>) {
   const env = Object.fromEntries(
     Object.entries(process.env).flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),
   )
@@ -131,6 +131,7 @@ function createEnv() {
   if (process.platform === "linux") delete env.LD_PRELOAD
   env.OPENCODE_SERVER_MODULE = serverModuleUrl()
   env.OPENCODE_SANDBOX_RUNTIME_ROOT = sandboxRuntimeRoot()
+  Object.assign(env, secureEnvironment)
   return env
 }
 

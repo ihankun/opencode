@@ -95,6 +95,7 @@ import {
   ZoomIn,
   ZoomOut,
   MoreHorizontal,
+  Mic,
 } from 'lucide-react'
 
 export interface IconProps extends SVGProps<SVGSVGElement> {
@@ -195,6 +196,7 @@ export const WifiOffIcon = wrap(WifiOff)
 export const BellIcon = wrap(Bell)
 export const DownloadIcon = wrap(Download)
 export const PinIcon = wrap(Pin)
+export const MicrophoneIcon = wrap(Mic)
 
 // Aliases
 export const ComposeIcon = wrap(SquarePen)

@@ -1,4 +1,11 @@
 {
+  "extensionHub": {
+    "title": "Extensions & capabilities",
+    "pluginsDescription": "Runtime plugins can extend OpenCode behavior. Review provenance, permissions, and config changes before installing.",
+    "mcpDescription": "MCP connections provide external tools and data sources; credentials are stored separately and encrypted.",
+    "kitsDescription": "Expert kits bundle organized skills and configuration for one-step installation and updates.",
+    "reviewHint": "Install grants code execution; review first"
+  },
   "commandPalette": {
     "placeholder": "Type a command...",
     "noCommandsFound": "No commands found"
@@ -65,6 +72,7 @@
     "desktopBridgeUnavailable": "Port discovery and preview capture are unavailable on this platform."
   },
   "sessionChanges": {
+    "exportArtifact": "Export change-review artifact",
     "loadingChanges": "Loading changes...",
     "failedToLoad": "Failed to load changes",
     "failedToInitGit": "Failed to initialize Git repository",
@@ -151,6 +159,10 @@
     "addToConversation": "Add to conversation"
   },
   "taskPanel": {
+    "artifacts": "Artifacts",
+    "exportManifest": "Export manifest",
+    "noArtifacts": "Logs, screenshots, videos, links, and pull requests emitted by runs appear here",
+    "openArtifact": "Open artifact",
     "title": "Automations",
     "subtitle": "Start OpenCodex tasks on a schedule",
     "loadFailed": "Failed to load automations",
@@ -346,6 +358,12 @@
     "removeConfirm": "Remove MCP server “{{name}}”? Its configuration will be deleted."
   },
   "skillPanel": {
+    "fullScaffold": "Create full skill scaffold",
+    "fullScaffoldDesc": "Also create scripts, references, and assets directories for future extension and version control.",
+    "lintResult": "Skill validation",
+    "lintPassed": "Structure, naming, and required content checks passed",
+    "editSkill": "Edit skill",
+    "failedToSave": "Failed to save skill",
     "title": "Skills",
     "filterPlaceholder": "Filter skills...",
     "loadingSkills": "Loading skills...",
@@ -441,6 +459,15 @@
     "forceConflict": "A skill already exists or has local changes. Continuing will overwrite conflicting content. Continue?"
   },
   "pluginPanel": {
+    "trustedOnly": "Trusted publishers only",
+    "trustedPublisher": "Trusted publisher",
+    "communityPublisher": "Community publisher",
+    "signature_signed": "Signature verified",
+    "signature_integrity": "Integrity checked",
+    "signature_unverified": "Unverified",
+    "updateDiff": "Update diff",
+    "updateReview": "Review these changes before installing the update:",
+    "untrustedConfirm": "{{name}} is not from a built-in trusted publisher. Plugins can execute code and access files and environment variables. Continue?",
     "installed": "Installed",
     "marketplace": "Plugin Marketplace",
     "marketplaceHint": "Search plugins in the marketplace",

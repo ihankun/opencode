@@ -38,6 +38,7 @@ import { apiErrorHandler } from '../utils'
 import { openUrl } from '../utils/browserOpen'
 import { Button, Dialog } from './ui'
 import { ConfirmDialog } from './ui/ConfirmDialog'
+import { serverStore } from '../store/serverStore'
 
 // ============================================
 // Types
@@ -56,6 +57,11 @@ type McpMarketItem = Awaited<ReturnType<typeof window.customOpenCode.searchMcpSe
 
 interface McpPanelProps {
   isResizing?: boolean
+}
+
+function secureEnvironmentName(name: string, key: string) {
+  const segment = (value: string) => value.toUpperCase().replace(/[^A-Z0-9_]+/g, '_').replace(/^\d/, '_$&').slice(0, 48)
+  return `OPENCODEX_MCP_${segment(name)}_${segment(key)}`
 }
 
 export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpPanelProps) {
@@ -224,7 +230,18 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
   const installMarketItem = useCallback(async (item: McpMarketItem, environment: Record<string, string>) => {
     setActionLoading(item.name)
     try {
-      const config = item.config.type === 'local' && item.requiredEnvironment.length > 0 ? { ...item.config, environment } : item.config
+      if (item.requiredEnvironment.length > 0 && serverStore.getActiveServerId() !== 'local') {
+        throw new Error('远程服务器的环境变量必须在远程主机上配置，OpenCodex 不会把密钥写入远程配置文件。')
+      }
+      const scope = `mcp:${currentDirectory ?? 'global'}:${item.name}`
+      const secureEnvironment = Object.fromEntries(Object.entries(environment).map(([key, value]) => [secureEnvironmentName(item.name, key), value]))
+      if (Object.keys(secureEnvironment).length) await window.customOpenCode.setSecureEnvironment(scope, secureEnvironment)
+      const config = item.config.type === 'local' && item.requiredEnvironment.length > 0
+        ? {
+            ...item.config,
+            environment: Object.fromEntries(item.requiredEnvironment.map(key => [key, `{env:${secureEnvironmentName(item.name, key)}}`])),
+          }
+        : item.config
       await addMcpServer(item.name, config as McpServerConfig, currentDirectory)
       await window.customOpenCode.setMcpMarketplaceSource({ directory: currentDirectory, name: item.name, provider: item.provider })
       await window.customOpenCode.restartServer()
@@ -250,6 +267,7 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
     setActionLoading(name)
     try {
       await removeMcpServer(name, currentDirectory)
+      await window.customOpenCode.setSecureEnvironment(`mcp:${currentDirectory ?? 'global'}:${name}`, null)
       await window.customOpenCode.setMcpMarketplaceSource({ directory: currentDirectory, name, provider: null })
       await window.customOpenCode.restartServer()
       await loadStatus()

@@ -174,6 +174,11 @@ export function AboutSettings() {
               {t('about.backupWarning')}
             </div>
 
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-success-100/25 bg-success-100/5 px-3 py-3"><div className="mb-2 text-[length:var(--fs-xs)] font-semibold text-success-100">{i18n.language.startsWith('zh') ? '包含' : 'Included'}</div><ul className="space-y-1 text-[length:var(--fs-xs)] text-text-300"><li>• {i18n.language.startsWith('zh') ? '主题、布局、快捷键和通知' : 'Theme, layout, keybindings, notifications'}</li><li>• {i18n.language.startsWith('zh') ? '服务器地址与默认项（不含凭据）' : 'Server profiles without credentials'}</li><li>• {i18n.language.startsWith('zh') ? '每服务器 UI、声音和更新偏好' : 'Per-server UI, sound, and update preferences'}</li></ul></div>
+              <div className="rounded-lg border border-warning-100/25 bg-warning-100/5 px-3 py-3"><div className="mb-2 text-[length:var(--fs-xs)] font-semibold text-warning-100">{i18n.language.startsWith('zh') ? '不包含，需要重新配置' : 'Excluded; reconfiguration required'}</div><ul className="space-y-1 text-[length:var(--fs-xs)] text-text-300"><li>• {i18n.language.startsWith('zh') ? '密码、API Key、Token 和 IM Secret' : 'Passwords, API keys, tokens, IM secrets'}</li><li>• {i18n.language.startsWith('zh') ? '自动化、Hooks、Memory 和安全策略' : 'Automations, hooks, memory, security policy'}</li><li>• {i18n.language.startsWith('zh') ? 'OpenCode 全局/项目配置' : 'OpenCode global/project configuration'}</li></ul></div>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" isLoading={backupBusy === 'export'} onClick={handleExportBackup}>
                 {backupBusy !== 'export' && <DownloadIcon size={12} />}

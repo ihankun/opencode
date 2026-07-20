@@ -231,6 +231,9 @@
     "recentProjects": "Recent projects"
   },
   "inputToolbar": {
+    "skipToComposer": "Skip to conversation composer",
+    "startVoice": "Start voice input",
+    "stopVoice": "Stop voice input",
     "default": "Default",
     "variants": {
       "default": "Default",
@@ -395,6 +398,15 @@
     "description": "This connects the OpenCode Zen API key, not the console.opencode.ai Console account."
   },
   "sessionSearch": {
+    "tagPrompt": "Enter tags separated by commas",
+    "allTags": "All tags",
+    "tags": "Tags",
+    "fork": "Fork",
+    "handoff": "Handoff",
+    "handoffPrompt": "Enter the target Runner name. Available: {{servers}}",
+    "noHandoffServer": "No other online Runner. Add and connect one under Settings > Servers.",
+    "noHandoffModel": "This conversation has no reusable model information yet.",
+    "handoffInstruction": "This task was handed off from another Runner. Review the recent transcript, confirm the current state, and continue:",
     "title": "Search chats",
     "placeholder": "Search chat titles or content",
     "recentChats": "Recent chats",
@@ -436,6 +448,10 @@
     "taskCreatedTitle": "Automation created"
   },
   "contextDetails": {
+    "sources": "Context sources",
+    "sourceEstimate": "Share is estimated from loaded message-part size and excludes server-side system prompts.",
+    "projectContributors": "Project contributors",
+    "directory": "Directory",
     "context": "Context",
     "session": "Session",
     "messages": "Messages",

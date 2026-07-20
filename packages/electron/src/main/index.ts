@@ -15,7 +15,7 @@ import { sandboxRuntimeRoot, spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
 import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
-import { getServerCredential, listServerCredentialIDs, setServerCredential } from "./credentials"
+import { getSecureCredential, getServerCredential, listServerCredentialIDs, setSecureCredential, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
 import { shouldUseMockKeychain } from "./keychain"
 import { ImBridgeService } from "./imBridge"
@@ -34,6 +34,8 @@ const appId = "com.hankun.opencodex"
 const imBridgeService = new ImBridgeService(
   (state) => mainWindow?.webContents.send("im-bridge:state", state),
   getServerCredential,
+  getSecureCredential,
+  setSecureCredential,
 )
 const taskScheduler = new TaskScheduler(async (task) => {
   if (task.serverId === "local" && server) return server.state
@@ -114,6 +116,18 @@ ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) =
   }
   return setServerCredential(id, { username: credential.username, password: credential.password })
 })
+ipcMain.handle("secure-environment:set", (_event, scope: unknown, rawValues: unknown) => {
+  if (typeof scope !== "string" || !scope.trim() || scope.length > 500) throw new Error("Invalid secure environment scope")
+  const id = `environment.${createHash("sha256").update(scope).digest("hex").slice(0, 24)}`
+  if (rawValues === null) return setSecureCredential(id, null)
+  if (!isRecord(rawValues)) throw new Error("Invalid secure environment values")
+  const values = Object.entries(rawValues).reduce<Record<string, string>>((result, [key, value]) => {
+    if (!/^[A-Z_][A-Z0-9_]{0,127}$/.test(key) || typeof value !== "string") throw new Error("Invalid secure environment entry")
+    result[key] = value
+    return result
+  }, {})
+  return setSecureCredential(id, Object.keys(values).length ? values : null)
+})
 ipcMain.handle("hosting:credentials", async () => {
   const ids = new Set(await listServerCredentialIDs())
   return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, ids.has(`hosting.${provider}`)]))
@@ -139,6 +153,11 @@ type NpmPackageManifest = {
   exports?: unknown
   main?: string
   "oc-themes"?: unknown
+  dist?: { integrity?: string; signatures?: Array<{ keyid?: string; sig?: string }> }
+  maintainers?: Array<{ name?: string }>
+  dependencies?: Record<string, string>
+  scripts?: Record<string, string>
+  repository?: string | { url?: string }
 }
 
 type NpmSearchPackage = {
@@ -344,7 +363,7 @@ function setDockIcon() {
 async function startServer(url: string) {
   try {
     serverError = undefined
-    server = await spawnServer(app.getPath("userData"), allowedOrigins(url))
+    server = await spawnServer(app.getPath("userData"), allowedOrigins(url), await secureEnvironment())
     mainWindow?.webContents.send("server:updated", currentServerState())
     void syncImBridgeServer(server.state.url).catch((error) => writeLog("im-bridge", "automatic start failed", error))
   } catch (error) {
@@ -388,6 +407,12 @@ function allowedOrigins(url: string) {
   } catch {
     return defaults
   }
+}
+
+async function secureEnvironment() {
+  const ids = (await listServerCredentialIDs()).filter(id => id.startsWith("environment."))
+  const credentials = await Promise.all(ids.map(id => getSecureCredential(id)))
+  return Object.assign({}, ...credentials.filter((item): item is Record<string, string> => Boolean(item)))
 }
 
 const usesMockKeychain = shouldUseMockKeychain({ override: process.env.OPENCODE_USE_MOCK_KEYCHAIN })
@@ -446,6 +471,7 @@ function notifyScheduledTaskFinished(run: ScheduledTaskRun, task: ScheduledTask)
 ipcMain.handle("server:get", currentServerState)
 ipcMain.handle("server:restart", restartServer)
 ipcMain.handle("security:get", readSecurityConfig)
+ipcMain.handle("security:audit", readSecurityAudit)
 ipcMain.handle("security:set", async (_event, value: unknown) => {
   const config = normalizeSecurityConfig(value)
   await writeSecurityConfig(config)
@@ -621,9 +647,10 @@ async function searchPlugins(raw: string) {
     return true
   })
   return Promise.all(unique.map(async (item) => {
-    const [downloads, compatibility] = await Promise.all([
+    const [downloads, compatibility, manifest] = await Promise.all([
       npmDownloads(item.name),
       inspectPluginCompatibility(item.name, item.version, exact),
+      exact?.name === item.name ? Promise.resolve(exact) : readNpmManifest(`${item.name}@${item.version || "latest"}`).catch(() => undefined),
     ])
     return {
       ...item,
@@ -631,6 +658,8 @@ async function searchPlugins(raw: string) {
       url: `https://www.npmjs.com/package/${item.name}`,
       downloads,
       compatibility,
+      trustedPublisher: isTrustedPluginPublisher(item.name, item.publisher),
+      signatureStatus: pluginSignatureStatus(manifest),
     }
   }))
 }
@@ -662,11 +691,19 @@ async function inspectPlugins(value: unknown) {
         source: "local" as const,
         url: "",
         updateAvailable: false,
+        trustedPublisher: false,
+        signatureStatus: "unverified" as const,
+        integrity: "",
+        permissions: ["code-execution", "filesystem", "environment"],
+        updateChanges: [],
       }
     }
 
     const parsed = parseNpmSpecifier(spec)
-    const latest = await readNpmManifest(parsed.name).catch(() => undefined)
+    const [latest, configured] = await Promise.all([
+      readNpmManifest(parsed.name).catch(() => undefined),
+      readNpmManifest(`${parsed.name}@${parsed.version}`).catch(() => undefined),
+    ])
     const configuredVersion = parsed.version === "latest" ? "" : parsed.version
     const latestVersion = latest?.version ?? ""
     return {
@@ -677,8 +714,37 @@ async function inspectPlugins(value: unknown) {
       source: "npm" as const,
       url: `https://www.npmjs.com/package/${parsed.name}`,
       updateAvailable: Boolean(configuredVersion && latestVersion && configuredVersion !== latestVersion),
+      trustedPublisher: isTrustedPluginPublisher(parsed.name, latest?.maintainers?.[0]?.name ?? ""),
+      signatureStatus: pluginSignatureStatus(configured ?? latest),
+      integrity: configured?.dist?.integrity ?? latest?.dist?.integrity ?? "",
+      permissions: ["code-execution", "filesystem", "environment", ...(Object.keys(configured?.dependencies ?? {}).some(name => /http|fetch|request|socket|ws/i.test(name)) ? ["network"] : [])],
+      updateChanges: pluginUpdateChanges(configured, latest),
     }
   }))
+}
+
+function pluginSignatureStatus(manifest?: NpmPackageManifest) {
+  if (manifest?.dist?.signatures?.some(item => item.sig && item.keyid)) return "signed" as const
+  if (manifest?.dist?.integrity) return "integrity" as const
+  return "unverified" as const
+}
+
+function isTrustedPluginPublisher(name: string, publisher: string) {
+  return name.startsWith("@opencode-ai/") || name.startsWith("@anomalyco/") || publisher === "opencode" || publisher === "anomalyco"
+}
+
+function pluginUpdateChanges(configured?: NpmPackageManifest, latest?: NpmPackageManifest) {
+  if (!configured || !latest || configured.version === latest.version) return []
+  const currentDependencies = new Set(Object.keys(configured.dependencies ?? {}))
+  const nextDependencies = new Set(Object.keys(latest.dependencies ?? {}))
+  const added = [...nextDependencies].filter(name => !currentDependencies.has(name))
+  const removed = [...currentDependencies].filter(name => !nextDependencies.has(name))
+  return [
+    `version ${configured.version ?? "?"} → ${latest.version ?? "?"}`,
+    ...(added.length ? [`dependencies added: ${added.join(", ")}`] : []),
+    ...(removed.length ? [`dependencies removed: ${removed.join(", ")}`] : []),
+    ...(JSON.stringify(configured.scripts ?? {}) !== JSON.stringify(latest.scripts ?? {}) ? ["lifecycle scripts changed"] : []),
+  ]
 }
 
 async function npmDownloads(name: string) {
@@ -1208,6 +1274,14 @@ function defaultSecurityConfig(): SecurityConfig {
 async function readSecurityConfig() {
   const value = await readFile(securityConfigFile(), "utf8").then(JSON.parse, () => undefined)
   return normalizeSecurityConfig(value)
+}
+
+async function readSecurityAudit() {
+  const directory = (await readSecurityConfig()).audit.directory
+  const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
+  const files = entries.filter(entry => entry.isFile() && (entry.name.endsWith('.jsonl') || entry.name.endsWith('.log'))).sort((left, right) => right.name.localeCompare(left.name)).slice(0, 10)
+  const contents = await Promise.all(files.map(async entry => ({ file: entry.name, text: await readFile(join(directory, entry.name), 'utf8').catch(() => '') })))
+  return contents.flatMap(item => item.text.split(/\r?\n/).filter(Boolean).slice(-200).map(line => ({ file: item.file, line }))).slice(-500).reverse()
 }
 
 function normalizeSecurityConfig(value: unknown): SecurityConfig {

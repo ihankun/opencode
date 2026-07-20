@@ -26,6 +26,8 @@ export type CustomOpenCodePluginSearchResult = {
   downloads: number
   url: string
   compatibility: "supported" | "unsupported" | "unknown"
+  trustedPublisher: boolean
+  signatureStatus: "signed" | "integrity" | "unverified"
 }
 
 export type CustomOpenCodePluginMetadata = {
@@ -36,6 +38,11 @@ export type CustomOpenCodePluginMetadata = {
   source: 'npm' | 'local'
   url: string
   updateAvailable: boolean
+  trustedPublisher: boolean
+  signatureStatus: 'signed' | 'integrity' | 'unverified'
+  integrity: string
+  permissions: string[]
+  updateChanges: string[]
 }
 
 export type CustomOpenCodeMcpSearchResult = {
@@ -242,10 +249,12 @@ export type CustomOpenCodeApi = {
   onImBridgeStateChanged(callback: (state: ImBridgeState) => void): () => void
   security(): Promise<CustomOpenCodeSecurityConfig>
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
+  securityAudit(): Promise<Array<{ file: string; line: string }>>
   windowsSandboxStatus(): Promise<CustomOpenCodeWindowsSandboxStatus>
   installWindowsSandbox(): Promise<CustomOpenCodeWindowsSandboxStatus>
   serverCredential(id: string): Promise<CustomOpenCodeServerCredential | undefined>
   setServerCredential(id: string, credential: CustomOpenCodeServerCredential | null): Promise<void>
+  setSecureEnvironment(scope: string, values: Record<string, string> | null): Promise<void>
   hostingCredentials(): Promise<Record<CustomOpenCodeHostingProvider, boolean>>
   setHostingCredential(provider: CustomOpenCodeHostingProvider, credential: CustomOpenCodeServerCredential | null): Promise<void>
   createPullRequest(input: { remoteUrl: string; sourceBranch: string; targetBranch: string; title: string; body?: string; draft?: boolean }): Promise<{ url: string; provider: CustomOpenCodeHostingProvider }>
@@ -315,10 +324,12 @@ const api: CustomOpenCodeApi = {
   },
   security: () => ipcRenderer.invoke("security:get"),
   updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
+  securityAudit: () => ipcRenderer.invoke("security:audit"),
   windowsSandboxStatus: () => ipcRenderer.invoke("security:windows-sandbox-status"),
   installWindowsSandbox: () => ipcRenderer.invoke("security:windows-sandbox-install"),
   serverCredential: (id) => ipcRenderer.invoke("credential:get", id),
   setServerCredential: (id, credential) => ipcRenderer.invoke("credential:set", id, credential),
+  setSecureEnvironment: (scope, values) => ipcRenderer.invoke("secure-environment:set", scope, values),
   hostingCredentials: () => ipcRenderer.invoke("hosting:credentials"),
   setHostingCredential: (provider, credential) => ipcRenderer.invoke("hosting:credential-set", provider, credential),
   createPullRequest: (input) => ipcRenderer.invoke("hosting:pr-create", input),

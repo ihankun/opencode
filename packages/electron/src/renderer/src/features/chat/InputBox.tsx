@@ -49,7 +49,7 @@ import {
   TrashIcon,
 } from '../../components/Icons'
 import type { ApiAgent } from '../../api/client'
-import { getVcsInfo, listVcsBranches, switchVcsBranch } from '../../api'
+import { getVcsDiff, getVcsInfo, listVcsBranches, switchVcsBranch } from '../../api'
 import type { VcsBranch, ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
 import { useServerStore } from '../../hooks'
@@ -57,7 +57,11 @@ import type { SessionStats } from '../../hooks'
 import { notificationStore } from '../../store'
 import { onComposerDraftInsertion } from '../../utils/composerDraft'
 import { executionTargetStore } from '../../store/executionTargetStore'
+import { projectProfileStore } from '../../store/projectProfileStore'
+import type { ProjectProfile } from '../../store/projectProfileStore'
+import { projectEnvironmentStore } from '../../store/projectEnvironmentStore'
 import { getDirectoryName, isSameDirectory } from '../../utils'
+import { getModelKey } from '../../utils/modelUtils'
 import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
   getInternalDragSnapshot,
@@ -73,6 +77,19 @@ import {
 interface HistoryEntry {
   text: string
   attachments: Attachment[]
+}
+
+interface SpeechRecognitionConstructor {
+  new (): {
+    lang: string
+    continuous: boolean
+    interimResults: boolean
+    onresult: ((event: { resultIndex: number; results: ArrayLike<{ 0?: { transcript?: string } }> }) => void) | null
+    onerror: (() => void) | null
+    onend: (() => void) | null
+    start: () => void
+    stop: () => void
+  }
 }
 
 interface DraggedFileInfo {
@@ -358,7 +375,9 @@ function FollowupQueue({
   )
 }
 
-function NewTaskContextBar({ paneId }: { paneId: string }) {
+type TaskPreflightIssue = { level: 'error' | 'warning' | 'info'; message: string }
+
+function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: string; onApplyProfile: (profile: ProjectProfile) => void; onPreflight: (issues: TaskPreflightIssue[]) => void }) {
   const { t } = useTranslation('chat')
   const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
   const { servers, activeServer, setActiveServer, checkHealth, getHealth } = useServerStore()
@@ -367,6 +386,10 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
   const [branchLoading, setBranchLoading] = useState(false)
   const [switching, setSwitching] = useState(false)
   const [executionMode, setExecutionMode] = useState<'current' | 'worktree'>('current')
+  const [dirtyCount, setDirtyCount] = useState(0)
+  const [preflightIssues, setPreflightIssues] = useState<TaskPreflightIssue[]>([])
+  const appliedProfileRef = useRef('')
+  const appliedBranchRef = useRef('')
   const menuRef = useRef<HTMLDivElement>(null)
   const projects = useMemo(() => {
     const directories = [...savedDirectories].toSorted(
@@ -398,6 +421,7 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
   const activeHealth = activeServer ? getHealth(activeServer.id) : null
   const supportsWorktree = activeHealth?.status === 'online' && activeHealth.capabilities?.worktree === true
   const supportsBranchSwitch = activeHealth?.status === 'online' && activeHealth.capabilities?.vcsMutations === true
+  const projectProfile = projectProfileStore.get(currentDirectory)
 
   useEffect(() => {
     if (!activeServer || activeHealth) return
@@ -431,9 +455,9 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
       projectId: sameLocation ? previous.projectId : undefined,
       branch: selectedBranch,
       worktreeId: sameLocation ? previous.worktreeId : undefined,
-      permissionProfile: sameLocation ? previous.permissionProfile : undefined,
+      permissionProfile: projectProfile?.permissionProfile ?? (sameLocation ? previous.permissionProfile : undefined),
     })
-  }, [activeServer, currentDirectory, executionMode, paneId, selectedBranch])
+  }, [activeServer, currentDirectory, executionMode, paneId, projectProfile?.permissionProfile, selectedBranch])
 
   useEffect(() => {
     if (!menu) return
@@ -447,16 +471,18 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
   useEffect(() => {
     if (!currentDirectory) {
       setBranches([])
+      setDirtyCount(0)
       setBranchLoading(false)
       return
     }
 
     let disposed = false
     setBranchLoading(true)
-    void Promise.all([getVcsInfo(currentDirectory), listVcsBranches(currentDirectory).catch(() => [])])
-      .then(([info, listed]) => {
+    void Promise.all([getVcsInfo(currentDirectory), listVcsBranches(currentDirectory).catch(() => []), getVcsDiff('git', currentDirectory).catch(() => [])])
+      .then(([info, listed, changes]) => {
         if (disposed) return
         setBranches(listed.length > 0 ? listed : info?.branch ? [{ name: info.branch, current: true }] : [])
+        setDirtyCount(changes.length)
       })
       .finally(() => {
         if (!disposed) setBranchLoading(false)
@@ -513,12 +539,58 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
     }
   }
 
+  useEffect(() => {
+    if (!projectProfile || !currentDirectory) return
+    const key = `${currentDirectory}:${projectProfile.updatedAt}:${activeServer?.id ?? ''}`
+    if (appliedProfileRef.current === key) return
+    appliedProfileRef.current = key
+    onApplyProfile(projectProfile)
+    if (projectProfile.executionMode === 'worktree' && supportsWorktree) setExecutionMode('worktree')
+    if (!projectProfile.defaultServerId || projectProfile.defaultServerId === activeServer?.id) return
+    void checkHealth(projectProfile.defaultServerId).then(health => {
+      if (health.status === 'online') {
+        setActiveServer(projectProfile.defaultServerId!)
+        return
+      }
+      notificationStore.push('error', '项目默认服务器不可用', health.error || projectProfile.defaultServerId || '', '', currentDirectory)
+    })
+  }, [activeServer?.id, checkHealth, currentDirectory, onApplyProfile, projectProfile, setActiveServer, supportsWorktree])
+
+  useEffect(() => {
+    if (!projectProfile?.defaultBranch || !currentDirectory || branchLoading || branches.length === 0) return
+    if (selectedBranch === projectProfile.defaultBranch) return
+    const key = `${currentDirectory}:${activeServer?.id}:${projectProfile.updatedAt}:${projectProfile.defaultBranch}`
+    if (appliedBranchRef.current === key) return
+    appliedBranchRef.current = key
+    if (!supportsBranchSwitch || !branches.some(branch => branch.name === projectProfile.defaultBranch)) return
+    if (dirtyCount > 0) {
+      notificationStore.push('completed', '未自动切换项目默认分支', `工作区有 ${dirtyCount} 个未提交文件，请处理后手动切换到 ${projectProfile.defaultBranch}。`, '', currentDirectory)
+      return
+    }
+    void selectBranch(projectProfile.defaultBranch)
+  }, [activeServer?.id, branchLoading, branches, currentDirectory, dirtyCount, projectProfile, selectedBranch, supportsBranchSwitch])
+
+  useEffect(() => {
+    const issues: TaskPreflightIssue[] = []
+    if (!currentDirectory) issues.push({ level: 'warning', message: '未选择项目，将在服务器默认目录执行。' })
+    if (!activeServer) issues.push({ level: 'error', message: '没有可用的执行服务器。' })
+    if (activeHealth && activeHealth.status !== 'online' && activeHealth.status !== 'checking') issues.push({ level: 'error', message: activeHealth.error || '执行服务器不可用。' })
+    if (activeHealth?.compatibility === 'incompatible') issues.push({ level: 'error', message: '服务器版本与当前客户端不兼容。' })
+    if (activeHealth?.status === 'checking' || !activeHealth) issues.push({ level: 'info', message: '正在检查服务器和项目环境…' })
+    if (executionMode === 'worktree' && !supportsWorktree) issues.push({ level: 'error', message: '当前服务器不支持隔离 Worktree。' })
+    if (dirtyCount > 0 && executionMode === 'current') issues.push({ level: 'warning', message: `当前工作区有 ${dirtyCount} 个未提交文件。` })
+    if (projectProfile?.setupCommands.length) issues.push({ level: 'info', message: `项目 Profile 配置了 ${projectProfile.setupCommands.length} 条初始化命令。` })
+    setPreflightIssues(issues)
+    onPreflight(issues)
+  }, [activeHealth, activeServer, currentDirectory, dirtyCount, executionMode, onPreflight, projectProfile?.setupCommands.length, supportsWorktree])
+
   const triggerClass =
     'inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[length:var(--fs-sm)] font-normal text-text-100 transition-colors hover:bg-bg-200/70 disabled:opacity-60'
   const menuClass =
     'absolute bottom-full left-0 z-50 mb-2 max-h-64 min-w-60 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl'
 
   return (
+    <>
     <div
       ref={menuRef}
       className="relative z-0 mx-3 -mb-px flex h-10 items-center gap-1 overflow-visible rounded-t-2xl bg-bg-200/45 px-4"
@@ -720,6 +792,8 @@ function NewTaskContextBar({ paneId }: { paneId: string }) {
         </div>
       )}
     </div>
+    {preflightIssues.length > 0 ? <div className="mx-3 flex min-h-7 items-center gap-2 border-x border-border-200/45 bg-bg-100/90 px-4 text-[length:var(--fs-xxs)] text-text-400"><span className={`h-1.5 w-1.5 rounded-full ${preflightIssues.some(issue => issue.level === 'error') ? 'bg-danger-100' : preflightIssues.some(issue => issue.level === 'warning') ? 'bg-warning-100' : 'bg-accent-main-100'}`} /><span className="truncate" title={preflightIssues.map(issue => issue.message).join('\n')}>{preflightIssues.map(issue => issue.message).join(' · ')}</span></div> : null}
+    </>
   )
 }
 
@@ -775,6 +849,8 @@ function InputBoxComponent({
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
   const { currentDirectory, savedDirectories, recentProjects } = useDirectory()
+  const taskProjectProfile = projectProfileStore.get(currentDirectory)
+  const taskExecutionTarget = executionTargetStore.getDraft(paneId)
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
   const fileCaps: FileCapabilities = useMemo(
     () =>
@@ -796,9 +872,43 @@ function InputBoxComponent({
 
   // 文本状态
   const [text, setText] = useState('')
+  const [voiceListening, setVoiceListening] = useState(false)
+  const voiceRecognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null)
+  const voiceSupported = typeof window !== 'undefined' && Boolean((window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ?? (window as typeof window & { webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition)
+  const toggleVoice = useCallback(() => {
+    if (voiceListening) {
+      voiceRecognitionRef.current?.stop()
+      setVoiceListening(false)
+      return
+    }
+    const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }
+    const Constructor = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition
+    if (!Constructor) return
+    const recognition = new Constructor()
+    recognition.lang = navigator.language || 'zh-CN'
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.onresult = event => {
+      const transcript = Array.from({ length: event.results.length - event.resultIndex }, (_, index) => event.results[event.resultIndex + index]?.[0]?.transcript ?? '').join('').trim()
+      if (transcript) setText(current => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${transcript}`)
+    }
+    recognition.onerror = () => setVoiceListening(false)
+    recognition.onend = () => setVoiceListening(false)
+    voiceRecognitionRef.current = recognition
+    recognition.start()
+    setVoiceListening(true)
+  }, [voiceListening])
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [taskPreflightIssues, setTaskPreflightIssues] = useState<TaskPreflightIssue[]>([])
+  const applyProjectProfile = useCallback((profile: ProjectProfile) => {
+    if (profile.defaultAgent && agents.some(agent => agent.name === profile.defaultAgent)) onAgentChange?.(profile.defaultAgent)
+    if (!profile.defaultModelKey) return
+    const model = models.find(item => getModelKey(item) === profile.defaultModelKey)
+    if (model) onModelChange?.(profile.defaultModelKey, model)
+  }, [agents, models, onAgentChange, onModelChange])
+  const updateTaskPreflight = useCallback((issues: TaskPreflightIssue[]) => setTaskPreflightIssues(issues), [])
 
   useEffect(
     () =>
@@ -1106,6 +1216,11 @@ function InputBoxComponent({
 
   const handleSend = useCallback((delivery?: 'steer' | 'queue') => {
     if (!canSend || isSubmitting) return
+    const blockingIssue = !sessionId ? taskPreflightIssues.find(issue => issue.level === 'error') : undefined
+    if (blockingIssue) {
+      notificationStore.push('error', '新建任务预检未通过', blockingIssue.message, '', currentDirectory)
+      return
+    }
     const normalizedDelivery = delivery === 'steer' || delivery === 'queue' ? delivery : undefined
 
     // 检测 command attachment
@@ -1125,14 +1240,19 @@ function InputBoxComponent({
     const agentAttachment = attachments.find(a => a.type === 'agent')
     const mentionedAgent = agentAttachment?.agentName
 
+    const initializeProject = !sessionId && currentDirectory && taskProjectProfile?.setupCommands.length && !projectEnvironmentStore.isCurrent(currentDirectory, taskProjectProfile.updatedAt, taskExecutionTarget?.serverId)
+    const submittedText = initializeProject
+      ? [`Before working on the task, initialize the project in the configured sandbox. Run these commands in order, stop and report if any command fails:`, '```sh', ...taskProjectProfile.setupCommands, '```', '', text].join('\n')
+      : text
     void runSubmit(
       () =>
-        onSend(text, attachments, {
+        onSend(submittedText, attachments, {
           agent: mentionedAgent || selectedAgent,
           variant: selectedVariant,
           delivery: normalizedDelivery,
         }),
       () => {
+        if (initializeProject && currentDirectory && taskProjectProfile) projectEnvironmentStore.capture({ directory: currentDirectory, profileUpdatedAt: taskProjectProfile.updatedAt, serverId: taskExecutionTarget?.serverId, branch: taskExecutionTarget?.branch, dirtyFiles: 0, setupCommands: taskProjectProfile.setupCommands })
         resetDraft()
         onClearRevert?.()
       },
@@ -1148,8 +1268,14 @@ function InputBoxComponent({
     runSubmit,
     selectedAgent,
     selectedVariant,
+    sessionId,
     submitCommandOptimistically,
+    taskPreflightIssues,
     text,
+    currentDirectory,
+    taskProjectProfile,
+    taskExecutionTarget?.serverId,
+    taskExecutionTarget?.branch,
   ])
 
   // 更新 @ 查询文本（用于进入/退出文件夹）
@@ -2021,7 +2147,7 @@ function InputBoxComponent({
               />
             )}
 
-            {!sessionId && <NewTaskContextBar paneId={paneId} />}
+            {!sessionId && <NewTaskContextBar paneId={paneId} onApplyProfile={applyProjectProfile} onPreflight={updateTaskPreflight} />}
 
             {/* Input Container */}
             <div
@@ -2142,6 +2268,9 @@ function InputBoxComponent({
                       modelSelectorRef={modelSelectorRef}
                       contextStats={contextStats}
                       hasMessages={hasMessages}
+                      voiceSupported={voiceSupported}
+                      voiceListening={voiceListening}
+                      onVoiceToggle={toggleVoice}
                     />
                   </div>
                 </div>

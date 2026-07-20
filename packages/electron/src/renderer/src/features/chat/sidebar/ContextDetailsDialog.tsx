@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '../../../components/ui'
 import { CodeBlock } from '../../../components/CodeBlock'
 import { ChevronDownIcon, ChevronUpIcon, CpuIcon, DollarSignIcon } from '../../../components/Icons'
-import { useMessageStore } from '../../../store'
+import { projectProfileStore, useMessageStore, useProjectProfiles } from '../../../store'
 import { useSessionStats, formatTokens, formatCost } from '../../../hooks'
 import type { Message, TokenUsage } from '../../../types/message'
+import { useDirectory } from '../../../hooks'
 
 interface ContextDetailsDialogProps {
   isOpen: boolean
@@ -38,7 +39,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function ContextDetailsDialog({ isOpen, onClose, contextLimit }: ContextDetailsDialogProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { sessionId, messages } = useMessageStore()
+  const { currentDirectory } = useDirectory()
+  useProjectProfiles()
   const stats = useSessionStats(contextLimit)
+  const profile = currentDirectory ? projectProfileStore.get(currentDirectory) : undefined
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -75,6 +79,15 @@ export function ContextDetailsDialog({ isOpen, onClose, contextLimit }: ContextD
     const id = msg.info.id
     setExpandedId(prev => (prev === id ? null : id))
   }, [])
+  const sources = useMemo(() => {
+    const parts = messages.flatMap(message => message.parts)
+    const totalSize = Math.max(1, parts.reduce((total, part) => total + JSON.stringify(part).length, 0))
+    return Object.entries(parts.reduce<Record<string, { count: number; size: number }>>((result, part) => {
+      const current = result[part.type] ?? { count: 0, size: 0 }
+      result[part.type] = { count: current.count + 1, size: current.size + JSON.stringify(part).length }
+      return result
+    }, {})).sort((left, right) => right[1].size - left[1].size).map(([type, value]) => ({ type, ...value, percent: Math.round(value.size / totalSize * 100) }))
+  }, [messages])
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={t('contextDetails.context')} width={900} className="w-full">
@@ -129,6 +142,24 @@ export function ContextDetailsDialog({ isOpen, onClose, contextLimit }: ContextD
             <span className="tabular-nums">{formatTimestamp(contextMsg.info.time?.created)}</span>
           </div>
         )}
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-border-200/50 bg-bg-100/40 p-3">
+          <div className="mb-2 text-[length:var(--fs-xs)] font-medium text-text-300">{t('contextDetails.sources')}</div>
+          <div className="space-y-2">{sources.map(source => <div key={source.type}><div className="mb-1 flex justify-between text-[length:var(--fs-xxs)] text-text-400"><span>{source.type} · {source.count}</span><span>{source.percent}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-bg-300"><div className="h-full rounded-full bg-accent-main-100/70" style={{ width: `${source.percent}%` }} /></div></div>)}</div>
+          <div className="mt-2 text-[length:var(--fs-xxs)] text-text-500">{t('contextDetails.sourceEstimate')}</div>
+        </div>
+        <div className="rounded-lg border border-border-200/50 bg-bg-100/40 p-3">
+          <div className="mb-2 text-[length:var(--fs-xs)] font-medium text-text-300">{t('contextDetails.projectContributors')}</div>
+          <div className="space-y-1 text-[length:var(--fs-xs)] text-text-400">
+            <div>{t('contextDetails.directory')}: <span className="font-mono text-text-300">{currentDirectory ?? '—'}</span></div>
+            <div>Agent: <span className="text-text-300">{profile?.defaultAgent ?? 'session default'}</span></div>
+            <div>Skills: <span className="text-text-300">{profile?.enabledSkills.join(', ') || '—'}</span></div>
+            <div>MCP: <span className="text-text-300">{profile?.enabledMcp.join(', ') || '—'}</span></div>
+            <div>Sandbox: <span className="text-text-300">{profile?.sandboxProfile ?? '—'}</span></div>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6">

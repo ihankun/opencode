@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { AlertCircleIcon, CheckIcon, CloseIcon, SettingsIcon, UndoIcon } from '../../../components/Icons'
 import { Dialog } from '../../../components/ui/Dialog'
 import { SettingsSearch } from '../SettingsSearch'
-import { getConfig, getGlobalConfig, getProviderConfigs, listAvailableShells, updateGlobalConfig } from '../../../api'
+import { getConfig, getGlobalConfig, getProviderConfigs, listAvailableShells, updateConfig, updateGlobalConfig } from '../../../api'
 import type { Config } from '../../../types/api/config'
 import { useCurrentDirectory, useIsMobile } from '../../../hooks'
 import { SettingsCard, SettingsSection } from './SettingsUI'
@@ -25,6 +25,8 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const [config, setConfig] = useState<Config>({} as Config)
   const [original, setOriginal] = useState<Config>({} as Config)
   const [effective, setEffective] = useState<Config>({} as Config)
+  const [globalConfig, setGlobalConfig] = useState<Config>({} as Config)
+  const [scope, setScope] = useState<'global' | 'project'>('global')
   const [shells, setShells] = useState<Choice[]>([])
   const [models, setModels] = useState<Choice[]>([])
   const [providerCatalog, setProviderCatalog] = useState<JsonRecord>({})
@@ -54,7 +56,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     })
   }, [])
 
-  const updateConfig = useCallback((next: Config) => {
+  const updateEditorConfig = useCallback((next: Config) => {
     setConfig(next)
     setValidationErrors([])
     setValidationDrillTarget(null)
@@ -100,8 +102,10 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
         }
       }
       if (request !== loadRequestRef.current) return
-      setOriginal(clone(global))
-      setConfig(clone(global))
+      const editable = scope === 'project' && directory ? nextEffective : global
+      setGlobalConfig(clone(global))
+      setOriginal(clone(editable))
+      setConfig(clone(editable))
       setJsonDraftErrors(new Set())
       setEffective(nextEffective)
       setProviderCatalog(isRecord(providers) ? providers : {})
@@ -121,7 +125,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     } finally {
       if (request === loadRequestRef.current) setLoading(false)
     }
-  }, [directory, isOpen, t])
+  }, [directory, isOpen, scope, t])
 
   useEffect(() => {
     if (isOpen) void load()
@@ -172,13 +176,16 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
     }
     setSaving(true)
     try {
-      const saved = await updateGlobalConfig(createMergePatch(original, snapshot) as Config)
+      const saved = scope === 'project' && directory
+        ? await updateConfig(snapshot, directory)
+        : await updateGlobalConfig(createMergePatch(original, snapshot) as Config)
       if (request !== saveRequestRef.current) return
       setOriginal(clone(saved))
       setConfig(current => sameValue(current, snapshot) ? clone(saved) : current)
       const nextEffective = await getConfig(directory)
       if (request !== saveRequestRef.current) return
       setEffective(nextEffective)
+      if (scope === 'global') setGlobalConfig(saved)
       setSchemaWarning(null)
     } catch (err) {
       if (request !== saveRequestRef.current) return
@@ -188,6 +195,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       if (request === saveRequestRef.current) setSaving(false)
     }
   }
+  const effectiveOverrideCount = useMemo(() => Object.keys(createMergePatch(globalConfig, effective)).length, [effective, globalConfig])
 
   const agents = useMemo(() => {
     const names = new Set([
@@ -309,7 +317,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                   <button
                     type="button"
                     disabled={!dirty || saving || validating}
-                    onClick={() => updateConfig(clone(original))}
+                    onClick={() => updateEditorConfig(clone(original))}
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border-200/60 px-3 py-1.5 text-[length:var(--fs-xs)] text-text-300 transition-colors hover:bg-bg-100 disabled:opacity-40"
                   >
                     <UndoIcon size={13} />
@@ -330,6 +338,16 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                 </div>
               </div>
             )}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-200/50 bg-bg-100/45 px-4 py-2 text-[length:var(--fs-xs)]">
+              <div className="flex items-center gap-2">
+                <span className="text-text-400">{tx('Editing scope', '编辑作用域', lang)}</span>
+                <div className="inline-flex rounded-lg bg-bg-200/60 p-0.5">
+                  <button type="button" onClick={() => { if (!dirty || window.confirm(tx('Discard unsaved changes and switch scope?', '放弃未保存的更改并切换作用域？', lang))) setScope('global') }} className={`rounded-md px-2.5 py-1 ${scope === 'global' ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{tx('Global', '全局', lang)}</button>
+                  <button type="button" disabled={!directory} onClick={() => { if (!dirty || window.confirm(tx('Discard unsaved changes and switch scope?', '放弃未保存的更改并切换作用域？', lang))) setScope('project') }} className={`rounded-md px-2.5 py-1 disabled:opacity-40 ${scope === 'project' ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{tx('Current project', '当前项目', lang)}</button>
+                </div>
+              </div>
+              <div className="min-w-0 text-text-400"><span className="font-medium text-text-300">{scope === 'global' ? tx('Global source', '全局配置源', lang) : tx('Project effective config', '项目有效配置', lang)}</span>{scope === 'project' && directory ? <span className="ml-2 max-w-80 truncate font-mono">{directory}</span> : null}<span className="ml-2">{tx(`${effectiveOverrideCount} effective override group(s)`, `有效配置包含 ${effectiveOverrideCount} 组覆盖`, lang)}</span></div>
+            </div>
             {error && <div className="break-words border-b border-error-100/20 bg-error-100/10 px-4 py-2 text-[length:var(--fs-xs)] text-error-100">{error}</div>}
             {schemaWarning && <div className="break-words border-b border-warning-100/20 bg-warning-100/10 px-4 py-2 text-[length:var(--fs-xs)] text-warning-100">{schemaWarning}</div>}
             {validationErrors.length > 0 && (
@@ -354,7 +372,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             {isMobile ? (
               <>
                 <main ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar overscroll-contain">
-                  <SectionRouter section={section} config={config} setConfig={updateConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
+                  <SectionRouter section={section} config={config} setConfig={updateEditorConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
                 </main>
                 <div className="relative shrink-0 px-4 py-3">
                   <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-border-200/30" />
@@ -362,7 +380,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                     <button
                       type="button"
                       disabled={!dirty || saving || validating}
-                      onClick={() => updateConfig(clone(original))}
+                      onClick={() => updateEditorConfig(clone(original))}
                       className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border-200/60 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-text-300 transition-colors hover:bg-bg-100 disabled:opacity-40"
                     >
                       <UndoIcon size={14} />
@@ -400,7 +418,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                   </div>
                 </aside>
                 <main ref={scrollRef} className="min-h-0 min-w-0 overflow-y-auto p-5 custom-scrollbar xl:px-6">
-                  <SectionRouter section={section} config={config} setConfig={updateConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
+                  <SectionRouter section={section} config={config} setConfig={updateEditorConfig} lang={lang} shells={shells} models={models} agents={agents} providerCatalog={providerCatalog} />
                 </main>
               </div>
             )}

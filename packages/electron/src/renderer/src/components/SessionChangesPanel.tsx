@@ -6,7 +6,7 @@
 
 import { memo, useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, GitCommitIcon } from './Icons'
+import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, GitCommitIcon, DownloadIcon } from './Icons'
 import { getMaterialIconUrl } from '../utils/materialIcons'
 import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
@@ -29,6 +29,7 @@ import { openUrl } from '../utils/browserOpen'
 import { createPullRequestUrl } from '../utils/pullRequest'
 import { insertComposerDraft } from '../utils/composerDraft'
 import { serverStore } from '../store/serverStore'
+import { saveData } from '../utils/downloadUtils'
 
 // 常量
 const MIN_LIST_HEIGHT = 80
@@ -637,6 +638,27 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              disabled={diffs.length === 0}
+              onClick={() => {
+                const payload = {
+                  schemaVersion: 1,
+                  exportedAt: new Date().toISOString(),
+                  sessionId,
+                  directory,
+                  scope: changeMode,
+                  summary: totalStats,
+                  files: diffs.map(diff => ({ file: diff.file, status: getFileStatus(diff), additions: diff.additions, deletions: diff.deletions, patch: diff.patch })),
+                }
+                saveData(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `review-${sessionId}-${changeMode}.json`, 'application/json')
+              }}
+              aria-label={t('sessionChanges.exportArtifact')}
+              title={t('sessionChanges.exportArtifact')}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 transition-colors hover:bg-bg-200/50 hover:text-text-100 disabled:opacity-40"
+            >
+              <DownloadIcon size={12} />
+            </button>
             {changeMode === 'git' && (
               <GitActions
                 files={diffs.map(diff => diff.file)}

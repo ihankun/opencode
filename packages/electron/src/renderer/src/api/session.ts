@@ -151,9 +151,10 @@ export async function createSession(
     directory?: string
     title?: string
     parentID?: string
+    serverId?: string
   } = {},
 ): Promise<ApiSession> {
-  const sdk = getSDKClient()
+  const sdk = getSDKClient(params.serverId)
   const { directory, title, parentID } = params
   return unwrap(
     await sdk.session.create({

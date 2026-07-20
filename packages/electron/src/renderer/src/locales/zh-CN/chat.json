@@ -229,6 +229,9 @@
     "recentProjects": "最近项目"
   },
   "inputToolbar": {
+    "skipToComposer": "跳到对话输入框",
+    "startVoice": "开始语音输入",
+    "stopVoice": "停止语音输入",
     "default": "默认",
     "variants": {
       "default": "默认",
@@ -393,6 +396,15 @@
     "description": "这里连接的是 OpenCode Zen 的 API Key，不是 console.opencode.ai 的 Console 账号。"
   },
   "sessionSearch": {
+    "tagPrompt": "输入标签，多个标签用逗号分隔",
+    "allTags": "全部标签",
+    "tags": "标签",
+    "fork": "分叉",
+    "handoff": "移交",
+    "handoffPrompt": "输入目标 Runner 名称。可用：{{servers}}",
+    "noHandoffServer": "没有其他在线 Runner，请先在设置－服务器中添加并连通服务器。",
+    "noHandoffModel": "该对话还没有可复用的模型信息，无法移交。",
+    "handoffInstruction": "这是从另一台 Runner 移交的任务。请阅读下面的最近对话，确认当前状态后继续执行：",
     "title": "搜索对话",
     "placeholder": "搜索对话标题或内容",
     "recentChats": "最近对话",
@@ -434,6 +446,10 @@
     "taskCreatedTitle": "自动化任务已创建"
   },
   "contextDetails": {
+    "sources": "上下文来源",
+    "sourceEstimate": "占比按当前已加载消息部件体积估算，不包含服务端系统提示词。",
+    "projectContributors": "项目注入项",
+    "directory": "目录",
     "context": "上下文",
     "session": "会话",
     "messages": "消息",

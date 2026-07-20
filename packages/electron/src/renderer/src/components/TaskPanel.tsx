@@ -7,8 +7,10 @@ import { serverStore, type ServerConfig } from '../store/serverStore'
 import { saveData } from '../utils/downloadUtils'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Dialog } from './ui/Dialog'
+import { Button } from './ui/Button'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { Cron } from 'croner'
 
 type Task = Awaited<ReturnType<typeof window.customOpenCode.listTasks>>[number]
 type TaskInput = Parameters<typeof window.customOpenCode.createTask>[0]
@@ -17,6 +19,7 @@ type TaskSettings = Awaited<ReturnType<typeof window.customOpenCode.taskSettings
 type Frequency = 'daily' | 'weekdays' | 'weekly' | 'advanced'
 type TaskTemplate = { id: string; name: string; input: TaskInput }
 const taskTemplateStorageKey = 'opencodex.automation.templates.v1'
+const handledRunStorageKey = 'opencodex.automation.handled-runs.v1'
 
 const weekdays = [
   ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun'],
@@ -28,7 +31,8 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
   const { servers, activeServer } = useServerStore()
   const [tasks, setTasks] = useState<Task[]>([])
   const [runs, setRuns] = useState<TaskRun[]>([])
-  const [view, setView] = useState<'tasks' | 'runs'>('tasks')
+  const [view, setView] = useState<'tasks' | 'attention' | 'runs' | 'artifacts'>('tasks')
+  const [handledRunIDs, setHandledRunIDs] = useState<string[]>(() => readStringList(handledRunStorageKey))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<'all' | 'enabled' | 'paused'>('all')
@@ -62,6 +66,8 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
     return window.customOpenCode.onTasksChanged(() => void load())
   }, [load, t])
   const visible = useMemo(() => tasks.filter(task => filter === 'all' || (filter === 'enabled' ? task.enabled : !task.enabled)), [filter, tasks])
+  const attentionRuns = useMemo(() => runs.filter(run => ['failed', 'timed_out', 'blocked', 'recovering'].includes(run.status) && !handledRunIDs.includes(run.id)), [handledRunIDs, runs])
+  const artifacts = useMemo(() => collectAutomationArtifacts(runs), [runs])
   const directories = useMemo(() => Array.from(new Map([
     ...(currentDirectory ? [{ path: currentDirectory, name: savedDirectories.find(item => item.path === currentDirectory)?.name ?? currentDirectory }] : []),
     ...(pathInfo?.directory ? [{ path: pathInfo.directory, name: savedDirectories.find(item => item.path === pathInfo.directory)?.name ?? pathInfo.directory }] : []),
@@ -147,10 +153,10 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
         </div>
       </div>
       <div role="tablist" aria-label={t('taskPanel.title')} className="flex shrink-0 gap-1 border-b border-border-200/40 px-6 py-2">
-        {([['tasks', t('taskPanel.taskList'), tasks.length], ['runs', t('taskPanel.runHistory'), runs.length]] as const).map(item => <button role="tab" aria-selected={view === item[0]} key={item[0]} onClick={() => setView(item[0])} className={`rounded-md px-3 py-1.5 text-[length:var(--fs-sm)] transition-colors ${view === item[0] ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{item[1]}<span className="ml-1.5 text-[length:var(--fs-xs)] text-text-500">{item[2]}</span></button>)}
+        {([['tasks', t('taskPanel.taskList'), tasks.length], ['attention', '需要处理', attentionRuns.length], ['runs', t('taskPanel.runHistory'), runs.length], ['artifacts', t('taskPanel.artifacts'), artifacts.length]] as const).map(item => <button role="tab" aria-selected={view === item[0]} key={item[0]} onClick={() => setView(item[0])} className={`rounded-md px-3 py-1.5 text-[length:var(--fs-sm)] transition-colors ${view === item[0] ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{item[1]}<span className={`ml-1.5 text-[length:var(--fs-xs)] ${item[0] === 'attention' && item[2] > 0 ? 'text-danger-100' : 'text-text-500'}`}>{item[2]}</span></button>)}
       </div>
       <div className="flex-1 overflow-auto px-6 py-5">
-        {view === 'runs' ? <TaskRunList runs={runs} loading={loading} onOpenSession={onOpenSession} onChanged={load} /> : <>
+        {view === 'artifacts' ? <AutomationArtifacts artifacts={artifacts} /> : view === 'runs' ? <TaskRunList runs={runs} loading={loading} onOpenSession={onOpenSession} onChanged={load} /> : view === 'attention' ? <div><div className="mb-3 flex items-center justify-between"><p className="text-[length:var(--fs-sm)] text-text-400">集中处理失败、超时、阻塞和恢复中的后台任务。</p><button disabled={!attentionRuns.length} onClick={() => { const next = [...new Set([...handledRunIDs, ...attentionRuns.map(run => run.id)])]; setHandledRunIDs(next); localStorage.setItem(handledRunStorageKey, JSON.stringify(next.slice(-2000))) }} className="rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] text-text-300 hover:bg-bg-200 disabled:opacity-40">全部标记为已处理</button></div><TaskRunList runs={attentionRuns} loading={loading} onOpenSession={onOpenSession} onChanged={load} /></div> : <>
         <details className="mb-4 rounded-lg border border-border-200/50 bg-bg-200/20 px-3 py-2 text-[length:var(--fs-xs)] text-text-300"><summary className="cursor-pointer select-none">{t('taskPanel.schedulerSettings')}</summary><div className="mt-3 grid grid-cols-4 gap-3"><label>{t('taskPanel.globalConcurrency')}<input type="number" min={1} max={20} value={settings.maxConcurrency} onChange={event => setSettings(current => ({ ...current, maxConcurrency: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.retentionDays')}<input type="number" min={1} max={365} value={settings.historyRetentionDays} onChange={event => setSettings(current => ({ ...current, historyRetentionDays: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.maxHistory')}<input type="number" min={100} max={10000} value={settings.maxHistory} onChange={event => setSettings(current => ({ ...current, maxHistory: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.webhookPort')}<input type="number" min={1024} max={65535} value={settings.webhookPort} onChange={event => setSettings(current => ({ ...current, webhookPort: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label></div></details>
         <div role="group" aria-label={t('taskPanel.taskFilter')} className="mb-5 flex gap-1 rounded-lg bg-bg-200/50 p-1 w-fit">
           {([['all', t('taskPanel.all')], ['enabled', t('taskPanel.enabled')], ['paused', t('taskPanel.paused')]] as const).map(item => (
@@ -201,6 +207,33 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
     </div>
   )
 })
+
+type AutomationArtifact = { id: string; runID: string; taskTitle: string; type: 'log' | 'image' | 'video' | 'pull-request' | 'link'; value: string; createdAt: number }
+
+function collectAutomationArtifacts(runs: TaskRun[]): AutomationArtifact[] {
+  return runs.flatMap(run => {
+    const text = `${run.log}\n${run.error ?? ''}`
+    const links = [...new Set(text.match(/https?:\/\/[^\s<>'"\])]+/g) ?? [])]
+    return [
+      ...(run.log || run.error ? [{ id: `${run.id}:log`, runID: run.id, taskTitle: run.taskTitle, type: 'log' as const, value: run.log || run.error || '', createdAt: run.createdAt }] : []),
+      ...links.map((value, index) => ({ id: `${run.id}:url:${index}`, runID: run.id, taskTitle: run.taskTitle, type: classifyArtifact(value), value, createdAt: run.createdAt })),
+    ]
+  }).toSorted((left, right) => right.createdAt - left.createdAt)
+}
+
+function classifyArtifact(value: string): AutomationArtifact['type'] {
+  if (/\.(png|jpe?g|gif|webp)(?:\?|$)/i.test(value)) return 'image'
+  if (/\.(mp4|webm|mov)(?:\?|$)/i.test(value)) return 'video'
+  if (/github\.com\/[^/]+\/[^/]+\/pull\/\d+|gitlab\.[^/]+\/.+\/merge_requests\/\d+/i.test(value)) return 'pull-request'
+  return 'link'
+}
+
+function AutomationArtifacts({ artifacts }: { artifacts: AutomationArtifact[] }) {
+  const { t } = useTranslation('components')
+  const [filter, setFilter] = useState<'all' | AutomationArtifact['type']>('all')
+  const visible = artifacts.filter(artifact => filter === 'all' || artifact.type === filter)
+  return <div><div className="mb-4 flex items-center justify-between gap-3"><div className="flex gap-1">{(['all', 'log', 'image', 'video', 'pull-request', 'link'] as const).map(type => <button key={type} onClick={() => setFilter(type)} className={`rounded-md px-2.5 py-1.5 text-[length:var(--fs-xs)] ${filter === type ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{type}</button>)}</div><Button size="sm" variant="ghost" disabled={!artifacts.length} onClick={() => saveData(new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), artifacts }, null, 2)), 'automation-artifacts.json', 'application/json')}>{t('taskPanel.exportManifest')}</Button></div>{visible.length === 0 ? <div className="rounded-xl border border-dashed border-border-200 py-20 text-center text-[length:var(--fs-sm)] text-text-400">{t('taskPanel.noArtifacts')}</div> : <div className="grid gap-2 md:grid-cols-2">{visible.map(artifact => <div key={artifact.id} className="rounded-xl border border-border-200/60 bg-bg-100 p-3"><div className="flex items-center justify-between"><span className="rounded bg-bg-200 px-2 py-0.5 text-[length:var(--fs-xxs)] text-text-300">{artifact.type}</span><span className="text-[length:var(--fs-xxs)] text-text-500">{new Date(artifact.createdAt).toLocaleString()}</span></div><div className="mt-2 truncate text-[length:var(--fs-sm)] font-medium text-text-200">{artifact.taskTitle}</div>{artifact.type === 'image' ? <img src={artifact.value} className="mt-2 max-h-44 w-full rounded-lg object-contain bg-bg-200" /> : artifact.type === 'video' ? <video src={artifact.value} controls className="mt-2 max-h-44 w-full rounded-lg bg-black" /> : <div className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[length:var(--fs-xxs)] text-text-400">{artifact.value}</div>}<div className="mt-2 flex justify-end">{artifact.type === 'log' ? <Button size="sm" variant="ghost" onClick={() => saveData(new TextEncoder().encode(artifact.value), `automation-${artifact.runID}.log`, 'text/plain')}>{t('taskPanel.exportLog')}</Button> : <Button size="sm" variant="ghost" onClick={() => void window.customOpenCode.openExternalUrl(artifact.value)}>{t('taskPanel.openArtifact')}</Button>}</div></div>)}</div>}</div>
+}
 
 function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRun[]; loading: boolean; onOpenSession: (sessionID: string, directory: string) => void; onChanged: () => Promise<void> }) {
   const { t } = useTranslation(['components'])
@@ -279,6 +312,7 @@ function TaskDialog({ task, initialInput, tasks, directory, directories, servers
   const [time, setTime] = useState(initial.time)
   const [day, setDay] = useState(initial.day)
   const [expression, setExpression] = useState(source?.cron ?? '0 18 * * *')
+  const [timezone, setTimezone] = useState(source?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [selectedDirectory, setSelectedDirectory] = useState(source?.directory ?? directory)
   const [selectedServerId, setSelectedServerId] = useState(source?.serverId ?? activeServer?.id ?? '')
   const { models, isLoading: modelsLoading } = useModels(selectedServerId || undefined)
@@ -304,6 +338,7 @@ function TaskDialog({ task, initialInput, tasks, directory, directories, servers
   const [error, setError] = useState('')
   const [templateSaved, setTemplateSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [preflight, setPreflight] = useState<{ ok: boolean; messages: string[]; nextRuns: Date[] }>()
   const selectedModel = models.find(model => taskModelKey(model.providerId, model.id) === selectedModelKey)
   const selectedServer = servers.find(server => server.id === selectedServerId)
   const selectedCapabilities = selectedServer ? serverStore.getHealth(selectedServer.id)?.capabilities : undefined
@@ -338,7 +373,7 @@ function TaskDialog({ task, initialInput, tasks, directory, directories, servers
       title,
       prompt,
       cron: frequency === 'advanced' ? expression : buildCron(frequency, time, day),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezone,
       serverId: selectedServer.id,
       serverName: selectedServer.name,
       serverUrl: selectedServer.url,
@@ -379,6 +414,33 @@ function TaskDialog({ task, initialInput, tasks, directory, directories, servers
       onSaved()
     } catch (cause) { setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')) } finally { setSaving(false) }
   }
+  const preview = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      const input = currentInput()
+      const messages: string[] = []
+      const health = await serverStore.checkHealth(input.serverId)
+      if (health.status !== 'online') throw new Error(health.error || t('taskPanel.serverUnavailable'))
+      messages.push(`服务器在线${health.latency !== undefined ? ` · ${health.latency}ms` : ''}${health.version ? ` · OpenCode ${health.version}` : ''}`)
+      if (!input.directory) messages.push('未配置项目目录，将使用服务器默认目录。')
+      if (input.executionMode === 'worktree' && !health.capabilities?.worktree) throw new Error(t('taskPanel.worktreeUnsupported'))
+      if (input.branch && !health.capabilities?.vcsMutations) throw new Error(t('taskPanel.branchUnsupported'))
+      if (input.executionMode === 'worktree') messages.push(`将从 ${input.branch || '当前分支'} 创建隔离 Worktree`)
+      if (input.dependencyTaskIds.some(id => id === task?.id)) throw new Error('任务不能依赖自身。')
+      const nextRuns = input.triggerType === 'schedule' ? new Cron(input.cron, { timezone: input.timezone, paused: true }).nextRuns(5) : []
+      if (input.triggerType === 'schedule' && nextRuns.length === 0) throw new Error('Cron 表达式没有可执行的未来时间。')
+      messages.push(`模型 ${input.modelProviderID}/${input.modelID}${input.variant ? ` · ${input.variant}` : ''}`)
+      messages.push(`权限 ${input.permissionProfile} · 超时 ${input.completionTimeoutMinutes} 分钟 · 最多重试 ${input.retryCount} 次`)
+      setPreflight({ ok: true, messages, nextRuns })
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : t('taskPanel.actionFailed')
+      setPreflight({ ok: false, messages: [message], nextRuns: [] })
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
   return <Dialog isOpen onClose={onClose} title={t(task ? 'taskPanel.editTask' : 'taskPanel.newTask')} width={576}>
       <div className="space-y-4">
         <div><Label>{t('taskPanel.name')}</Label><input aria-label={t('taskPanel.name')} value={title} onChange={e => setTitle(e.target.value)} className={`${inputClass} h-9 w-full`} placeholder={t('taskPanel.namePlaceholder')} /></div>
@@ -394,14 +456,15 @@ function TaskDialog({ task, initialInput, tasks, directory, directories, servers
         <div className="grid grid-cols-2 gap-2"><div><Label>{t('taskPanel.model')}</Label><select aria-label={t('taskPanel.model')} value={selectedModelKey} disabled={modelsLoading} onChange={e => { setSelectedModelKey(e.target.value); setVariant('') }} className={`${inputClass} h-9 w-full`}><option value="">{modelsLoading ? t('taskPanel.loadingModels') : t('taskPanel.selectModel')}</option>{models.map(model => <option key={taskModelKey(model.providerId, model.id)} value={taskModelKey(model.providerId, model.id)}>{model.name} · {model.providerName}</option>)}</select></div><div><Label>{t('taskPanel.reasoning')}</Label><select aria-label={t('taskPanel.reasoning')} value={variant} onChange={e => setVariant(e.target.value)} disabled={!selectedModel} className={`${inputClass} h-9 w-full`}><option value="">{t('taskPanel.default')}</option>{selectedModel?.variants.map(item => <option key={item} value={item}>{item}</option>)}</select></div></div>
         <div><Label>{t('taskPanel.trigger')}</Label><select aria-label={t('taskPanel.trigger')} value={triggerType} onChange={event => setTriggerType(event.target.value as TaskInput['triggerType'])} className={`${inputClass} h-9 w-full`}><option value="schedule">{t('taskPanel.triggerSchedule')}</option><option value="task-success">{t('taskPanel.triggerSuccess')}</option><option value="task-failure">{t('taskPanel.triggerFailure')}</option><option value="webhook">{t('taskPanel.triggerWebhook')}</option></select></div>
         {(triggerType === 'task-success' || triggerType === 'task-failure') ? <div><Label>{t('taskPanel.sourceTask')}</Label><select aria-label={t('taskPanel.sourceTask')} value={triggerTaskId} onChange={event => setTriggerTaskId(event.target.value)} className={`${inputClass} h-9 w-full`}><option value="">{t('taskPanel.selectSourceTask')}</option>{referenceTasks.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div> : null}
-        {triggerType === 'schedule' ? <div><Label>{t('taskPanel.schedule')}</Label><div className="grid grid-cols-[1fr_1fr] gap-2"><select aria-label={t('taskPanel.schedule')} value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} className={`${inputClass} h-9`}><option value="daily">{t('taskPanel.daily')}</option><option value="weekdays">{t('taskPanel.weekdays')}</option><option value="weekly">{t('taskPanel.weekly')}</option><option value="advanced">{t('taskPanel.advancedCron')}</option></select>{frequency === 'advanced' ? <input aria-label={t('taskPanel.advancedCron')} value={expression} onChange={e => setExpression(e.target.value)} className={`${inputClass} h-9 font-mono`} placeholder="0 18 * * *" /> : <div className="flex gap-2">{frequency === 'weekly' && <select aria-label={t('taskPanel.weekly')} value={day} onChange={e => setDay(e.target.value)} className={`${inputClass} h-9 flex-1`}>{weekdays.map(item => <option value={item[0]} key={item[0]}>{t(`taskPanel.weekday${item[0]}`)}</option>)}</select>}<input aria-label={t('taskPanel.scheduleTime')} type="time" value={time} onChange={e => setTime(e.target.value)} className={`${inputClass} h-9 flex-1`} /></div>}</div>{frequency === 'advanced' && <p className="mt-1 text-[length:var(--fs-xs)] text-text-400">{t('taskPanel.cronHint')}</p>}</div> : null}
+        {triggerType === 'schedule' ? <div><Label>{t('taskPanel.schedule')}</Label><div className="grid grid-cols-[1fr_1fr] gap-2"><select aria-label={t('taskPanel.schedule')} value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} className={`${inputClass} h-9`}><option value="daily">{t('taskPanel.daily')}</option><option value="weekdays">{t('taskPanel.weekdays')}</option><option value="weekly">{t('taskPanel.weekly')}</option><option value="advanced">{t('taskPanel.advancedCron')}</option></select>{frequency === 'advanced' ? <input aria-label={t('taskPanel.advancedCron')} value={expression} onChange={e => setExpression(e.target.value)} className={`${inputClass} h-9 font-mono`} placeholder="0 18 * * *" /> : <div className="flex gap-2">{frequency === 'weekly' && <select aria-label={t('taskPanel.weekly')} value={day} onChange={e => setDay(e.target.value)} className={`${inputClass} h-9 flex-1`}>{weekdays.map(item => <option value={item[0]} key={item[0]}>{t(`taskPanel.weekday${item[0]}`)}</option>)}</select>}<input aria-label={t('taskPanel.scheduleTime')} type="time" value={time} onChange={e => setTime(e.target.value)} className={`${inputClass} h-9 flex-1`} /></div>}</div><input aria-label="Timezone" value={timezone} onChange={event => setTimezone(event.target.value)} className={`${inputClass} mt-2 h-9 w-full font-mono`} placeholder="Asia/Shanghai" />{frequency === 'advanced' && <p className="mt-1 text-[length:var(--fs-xs)] text-text-400">{t('taskPanel.cronHint')}</p>}</div> : null}
         {triggerType === 'webhook' ? <div><Label>{t('taskPanel.incomingWebhook')}</Label><input aria-label={t('taskPanel.incomingWebhook')} readOnly value={task?.webhookUrl ?? ''} className={`${inputClass} h-9 w-full font-mono text-[length:var(--fs-xs)]`} placeholder={t('taskPanel.webhookAfterSave')} />{task?.webhookUrl ? <button type="button" onClick={() => void navigator.clipboard.writeText(task.webhookUrl)} className="mt-1 text-[length:var(--fs-xs)] text-accent-main-100">{t('taskPanel.copyWebhook')}</button> : null}</div> : null}
         <details className="rounded-lg border border-border-200/60 px-3 py-2"><summary className="cursor-pointer text-[length:var(--fs-xs)] font-medium text-text-300">{t('taskPanel.dependencies')}</summary><div className="mt-2 grid grid-cols-2 gap-2">{referenceTasks.length ? referenceTasks.map(item => <label key={item.id} className="flex items-center gap-2 text-[length:var(--fs-xs)] text-text-300"><input type="checkbox" checked={dependencyTaskIds.includes(item.id)} onChange={event => setDependencyTaskIds(current => event.target.checked ? [...current, item.id] : current.filter(id => id !== item.id))} />{item.title}</label>) : <span className="text-text-500">{t('taskPanel.noDependencies')}</span>}</div></details>
         <details className="rounded-lg border border-border-200/60 px-3 py-2" open={notificationChannels.includes('webhook')}><summary className="cursor-pointer text-[length:var(--fs-xs)] font-medium text-text-300">{t('taskPanel.notifications')}</summary><div className="mt-2 flex gap-4"><label className="flex items-center gap-2 text-[length:var(--fs-xs)]"><input type="checkbox" checked={notificationChannels.includes('desktop')} onChange={event => setNotificationChannels(current => event.target.checked ? [...new Set([...current, 'desktop' as const])] : current.filter(item => item !== 'desktop'))} />{t('taskPanel.desktopNotification')}</label><label className="flex items-center gap-2 text-[length:var(--fs-xs)]"><input type="checkbox" checked={notificationChannels.includes('webhook')} onChange={event => setNotificationChannels(current => event.target.checked ? [...new Set([...current, 'webhook' as const])] : current.filter(item => item !== 'webhook'))} />Webhook</label></div>{notificationChannels.includes('webhook') ? <input aria-label={t('taskPanel.notificationWebhook')} value={notificationWebhookUrl} onChange={event => setNotificationWebhookUrl(event.target.value)} className={`${inputClass} mt-2 h-9 w-full`} placeholder="https://example.com/hooks/automation" /> : null}</details>
         {error && <div role="alert" className="text-[length:var(--fs-xs)] text-danger-100">{error}</div>}
         {templateSaved && <div role="status" className="text-[length:var(--fs-xs)] text-success-100">{t('taskPanel.templateSaved')}</div>}
+        {preflight ? <div className={`rounded-lg border px-3 py-2 text-[length:var(--fs-xs)] ${preflight.ok ? 'border-success-100/30 bg-success-100/5 text-text-300' : 'border-danger-100/30 bg-danger-100/5 text-danger-100'}`}><div className="mb-1 font-medium">{preflight.ok ? '预检通过' : '预检失败'}</div>{preflight.messages.map(message => <div key={message}>• {message}</div>)}{preflight.nextRuns.length ? <div className="mt-2 border-t border-border-200/50 pt-2"><div className="mb-1 font-medium">未来 5 次运行</div>{preflight.nextRuns.map(date => <div key={date.toISOString()}>{date.toLocaleString()} · {timezone}</div>)}</div> : null}</div> : null}
       </div>
-      <div className="mt-5 flex justify-end gap-2 border-t border-border-200/60 pt-4"><button disabled={!title.trim() || !prompt.trim() || !selectedModel || !selectedServer} onClick={() => { try { onSaveTemplate(currentInput()); setError(''); setTemplateSaved(true) } catch (cause) { setTemplateSaved(false); setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')) } }} className="mr-auto rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300 disabled:opacity-50">{t('taskPanel.saveTemplate')}</button><button onClick={onClose} className="rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300">{t('common:cancel')}</button><button disabled={saving || !title.trim() || !prompt.trim() || !selectedModel || (triggerType === 'task-success' || triggerType === 'task-failure') && !triggerTaskId} onClick={() => void save()} className="inline-flex items-center gap-1.5 rounded-lg bg-accent-main-100 px-4 py-2 text-[length:var(--fs-sm)] text-oncolor-100 transition-colors hover:bg-accent-main-200 disabled:opacity-50">{saving ? <SpinnerIcon size={12} className="animate-spin" /> : <CheckIcon size={12} />}{t('common:save')}</button></div>
+      <div className="mt-5 flex justify-end gap-2 border-t border-border-200/60 pt-4"><button disabled={!title.trim() || !prompt.trim() || !selectedModel || !selectedServer} onClick={() => { try { onSaveTemplate(currentInput()); setError(''); setTemplateSaved(true) } catch (cause) { setTemplateSaved(false); setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')) } }} className="mr-auto rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300 disabled:opacity-50">{t('taskPanel.saveTemplate')}</button><button disabled={saving || !selectedModel || !selectedServer} onClick={() => void preview()} className="rounded-lg border border-border-200 px-3 py-2 text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200 disabled:opacity-50">预检 / 试运行</button><button onClick={onClose} className="rounded-lg px-3 py-2 text-[length:var(--fs-sm)] text-text-300">{t('common:cancel')}</button><button disabled={saving || !title.trim() || !prompt.trim() || !selectedModel || (triggerType === 'task-success' || triggerType === 'task-failure') && !triggerTaskId} onClick={() => void save()} className="inline-flex items-center gap-1.5 rounded-lg bg-accent-main-100 px-4 py-2 text-[length:var(--fs-sm)] text-oncolor-100 transition-colors hover:bg-accent-main-200 disabled:opacity-50">{saving ? <SpinnerIcon size={12} className="animate-spin" /> : <CheckIcon size={12} />}{t('common:save')}</button></div>
   </Dialog>
 }
 
@@ -499,6 +562,15 @@ function readTaskTemplates(): TaskTemplate[] {
     const parsed: unknown = JSON.parse(value)
     if (!Array.isArray(parsed)) return []
     return parsed.filter((item): item is TaskTemplate => Boolean(item && typeof item === 'object' && typeof item.id === 'string' && typeof item.name === 'string' && isTaskInput(item.input)))
+  } catch {
+    return []
+  }
+}
+
+function readStringList(key: string) {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? '[]')
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
   } catch {
     return []
   }

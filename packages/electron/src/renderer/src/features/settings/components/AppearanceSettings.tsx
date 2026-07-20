@@ -11,6 +11,7 @@ import { saveData } from '../../../utils/downloadUtils'
 import { I18nTrans } from '../../../components/I18nTrans'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { CodeBlockThemeSettings } from './CodeBlockThemeSettings'
+import { accessibilityStore, useAccessibilitySettings } from '../../../store/accessibilityStore'
 
 // ============================================
 // Theme Preset Card
@@ -515,6 +516,7 @@ export function AppearanceSettings() {
     codeFontScale,
     setCodeFontScale,
   } = useTheme()
+  const accessibility = useAccessibilitySettings()
 
   const activeSnippet = customCSSSnippets.find(item => item.id === activeCustomCSSSnippetId) || null
   const hasUnsavedSnippetChanges = activeSnippet != null && activeSnippet.css !== customCSS
@@ -729,6 +731,13 @@ export function AppearanceSettings() {
             />
           </div>
         </SettingRow>
+      </SettingsSection>
+      <SettingsSection title={t('appearance.accessibility')}>
+        <p className="text-[length:var(--fs-sm)] text-text-400">{t('appearance.accessibilityDesc')}</p>
+        <SettingRow label={t('appearance.reducedMotion')} description={t('appearance.reducedMotionDesc')} onClick={() => accessibilityStore.set({ reducedMotion: !accessibility.reducedMotion })}><Toggle enabled={accessibility.reducedMotion} onChange={() => accessibilityStore.set({ reducedMotion: !accessibility.reducedMotion })} /></SettingRow>
+        <SettingRow label={t('appearance.highContrast')} description={t('appearance.highContrastDesc')} onClick={() => accessibilityStore.set({ highContrast: !accessibility.highContrast })}><Toggle enabled={accessibility.highContrast} onChange={() => accessibilityStore.set({ highContrast: !accessibility.highContrast })} /></SettingRow>
+        <SettingRow label={t('appearance.largeTargets')} description={t('appearance.largeTargetsDesc')} onClick={() => accessibilityStore.set({ largeTargets: !accessibility.largeTargets })}><Toggle enabled={accessibility.largeTargets} onChange={() => accessibilityStore.set({ largeTargets: !accessibility.largeTargets })} /></SettingRow>
+        <SettingRow label={t('appearance.visibleFocus')} description={t('appearance.visibleFocusDesc')} onClick={() => accessibilityStore.set({ visibleFocus: !accessibility.visibleFocus })}><Toggle enabled={accessibility.visibleFocus} onChange={() => accessibilityStore.set({ visibleFocus: !accessibility.visibleFocus })} /></SettingRow>
       </SettingsSection>
       <ConfirmDialog isOpen={deleteSnippet !== null} onClose={() => setDeleteSnippet(null)} onConfirm={() => { if (!deleteSnippet) return; deleteCustomCSSSnippet(deleteSnippet.id); setDeleteSnippet(null) }} title={t('appearance.deleteOverride')} description={deleteSnippet ? t('appearance.deleteOverrideConfirm', { name: deleteSnippet.name }) : ''} confirmText={t('common:delete')} variant="danger" />
     </div>

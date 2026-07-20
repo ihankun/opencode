@@ -24,6 +24,7 @@ import { soundStore, useSoundSettings } from '../../../store/soundStore'
 import { Toggle, SettingRow, SettingsCard } from './SettingsUI'
 import { BUILTIN_SOUNDS, SOUND_OPTIONS, isSoundSupported, playSound } from '../../../utils/soundPlayer'
 import type { NotificationType } from '../../../store/notificationStore'
+import { notificationPolicyStore, useNotificationPolicy } from '../../../store/notificationPolicyStore'
 
 // ============================================
 // Event type metadata
@@ -362,6 +363,7 @@ export function NotificationSettings() {
   const [testSending, setTestSending] = useState(false)
   const soundSettings = useSoundSettings()
   const soundSupported = isSoundSupported()
+  const policy = useNotificationPolicy()
 
   const handleTestNotification = async () => {
     setTestSending(true)
@@ -390,6 +392,14 @@ export function NotificationSettings() {
 
   return (
     <div className="space-y-4">
+      <SettingsCard title={t('notifications.deliveryPolicy')} description={t('notifications.deliveryPolicyDesc')}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <SettingRow label={t('notifications.quietHours')} description={t('notifications.quietHoursDesc')} onClick={() => notificationPolicyStore.set({ quietEnabled: !policy.quietEnabled })}><Toggle enabled={policy.quietEnabled} onChange={() => notificationPolicyStore.set({ quietEnabled: !policy.quietEnabled })} /></SettingRow>
+          <SettingRow label={t('notifications.groupBySession')} description={t('notifications.groupBySessionDesc')} onClick={() => notificationPolicyStore.set({ groupBySession: !policy.groupBySession })}><Toggle enabled={policy.groupBySession} onChange={() => notificationPolicyStore.set({ groupBySession: !policy.groupBySession })} /></SettingRow>
+        </div>
+        {policy.quietEnabled && <div className="mt-3 flex items-center gap-2 text-[length:var(--fs-xs)] text-text-400"><input type="time" value={policy.quietStart} onChange={event => notificationPolicyStore.set({ quietStart: event.target.value })} className="h-8 rounded-md border border-border-200 bg-bg-000 px-2 text-text-100" /><span>—</span><input type="time" value={policy.quietEnd} onChange={event => notificationPolicyStore.set({ quietEnd: event.target.value })} className="h-8 rounded-md border border-border-200 bg-bg-000 px-2 text-text-100" /></div>}
+        <div className="mt-3 grid gap-3 md:grid-cols-2"><label className="text-[length:var(--fs-xs)] text-text-300"><span className="mb-1 block">{t('notifications.rateLimit')}</span><input type="number" min={1} max={60} value={policy.maxPerMinute} onChange={event => notificationPolicyStore.set({ maxPerMinute: Number(event.target.value) })} className="h-8 w-full rounded-md border border-border-200 bg-bg-000 px-2 text-text-100" /></label><div><div className="mb-1 text-[length:var(--fs-xs)] text-text-300">{t('notifications.channels')}</div><div className="flex flex-wrap gap-3">{(['system', 'inApp', 'sound'] as const).map(channel => <label key={channel} className="flex items-center gap-1.5 text-[length:var(--fs-xs)] text-text-400"><input type="checkbox" checked={policy.channels[channel]} onChange={event => notificationPolicyStore.set({ channels: { ...policy.channels, [channel]: event.target.checked } })} />{t(`notifications.channel_${channel}`)}</label>)}</div></div></div>
+      </SettingsCard>
       {/* Row 1: System Notifications + In-App Alerts */}
       <div className="grid gap-4 xl:grid-cols-2">
         <SettingsCard

@@ -165,6 +165,47 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   }
 }
 
+:root[data-reduced-motion] *,
+:root[data-reduced-motion] *::before,
+:root[data-reduced-motion] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+:root[data-high-contrast] {
+  --border-200: var(--text-400);
+  --border-300: var(--text-300);
+}
+
+:root[data-high-contrast] :where(button, input, textarea, select, [role='button']) {
+  border-color: hsl(var(--text-400) / 0.75);
+}
+
+:root[data-large-targets] :where(button, [role='button'], input:not([type='checkbox']):not([type='radio']), select) {
+  min-height: 36px;
+}
+
+:root:not([data-visible-focus]) :where(button, input, textarea, select, [role='button'], [role='menuitem']):focus-visible {
+  outline: none;
+}
+
+.skip-to-composer {
+  position: fixed;
+  z-index: 20000;
+  left: 12px;
+  top: 8px;
+  transform: translateY(-160%);
+  border-radius: 8px;
+  background: hsl(var(--bg-000));
+  padding: 8px 12px;
+  color: hsl(var(--text-100));
+  box-shadow: 0 4px 20px hsl(var(--bg-000) / 0.4);
+}
+
+.skip-to-composer:focus { transform: translateY(0); }
+
 .toast-safe-top {
   top: calc(var(--app-safe-top, 0px) + 0.75rem);
 }
