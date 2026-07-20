@@ -2093,6 +2093,7 @@ function InputBoxComponent({
                   <div className="min-h-0 flex-1 overflow-hidden pt-4 pb-2">
                     <textarea
                       ref={textareaRef}
+                      data-composer-input
                       value={text}
                       onChange={handleChange}
                       onKeyDown={handleKeyDown}
@@ -2104,7 +2105,7 @@ function InputBoxComponent({
                       onBlur={handleBlur}
                       disabled={inputDisabled}
                       placeholder={homeMode ? t('emptyState.promptPlaceholder') : isCompact ? t('inputBox.replyToAgentMobile') : t('inputBox.replyToAgent')}
-                      className={`block w-full resize-none focus:outline-none focus:ring-0 bg-transparent text-text-100 placeholder:text-text-400 custom-scrollbar ${isCompact ? 'px-3' : 'px-4'}`}
+                      className={`block w-full resize-none border-0 bg-transparent text-text-100 shadow-none outline-none ring-0 placeholder:text-text-400 focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none custom-scrollbar ${isCompact ? 'px-3' : 'px-4'}`}
                       style={{
                         ...TEXT_STYLE,
                         minHeight: '24px',
