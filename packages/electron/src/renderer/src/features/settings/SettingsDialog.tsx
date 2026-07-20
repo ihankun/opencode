@@ -40,6 +40,7 @@ const ArchivedSessionsSettings = lazy(() => import('./components/ArchivedSession
 const SecuritySettings = lazy(() => import('./components/SecuritySettings').then(module => ({ default: module.SecuritySettings })))
 const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
+const ImBotSettings = lazy(() => import('./components/ImBotSettings').then(module => ({ default: module.ImBotSettings })))
 
 // ============================================
 // Types
@@ -62,6 +63,7 @@ export type SettingsTab =
   | 'security'
   | 'memory'
   | 'hooks'
+  | 'imBot'
   | 'about'
 
 interface SettingsDialogProps {
@@ -92,11 +94,13 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   security: <ShieldIcon size={15} />,
   memory: <AgentIcon size={15} />,
   hooks: <PlugIcon size={15} />,
+  imBot: <MessageSquareIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
   'servers',
   'hosting',
+  'imBot',
   'providers',
   'models',
   'agent',
@@ -132,6 +136,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.security',
   memory: 'tabs.memory',
   hooks: 'tabs.hooks',
+  imBot: 'tabs.imBot',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
@@ -152,11 +157,14 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.securityDesc',
   memory: 'tabs.memoryDesc',
   hooks: 'tabs.hooksDesc',
+  imBot: 'tabs.imBotDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.core', tabs: ['servers', 'hosting', 'providers', 'models', 'agent', 'chat', 'archived', 'memory', 'workspace', 'appearance', 'notifications'] },
+  { labelKey: 'groups.core', tabs: ['servers', 'providers', 'models', 'agent', 'chat', 'memory', 'workspace', 'hosting', 'imBot'] },
+  { labelKey: 'groups.general', tabs: ['appearance', 'notifications'] },
   { labelKey: 'groups.advanced', tabs: ['security', 'hooks', 'service', 'config', 'keybindings', 'about'] },
+  { labelKey: 'groups.archived', tabs: ['archived'] },
 ]
 
 // ============================================
@@ -199,6 +207,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <MemorySettings />
     case 'hooks':
       return <HooksSettings />
+    case 'imBot':
+      return <ImBotSettings />
     case 'about':
       return <AboutSettings />
     default:

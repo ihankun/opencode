@@ -17,6 +17,7 @@ import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
 import { getServerCredential, listServerCredentialIDs, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
 import { shouldUseMockKeychain } from "./keychain"
+import { ImBridgeService } from "./imBridge"
 
 let mainWindow: BrowserWindow | undefined
 let internalBrowserWindow: BrowserWindow | undefined
@@ -29,6 +30,10 @@ const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
 const appId = "com.hankun.opencodex"
+const imBridgeService = new ImBridgeService(
+  (state) => mainWindow?.webContents.send("im-bridge:state", state),
+  getServerCredential,
+)
 const taskScheduler = new TaskScheduler(async (task) => {
   if (task.serverId === "local" && server) return server.state
   const credential = await getServerCredential(task.serverId)
@@ -84,6 +89,13 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
   if (nativeTheme.themeSource === value) return
   nativeTheme.themeSource = value
 })
+
+ipcMain.handle("im-bridge:config-get", () => imBridgeService.config())
+ipcMain.handle("im-bridge:config-set", (_event, config: unknown) => imBridgeService.save(config))
+ipcMain.handle("im-bridge:state", () => imBridgeService.state())
+ipcMain.handle("im-bridge:start", () => imBridgeService.start(server?.state.url))
+ipcMain.handle("im-bridge:stop", () => imBridgeService.stop())
+ipcMain.handle("im-bridge:restart", () => imBridgeService.restart(server?.state.url))
 
 ipcMain.handle("credential:get", (_event, id: unknown) => {
   if (typeof id !== "string") throw new Error("Invalid server credential id")
@@ -268,6 +280,7 @@ async function createWindow() {
     writeLog("main", "window loadURL failed", error)
     mainWindow?.show()
   })
+  void imBridgeService.autoStart().catch((error) => writeLog("im-bridge", "automatic remote start failed", error))
   void startServer(url)
 }
 
@@ -330,11 +343,22 @@ async function startServer(url: string) {
     serverError = undefined
     server = await spawnServer(app.getPath("userData"), allowedOrigins(url))
     mainWindow?.webContents.send("server:updated", currentServerState())
+    void syncImBridgeServer(server.state.url).catch((error) => writeLog("im-bridge", "automatic start failed", error))
   } catch (error) {
     serverError = error instanceof Error ? error.message : String(error)
     writeLog("main", "failed to start opencode server", error)
     mainWindow?.webContents.send("server:updated", currentServerState())
   }
+}
+
+async function syncImBridgeServer(localServerUrl: string) {
+  const config = await imBridgeService.config()
+  const state = imBridgeService.state()
+  if (config.serverId === "local" && (state.status === "running" || state.status === "starting")) {
+    await imBridgeService.restart(localServerUrl)
+    return
+  }
+  await imBridgeService.autoStart(localServerUrl)
 }
 
 async function stopServer() {
@@ -511,7 +535,7 @@ app.on("before-quit", (event) => {
   event.preventDefault()
   isQuitting = true
   isStoppingForQuit = true
-  void taskScheduler.stop().then(stopServer).finally(() => app.exit(0))
+  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => app.exit(0))
 })
 
 app.on("window-all-closed", () => {

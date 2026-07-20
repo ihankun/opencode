@@ -1,4 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron"
+import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
+
+export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 
 export type CustomOpenCodeServerState = {
     status: "online"
@@ -220,6 +223,13 @@ export type CustomOpenCodeSecurityConfig = {
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
+  imBridgeConfig(): Promise<ImBridgeConfig>
+  updateImBridgeConfig(config: ImBridgeConfig): Promise<ImBridgeConfig>
+  imBridgeState(): Promise<ImBridgeState>
+  startImBridge(): Promise<ImBridgeState>
+  stopImBridge(): Promise<ImBridgeState>
+  restartImBridge(): Promise<ImBridgeState>
+  onImBridgeStateChanged(callback: (state: ImBridgeState) => void): () => void
   security(): Promise<CustomOpenCodeSecurityConfig>
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
   serverCredential(id: string): Promise<CustomOpenCodeServerCredential | undefined>
@@ -280,6 +290,17 @@ export type CustomOpenCodeApi = {
 const api: CustomOpenCodeApi = {
   server: () => ipcRenderer.invoke("server:get"),
   restartServer: () => ipcRenderer.invoke("server:restart"),
+  imBridgeConfig: () => ipcRenderer.invoke("im-bridge:config-get"),
+  updateImBridgeConfig: (config) => ipcRenderer.invoke("im-bridge:config-set", config),
+  imBridgeState: () => ipcRenderer.invoke("im-bridge:state"),
+  startImBridge: () => ipcRenderer.invoke("im-bridge:start"),
+  stopImBridge: () => ipcRenderer.invoke("im-bridge:stop"),
+  restartImBridge: () => ipcRenderer.invoke("im-bridge:restart"),
+  onImBridgeStateChanged(callback) {
+    const listener = (_event: unknown, state: ImBridgeState) => callback(state)
+    ipcRenderer.on("im-bridge:state", listener)
+    return () => ipcRenderer.removeListener("im-bridge:state", listener)
+  },
   security: () => ipcRenderer.invoke("security:get"),
   updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
   serverCredential: (id) => ipcRenderer.invoke("credential:get", id),

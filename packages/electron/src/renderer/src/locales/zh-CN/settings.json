@@ -13,6 +13,8 @@
     "serversDesc": "后端连接和快速切换活跃端点",
     "hosting": "代码托管",
     "hostingDesc": "管理 GitHub、GitLab 和 Bitbucket 平台凭证",
+    "imBot": "IM机器人",
+    "imBotDesc": "通过飞书、QQ、Telegram、Discord、微信或钉钉远程对话",
     "providers": "供应商",
     "providersDesc": "连接模型供应商并保存 API Key",
     "models": "模型",
@@ -48,7 +50,9 @@
   },
   "groups": {
     "core": "核心",
-    "advanced": "高级"
+    "general": "通用",
+    "advanced": "高级",
+    "archived": "已归档"
   },
   "archived": {
     "title": "已归档对话",
@@ -61,6 +65,44 @@
     "deleteTitle": "永久删除对话？",
     "deleteWarning": "即将永久删除“{{title}}”。对应的会话、消息和部件数据会被物理删除，无法恢复。",
     "deleteForever": "永久删除"
+  },
+  "imBot": {
+    "title": "IM机器人",
+    "desktopOnly": "IM 桥接仅在 OpenCodex 桌面版中可用。",
+    "serviceTitle": "桥接服务",
+    "serviceDescription": "独立运行 IM 消息桥接进程，并连接到所选 OpenCode Server。",
+    "connectionTitle": "OpenCode 连接",
+    "connectionDescription": "机器人收到消息后，将在以下服务器和工作目录中创建或继续任务。",
+    "channelsTitle": "机器人平台",
+    "channelsDescription": "启用一个或多个平台，并填写平台后台生成的机器人凭证。",
+    "server": "执行服务器",
+    "agent": "默认 Agent",
+    "directory": "执行目录",
+    "useCurrentProject": "使用当前项目",
+    "debounce": "连续消息合并时间（毫秒）",
+    "verificationToken": "Verification Token",
+    "webhookPort": "Webhook 端口",
+    "allowedChatIds": "允许的 Chat ID（逗号分隔，留空允许所有）",
+    "allowedChannelIds": "允许的 Channel ID（逗号分隔，留空允许所有）",
+    "sessionFile": "会话文件路径（可选）",
+    "botName": "机器人名称（可选）",
+    "securityWarning": "IM 消息可以驱动 Agent 在所选目录执行任务。请限制机器人可见范围，并优先填写 Telegram Chat ID 或 Discord Channel ID 白名单。配置文件保存在 ~/.opencodex/im-bridge，权限为仅当前用户可读写。",
+    "logsTitle": "运行日志",
+    "logsDescription": "显示最近 300 行桥接日志，可用于查看连接状态、微信登录提示和平台错误。",
+    "noLogs": "尚无运行日志",
+    "start": "启动",
+    "stop": "停止",
+    "restart": "重启",
+    "autoStart": "应用启动时自动运行",
+    "saveRestart": "保存并重启",
+    "saved": "配置已保存",
+    "savedAndRestarted": "配置已保存，桥接服务正在重启",
+    "status": {
+      "stopped": "已停止",
+      "starting": "启动中",
+      "running": "运行中",
+      "error": "异常"
+    }
   },
   "servers": {
     "connections": "连接",

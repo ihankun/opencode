@@ -13,6 +13,8 @@
     "serversDesc": "Backend connections and fast active endpoint switching",
     "hosting": "Code Hosting",
     "hostingDesc": "Manage GitHub, GitLab, and Bitbucket credentials",
+    "imBot": "IM Bots",
+    "imBotDesc": "Chat remotely through Feishu, QQ, Telegram, Discord, WeChat, or DingTalk",
     "providers": "Providers",
     "providersDesc": "Connect model providers and save API keys",
     "models": "Models",
@@ -48,7 +50,9 @@
   },
   "groups": {
     "core": "Core",
-    "advanced": "Advanced"
+    "general": "General",
+    "advanced": "Advanced",
+    "archived": "Archived"
   },
   "archived": {
     "title": "Archived Chats",
@@ -61,6 +65,44 @@
     "deleteTitle": "Permanently delete chat?",
     "deleteWarning": "You are about to permanently delete “{{title}}”. Its session, messages, and parts will be physically removed and cannot be recovered.",
     "deleteForever": "Delete forever"
+  },
+  "imBot": {
+    "title": "IM Bots",
+    "desktopOnly": "The IM bridge is only available in the OpenCodex desktop app.",
+    "serviceTitle": "Bridge service",
+    "serviceDescription": "Run the IM message bridge in an isolated process connected to the selected OpenCode Server.",
+    "connectionTitle": "OpenCode connection",
+    "connectionDescription": "Messages received by bots create or continue tasks on this server and working directory.",
+    "channelsTitle": "Bot platforms",
+    "channelsDescription": "Enable one or more platforms and enter credentials created in their bot consoles.",
+    "server": "Execution server",
+    "agent": "Default agent",
+    "directory": "Working directory",
+    "useCurrentProject": "Use current project",
+    "debounce": "Message merge window (ms)",
+    "verificationToken": "Verification token",
+    "webhookPort": "Webhook port",
+    "allowedChatIds": "Allowed Chat IDs (comma-separated; empty allows all)",
+    "allowedChannelIds": "Allowed Channel IDs (comma-separated; empty allows all)",
+    "sessionFile": "Session file path (optional)",
+    "botName": "Bot name (optional)",
+    "securityWarning": "IM messages can instruct the agent to work in the selected directory. Restrict bot visibility and preferably set Telegram Chat ID or Discord Channel ID allowlists. Configuration is stored at ~/.opencodex/im-bridge with user-only permissions.",
+    "logsTitle": "Runtime logs",
+    "logsDescription": "Shows the latest 300 bridge log lines for connection status, WeChat login prompts, and platform errors.",
+    "noLogs": "No runtime logs yet",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "autoStart": "Run when the app starts",
+    "saveRestart": "Save and restart",
+    "saved": "Configuration saved",
+    "savedAndRestarted": "Configuration saved; the bridge is restarting",
+    "status": {
+      "stopped": "Stopped",
+      "starting": "Starting",
+      "running": "Running",
+      "error": "Error"
+    }
   },
   "servers": {
     "connections": "Connections",

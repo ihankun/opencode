@@ -29,6 +29,7 @@ const definitions = (tab: SettingsTab, labelKeys: string[]): SettingsSearchDefin
 export const SETTINGS_SEARCH_DEFINITIONS: SettingsSearchDefinition[] = [
   ...definitions('servers', ['servers.connections']),
   ...definitions('hosting', ['servers.hosting.title']),
+  ...definitions('imBot', ['imBot.serviceTitle', 'imBot.connectionTitle', 'imBot.channelsTitle']),
   ...definitions('providers', ['tabs.providers']),
   ...definitions('models', ['models.visibility']),
   ...definitions('agent', ['agent.behavior', 'agent.toolInteraction', 'chat.alwaysAllowMode', 'chat.approvePendingOnFullAuto', 'chat.queueFollowupMessages', 'chat.immersiveMode', 'chat.inlineToolRequests', 'chat.descriptiveToolSteps', 'chat.processCollapse', 'chat.compactInlinePermission', 'chat.toolCardStyle']),

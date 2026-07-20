@@ -15,9 +15,11 @@ export default defineConfig({
         input: {
           index: "src/main/index.ts",
           sidecar: "src/main/sidecar.ts",
+          imBridgeSidecar: "vendor/opencode-im-bridge/src/index.ts",
         },
       },
       externalizeDeps: {
+        exclude: ["@opencode-ai/sdk"],
         include: [nodePtyPkg],
       },
     },
