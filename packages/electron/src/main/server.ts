@@ -130,7 +130,13 @@ function createEnv() {
   delete env.DEBUG
   if (process.platform === "linux") delete env.LD_PRELOAD
   env.OPENCODE_SERVER_MODULE = serverModuleUrl()
+  env.OPENCODE_SANDBOX_RUNTIME_ROOT = sandboxRuntimeRoot()
   return env
+}
+
+function sandboxRuntimeRoot() {
+  if (app.isPackaged) return join(process.resourcesPath, "sandbox-runtime")
+  return join(dirname(fileURLToPath(import.meta.url)), "../../../sandbox-runtime")
 }
 
 function serverModuleUrl() {

@@ -206,6 +206,8 @@ async function load() {
 }
 
 function runtime(current: Config, cwd: string, worktree: string): Partial<SandboxRuntimeConfig> {
+  const root = process.env.OPENCODE_SANDBOX_RUNTIME_ROOT
+  const arch = process.arch === "x64" || process.arch === "arm64" ? process.arch : undefined
   return {
     filesystem: {
       denyRead: current.sandbox.denyRead,
@@ -220,6 +222,8 @@ function runtime(current: Config, cwd: string, worktree: string): Partial<Sandbo
       allowAllUnixSockets: current.sandbox.allowAllUnixSockets,
       allowLocalBinding: current.sandbox.allowLocalBinding,
     },
+    seccomp: root && arch ? { applyPath: path.join(root, "vendor", "seccomp", arch, "apply-seccomp") } : undefined,
+    windows: root && arch ? { srtWin: { path: path.join(root, "vendor", "srt-win", arch, "srt-win.exe") } } : undefined,
   }
 }
 
