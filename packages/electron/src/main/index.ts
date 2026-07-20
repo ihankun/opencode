@@ -14,7 +14,7 @@ import { spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
 import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
-import { listServerCredentials, setServerCredential } from "./credentials"
+import { getServerCredential, listServerCredentialIDs, setServerCredential } from "./credentials"
 import type { ServerCredential } from "./credentials"
 
 let mainWindow: BrowserWindow | undefined
@@ -30,7 +30,7 @@ const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
 const appId = "com.hankun.opencodex"
 const taskScheduler = new TaskScheduler(async (task) => {
   if (task.serverId === "local" && server) return server.state
-  const credential = (await listServerCredentials())[task.serverId]
+  const credential = await getServerCredential(task.serverId)
   return {
     url: task.serverUrl,
     ...(credential ? credential : {}),
@@ -84,7 +84,10 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
   nativeTheme.themeSource = value
 })
 
-ipcMain.handle("credential:list", () => listServerCredentials())
+ipcMain.handle("credential:get", (_event, id: unknown) => {
+  if (typeof id !== "string") throw new Error("Invalid server credential id")
+  return getServerCredential(id)
+})
 ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) => {
   if (typeof id !== "string") throw new Error("Invalid server credential id")
   if (rawCredential === null) return setServerCredential(id, null)
@@ -96,8 +99,8 @@ ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) =
   return setServerCredential(id, { username: credential.username, password: credential.password })
 })
 ipcMain.handle("hosting:credentials", async () => {
-  const credentials = await listServerCredentials()
-  return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, !!credentials[`hosting.${provider}`]?.password]))
+  const ids = new Set(await listServerCredentialIDs())
+  return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, ids.has(`hosting.${provider}`)]))
 })
 ipcMain.handle("hosting:credential-set", (_event, provider: unknown, rawCredential: unknown) => {
   const name = normalizeHostingProvider(provider)
@@ -1437,7 +1440,7 @@ async function createHostedPullRequest(rawInput: unknown) {
   const repositoryParts = repository.split("/").filter(Boolean)
   if (repositoryParts.length < 2 || (provider !== "gitlab" && repositoryParts.length !== 2)) throw new Error("The Git remote must identify one repository")
   const [owner, name] = repositoryParts
-  const credential = (await listServerCredentials())[`hosting.${provider}`]
+  const credential = await getServerCredential(`hosting.${provider}`)
   if (!credential?.password) throw new Error(`Configure a ${provider} access token in Settings before creating a pull request`)
 
   const request = provider === "github"

@@ -56,7 +56,7 @@ export * from './controlPlane'
 // ============================================
 
 export async function getActiveModels(directory?: string, serverId?: string): Promise<ModelInfo[]> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   const sdk = getSDKClient(serverId)
   const data = requireRecord(
     unwrap(await sdk.config.providers({ directory: formatPathForApi(directory) })),
@@ -102,7 +102,7 @@ export async function getActiveModels(directory?: string, serverId?: string): Pr
 }
 
 export async function getDefaultModels(directory?: string, serverId?: string): Promise<Record<string, string>> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   const sdk = getSDKClient(serverId)
   const data = requireRecord(
     unwrap(await sdk.config.providers({ directory: formatPathForApi(directory) })),
@@ -121,7 +121,7 @@ export async function getDefaultModels(directory?: string, serverId?: string): P
  * 获取当前项目
  */
 export async function getCurrentProject(directory?: string, serverId?: string): Promise<ApiProject> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   const sdk = getSDKClient(serverId)
   return unwrap(await sdk.project.current({ directory: formatPathForApi(directory) }))
 }
@@ -130,7 +130,7 @@ export async function getCurrentProject(directory?: string, serverId?: string): 
  * 获取项目列表
  */
 export async function getProjects(directory?: string, serverId?: string): Promise<ApiProject[]> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   const sdk = getSDKClient(serverId)
   return requireArray<ApiProject>(unwrap(await sdk.project.list({ directory: formatPathForApi(directory) })), 'Invalid OpenCode project list response')
 }

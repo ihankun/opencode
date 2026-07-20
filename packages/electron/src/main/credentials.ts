@@ -14,23 +14,25 @@ type CredentialFile = {
 
 let writeQueue = Promise.resolve()
 
-export async function listServerCredentials(): Promise<Record<string, ServerCredential>> {
-  if (!safeStorage.isEncryptionAvailable()) return {}
-  const stored = await readCredentialFile()
-  return Object.entries(stored.credentials).reduce<Record<string, ServerCredential>>((result, [id, encrypted]) => {
-    const credential = decryptCredential(encrypted)
-    if (credential) result[id] = credential
-    return result
-  }, {})
+export async function getServerCredential(id: string): Promise<ServerCredential | undefined> {
+  if (!isCredentialID(id)) return
+  const encrypted = (await readCredentialFile()).credentials[id]
+  if (!encrypted || !safeStorage.isEncryptionAvailable()) return
+  return decryptCredential(encrypted)
+}
+
+export async function listServerCredentialIDs(): Promise<string[]> {
+  return Object.keys((await readCredentialFile()).credentials)
 }
 
 export function setServerCredential(id: string, credential: ServerCredential | null): Promise<void> {
-  if (!/^[a-zA-Z0-9._-]{1,200}$/.test(id)) return Promise.reject(new Error("Invalid server credential id"))
+  if (!isCredentialID(id)) return Promise.reject(new Error("Invalid server credential id"))
   const operation = writeQueue.then(async () => {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is unavailable")
     const stored = await readCredentialFile()
+    if (!credential && !stored.credentials[id]) return
     if (!credential) delete stored.credentials[id]
     if (credential) {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is unavailable")
       stored.credentials[id] = safeStorage.encryptString(JSON.stringify(credential)).toString("base64")
     }
     const file = credentialFilePath()
@@ -41,6 +43,10 @@ export function setServerCredential(id: string, credential: ServerCredential | n
   })
   writeQueue = operation.catch(() => undefined)
   return operation
+}
+
+function isCredentialID(id: string) {
+  return /^[a-zA-Z0-9._-]{1,200}$/.test(id)
 }
 
 function credentialFilePath() {

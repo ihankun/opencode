@@ -222,7 +222,7 @@ export type CustomOpenCodeApi = {
   restartServer(): Promise<CustomOpenCodeServerState>
   security(): Promise<CustomOpenCodeSecurityConfig>
   updateSecurity(config: CustomOpenCodeSecurityConfig): Promise<CustomOpenCodeSecurityConfig>
-  serverCredentials(): Promise<Record<string, CustomOpenCodeServerCredential>>
+  serverCredential(id: string): Promise<CustomOpenCodeServerCredential | undefined>
   setServerCredential(id: string, credential: CustomOpenCodeServerCredential | null): Promise<void>
   hostingCredentials(): Promise<Record<CustomOpenCodeHostingProvider, boolean>>
   setHostingCredential(provider: CustomOpenCodeHostingProvider, credential: CustomOpenCodeServerCredential | null): Promise<void>
@@ -282,7 +282,7 @@ const api: CustomOpenCodeApi = {
   restartServer: () => ipcRenderer.invoke("server:restart"),
   security: () => ipcRenderer.invoke("security:get"),
   updateSecurity: (config) => ipcRenderer.invoke("security:set", config),
-  serverCredentials: () => ipcRenderer.invoke("credential:list"),
+  serverCredential: (id) => ipcRenderer.invoke("credential:get", id),
   setServerCredential: (id, credential) => ipcRenderer.invoke("credential:set", id, credential),
   hostingCredentials: () => ipcRenderer.invoke("hosting:credentials"),
   setHostingCredential: (provider, credential) => ipcRenderer.invoke("hosting:credential-set", provider, credential),

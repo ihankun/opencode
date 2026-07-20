@@ -188,7 +188,8 @@ class ServerStore {
   private clockCalibrationMap = new Map<string, ServerClockCalibration>()
   private listeners: Set<Listener> = new Set()
   private localServerUrlOverride: string | null = null
-  private credentialsReady: Promise<void>
+  private loadedCredentialIds = new Set<string>()
+  private credentialLoads = new Map<string, Promise<void>>()
 
   // server 切换监听器（用于触发 SSE 重连等副作用，避免循环依赖）
   private serverChangeListeners: Set<(newServerId: string, reason: ServerChangeReason) => void> = new Set()
@@ -204,7 +205,6 @@ class ServerStore {
   constructor() {
     this.loadFromStorage()
     this.updateSnapshots()
-    this.credentialsReady = this.hydrateCredentials().catch(() => undefined)
   }
 
   // ============================================
@@ -282,21 +282,32 @@ class ServerStore {
   }
 
   private supportsSecureCredentials(): boolean {
-    return typeof window !== 'undefined' && !!window.customOpenCode?.serverCredentials
+    return typeof window !== 'undefined' && !!window.customOpenCode?.serverCredential
   }
 
-  private async hydrateCredentials(): Promise<void> {
-    if (!this.supportsSecureCredentials()) return
-
-    const legacyCredentials = this.servers.flatMap(server => server.auth ? [[server.id, server.auth] as const] : [])
-    await Promise.all(legacyCredentials.map(([id, auth]) => window.customOpenCode.setServerCredential(id, auth)))
-    const credentials = await window.customOpenCode.serverCredentials()
-    this.servers = this.servers.map(server => ({ ...server, auth: credentials[server.id] }))
-    this.saveToStorage()
-    this.notify()
-    if (this.activeServerId && credentials[this.activeServerId]) {
-      this.notifyServerChange(this.activeServerId, 'credential-change')
-    }
+  private ensureCredential(serverId: string): Promise<void> {
+    if (!this.supportsSecureCredentials() || this.loadedCredentialIds.has(serverId)) return Promise.resolve()
+    const pending = this.credentialLoads.get(serverId)
+    if (pending) return pending
+    const load = (async () => {
+      const index = this.servers.findIndex(server => server.id === serverId)
+      if (index === -1) return
+      const legacy = this.servers[index].auth
+      if (legacy) {
+        await window.customOpenCode.setServerCredential(serverId, legacy)
+        this.loadedCredentialIds.add(serverId)
+        this.saveToStorage()
+        return
+      }
+      const credential = await window.customOpenCode.serverCredential(serverId)
+      this.loadedCredentialIds.add(serverId)
+      if (!credential) return
+      this.servers[index] = { ...this.servers[index], auth: credential }
+      this.notify()
+      if (this.activeServerId === serverId) this.notifyServerChange(serverId, 'credential-change')
+    })().finally(() => this.credentialLoads.delete(serverId))
+    this.credentialLoads.set(serverId, load)
+    return load
   }
 
   private persistCredential(id: string, auth: ServerAuth | null): void {
@@ -379,8 +390,8 @@ class ServerStore {
     return this._serversSnapshot.find(server => server.id === serverId) ?? null
   }
 
-  whenCredentialsReady(): Promise<void> {
-    return this.credentialsReady
+  whenCredentialsReady(serverId = this.getActiveServerId()): Promise<void> {
+    return this.ensureCredential(serverId)
   }
 
   getLocalServer(): ServerConfig | null {
@@ -470,7 +481,10 @@ class ServerStore {
       url: validateServerUrl(config.url, config.allowInsecureHttp),
     }
     this.servers.push(server)
-    if (server.auth) this.persistCredential(server.id, server.auth)
+    if (server.auth) {
+      this.loadedCredentialIds.add(server.id)
+      this.persistCredential(server.id, server.auth)
+    }
     this.saveToStorage()
     this.notify()
     return server
@@ -494,6 +508,7 @@ class ServerStore {
       this.localServerUrlOverride = null
     }
     if (Object.prototype.hasOwnProperty.call(updates, 'auth')) {
+      this.loadedCredentialIds.add(id)
       this.persistCredential(id, updates.auth ?? null)
     }
     this.saveToStorage()
@@ -530,6 +545,8 @@ class ServerStore {
     this.healthMap.delete(id)
     this.healthCheckSeqMap.delete(id)
     this.clockCalibrationMap.delete(id)
+    this.loadedCredentialIds.delete(id)
+    this.credentialLoads.delete(id)
     this.persistCredential(id, null)
 
     // 如果删除的是当前选中的，切换到默认
@@ -558,6 +575,7 @@ class ServerStore {
 
     if (changed) {
       this.notifyServerChange(id, 'server-switch')
+      void this.ensureCredential(id).catch(error => console.error('Failed to load secure server credential', error))
     }
 
     return true
@@ -583,7 +601,7 @@ class ServerStore {
    * 检查服务器健康状态
    */
   async checkHealth(serverId: string): Promise<ServerHealth> {
-    await this.credentialsReady
+    await this.ensureCredential(serverId)
     const storedServer = this.servers.find(s => s.id === serverId)
     if (!storedServer) {
       return { status: 'error', error: 'Server not found' }

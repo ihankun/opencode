@@ -112,7 +112,7 @@ export function getSDKClient(serverId = serverStore.getActiveServerId()): Openco
 }
 
 export async function apiFetchJson<T>(path: string, init?: RequestInit, serverId = serverStore.getActiveServerId()): Promise<T> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   await preparePlatformNetwork()
 
   const url = new URL(path, requireServer(serverId).url)
@@ -149,7 +149,7 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit, serverId
  * 在应用初始化时应该先调一次这个
  */
 export async function getSDKClientAsync(serverId = serverStore.getActiveServerId()): Promise<OpencodeClient> {
-  await serverStore.whenCredentialsReady()
+  await serverStore.whenCredentialsReady(serverId)
   await preparePlatformNetwork()
   _cachedClients.delete(serverId)
   return getSDKClient(serverId)
