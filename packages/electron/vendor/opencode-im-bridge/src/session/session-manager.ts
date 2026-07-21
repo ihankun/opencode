@@ -26,6 +26,10 @@ function getWorkingDirectory(): string {
   return process.env.OPENCODE_CWD || process.cwd()
 }
 
+function directoryHeaders(): Record<string, string> {
+  return { "x-opencode-directory": getWorkingDirectory() }
+}
+
 interface TuiSession {
   id: string
   title?: string
@@ -94,7 +98,9 @@ export function createSessionManager(
 
   async function sessionExistsOnServer(sessionId: string): Promise<boolean> {
     try {
-      const resp = await fetch(`${serverUrl}/session/${sessionId}`)
+      const resp = await fetch(`${serverUrl}/session/${sessionId}`, {
+        headers: directoryHeaders(),
+      })
       return resp.status !== 404
     } catch {
       return true
@@ -106,7 +112,7 @@ export function createSessionManager(
     const url = `${serverUrl}/session?roots=true&limit=1&directory=${encodeURIComponent(cwd)}`
 
     try {
-      const resp = await fetch(url)
+      const resp = await fetch(url, { headers: directoryHeaders() })
       if (!resp.ok) return null
 
       const sessions = (await resp.json()) as TuiSession[]
@@ -128,7 +134,10 @@ export function createSessionManager(
   async function createNewSession(feishuKey: string): Promise<string> {
     const resp = await fetch(`${serverUrl}/session`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...directoryHeaders(),
+      },
       body: JSON.stringify({ title: `Feishu chat ${feishuKey}` }),
     })
 

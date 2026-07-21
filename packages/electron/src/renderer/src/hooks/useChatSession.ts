@@ -29,6 +29,7 @@ import {
   getSessionMessages,
   abortSession,
   getSelectableAgents,
+  onAgentsChanged,
   getPendingPermissions,
   getPendingQuestions,
   prefetchCommands,
@@ -522,9 +523,13 @@ export function useChatSession({
 
   // Load agents
   useEffect(() => {
-    getSelectableAgents(currentDirectory)
-      .then(setAgents)
-      .catch(err => handleError('fetch agents', err))
+    const load = () => {
+      getSelectableAgents(currentDirectory)
+        .then(setAgents)
+        .catch(err => handleError('fetch agents', err))
+    }
+    load()
+    return onAgentsChanged(load)
   }, [currentDirectory])
 
   // Preload @ root directory and / commands for current session directory

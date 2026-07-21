@@ -31,8 +31,6 @@ export function WorkspaceSettings() {
 
   return (
     <div>
-      <ProjectOverview />
-      <ProjectProfileSettings />
       <SettingsSection title={t('workspace.layout')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('workspace.layoutDesc')}</p>
 

@@ -572,7 +572,6 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
 
   useEffect(() => {
     const issues: TaskPreflightIssue[] = []
-    if (!currentDirectory) issues.push({ level: 'warning', message: '未选择项目，将在服务器默认目录执行。' })
     if (!activeServer) issues.push({ level: 'error', message: '没有可用的执行服务器。' })
     if (activeHealth && activeHealth.status !== 'online' && activeHealth.status !== 'checking') issues.push({ level: 'error', message: activeHealth.error || '执行服务器不可用。' })
     if (activeHealth?.compatibility === 'incompatible') issues.push({ level: 'error', message: '服务器版本与当前客户端不兼容。' })
@@ -582,7 +581,7 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
     if (projectProfile?.setupCommands.length) issues.push({ level: 'info', message: `项目 Profile 配置了 ${projectProfile.setupCommands.length} 条初始化命令。` })
     setPreflightIssues(issues)
     onPreflight(issues)
-  }, [activeHealth, activeServer, currentDirectory, dirtyCount, executionMode, onPreflight, projectProfile?.setupCommands.length, supportsWorktree])
+  }, [activeHealth, activeServer, dirtyCount, executionMode, onPreflight, projectProfile?.setupCommands.length, supportsWorktree])
 
   const triggerClass =
     'inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[length:var(--fs-sm)] font-normal text-text-100 transition-colors hover:bg-bg-200/70 disabled:opacity-60'

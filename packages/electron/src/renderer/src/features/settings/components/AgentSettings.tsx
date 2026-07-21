@@ -5,12 +5,28 @@ import type { AlwaysAllowMode } from '../../../store/autoApproveStore'
 import { themeStore, type ToolCardStyle } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
-import { useDirectory } from '../../../hooks'
+import { notifyAgentsChanged } from '../../../api/agent'
+import { useDirectory, useModels } from '../../../hooks'
 import type { AgentConfig, Config } from '../../../types/api/config'
 import { Button, Dialog } from '../../../components/ui'
 import { apiErrorHandler } from '../../../utils'
 
 type AgentDraft = AgentConfig & { name: string }
+
+const agentColors = [
+  { value: 'accent', background: 'var(--color-accent-main-100)', zh: '强调色', en: 'Accent' },
+  { value: 'secondary', background: 'var(--color-accent-secondary-100)', zh: '辅助色', en: 'Secondary' },
+  { value: 'success', background: 'var(--color-success-100)', zh: '绿色', en: 'Green' },
+  { value: 'warning', background: 'var(--color-warning-100)', zh: '橙色', en: 'Orange' },
+  { value: 'error', background: 'var(--color-danger-100)', zh: '红色', en: 'Red' },
+  { value: 'info', background: 'var(--color-info-100)', zh: '蓝色', en: 'Blue' },
+]
+
+function agentColor(color: unknown) {
+  if (typeof color !== 'string') return 'var(--color-accent-main-100)'
+  if (color.startsWith('#')) return color
+  return agentColors.find(option => option.value === color)?.background ?? 'var(--color-accent-main-100)'
+}
 
 const emptyAgent: AgentDraft = {
   name: '',
@@ -175,6 +191,7 @@ export function AgentSettings() {
 function AgentProfiles() {
   const { i18n } = useTranslation()
   const { currentDirectory } = useDirectory()
+  const { models, isLoading: modelsLoading, error: modelsError } = useModels()
   const [scope, setScope] = useState<'global' | 'project'>(currentDirectory ? 'project' : 'global')
   const [config, setConfig] = useState<Config>()
   const [draft, setDraft] = useState<AgentDraft>()
@@ -188,6 +205,33 @@ function AgentProfiles() {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return []
     return Object.entries(value as Record<string, AgentConfig>).filter((entry): entry is [string, AgentConfig] => Boolean(entry[1]) && typeof entry[1] === 'object')
   }, [config])
+  const selectedModel = draft?.model
+    ? models.find(model => `${model.providerId}/${model.id}` === draft.model)
+    : undefined
+
+  const permissionAction = (name: 'edit' | 'bash') => {
+    try {
+      const value = JSON.parse(permissions || '{}') as unknown
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return 'ask'
+      const action = (value as Record<string, unknown>)[name]
+      return action === 'allow' || action === 'deny' ? action : 'ask'
+    } catch {
+      return 'ask'
+    }
+  }
+
+  const setPermissionAction = (name: 'edit' | 'bash', action: string) => {
+    const value = (() => {
+      try {
+        const parsed = JSON.parse(permissions || '{}') as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+      } catch {
+        // Replacing an invalid advanced draft through a basic control is intentional.
+      }
+      return {}
+    })()
+    setPermissions(JSON.stringify({ ...value, [name]: action }, null, 2))
+  }
 
   useEffect(() => {
     let disposed = false
@@ -228,6 +272,7 @@ function AgentProfiles() {
     try {
       const existing = (config as unknown as { agent?: Record<string, AgentConfig> }).agent ?? {}
       const name = draft.name.trim()
+      const steps = draft.steps ?? draft.maxSteps
       const nextAgents = { ...existing }
       if (originalName && originalName !== name) nextAgents[originalName] = { ...nextAgents[originalName], disable: true }
       nextAgents[name] = {
@@ -238,13 +283,14 @@ function AgentProfiles() {
         prompt: draft.prompt?.trim() || undefined,
         color: draft.color || undefined,
         hidden: draft.mode === 'subagent' ? draft.hidden : undefined,
-        maxSteps: draft.maxSteps && draft.maxSteps > 0 ? draft.maxSteps : undefined,
+        steps: steps && steps > 0 ? steps : undefined,
         permission,
         disable: false,
       }
       const next = { ...(config as unknown as Record<string, unknown>), agent: nextAgents } as unknown as Config
       const saved = scope === 'project' && currentDirectory ? await updateConfig(next, currentDirectory) : await updateGlobalConfig(next)
       setConfig(saved)
+      notifyAgentsChanged()
       setDraft(undefined)
     } catch (cause) {
       apiErrorHandler('save agent profile', cause)
@@ -261,6 +307,7 @@ function AgentProfiles() {
       const existing = (config as unknown as { agent?: Record<string, AgentConfig> }).agent ?? {}
       const next = { ...(config as unknown as Record<string, unknown>), agent: { ...existing, [name]: { ...value, disable: !value.disable } } } as unknown as Config
       setConfig(scope === 'project' && currentDirectory ? await updateConfig(next, currentDirectory) : await updateGlobalConfig(next))
+      notifyAgentsChanged()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -284,7 +331,7 @@ function AgentProfiles() {
       <div className="mt-3 space-y-2">
         {agents.length === 0 ? <div className="rounded-lg border border-dashed border-border-200 px-3 py-6 text-center text-[length:var(--fs-sm)] text-text-400">{zh ? '当前作用域没有自定义 Agent。' : 'No custom agents in this scope.'}</div> : agents.map(([name, value]) => (
           <div key={name} className="flex items-center gap-3 rounded-lg border border-border-200/60 bg-bg-000/40 px-3 py-2.5">
-            <span className="h-3 w-3 rounded-full" style={{ background: typeof value.color === 'string' && value.color.startsWith('#') ? value.color : 'var(--color-accent-main-100)' }} />
+            <span className="h-3 w-3 rounded-full" style={{ background: agentColor(value.color) }} />
             <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{name}</span><span className="rounded bg-bg-200 px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400">{value.mode ?? 'all'}</span>{value.disable ? <span className="text-[length:var(--fs-xxs)] text-warning-100">{zh ? '已停用' : 'Disabled'}</span> : null}</div><p className="truncate text-[length:var(--fs-xs)] text-text-400">{value.description || value.model || (zh ? '未填写描述' : 'No description')}</p></div>
             <Button size="sm" variant="secondary" onClick={() => open(name, value)}>{zh ? '编辑' : 'Edit'}</Button>
             <Button size="sm" variant="secondary" disabled={busy} onClick={() => open(`${name}-copy`, { ...value, disable: false })}>{zh ? '复制' : 'Duplicate'}</Button>
@@ -294,20 +341,99 @@ function AgentProfiles() {
       </div>
       <Dialog isOpen={Boolean(draft)} onClose={() => setDraft(undefined)} title={originalName ? (zh ? '编辑 Agent' : 'Edit agent') : (zh ? '新建 Agent' : 'New agent')} width={720}>
         {draft ? <div className="space-y-3">
+          <div className="rounded-lg border border-accent-main-100/20 bg-accent-main-100/5 px-3 py-2 text-[length:var(--fs-xs)] leading-relaxed text-text-300">
+            {zh
+              ? 'Agent 是可复用的工作模式。Primary 会出现在新对话输入框的 Agent 下拉菜单中；Subagent 可通过 @ 选择或由其他 Agent 调用。通常只需填写名称、用途和系统提示词，其余保持默认即可。'
+              : 'An agent is a reusable working mode. Primary agents appear in the composer Agent menu; subagents can be selected with @ or called by other agents. Usually you only need a name, purpose, and system prompt.'}
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <AgentField label={zh ? '名称' : 'Name'}><input value={draft.name} disabled={Boolean(originalName)} onChange={event => setDraft({ ...draft, name: event.target.value })} className={agentInput} /></AgentField>
-            <AgentField label={zh ? '类型' : 'Mode'}><select value={draft.mode} onChange={event => setDraft({ ...draft, mode: event.target.value as AgentConfig['mode'] })} className={agentInput}><option value="primary">Primary</option><option value="subagent">Subagent</option><option value="all">All</option></select></AgentField>
-            <AgentField label={zh ? '描述' : 'Description'} className="md:col-span-2"><input value={draft.description ?? ''} onChange={event => setDraft({ ...draft, description: event.target.value })} className={agentInput} /></AgentField>
-            <AgentField label={zh ? '模型（provider/model）' : 'Model (provider/model)'}><input value={draft.model ?? ''} onChange={event => setDraft({ ...draft, model: event.target.value })} className={agentInput} /></AgentField>
-            <AgentField label="Variant"><input value={draft.variant ?? ''} onChange={event => setDraft({ ...draft, variant: event.target.value })} className={agentInput} /></AgentField>
-            <AgentField label={zh ? '颜色' : 'Color'}><input value={String(draft.color ?? '')} onChange={event => setDraft({ ...draft, color: event.target.value })} className={agentInput} placeholder="#4f8cff / accent" /></AgentField>
-            <AgentField label={zh ? '最大步骤' : 'Maximum steps'}><input type="number" min={1} value={draft.maxSteps ?? ''} onChange={event => setDraft({ ...draft, maxSteps: Number(event.target.value) || undefined })} className={agentInput} /></AgentField>
-            <AgentField label={zh ? '系统提示词' : 'System prompt'} className="md:col-span-2"><textarea rows={6} value={draft.prompt ?? ''} onChange={event => setDraft({ ...draft, prompt: event.target.value })} className={`${agentInput} h-auto py-2 font-mono`} /></AgentField>
-            <AgentField label={zh ? '权限 JSON' : 'Permissions JSON'} className="md:col-span-2"><textarea rows={7} value={permissions} onChange={event => setPermissions(event.target.value)} className={`${agentInput} h-auto py-2 font-mono`} /></AgentField>
+            <AgentField label={zh ? '名称' : 'Name'} description={zh ? '用于菜单显示，例如 code-reviewer。' : 'Shown in menus, for example code-reviewer.'}>
+              <input value={draft.name} disabled={Boolean(originalName)} onChange={event => setDraft({ ...draft, name: event.target.value })} className={agentInput} placeholder="code-reviewer" />
+            </AgentField>
+            <AgentField label={zh ? '类型' : 'Mode'} description={zh ? '决定 Agent 出现和被调用的位置。' : 'Controls where the agent appears and can be called.'}>
+              <select value={draft.mode} onChange={event => setDraft({ ...draft, mode: event.target.value as AgentConfig['mode'] })} className={agentInput}>
+                <option value="primary">{zh ? 'Primary（对话中直接选择）' : 'Primary (select in chat)'}</option>
+                <option value="subagent">{zh ? 'Subagent（通过 @ 或其他 Agent 调用）' : 'Subagent (called with @ or by agents)'}</option>
+                <option value="all">{zh ? 'All（两种方式都可用）' : 'All (available in both places)'}</option>
+              </select>
+            </AgentField>
+            <AgentField label={zh ? '用途说明' : 'Purpose'} description={zh ? '告诉你和其他 Agent 什么时候应该使用它。' : 'Explains when you or another agent should use it.'} className="md:col-span-2">
+              <input value={draft.description ?? ''} onChange={event => setDraft({ ...draft, description: event.target.value })} className={agentInput} placeholder={zh ? '例如：审查 TypeScript 代码并给出可执行的修改建议' : 'For example: Review TypeScript and suggest actionable changes'} />
+            </AgentField>
+            <AgentField label={zh ? '模型' : 'Model'} description={zh ? '不指定时跟随当前对话选择的模型。' : 'Leave unset to follow the model selected in the conversation.'}>
+              <select
+                value={draft.model ?? ''}
+                onChange={event => setDraft({ ...draft, model: event.target.value || undefined, variant: undefined })}
+                className={agentInput}
+                disabled={modelsLoading && models.length === 0}
+              >
+                <option value="">{modelsLoading ? (zh ? '正在加载模型…' : 'Loading models…') : (zh ? '跟随当前对话模型（推荐）' : 'Follow conversation model (recommended)')}</option>
+                {draft.model && !models.some(model => `${model.providerId}/${model.id}` === draft.model) ? <option value={draft.model}>{draft.model} ({zh ? '当前不可用' : 'unavailable'})</option> : null}
+                {models.map(model => <option key={`${model.providerId}/${model.id}`} value={`${model.providerId}/${model.id}`}>{model.providerName} · {model.name}</option>)}
+              </select>
+              {modelsError ? <span className="mt-1 block text-[length:var(--fs-xxs)] text-warning-100">{zh ? '模型列表加载失败，将跟随当前对话模型。' : 'Could not load models; the conversation model will be used.'}</span> : null}
+            </AgentField>
+            <AgentField label={zh ? '推理强度' : 'Reasoning effort'} description={zh ? '仅显示所选模型支持的选项。' : 'Only options supported by the selected model are shown.'}>
+              <select
+                value={draft.variant ?? ''}
+                onChange={event => setDraft({ ...draft, variant: event.target.value || undefined })}
+                className={agentInput}
+                disabled={!selectedModel || selectedModel.variants.length === 0}
+              >
+                <option value="">{zh ? '默认' : 'Default'}</option>
+                {draft.variant && !selectedModel?.variants.includes(draft.variant) ? <option value={draft.variant}>{draft.variant}</option> : null}
+                {selectedModel?.variants.map(variant => <option key={variant} value={variant}>{variant}</option>)}
+              </select>
+            </AgentField>
+            <AgentField label={zh ? '标识颜色' : 'Color'} description={zh ? '用于菜单中快速识别这个 Agent。' : 'Used to identify this agent in menus.'}>
+              <div className="flex h-9 items-center gap-2">
+                {agentColors.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    title={zh ? option.zh : option.en}
+                    aria-label={zh ? option.zh : option.en}
+                    aria-pressed={draft.color === option.value}
+                    onClick={() => setDraft({ ...draft, color: option.value })}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${draft.color === option.value ? 'border-text-100 ring-2 ring-accent-main-100/25' : 'border-bg-000'}`}
+                    style={{ background: option.background }}
+                  />
+                ))}
+              </div>
+            </AgentField>
+            <AgentField label={zh ? '最大执行步骤' : 'Maximum steps'} description={zh ? '留空使用系统默认值；只有需要限制执行轮数时才填写。' : 'Leave blank for the system default; set only when you need a hard limit.'}>
+              <input type="number" min={1} value={draft.steps ?? draft.maxSteps ?? ''} onChange={event => setDraft({ ...draft, steps: Number(event.target.value) || undefined, maxSteps: undefined })} className={agentInput} placeholder={zh ? '系统默认' : 'System default'} />
+            </AgentField>
+            <AgentField label={zh ? '系统提示词' : 'System prompt'} description={zh ? '描述它的角色、目标、工作方式和输出要求。' : 'Describe its role, goals, working style, and expected output.'} className="md:col-span-2">
+              <textarea rows={5} value={draft.prompt ?? ''} onChange={event => setDraft({ ...draft, prompt: event.target.value })} className={`${agentInput} h-auto py-2`} placeholder={zh ? '例如：你是一名代码审查专家。优先发现真实缺陷，并按严重程度给出简洁建议……' : 'For example: You are a code review expert. Prioritize real defects and give concise, severity-ranked feedback…'} />
+            </AgentField>
+            <div className="md:col-span-2 rounded-lg border border-border-200/60 bg-bg-050 px-3 py-2.5">
+              <div className="mb-2 text-[length:var(--fs-xs)] font-medium text-text-300">{zh ? '工具权限' : 'Tool permissions'}</div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <AgentField label={zh ? '编辑文件' : 'Edit files'}>
+                  <select value={permissionAction('edit')} onChange={event => setPermissionAction('edit', event.target.value)} className={agentInput}>
+                    <option value="ask">{zh ? '每次询问' : 'Ask every time'}</option>
+                    <option value="allow">{zh ? '自动允许' : 'Always allow'}</option>
+                    <option value="deny">{zh ? '禁止' : 'Deny'}</option>
+                  </select>
+                </AgentField>
+                <AgentField label={zh ? '运行命令' : 'Run commands'}>
+                  <select value={permissionAction('bash')} onChange={event => setPermissionAction('bash', event.target.value)} className={agentInput}>
+                    <option value="ask">{zh ? '每次询问' : 'Ask every time'}</option>
+                    <option value="allow">{zh ? '自动允许' : 'Always allow'}</option>
+                    <option value="deny">{zh ? '禁止' : 'Deny'}</option>
+                  </select>
+                </AgentField>
+              </div>
+              <details className="mt-2 text-[length:var(--fs-xs)] text-text-400">
+                <summary className="cursor-pointer select-none hover:text-text-200">{zh ? '高级权限 JSON（可选）' : 'Advanced permissions JSON (optional)'}</summary>
+                <textarea rows={5} value={permissions} onChange={event => setPermissions(event.target.value)} className={`${agentInput} mt-2 h-auto py-2 font-mono`} />
+              </details>
+            </div>
           </div>
           {draft.mode === 'subagent' ? <label className="flex items-center gap-2 text-[length:var(--fs-sm)] text-text-200"><input type="checkbox" checked={draft.hidden === true} onChange={event => setDraft({ ...draft, hidden: event.target.checked })} />{zh ? '从手动 @ 菜单隐藏' : 'Hide from the manual @ menu'}</label> : null}
           {error ? <p className="rounded-lg bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">{error}</p> : null}
-          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setDraft(undefined)}>{zh ? '取消' : 'Cancel'}</Button><Button isLoading={busy} onClick={() => void save()}>{zh ? '保存' : 'Save'}</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setDraft(undefined)}>{zh ? '取消' : 'Cancel'}</Button><Button disabled={!draft.name.trim()} isLoading={busy} onClick={() => void save()}>{zh ? '保存' : 'Save'}</Button></div>
         </div> : null}
       </Dialog>
     </SettingsSection>
@@ -316,6 +442,6 @@ function AgentProfiles() {
 
 const agentInput = 'h-9 w-full rounded-lg border border-border-200 bg-bg-000 px-3 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100/70'
 
-function AgentField(props: { label: string; children: React.ReactNode; className?: string }) {
-  return <label className={`block text-[length:var(--fs-xs)] text-text-300 ${props.className ?? ''}`}><span className="mb-1 block font-medium">{props.label}</span>{props.children}</label>
+function AgentField(props: { label: string; children: React.ReactNode; className?: string; description?: string }) {
+  return <label className={`block text-[length:var(--fs-xs)] text-text-300 ${props.className ?? ''}`}><span className="mb-1 block font-medium">{props.label}</span>{props.children}{props.description ? <span className="mt-1 block text-[length:var(--fs-xxs)] leading-relaxed text-text-500">{props.description}</span> : null}</label>
 }

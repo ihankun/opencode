@@ -106,6 +106,12 @@ describeOrSkip("session-manager", () => {
       const mapping = sm.getSession("chat-2")
       expect(mapping).not.toBeNull()
       expect(mapping!.is_bound).toBe(0)
+
+      const createCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === "POST",
+      )
+      expect(createCall).toBeDefined()
+      expect(new Headers((createCall![1] as RequestInit).headers).get("x-opencode-directory")).toBe("/test/project")
     })
 
     it("reuses cached session without any API call", async () => {

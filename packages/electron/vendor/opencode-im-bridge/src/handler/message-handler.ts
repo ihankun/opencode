@@ -54,6 +54,13 @@ export interface HandlerDeps {
 
 const EVENT_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
+function opencodeJsonHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "x-opencode-directory": process.env.OPENCODE_CWD || process.cwd(),
+  }
+}
+
 /** Thrown when POST /session/{id}/message returns 404 — session no longer exists. */
 export class SessionGoneError extends Error {
   constructor(public readonly sessionId: string, public readonly status: number) {
@@ -677,7 +684,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/message`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: opencodeJsonHeaders(),
         body: postBody,
       }, "incoming message")
       if (resp.status === 404) {
@@ -697,7 +704,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/prompt_async`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: opencodeJsonHeaders(),
         body: postBody,
       }, "incoming message (streaming)")
       if (resp.status === 404) {
@@ -993,7 +1000,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/message`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: opencodeJsonHeaders(),
         body: postBody,
       }, "debounced message")
       if (resp.status === 404) {
@@ -1013,7 +1020,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/prompt_async`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: opencodeJsonHeaders(),
         body: postBody,
       }, "debounced message (streaming)")
       if (resp.status === 404) {

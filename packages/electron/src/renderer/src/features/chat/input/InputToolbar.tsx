@@ -171,7 +171,16 @@ function AgentModeIcon({ name, color }: { name?: string; color?: string }) {
   const normalized = name?.toLowerCase()
   const Icon =
     normalized === 'build' ? BuildAgentIcon : normalized === 'plan' ? PlanAgentIcon : normalized === 'goal' ? GoalAgentIcon : AgentIcon
-  const style = normalized === 'build' ? { color: '#2563eb' } : normalized === 'goal' ? { color: '#f97316' } : color ? { color } : undefined
+  const resolvedColor = color ? ({
+    primary: 'var(--color-accent-main-100)',
+    accent: 'var(--color-accent-main-100)',
+    secondary: 'var(--color-accent-secondary-100)',
+    success: 'var(--color-success-100)',
+    warning: 'var(--color-warning-100)',
+    error: 'var(--color-danger-100)',
+    info: 'var(--color-info-100)',
+  }[color] ?? color) : undefined
+  const style = normalized === 'build' ? { color: '#2563eb' } : normalized === 'goal' ? { color: '#f97316' } : resolvedColor ? { color: resolvedColor } : undefined
 
   return <Icon style={style} />
 }

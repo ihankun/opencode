@@ -247,6 +247,9 @@ describe("createMessageHandler", () => {
       (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("/message"),
     )
     expect(postCall).toBeDefined()
+    expect(new Headers((postCall![1] as RequestInit).headers).get("x-opencode-directory")).toBe(
+      process.env.OPENCODE_CWD || process.cwd(),
+    )
     const body = JSON.parse((postCall![1] as { body: string }).body)
     expect(body.parts[0].text).toContain("1. first item")
     expect(body.parts[0].text).toContain("2. second item")

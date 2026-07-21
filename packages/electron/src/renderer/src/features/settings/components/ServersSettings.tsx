@@ -667,7 +667,39 @@ export function ServersSettings() {
         </div>
     </SettingsCard>
     <SettingsCard title={t('servers.runnerDashboard')} description={t('servers.runnerDashboardDesc')}>
-      <div className="grid gap-2 md:grid-cols-2">{orderedServers.map(server => { const health = getHealth(server.id); return <div key={server.id} className="rounded-lg border border-border-200/50 bg-bg-050 p-3"><div className="flex items-center justify-between gap-2"><div className="min-w-0"><div className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{server.name}</div><div className="truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{server.url}</div></div><span className={`rounded-full px-2 py-0.5 text-[length:var(--fs-xxs)] ${health?.status === 'online' ? 'bg-success-100/10 text-success-100' : 'bg-danger-100/10 text-danger-100'}`}>{health?.status ?? 'unknown'}</span></div><div className="mt-2 flex flex-wrap gap-1 text-[length:var(--fs-xxs)] text-text-400"><span className="rounded bg-bg-200 px-1.5 py-0.5">{server.isDefault ? t('servers.embeddedRunner') : t('servers.persistentRunner')}</span><span className="rounded bg-bg-200 px-1.5 py-0.5">{t('servers.projectCount', { count: runnerProjects[server.id] ?? 0 })}</span>{health?.latency !== undefined && <span className="rounded bg-bg-200 px-1.5 py-0.5">{health.latency} ms</span>}{health?.capabilities?.backgroundSubagents && <span className="rounded bg-bg-200 px-1.5 py-0.5">Subagents</span>}{health?.capabilities?.worktree && <span className="rounded bg-bg-200 px-1.5 py-0.5">Worktree</span>}</div><div className="mt-3 flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => void window.customOpenCode.openInternalUrl(server.url)}>{t('servers.openEndpoint')}</Button><Button size="sm" disabled={health?.status !== 'online' || activeServer?.id === server.id} onClick={() => void handleSelectServer(server.id)}>{activeServer?.id === server.id ? t('servers.currentRunner') : t('servers.useRunner')}</Button></div></div> })}</div>
+      <div className="grid gap-1.5">
+        {orderedServers.map(server => {
+          const health = getHealth(server.id)
+          const isActive = activeServer?.id === server.id
+          return (
+            <div
+              key={server.id}
+              className={`rounded-lg border px-3 py-2 transition-colors ${isActive ? 'border-accent-main-100/40 bg-accent-main-100/5' : 'border-border-200/50 bg-bg-050'}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="shrink-0 text-[length:var(--fs-sm)] font-medium text-text-100">{server.name}</span>
+                    <span className="truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{server.url}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1 text-[length:var(--fs-xxs)] text-text-400">
+                    <span className="rounded bg-bg-200 px-1.5 py-0.5">{server.isDefault ? t('servers.embeddedRunner') : t('servers.persistentRunner')}</span>
+                    <span className="rounded bg-bg-200 px-1.5 py-0.5">{t('servers.projectCount', { count: runnerProjects[server.id] ?? 0 })}</span>
+                    {health?.latency !== undefined && <span className="rounded bg-bg-200 px-1.5 py-0.5">{health.latency} ms</span>}
+                    {health?.capabilities?.backgroundSubagents && <span className="rounded bg-bg-200 px-1.5 py-0.5">Subagents</span>}
+                    {health?.capabilities?.worktree && <span className="rounded bg-bg-200 px-1.5 py-0.5">Worktree</span>}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[length:var(--fs-xxs)] ${health?.status === 'online' ? 'bg-success-100/10 text-success-100' : 'bg-danger-100/10 text-danger-100'}`}>{health?.status ?? 'unknown'}</span>
+                  <Button size="sm" variant="ghost" onClick={() => void window.customOpenCode.openInternalUrl(server.url)}>{t('servers.openEndpoint')}</Button>
+                  <Button size="sm" disabled={health?.status !== 'online' || isActive} onClick={() => void handleSelectServer(server.id)}>{isActive ? t('servers.currentRunner') : t('servers.useRunner')}</Button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
       <div className="mt-3 rounded-lg border border-accent-main-100/20 bg-accent-main-100/5 px-3 py-2 text-[length:var(--fs-xs)] text-text-300">{t('servers.handoffHint')}</div>
     </SettingsCard>
   </div>

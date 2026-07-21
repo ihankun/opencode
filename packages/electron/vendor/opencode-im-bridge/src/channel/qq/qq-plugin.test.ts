@@ -122,6 +122,7 @@ describe("QQPlugin", () => {
     await plugin.gateway.startAccount("default", controller.signal)
 
     expect(botInstances).toHaveLength(1)
+    expect(botInstances[0].config.intents).toEqual(["GROUP_AND_C2C_EVENT"])
     expect(botInstances[0].start).toHaveBeenCalledTimes(1)
 
     await plugin.gateway.stopAccount!("default")

@@ -7,6 +7,19 @@ import { getSDKClient, unwrap } from './sdk'
 import { formatPathForApi } from '../utils/directoryUtils'
 import type { ApiAgent } from './types'
 
+const changeListeners = new Set<() => void>()
+
+export function onAgentsChanged(listener: () => void) {
+  changeListeners.add(listener)
+  return () => {
+    changeListeners.delete(listener)
+  }
+}
+
+export function notifyAgentsChanged() {
+  changeListeners.forEach(listener => listener())
+}
+
 /**
  * 获取 agent 列表
  */

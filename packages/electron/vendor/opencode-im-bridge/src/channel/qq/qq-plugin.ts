@@ -18,7 +18,10 @@ import type {
 import type { AppConfig } from "../../utils/config.js"
 import type { Logger } from "../../utils/logger.js"
 import { Bot, ReceiverMode, segment } from "qq-official-bot"
+import type { Intent } from "qq-official-bot"
 import { parseQQMediaMessage } from "./qq-api-client.js"
+
+const QQ_INTENTS = ["GROUP_AND_C2C_EVENT"] satisfies Intent[]
 
 export interface QQPluginDeps {
     appConfig: AppConfig
@@ -69,9 +72,7 @@ export class QQPlugin extends BaseChannelPlugin {
             maxRetries: 10,
             reconnectDelay: 1000,
             heartbeatInterval: 45000,
-            intents: [
-                "C2C_MESSAGE_CREATE", // Private messages
-            ],
+            intents: QQ_INTENTS,
             mode: ReceiverMode.WEBSOCKET,
         })
 
