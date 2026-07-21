@@ -28,6 +28,8 @@ const config: Configuration = {
   },
   nsis: {
     artifactName: "${productName} Setup ${version}.${ext}",
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
   },
   linux: {
     icon: "assets/opencode-icon.png",
