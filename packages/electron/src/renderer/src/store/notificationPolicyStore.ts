@@ -21,13 +21,7 @@ const defaults: NotificationPolicy = {
 
 function loadPolicy(): NotificationPolicy {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<NotificationPolicy>
-    return {
-      ...defaults,
-      ...value,
-      maxPerMinute: Math.max(1, Math.min(60, Number(value.maxPerMinute) || defaults.maxPerMinute)),
-      channels: { ...defaults.channels, ...value.channels },
-    }
+    return normalizeNotificationPolicy(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'))
   } catch {
     return defaults
   }
@@ -50,7 +44,7 @@ class NotificationPolicyStore {
   }
   canDeliver(channel: keyof NotificationPolicy['channels'], options?: { bypassQuiet?: boolean }) {
     if (!this.state.channels[channel]) return false
-    if (!options?.bypassQuiet && this.state.quietEnabled && isQuietNow(this.state)) return false
+    if (!options?.bypassQuiet && this.state.quietEnabled && isQuietAt(this.state, new Date())) return false
     const now = Date.now()
     this.deliveries = this.deliveries.filter(timestamp => now - timestamp < 60_000)
     if (this.deliveries.length >= this.state.maxPerMinute) return false
@@ -59,8 +53,17 @@ class NotificationPolicyStore {
   }
 }
 
-function isQuietNow(policy: NotificationPolicy) {
-  const minutes = new Date().getHours() * 60 + new Date().getMinutes()
+export function normalizeNotificationPolicy(value: Partial<NotificationPolicy>): NotificationPolicy {
+  return {
+    ...defaults,
+    ...value,
+    maxPerMinute: Math.max(1, Math.min(60, Number(value.maxPerMinute) || defaults.maxPerMinute)),
+    channels: { ...defaults.channels, ...value.channels },
+  }
+}
+
+export function isQuietAt(policy: NotificationPolicy, at: Date) {
+  const minutes = at.getHours() * 60 + at.getMinutes()
   const parse = (value: string) => {
     const [hour, minute] = value.split(':').map(Number)
     return hour * 60 + minute

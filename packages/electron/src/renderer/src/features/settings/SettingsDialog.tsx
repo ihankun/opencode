@@ -235,6 +235,11 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     return next
   }, [])
   const [tab, setTab] = useState<SettingsTab>(normalizeTab(initialTab))
+  const close = useCallback((event?: React.SyntheticEvent) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+    onClose()
+  }, [onClose])
 
   const visibleTabIds = useMemo(
     () => (isTauriDesktop ? TAB_IDS : TAB_IDS.filter(id => id !== 'service')),
@@ -409,12 +414,16 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
         showCloseButton={false}
         rawContent
       >
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="settings-surface flex min-h-0 flex-1 flex-col">
           {/* Sticky Header + Tabs */}
           <div className="shrink-0">
             {/* Title bar */}
-            <div className="flex items-center justify-center px-4 pt-3 pb-2">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <div className="w-9" aria-hidden="true" />
               <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{t('title')}</div>
+              <button type="button" onClick={close} className="rounded-md p-2 text-text-400 hover:bg-bg-100 hover:text-text-200" aria-label={t('closeSettings')}>
+                <CloseIcon size={18} />
+              </button>
             </div>
             <div className="px-4 pb-2">{search}</div>
 
@@ -478,7 +487,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
       showCloseButton={false}
       rawContent
     >
-      <div className="flex h-[min(90vh,820px)]">
+      <div className="settings-surface flex h-[min(90vh,820px)]">
         {/* Left Nav - 窄屏时收缩 */}
         <nav
           role="tablist"
@@ -543,7 +552,9 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
               </div>
             </div>
             <button
-              onClick={onClose}
+              type="button"
+              onPointerDown={event => event.stopPropagation()}
+              onClick={close}
               className="p-2 text-text-400 hover:text-text-200 hover:bg-bg-100 rounded-md transition-colors -mr-1 shrink-0"
               aria-label={t('closeSettings')}
             >

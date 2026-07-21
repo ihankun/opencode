@@ -47,6 +47,15 @@ export function exportDebugLogs() {
   return output
 }
 
+export function diagnosticLogTail(limit = 40) {
+  if (!logFile || !existsSync(logFile)) return []
+  return redact(readFileSync(logFile, "utf8"))
+    .replace(/https?:\/\/(?!127\.0\.0\.1|localhost|\[::1\])[^\s/"']+/gi, "https://[REMOTE_HOST]")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .slice(-Math.max(1, Math.min(200, limit)))
+}
+
 function stamp() {
   return new Date()
     .toISOString()

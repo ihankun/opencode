@@ -7,12 +7,9 @@ import { ChatPane } from './features/chat/ChatPane'
 import { SplitContainer } from './features/chat/SplitContainer'
 import type { CommandItem } from './components/CommandPalette'
 import { ToastContainer } from './components/ToastContainer'
-import { RightPanel } from './components/RightPanel'
-import { BottomPanel } from './components/BottomPanel'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
 import { ElectronWindowsTitlebar } from './components/ElectronWindowsTitlebar'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './components/Icons'
-import { SessionSearchDialog } from './features/chat/sidebar/SessionSearchDialog'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
 import { useCloseServiceDialog } from './hooks/useCloseServiceDialog'
@@ -40,6 +37,7 @@ import type { TerminalTab } from './store/layoutStore'
 import type { SettingsTab } from './features/settings/SettingsDialog'
 import { isTauri, isTauriMobile, isElectron, getDesktopPlatform } from './utils/tauri'
 import { InternalDragLayer } from './components/InternalDragLayer'
+import { completeOnboarding, resetOnboarding, shouldShowOnboarding } from './store/onboardingStore'
 
 const SettingsDialog = lazy(() =>
   import('./features/settings/SettingsDialog').then(module => ({ default: module.SettingsDialog })),
@@ -64,6 +62,18 @@ const PluginPanel = lazy(() =>
 )
 const TaskPanel = lazy(() =>
   import('./components/TaskPanel').then(module => ({ default: module.TaskPanel })),
+)
+const RightPanel = lazy(() =>
+  import('./components/RightPanel').then(module => ({ default: module.RightPanel })),
+)
+const BottomPanel = lazy(() =>
+  import('./components/BottomPanel').then(module => ({ default: module.BottomPanel })),
+)
+const SessionSearchDialog = lazy(() =>
+  import('./features/chat/sidebar/SessionSearchDialog').then(module => ({ default: module.SessionSearchDialog })),
+)
+const OnboardingDialog = lazy(() =>
+  import('./components/OnboardingDialog').then(module => ({ default: module.OnboardingDialog })),
 )
 
 const MOBILE_PAGER_SCROLL_END_MS = 120
@@ -602,6 +612,7 @@ function App() {
   const focusedDirectory = focusedRouteDirectory || ''
 
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
+  const [onboardingOpen, setOnboardingOpen] = useState(() => shouldShowOnboarding())
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('servers')
   const openSettingsTab = useCallback((tab: SettingsTab) => {
     setSettingsInitialTab(tab)
@@ -616,7 +627,18 @@ function App() {
   const openAboutSettings = useCallback(() => {
     openSettingsTab('about')
   }, [openSettingsTab])
-  const closeSettings = useCallback(() => setSettingsDialogOpen(false), [])
+  const closeSettings = useCallback(() => {
+    setSettingsDialogOpen(false)
+    if (shouldShowOnboarding()) setOnboardingOpen(true)
+  }, [])
+  const openSettingsFromOnboarding = useCallback((tab: SettingsTab) => {
+    setOnboardingOpen(false)
+    openSettingsTab(tab)
+  }, [openSettingsTab])
+  const completeGettingStarted = useCallback(() => {
+    completeOnboarding()
+    setOnboardingOpen(false)
+  }, [])
 
   const renderPaneLeaf = useCallback(
     (paneId: string, paneSessionId: string | null) => (
@@ -672,6 +694,15 @@ function App() {
       window.removeEventListener('titlebar:open-settings', onOpenSettings)
     }
   }, [openProject, openSettings])
+
+  useEffect(() => {
+    const restart = () => {
+      resetOnboarding()
+      setOnboardingOpen(true)
+    }
+    window.addEventListener('onboarding:restart', restart)
+    return () => window.removeEventListener('onboarding:restart', restart)
+  }, [])
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 
@@ -1273,6 +1304,7 @@ function App() {
 
         <Suspense fallback={null}>
           <SettingsDialog isOpen={settingsDialogOpen} onClose={closeSettings} initialTab={settingsInitialTab} />
+          <OnboardingDialog isOpen={onboardingOpen} projectSelected={Boolean(currentDirectory)} onOpenSettings={openSettingsFromOnboarding} onComplete={completeGettingStarted} />
           <CommandPalette
             isOpen={commandPaletteOpen}
             onClose={() => setCommandPaletteOpen(false)}

@@ -359,6 +359,12 @@ export const NetworkConfigSchema = z.object({
     .describe(
       'If true, hosts not in allowedDomains are denied without consulting the ask callback. Set this when allowedDomains is policy enforcement, not a prompt-suppression hint.',
     ),
+  blockPrivateNetworks: z
+    .boolean()
+    .optional()
+    .describe(
+      'Resolve allowed hostnames before connecting and reject loopback, link-local, private, carrier-grade NAT, multicast, and reserved address ranges.',
+    ),
   allowUnixSockets: z
     .array(z.string())
     .optional()

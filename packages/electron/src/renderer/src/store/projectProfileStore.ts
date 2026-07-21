@@ -23,7 +23,7 @@ class ProjectProfileStore {
 
   get(directory?: string) {
     if (!directory) return
-    return this.profiles[normalize(directory)]
+    return this.profiles[normalizeProjectDirectory(directory)]
   }
 
   list() {
@@ -31,13 +31,13 @@ class ProjectProfileStore {
   }
 
   save(profile: Omit<ProjectProfile, 'updatedAt'>) {
-    this.profiles = { ...this.profiles, [normalize(profile.directory)]: { ...profile, updatedAt: Date.now() } }
+    this.profiles = { ...this.profiles, [normalizeProjectDirectory(profile.directory)]: { ...profile, updatedAt: Date.now() } }
     this.persist()
   }
 
   remove(directory: string) {
     const profiles = { ...this.profiles }
-    delete profiles[normalize(directory)]
+    delete profiles[normalizeProjectDirectory(directory)]
     this.profiles = profiles
     this.persist()
   }
@@ -55,15 +55,21 @@ class ProjectProfileStore {
   }
 }
 
-function normalize(directory: string) {
+export function normalizeProjectDirectory(directory: string) {
   return directory.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
 function readProfiles(): Record<string, ProjectProfile> {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as unknown
-    if (!raw || typeof raw !== 'object' || !('profiles' in raw) || !raw.profiles || typeof raw.profiles !== 'object') return {}
-    return Object.entries(raw.profiles).reduce<Record<string, ProjectProfile>>((result, [key, value]) => {
+    return parseProjectProfiles(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'))
+  } catch {
+    return {}
+  }
+}
+
+export function parseProjectProfiles(raw: unknown): Record<string, ProjectProfile> {
+  if (!raw || typeof raw !== 'object' || !('profiles' in raw) || !raw.profiles || typeof raw.profiles !== 'object') return {}
+  return Object.entries(raw.profiles).reduce<Record<string, ProjectProfile>>((result, [key, value]) => {
       if (!value || typeof value !== 'object') return result
       const profile = value as Partial<ProjectProfile>
       if (typeof profile.directory !== 'string') return result
@@ -82,10 +88,7 @@ function readProfiles(): Record<string, ProjectProfile> {
         updatedAt: typeof profile.updatedAt === 'number' ? profile.updatedAt : 0,
       }
       return result
-    }, {})
-  } catch {
-    return {}
-  }
+  }, {})
 }
 
 export const projectProfileStore = new ProjectProfileStore()

@@ -10,7 +10,7 @@ import extract from "extract-zip"
 import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
-import { exportDebugLogs, initLogging, writeLog } from "./logging"
+import { diagnosticLogTail, exportDebugLogs, initLogging, writeLog } from "./logging"
 import { sandboxRuntimeRoot, spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
@@ -58,6 +58,7 @@ type SecurityConfig = {
     deniedDomains: string[]
     allowedIPs: string[]
     deniedIPs: string[]
+    blockPrivateNetworks: boolean
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean
@@ -550,6 +551,42 @@ ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogi
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
 ipcMain.handle("logging:export", exportDebugLogs)
+ipcMain.handle("diagnostics:get", async () => {
+  const security = await readSecurityConfig()
+  return {
+    generatedAt: new Date().toISOString(),
+    application: {
+      name: app.getName(),
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      platform: process.platform,
+      arch: process.arch,
+      locale: app.getLocale(),
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      node: process.versions.node,
+      uptimeSeconds: Math.round(process.uptime()),
+    },
+    localRunner: {
+      status: server ? "online" : "starting",
+      error: serverError,
+    },
+    imBridge: {
+      status: imBridgeService.state().status,
+    },
+    security: {
+      sandboxEnabled: security.sandbox.enabled,
+      blockPrivateNetworks: security.sandbox.blockPrivateNetworks,
+      allowedDomainRules: security.sandbox.allowedDomains.length,
+      deniedDomainRules: security.sandbox.deniedDomains.length,
+      allowedIPRules: security.sandbox.allowedIPs.length,
+      deniedIPRules: security.sandbox.deniedIPs.length,
+      auditEnabled: security.audit.enabled,
+      windowsSandbox: await windowsSandboxStatus(),
+    },
+    recentLogs: diagnosticLogTail(),
+  }
+})
 
 // Windows 盘符列表
 ipcMain.handle("drives:list", async () => {
@@ -1260,6 +1297,7 @@ function defaultSecurityConfig(): SecurityConfig {
       deniedDomains: [],
       allowedIPs: [],
       deniedIPs: [],
+      blockPrivateNetworks: true,
       allowUnixSockets: [],
       allowAllUnixSockets: false,
       allowLocalBinding: false,
@@ -1316,6 +1354,7 @@ function normalizeSecurityConfig(value: unknown): SecurityConfig {
       deniedDomains: strings(sandbox.deniedDomains, defaults.sandbox.deniedDomains),
       allowedIPs: ipRules(sandbox.allowedIPs, defaults.sandbox.allowedIPs, false),
       deniedIPs: ipRules(sandbox.deniedIPs, defaults.sandbox.deniedIPs, true),
+      blockPrivateNetworks: typeof sandbox.blockPrivateNetworks === "boolean" ? sandbox.blockPrivateNetworks : defaults.sandbox.blockPrivateNetworks,
       allowUnixSockets: strings(sandbox.allowUnixSockets, defaults.sandbox.allowUnixSockets),
       allowAllUnixSockets: typeof sandbox.allowAllUnixSockets === "boolean" ? sandbox.allowAllUnixSockets : defaults.sandbox.allowAllUnixSockets,
       allowLocalBinding: typeof sandbox.allowLocalBinding === "boolean" ? sandbox.allowLocalBinding : defaults.sandbox.allowLocalBinding,

@@ -13,6 +13,25 @@ const ipPatternCache = new Map<
   { blockList: BlockList; type: 'ipv4' | 'ipv6' }
 >()
 
+const PRIVATE_NETWORK_PATTERNS = [
+  '0.0.0.0/8',
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '172.16.0.0/12',
+  '192.0.0.0/24',
+  '192.168.0.0/16',
+  '198.18.0.0/15',
+  '224.0.0.0/4',
+  '240.0.0.0/4',
+  '::/128',
+  '::1/128',
+  'fc00::/7',
+  'fe80::/10',
+  'ff00::/8',
+] as const
+
 export function isIPPattern(pattern: string): boolean {
   const slash = pattern.lastIndexOf('/')
   const address = stripBrackets(
@@ -35,6 +54,16 @@ export function matchesIPPattern(hostname: string, pattern: string): boolean {
   const entry = cached ?? createIPBlockList(pattern)
   if (!cached) ipPatternCache.set(pattern, entry)
   return entry.blockList.check(host, family === 4 ? 'ipv4' : 'ipv6')
+}
+
+export function isPrivateNetworkAddress(hostname: string): boolean {
+  const host = stripBrackets(hostname)
+  if (!isIP(host)) return false
+  if (/^::ffff:/i.test(host)) {
+    const mapped = host.slice(7)
+    if (isIP(mapped) === 4) return PRIVATE_NETWORK_PATTERNS.slice(0, 11).some(pattern => matchesIPPattern(mapped, pattern))
+  }
+  return PRIVATE_NETWORK_PATTERNS.some(pattern => matchesIPPattern(host, pattern))
 }
 
 function createIPBlockList(pattern: string) {

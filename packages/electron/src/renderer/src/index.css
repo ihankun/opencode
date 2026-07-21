@@ -165,6 +165,22 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   }
 }
 
+.settings-surface :is(input, textarea, select):focus,
+.settings-surface :is(input, textarea, select):focus-visible {
+  outline: none;
+  border-color: hsl(var(--accent-main-100) / 0.72);
+  box-shadow: 0 0 0 2px hsl(var(--accent-main-100) / 0.16);
+}
+
+.settings-surface button:focus-visible {
+  outline: 2px solid hsl(var(--accent-main-100) / 0.72);
+  outline-offset: 2px;
+}
+
+.settings-surface :is(button, input, textarea, select):disabled {
+  cursor: not-allowed;
+}
+
 :root[data-reduced-motion] *,
 :root[data-reduced-motion] *::before,
 :root[data-reduced-motion] *::after {

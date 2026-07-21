@@ -660,6 +660,8 @@
     "allowedIPsDescription": "每行一个 IPv4、IPv6 或 CIDR 网段，例如 192.168.1.10、10.0.0.0/8、2001:db8::/32。",
     "deniedIPs": "IP 黑名单",
     "deniedIPsDescription": "优先于 IP 白名单；支持精确地址、CIDR 网段，填写 * 可拒绝所有直接 IP 连接。",
+    "blockPrivateNetworks": "阻止私网和本地地址",
+    "blockPrivateNetworksDescription": "校验白名单域名的 DNS 解析结果，阻止回环、私网、链路本地、保留和组播地址，防止 DNS 重绑定访问本机服务。",
     "strictNetworkDescription": "启用沙箱后使用严格网络策略：命令只能访问白名单中的域名或 IP。授权文件访问不会解除网络限制，拦截后也不会自动脱离沙箱重试。白名单全部留空可完全断网。",
     "unixSockets": "允许 Unix Socket",
     "unixSocketsDescription": "每行一个 Socket 路径；通常保持为空。",

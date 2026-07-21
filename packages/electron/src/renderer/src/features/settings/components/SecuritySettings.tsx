@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CustomOpenCodeSecurityConfig, CustomOpenCodeWindowsSandboxStatus } from '../../../../../preload'
 import { SegmentedControl, SettingRow, SettingsSection, Toggle } from './SettingsUI'
 import { useTranslation } from 'react-i18next'
+import { evaluateNetworkTarget, isValidDomainRule, isValidIPRule } from '../../../utils/networkPolicy'
 
 const fieldClass = 'w-full min-h-20 resize-y rounded-lg border border-border-200 bg-bg-000 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100'
 
@@ -21,8 +22,8 @@ export function SecuritySettings() {
   }, [])
 
   if (!config) return <div className="text-sm text-text-400">{t('security.loading')}</div>
-  const invalidDomains = [...config.sandbox.allowedDomains, ...config.sandbox.deniedDomains].filter(rule => rule !== '*' && !/^(\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(rule))
-  const invalidIPs = [...config.sandbox.allowedIPs, ...config.sandbox.deniedIPs].filter(rule => !isIpRule(rule))
+  const invalidDomains = [...config.sandbox.allowedDomains.filter(rule => !isValidDomainRule(rule)), ...config.sandbox.deniedDomains.filter(rule => !isValidDomainRule(rule, true))]
+  const invalidIPs = [...config.sandbox.allowedIPs.filter(rule => !isValidIPRule(rule)), ...config.sandbox.deniedIPs.filter(rule => !isValidIPRule(rule, true))]
   const test = evaluateNetworkTarget(testTarget, config)
 
   const setSandbox = (value: Partial<CustomOpenCodeSecurityConfig['sandbox']>) => {
@@ -117,6 +118,9 @@ export function SecuritySettings() {
         {listField(t('security.deniedDomains'), t('security.deniedDomainsDescription'), config.sandbox.deniedDomains, deniedDomains => setSandbox({ deniedDomains }))}
         {listField(t('security.allowedIPs'), t('security.allowedIPsDescription'), config.sandbox.allowedIPs, allowedIPs => setSandbox({ allowedIPs }))}
         {listField(t('security.deniedIPs'), t('security.deniedIPsDescription'), config.sandbox.deniedIPs, deniedIPs => setSandbox({ deniedIPs }))}
+        <SettingRow label={t('security.blockPrivateNetworks')} description={t('security.blockPrivateNetworksDescription')}>
+          <Toggle enabled={config.sandbox.blockPrivateNetworks} onChange={() => setSandbox({ blockPrivateNetworks: !config.sandbox.blockPrivateNetworks })} />
+        </SettingRow>
         {listField(t('security.unixSockets'), t('security.unixSocketsDescription'), config.sandbox.allowUnixSockets, allowUnixSockets => setSandbox({ allowUnixSockets }))}
         <SettingRow label={t('security.allUnixSockets')} description={t('security.allUnixSocketsDescription')}>
           <Toggle enabled={config.sandbox.allowAllUnixSockets} onChange={() => setSandbox({ allowAllUnixSockets: !config.sandbox.allowAllUnixSockets })} />
@@ -173,47 +177,6 @@ export function SecuritySettings() {
       </div>
     </div>
   )
-}
-
-function evaluateNetworkTarget(target: string, config: CustomOpenCodeSecurityConfig) {
-  const value = target.trim()
-  const host = (() => { try { return new URL(value.includes('://') ? value : `https://${value}`).hostname.replace(/^\[|\]$/g, '').toLowerCase() } catch { return value.toLowerCase() } })()
-  const ip = isIpLiteral(host)
-  const denied = (ip ? config.sandbox.deniedIPs : config.sandbox.deniedDomains).find(rule => matchesNetworkRule(host, rule))
-  if (denied) return { allowed: false, reason: `deny: ${denied}` }
-  const allowedRules = ip ? config.sandbox.allowedIPs : config.sandbox.allowedDomains
-  const allowed = allowedRules.find(rule => matchesNetworkRule(host, rule))
-  if (allowed) return { allowed: true, reason: `allow: ${allowed}` }
-  return { allowed: false, reason: allowedRules.length === 0 ? 'deny: allowlist is empty' : 'deny: no allowlist rule matched' }
-}
-
-function matchesNetworkRule(host: string, rule: string) {
-  if (rule === '*') return true
-  if (rule.startsWith('*.')) return host.endsWith(rule.slice(1)) && host !== rule.slice(2)
-  if (rule.includes('/') && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(rule) && /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-    const [network, prefixValue] = rule.split('/')
-    const prefix = Number(prefixValue)
-    const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0
-    return (ipv4Number(host) & mask) === (ipv4Number(network) & mask)
-  }
-  return host === rule.replace(/^\[|\]$/g, '').toLowerCase()
-}
-
-function ipv4Number(value: string) {
-  return value.split('.').reduce((result, part) => ((result << 8) | Number(part)) >>> 0, 0)
-}
-
-function isIpLiteral(value: string) {
-  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value) || value.includes(':')
-}
-
-function isIpRule(value: string) {
-  if (value === '*') return true
-  const [address, prefix] = value.replace(/^\[|\]$/g, '').split('/')
-  if (!isIpLiteral(address)) return false
-  if (prefix === undefined) return true
-  const max = address.includes(':') ? 128 : 32
-  return /^\d+$/.test(prefix) && Number(prefix) <= max
 }
 
 function formatAuditLine(line: string) {

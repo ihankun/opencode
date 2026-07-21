@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '../../../components/ui/Dialog'
 import { SearchIcon, SpinnerIcon } from '../../../components/Icons'
@@ -96,8 +96,10 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     const timerId = window.setTimeout(() => {
       void searchSessions(eligible, term, normalizedDirectory, messageCacheRef.current).then(nextResults => {
         if (cancelled) return
-        setResults(nextResults)
-        setSelectedIndex(0)
+        startTransition(() => {
+          setResults(nextResults)
+          setSelectedIndex(0)
+        })
       })
     }, 160)
 
@@ -273,7 +275,7 @@ function SearchResultRow(props: {
       onMouseEnter={props.onMouseEnter}
       role="button"
       tabIndex={0}
-      className={`flex w-full min-w-0 flex-col rounded-lg px-3 py-2 text-left transition-colors ${
+      className={`group flex w-full min-w-0 flex-col rounded-lg px-3 py-2 text-left transition-colors ${
         props.selected ? 'bg-bg-200 text-text-100' : 'text-text-200 hover:bg-bg-200/60'
       }`}
     >
@@ -311,7 +313,18 @@ async function buildSearchIndex(sessions: ApiSession[], directory: string | unde
   const pending = sessions.filter(session => !cache.has(`${directory ?? ''}:${session.id}`))
   for (let index = 0; index < pending.length; index += 6) {
     await Promise.all(pending.slice(index, index + 6).map(session => getCachedSessionText(session.id, session.directory || directory, cache)))
+    await yieldToBrowser()
   }
+}
+
+function yieldToBrowser() {
+  return new Promise<void>(resolve => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 120 })
+      return
+    }
+    globalThis.setTimeout(resolve, 0)
+  })
 }
 
 function loadConversationMetadata() {

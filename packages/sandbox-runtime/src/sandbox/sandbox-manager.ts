@@ -73,11 +73,12 @@ import {
   redactUrl,
   resolveParentProxy,
 } from './parent-proxy.js'
-import { matchesDomainPattern, matchesIPPattern } from './domain-pattern.js'
+import { isPrivateNetworkAddress, matchesDomainPattern, matchesIPPattern } from './domain-pattern.js'
 import type { ChildProcess } from 'node:child_process'
 import type { ResolvedParentProxy } from './parent-proxy.js'
 import { EOL } from 'node:os'
 import { isIP } from 'node:net'
+import { lookup } from 'node:dns/promises'
 import { dirname } from 'node:path'
 
 interface HostNetworkManagerContext {
@@ -104,6 +105,7 @@ let mitmCA: MitmCA | undefined
 // the sandbox child env, checked on every CONNECT/request — so a host process
 // dialing 127.0.0.1:<proxyPort> can't reach the filter callback.
 let proxyAuthToken: string | undefined
+const dnsSafetyCache = new Map<string, { safe: boolean; expiresAt: number }>()
 // Windows: the resolved access set that was actually applied at
 // initialize(). `undefined` means no stamp/grant was applied
 // (gates running `acl restore`/`acl revoke` at reset()).
@@ -208,6 +210,10 @@ async function filterNetworkRequest(
   // Check allowed domains
   for (const allowedDomain of config.network.allowedDomains) {
     if (matchesDomainPattern(canonicalHost, allowedDomain)) {
+      if (config.network.blockPrivateNetworks && !(await hostnameResolvesSafely(canonicalHost))) {
+        logForDebugging(`Denied because DNS resolved to a private or local address: ${host}:${port}`)
+        return false
+      }
       logForDebugging(`Allowed by config rule: ${host}:${port}`)
       return true
     }
@@ -243,6 +249,17 @@ async function filterNetworkRequest(
     })
     return false
   }
+}
+
+async function hostnameResolvesSafely(host: string) {
+  if (isIP(host)) return !isPrivateNetworkAddress(host)
+  const cached = dnsSafetyCache.get(host)
+  if (cached && cached.expiresAt > Date.now()) return cached.safe
+  const safe = await lookup(host, { all: true, verbatim: true })
+    .then(results => results.length > 0 && results.every(result => !isPrivateNetworkAddress(result.address)))
+    .catch(() => false)
+  dnsSafetyCache.set(host, { safe, expiresAt: Date.now() + 30_000 })
+  return safe
 }
 
 /**
@@ -1686,6 +1703,7 @@ function forceCloseHttpServer(
 }
 
 async function reset(): Promise<void> {
+  dnsSafetyCache.clear()
   // Windows: release this session's sandbox-user ACEs. Best-effort
   // — log anomalies rather than throw, so teardown always
   // completes. Leftover ACEs are recoverable later via

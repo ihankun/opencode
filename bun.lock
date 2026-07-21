@@ -510,6 +510,7 @@
         "zod": "^3.24.0",
       },
       "devDependencies": {
+        "@playwright/test": "catalog:",
         "@tailwindcss/vite": "^4.2.2",
         "@types/bun": "catalog:",
         "@types/diff": "^7.0.2",

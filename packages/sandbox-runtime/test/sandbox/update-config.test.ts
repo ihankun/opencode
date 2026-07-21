@@ -103,6 +103,19 @@ describe('proxy auth + network deny semantics', () => {
     expect(asked).toBe(false)
   })
 
+  it('rejects an allowlisted hostname when DNS resolves to loopback', async () => {
+    await SandboxManager.initialize({
+      network: {
+        allowedDomains: ['localhost'],
+        deniedDomains: [],
+        strictAllowlist: true,
+        blockPrivateNetworks: true,
+      },
+      filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
+    })
+    expect((await proxyRequest(SandboxManager.getProxyPort()!, 'localhost')).statusCode).toBe(403)
+  })
+
   it('enforces direct IP allowlists and denylist CIDRs', async () => {
     await SandboxManager.initialize({
       network: {

@@ -14,6 +14,7 @@ type Config = {
     deniedDomains: string[]
     allowedIPs: string[]
     deniedIPs: string[]
+    blockPrivateNetworks: boolean
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean
@@ -234,6 +235,7 @@ async function load() {
         deniedDomains: [],
         allowedIPs: [],
         deniedIPs: [],
+        blockPrivateNetworks: true,
         allowUnixSockets: [],
         allowAllUnixSockets: false,
         allowLocalBinding: false,
@@ -258,6 +260,7 @@ function runtime(current: Config, cwd: string, worktree: string): SandboxRuntime
       deniedDomains: current.sandbox.deniedDomains,
       allowedIPs: current.sandbox.allowedIPs,
       deniedIPs: current.sandbox.deniedIPs,
+      blockPrivateNetworks: current.sandbox.blockPrivateNetworks,
       strictAllowlist: true,
       allowUnixSockets: current.sandbox.allowUnixSockets,
       allowAllUnixSockets: current.sandbox.allowAllUnixSockets,

@@ -219,6 +219,7 @@ export type CustomOpenCodeSecurityConfig = {
     deniedDomains: string[]
     allowedIPs: string[]
     deniedIPs: string[]
+    blockPrivateNetworks: boolean
     allowUnixSockets: string[]
     allowAllUnixSockets: boolean
     allowLocalBinding: boolean
@@ -235,6 +236,15 @@ export type CustomOpenCodeWindowsSandboxStatus = {
   installed: boolean
   cancelled?: boolean
   error?: string
+}
+
+export type CustomOpenCodeDiagnostics = {
+  generatedAt: string
+  application: Record<string, string | number | boolean | undefined>
+  localRunner: { status: string; error?: string }
+  imBridge: { status: string }
+  security: Record<string, unknown>
+  recentLogs: string[]
 }
 
 export type CustomOpenCodeApi = {
@@ -298,6 +308,7 @@ export type CustomOpenCodeApi = {
   }): Promise<CustomOpenCodeNotificationSendResult>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
   exportDebugLogs(): Promise<string>
+  diagnostics(): Promise<CustomOpenCodeDiagnostics>
   listDrives(): Promise<string[]>
   // Window controls
   windowMinimize(): Promise<void>
@@ -380,6 +391,7 @@ const api: CustomOpenCodeApi = {
     return () => ipcRenderer.removeListener("notification:clicked", listener)
   },
   exportDebugLogs: () => ipcRenderer.invoke("logging:export"),
+  diagnostics: () => ipcRenderer.invoke("diagnostics:get"),
   listDrives: () => ipcRenderer.invoke("drives:list"),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke("window:minimize"),

@@ -1,14 +1,16 @@
 {
   "name": "opencodex",
   "private": true,
-  "version": "1.12.3",
+  "version": "1.12.4",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test src/renderer && node --test src/main/*.test.ts",
+    "test:e2e": "playwright test",
     "verify": "bun run typecheck && bun run test",
+    "upstream:check": "bun ./scripts/check-upstreams.ts",
     "install:electron": "node ./node_modules/electron/install.js",
     "icons": "bun ./scripts/generate-icons.ts",
     "predev": "bun run icons && bun ./scripts/build-server.ts",
@@ -74,6 +76,7 @@
     "esbuild"
   ],
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
     "@types/diff": "^7.0.2",
     "@types/node": "catalog:",

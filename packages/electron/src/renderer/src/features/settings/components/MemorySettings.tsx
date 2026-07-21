@@ -100,7 +100,7 @@ export function MemorySettings() {
   if (!supported) return <div className="rounded-lg border border-border-200 p-4 text-[length:var(--fs-sm)] text-text-400">{t('memory.unsupported')}</div>
   return <div className="space-y-4">
     <SettingsCard title={t('memory.sources')} description={t('memory.sourcesDesc')}>
-      <div className="mb-3 flex gap-1 rounded-lg bg-bg-200/40 p-1">{sources.map(source => <button key={source.id} onClick={() => select(source)} className={`flex-1 rounded-md px-2 py-1.5 text-[length:var(--fs-xs)] ${selected === source.id ? 'bg-bg-100 text-text-100 shadow-sm' : 'text-text-400'}`}>{source.name}<span className="ml-1 text-text-500">P{source.priority}</span></button>)}</div>
+      <div className="mb-3 flex gap-1 rounded-lg bg-bg-200/40 p-1">{sources.map(source => <button type="button" key={source.id} onClick={() => select(source)} className={`flex-1 rounded-md px-2 py-1.5 text-[length:var(--fs-xs)] ${selected === source.id ? 'bg-bg-100 text-text-100 shadow-sm' : 'text-text-400'}`}>{source.name}<span className="ml-1 text-text-500">P{source.priority}</span></button>)}</div>
       <div className="mb-2 truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{sources.find(source => source.id === selected)?.path}</div>
       <textarea value={draft} onChange={event => setDraft(event.target.value)} rows={16} className="w-full resize-y rounded-lg border border-border-200 bg-bg-000 p-3 font-mono text-[length:var(--fs-xs)] leading-5 text-text-100 outline-none focus:border-accent-main-100" />
       <div className="mt-2 text-right text-[length:var(--fs-xxs)] text-text-500">{new TextEncoder().encode(draft).byteLength.toLocaleString()} bytes</div>
