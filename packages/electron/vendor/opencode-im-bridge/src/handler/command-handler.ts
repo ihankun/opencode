@@ -1373,7 +1373,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
     if (!targetRaw || targetRaw.toLowerCase() === "list") {
       const fileModelId = await getCurrentModelFromFile()
       const localModelId = detectCurrentModel(mapping)
-      const currentModelId = fileModelId ?? localModelId
+      const currentModelId = localModelId ?? fileModelId
 
       if (channelId === "telegram") {
         const telegramCard = buildTelegramModelCard(currentModelId, models)
@@ -1482,7 +1482,7 @@ export function createCommandHandler(deps: CommandHandlerDeps): CommandHandler {
       return
     }
 
-    const currentModelId = await getCurrentModelFromFile() ?? detectCurrentModel(mapping)
+    const currentModelId = detectCurrentModel(mapping) ?? await getCurrentModelFromFile()
     if (!currentModelId) {
       await replyText(chatId, messageId, t(locale, "command.noModelSet"), channelId)
       return

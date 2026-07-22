@@ -10,7 +10,7 @@
  * silently if the plugin does not implement the required method.
  */
 
-import { stat, realpath, readdir } from "node:fs/promises"
+import { stat, realpath, readdir, mkdir } from "node:fs/promises"
 import { resolve, join, basename } from "node:path"
 import { homedir } from "node:os"
 import type { ChannelOutboundAdapter, OutboundTarget } from "../channel/types.js"
@@ -216,6 +216,7 @@ export function createOutboundMediaHandler(
       logger.info(`[OutboundMedia] Taking snapshot for target: ${targetAddress}`)
       for (const dir of allowlist) {
         try {
+          await mkdir(dir, { recursive: true })
           const entries = await readdir(dir)
           logger.info(`[OutboundMedia] Directory ${dir} has ${entries.length} files`)
           for (const f of entries) snapshot.add(f)

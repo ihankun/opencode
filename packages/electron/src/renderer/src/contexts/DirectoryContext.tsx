@@ -134,7 +134,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 
   // 添加目录
   const addDirectory = useCallback(
-    (path: string) => {
+    (path: string, options?: { select?: boolean }) => {
       let normalized = normalizeToForwardSlash(path)
 
       // normalizeToForwardSlash 会去掉尾斜杠，导致根路径 "/" → "" 和 "C:/" → "C:"
@@ -149,7 +149,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 
       // 使用 isSameDirectory 检查是否已存在（处理大小写和斜杠差异）
       if (savedDirectories.some(d => isSameDirectory(d.path, normalized))) {
-        setCurrentDirectory(normalized)
+        if (options?.select !== false) setCurrentDirectory(normalized)
         return
       }
 
@@ -159,8 +159,11 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
         addedAt: Date.now(),
       }
 
-      setSavedDirectories(prev => [...prev, newDir])
-      setCurrentDirectory(normalized)
+      setSavedDirectories(prev => {
+        if (prev.some(directory => isSameDirectory(directory.path, normalized))) return prev
+        return [...prev, newDir]
+      })
+      if (options?.select !== false) setCurrentDirectory(normalized)
     },
     [savedDirectories, setCurrentDirectory],
   )

@@ -158,6 +158,8 @@ describe("TelegramPlugin", () => {
           action: "permission_reply",
           requestId: "req-1",
           reply: "once",
+          channelId: "telegram",
+          channelId: "telegram",
         }),
       }),
       open_chat_id: "42",

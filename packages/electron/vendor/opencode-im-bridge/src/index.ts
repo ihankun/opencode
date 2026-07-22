@@ -141,13 +141,6 @@ async function main(): Promise<void> {
     directory: opencodeDirectory,
     headers: authorization ? { Authorization: authorization } : undefined,
   })
-  const normalizedOpencodeDirectory = normalizeDirectory(opencodeDirectory)
-
-  function normalizeDirectory(directory: string): string {
-    const resolved = resolve(directory)
-    return process.platform === "win32" ? resolved.toLowerCase() : resolved
-  }
-
   async function waitForServer(maxRetries = 10): Promise<void> {
     const bootAttempt = await serviceLauncher?.ensureServerReady("startup")
     if (bootAttempt?.healthy) {
@@ -448,16 +441,9 @@ async function main(): Promise<void> {
 
   function dispatchGlobalSseEvent(event: unknown): void {
     const globalEvent = event as Record<string, unknown>
-    const directory = globalEvent?.directory
     const payload = globalEvent?.payload
-
-    if (typeof directory === "string") {
-      const normalizedEventDirectory = normalizeDirectory(directory)
-      if (normalizedEventDirectory !== normalizedOpencodeDirectory) {
-        return
-      }
-    }
-
+    // The bridge owns sessions in one directory per IM channel. Session-scoped
+    // listeners and EventProcessor ownership already discard unrelated events.
     dispatchSseEvent(payload)
   }
 

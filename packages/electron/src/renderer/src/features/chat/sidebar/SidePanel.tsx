@@ -135,7 +135,7 @@ function ProjectInfoHover({ project, disabled, children }: { project: ProjectIte
     if (request !== requestRef.current) return
     setDetails({
       branch: vcsInfo?.branch ?? null,
-      sessionCount: sessions?.filter(session => !isScheduledTaskSession(session) && !isExternalChannelSession(session)).length ?? null,
+      sessionCount: sessions?.filter(session => !isScheduledTaskSession(session)).length ?? null,
     })
     loadedAtRef.current = Date.now()
     setIsLoading(false)
@@ -425,15 +425,27 @@ export function SidePanel({
     useSessionContext()
   const {
     sessions: globalSessions,
-    isLoading: isLoadingGlobalSessions,
-    isLoadingMore: isLoadingMoreGlobalSessions,
-    hasMore: hasMoreGlobalSessions,
-    loadMore: loadMoreGlobalSessions,
   } = useSessions({ global: true, pageSize: 30 })
   const externalChannelSessions = useMemo(
     () => globalSessions.filter(isExternalChannelSession),
     [globalSessions],
   )
+
+  useEffect(() => {
+    const directories = Array.from(
+      new Set(
+        externalChannelSessions
+          .map(session => normalizeToForwardSlash(session.directory))
+          .filter(directory => getDirectoryName(directory).endsWith('[im]')),
+      ),
+    )
+    if (directories.length === 0) return
+
+    directories
+      .filter(directory => !savedDirectories.some(saved => isSameDirectory(saved.path, directory)))
+      .forEach(directory => addDirectory(directory, { select: false }))
+    setExpandedProjectIds(prev => Array.from(new Set([...prev, ...directories])))
+  }, [addDirectory, externalChannelSessions, savedDirectories])
 
   const pinnedEntries = useSyncExternalStore(
     pinnedSessionsStore.subscribe,
@@ -748,23 +760,19 @@ export function SidePanel({
   const projectBusyCount = useMemo(
     () =>
       busySessions.filter(entry => {
-        const session = sessionLookup.get(entry.sessionId)
-        if (session && isExternalChannelSession(session)) return false
         if (!entry.directory) return false
         return Boolean(findProjectGroupForDirectory(displayedProjects, entry.directory))
       }).length,
-    [busySessions, displayedProjects, sessionLookup],
+    [busySessions, displayedProjects],
   )
 
   const conversationBusyCount = useMemo(
     () =>
       busySessions.filter(entry => {
-        const session = sessionLookup.get(entry.sessionId)
-        if (session && isExternalChannelSession(session)) return true
         if (!entry.directory) return true
         return !findProjectGroupForDirectory(displayedProjects, entry.directory)
       }).length,
-    [busySessions, displayedProjects, sessionLookup],
+    [busySessions, displayedProjects],
   )
 
   useEffect(() => {
@@ -1297,12 +1305,11 @@ export function SidePanel({
       localConversationSource.sessions
         .filter(
           session =>
-            isExternalChannelSession(session) ||
+            !isExternalChannelSession(session) &&
             !findProjectGroupForDirectory(displayedProjects, session.directory),
         )
         .map(session => [session.id, session]),
     )
-    externalChannelSessions.forEach(session => merged.set(session.id, session))
 
     const pinned = pinnedEntries
       .map(entry => merged.get(entry.sessionId))
@@ -1312,15 +1319,13 @@ export function SidePanel({
       .filter(session => !pinnedIds.has(session.id))
       .toSorted((left, right) => right.time.updated - left.time.updated)
     return [...pinned, ...recent]
-  }, [displayedProjects, externalChannelSessions, localConversationSource.sessions, pinnedEntries])
+  }, [displayedProjects, localConversationSource.sessions, pinnedEntries])
   const defaultConversationSource = {
     sessions: conversationSessions,
-    isLoading: localConversationSource.isLoading || isLoadingGlobalSessions,
-    isLoadingMore: localConversationSource.isLoadingMore || isLoadingMoreGlobalSessions,
-    hasMore: localConversationSource.hasMore || hasMoreGlobalSessions,
-    onLoadMore: async () => {
-      await Promise.all([Promise.resolve(localConversationSource.onLoadMore()), loadMoreGlobalSessions()])
-    },
+    isLoading: localConversationSource.isLoading,
+    isLoadingMore: localConversationSource.isLoadingMore,
+    hasMore: localConversationSource.hasMore,
+    onLoadMore: localConversationSource.onLoadMore,
   }
 
   // 统一的结构，通过 CSS 控制显示/隐藏
@@ -1518,9 +1523,16 @@ export function SidePanel({
                       hasMore: false,
                       onLoadMore: () => {},
                     }
+                const projectExternalSessions = externalChannelSessions.filter(session =>
+                  findProjectGroupForDirectory([project], session.directory),
+                )
                 const projectSessionSource = {
                   ...rawProjectSessionSource,
-                  sessions: rawProjectSessionSource.sessions.filter(session => !isExternalChannelSession(session)),
+                  sessions: Array.from(
+                    new Map(
+                      [...projectExternalSessions, ...rawProjectSessionSource.sessions].map(session => [session.id, session]),
+                    ).values(),
+                  ),
                 }
                 const itemLabel = project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (

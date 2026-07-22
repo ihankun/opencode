@@ -17,9 +17,10 @@
 - **SSE 流式输出** — 订阅 opencode SSE 事件流，防抖处理卡片更新，避免触发频率限制。
 - **对话记忆** — SQLite 存储每个会话的对话历史，每次消息自动携带上下文。
 - **Session 自动发现** — 自动发现并绑定当前目录的最新 TUI session，重启后映射关系持久保存。
+- **渠道项目隔离** — IM 会话按渠道保存到 `~/.opencode/im/<渠道>[im]/`，例如飞书使用 `feishu[im]`、QQ 使用 `qq[im]`。
 - **优雅重连** — 启动时指数退避重连 opencode server，最多重试 10 次，无需手动等待 server 就绪。
 - **可扩展渠道层** — `ChannelPlugin` 接口设计，可扩展接入 Slack、Discord、QQ 等其他平台，无需修改核心逻辑。
-- **文件与图片支持** — 支持飞书图片和文件消息（不限于文字）。附件下载保存至 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`，并将本地路径传给 opencode 供其读取分析。支持流式下载，50 MB 大小限制，文件名安全处理。
+- **文件与图片支持** — 支持飞书图片和文件消息（不限于文字）。附件下载保存至 `~/.opencodex/.opencode-lark/attachments/`，并将本地路径传给 opencode 供其读取分析。支持流式下载，50 MB 大小限制，文件名安全处理。
 - **文件自动发送** — Agent 将文件/图片保存到 attachments 目录后，系统通过 snapshot 机制自动检测并发送给用户。支持图片、音频、视频、文档（PDF/Word/Excel/PPT/压缩包等）。
 
 ---
@@ -40,7 +41,7 @@
 
 > ⏳ = 功能开发中
 
-下载的文件保存在 `${OPENCODE_CWD}/.opencode-im-bridge/attachments/`（若该路径不可写则回退至系统临时目录）。
+下载的文件保存在 `~/.opencodex/.opencode-lark/attachments/`（若该路径不可写则回退至系统临时目录）。
 
 ### 平台对比
 
@@ -91,7 +92,7 @@
 **定时任务特性：**
 
 - **IM 上下文注入**：任务执行时 AI 知道通过哪个平台与用户交互
-- **文件自动发送**：将文件保存到 `.opencode-lark/attachments/` 目录，系统自动发送给用户
+- **文件自动发送**：将文件保存到 `~/.opencodex/.opencode-lark/attachments/` 目录，系统自动发送给用户
 - **交互式卡片**：
   - 飞书：确认/拒绝按钮卡片
   - Telegram：Inline keyboard

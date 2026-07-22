@@ -78,18 +78,18 @@ export function createFeishuWSGateway(options: WSClientOptions) {
             open_message_id: action.open_message_id,
             operator: action.operator.open_id,
           })
-          // Fire and forget — do NOT await.
-          // The opencode POST may take >3s and Feishu will timeout the callback.
-          void onCardAction(action).catch((err) => {
-            logger.error("Error in card action handler:", err)
-          })
-          // Return toast + updated card to give instant feedback and disable buttons.
-          // WSClient sends this back to Feishu as the callback response.
+          // Permission and question replies are local requests with a 2s timeout.
+          // Only disable the buttons after opencode confirms the reply.
+          await onCardAction(action)
           return buildCallbackResponse(action)
         } catch (err) {
           logger.error("Error handling card action:", err)
-          // Return empty object even on error to avoid Feishu error 200340.
-          return {}
+          return {
+            toast: {
+              type: "error",
+              content: "提交失败，审批仍然有效，请重试",
+            },
+          }
         }
       },
     })

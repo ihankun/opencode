@@ -7,6 +7,8 @@ Shared infrastructure. No business logic lives here. If something is needed in m
 ### `paths.ts`
 `getAttachmentsDir()` — returns the canonical path to the attachments directory used for downloaded Feishu files and uploaded agent outputs. Centralizes this so `outbound-media.ts`, `message-handler.ts`, and tests all resolve the same directory rather than each hardcoding a path.
 
+`getChannelWorkingDirectory(channelId)` — returns the isolated `~/.opencode/im/<channel>[im]` project directory used by sessions from that IM channel.
+
 Always use this instead of constructing attachment paths manually.
 
 ### `config.ts`

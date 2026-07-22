@@ -407,6 +407,8 @@ describe("createStreamingBridge", () => {
                 action: "permission_reply",
                 requestId: "perm-1",
                 reply: "once",
+                channelId: "feishu",
+                channelId: "feishu",
               }),
             }),
           ]),

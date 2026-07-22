@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { createInteractiveHandler } from "../interactive-handler.js"
 import { createMockLogger } from "../../__tests__/setup.js"
 import type { FeishuCardAction } from "../../types.js"
+import { getChannelWorkingDirectory } from "../../utils/paths.js"
 
 describe("createInteractiveHandler", () => {
   let mockLogger: ReturnType<typeof createMockLogger>
@@ -46,11 +47,13 @@ describe("createInteractiveHandler", () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         "http://test:4096/question/req-123/reply",
-        {
+        expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ answers: [["first", "second"]] }),
-        },
+        }),
+      )
+      expect(new Headers(mockFetch.mock.calls[0]![1].headers).get("x-opencode-directory")).toBe(
+        getChannelWorkingDirectory("feishu"),
       )
       expect(mockLogger.info).toHaveBeenCalledWith(
         "Question req-123 answered: first",
@@ -76,9 +79,7 @@ describe("createInteractiveHandler", () => {
         operator: { open_id: "ou-1" },
       }
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Missing requestId or answers in question_answer action",
       )
       expect(mockFetch).not.toHaveBeenCalled()
@@ -103,9 +104,7 @@ describe("createInteractiveHandler", () => {
         operator: { open_id: "ou-1" },
       }
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Missing requestId or answers in question_answer action",
       )
       expect(mockFetch).not.toHaveBeenCalled()
@@ -131,11 +130,7 @@ describe("createInteractiveHandler", () => {
         operator: { open_id: "ou-1" },
       }
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        "Failed to parse question answers: {invalid json",
-      )
+      await expect(handler(action)).rejects.toThrow()
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
@@ -165,9 +160,7 @@ describe("createInteractiveHandler", () => {
         statusText: "Bad Request",
       })
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Question reply failed: 400 Bad Request",
       )
     })
@@ -195,11 +188,7 @@ describe("createInteractiveHandler", () => {
       const error = new Error("Network error")
       mockFetch.mockRejectedValueOnce(error)
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        `Question reply request failed: ${error}`,
-      )
+      await expect(handler(action)).rejects.toThrow("Network error")
     })
   })
 
@@ -217,6 +206,7 @@ describe("createInteractiveHandler", () => {
             action: "permission_reply",
             requestId: "req-456",
             reply: "once",
+            channelId: "qqbot",
           },
         },
         open_message_id: "msg-1",
@@ -234,11 +224,13 @@ describe("createInteractiveHandler", () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         "http://test:4096/permission/req-456/reply",
-        {
+        expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reply: "once" }),
-        },
+        }),
+      )
+      expect(new Headers(mockFetch.mock.calls[0]![1].headers).get("x-opencode-directory")).toBe(
+        getChannelWorkingDirectory("qqbot"),
       )
       expect(mockLogger.info).toHaveBeenCalledWith(
         "Permission req-456: Allowed (once)",
@@ -330,9 +322,7 @@ describe("createInteractiveHandler", () => {
         operator: { open_id: "ou-1" },
       }
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Missing requestId or reply in permission_reply action",
       )
       expect(mockFetch).not.toHaveBeenCalled()
@@ -357,9 +347,7 @@ describe("createInteractiveHandler", () => {
         operator: { open_id: "ou-1" },
       }
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Missing requestId or reply in permission_reply action",
       )
       expect(mockFetch).not.toHaveBeenCalled()
@@ -391,9 +379,7 @@ describe("createInteractiveHandler", () => {
         statusText: "Internal Server Error",
       })
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      await expect(handler(action)).rejects.toThrow(
         "Permission reply failed: 500 Internal Server Error",
       )
     })
@@ -421,11 +407,7 @@ describe("createInteractiveHandler", () => {
       const error = new Error("Network error")
       mockFetch.mockRejectedValueOnce(error)
 
-      await handler(action)
-
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        `Permission reply request failed: ${error}`,
-      )
+      await expect(handler(action)).rejects.toThrow("Network error")
     })
   })
 

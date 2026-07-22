@@ -9,6 +9,7 @@
 
 import type { Logger } from "../utils/logger.js"
 import type { FeishuCardAction } from "../types.js"
+import { getChannelWorkingDirectory } from "../utils/paths.js"
 
 // ── Types ──
 
@@ -44,32 +45,23 @@ export function createInteractiveHandler(deps: InteractiveHandlerDeps) {
   ): Promise<void> {
     const { requestId, answers } = value
     if (!requestId || !answers) {
-      logger.warn("Missing requestId or answers in question_answer action")
-      return
+      throw new Error("Missing requestId or answers in question_answer action")
     }
 
-    let parsedAnswers: string[][]
-    try {
-      parsedAnswers = JSON.parse(answers) as string[][]
-    } catch {
-      logger.warn(`Failed to parse question answers: ${answers}`)
-      return
+    const parsedAnswers = JSON.parse(answers) as string[][]
+    const resp = await fetch(`${serverUrl}/question/${requestId}/reply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-opencode-directory": getChannelWorkingDirectory(value.channelId ?? "feishu"),
+      },
+      body: JSON.stringify({ answers: parsedAnswers }),
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (!resp.ok) {
+      throw new Error(`Question reply failed: ${resp.status} ${resp.statusText}`)
     }
-
-    try {
-      const resp = await fetch(`${serverUrl}/question/${requestId}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: parsedAnswers }),
-      })
-      if (!resp.ok) {
-        logger.warn(`Question reply failed: ${resp.status} ${resp.statusText}`)
-      } else {
-        logger.info(`Question ${requestId} answered: ${parsedAnswers[0]?.[0] ?? ""}`)
-      }
-    } catch (err) {
-      logger.warn(`Question reply request failed: ${err}`)
-    }
+    logger.info(`Question ${requestId} answered: ${parsedAnswers[0]?.[0] ?? ""}`)
   }
 
   async function handlePermissionReply(
@@ -77,28 +69,26 @@ export function createInteractiveHandler(deps: InteractiveHandlerDeps) {
   ): Promise<void> {
     const { requestId, reply } = value
     if (!requestId || !reply) {
-      logger.warn("Missing requestId or reply in permission_reply action")
-      return
+      throw new Error("Missing requestId or reply in permission_reply action")
     }
 
-    try {
-      const resp = await fetch(`${serverUrl}/permission/${requestId}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply }),
-      })
-      if (!resp.ok) {
-        logger.warn(`Permission reply failed: ${resp.status} ${resp.statusText}`)
-      } else {
-        const labelMap: Record<string, string> = {
-          once: "Allowed (once)",
-          always: "Always allowed",
-          reject: "Rejected",
-        }
-        logger.info(`Permission ${requestId}: ${labelMap[reply] ?? reply}`)
-      }
-    } catch (err) {
-      logger.warn(`Permission reply request failed: ${err}`)
+    const resp = await fetch(`${serverUrl}/permission/${requestId}/reply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-opencode-directory": getChannelWorkingDirectory(value.channelId ?? "feishu"),
+      },
+      body: JSON.stringify({ reply }),
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (!resp.ok) {
+      throw new Error(`Permission reply failed: ${resp.status} ${resp.statusText}`)
     }
+    const labelMap: Record<string, string> = {
+      once: "Allowed (once)",
+      always: "Always allowed",
+      reject: "Rejected",
+    }
+    logger.info(`Permission ${requestId}: ${labelMap[reply] ?? reply}`)
   }
 }

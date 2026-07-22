@@ -20,7 +20,7 @@ import { addListener, removeListener } from "../utils/event-listeners.js"
 import type { CommandHandlerEx } from "./command-handler.js"
 import type { OutboundMediaHandler } from "./outbound-media.js"
 import { MessageDebouncer, type BufferedMessage, type BatchContext } from "./message-debounce.js"
-import { getAttachmentsDir } from "../utils/paths.js"
+import { getAttachmentsDir, getChannelWorkingDirectory } from "../utils/paths.js"
 import { writeFile, mkdir, access } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { tmpdir } from "node:os"
@@ -54,10 +54,21 @@ export interface HandlerDeps {
 
 const EVENT_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
-function opencodeJsonHeaders(): Record<string, string> {
+function opencodeJsonHeaders(channelId: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
-    "x-opencode-directory": process.env.OPENCODE_CWD || process.cwd(),
+    "x-opencode-directory": getChannelWorkingDirectory(channelId),
+  }
+}
+
+function mappedModel(model: string | null | undefined) {
+  if (!model) return {}
+  const [providerID, ...modelParts] = model.split("/")
+  const [modelID, variant] = modelParts.join("/").split("#")
+  if (!providerID || !modelID) return {}
+  return {
+    model: { providerID, modelID },
+    ...(variant ? { variant } : {}),
   }
 }
 
@@ -677,14 +688,14 @@ export function createMessageHandler(
 
     // ── 8. Build the POST-to-opencode function ──
     let currentSessionId = sessionId
-    const preferredAgent = sessionManager.getSession(feishuKey)?.agent
-    const postBody = JSON.stringify({ parts, agent: preferredAgent })
+    const mapping = sessionManager.getSession(feishuKey)
+    const postBody = JSON.stringify({ parts, agent: mapping?.agent, ...mappedModel(mapping?.model) })
 
     async function postToOpencode(): Promise<string> {
       const url = `${serverUrl}/session/${currentSessionId}/message`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: opencodeJsonHeaders(),
+        headers: opencodeJsonHeaders(channelId),
         body: postBody,
       }, "incoming message")
       if (resp.status === 404) {
@@ -704,7 +715,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/prompt_async`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: opencodeJsonHeaders(),
+        headers: opencodeJsonHeaders(channelId),
         body: postBody,
       }, "incoming message (streaming)")
       if (resp.status === 404) {
@@ -725,7 +736,7 @@ export function createMessageHandler(
         if (!(err instanceof SessionGoneError)) throw err
         logger.warn(`Session ${currentSessionId} returned 404 — clearing stale mapping and retrying`)
         sessionManager.deleteMapping(feishuKey)
-        const newSessionId = await sessionManager.getOrCreate(feishuKey, preferredAgent, channelId)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey, mapping?.agent, channelId)
         ownedSessions.add(newSessionId)
         logger.info(`Session self-healed: ${currentSessionId} → ${newSessionId}`)
         currentSessionId = newSessionId
@@ -994,13 +1005,14 @@ export function createMessageHandler(
 
     // Build POST function
     let currentSessionId = sessionId
-    const postBody = JSON.stringify({ parts })
+    const mapping = sessionManager.getSession(feishuKey)
+    const postBody = JSON.stringify({ parts, agent: mapping?.agent, ...mappedModel(mapping?.model) })
 
     async function postToOpencode(): Promise<string> {
       const url = `${serverUrl}/session/${currentSessionId}/message`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: opencodeJsonHeaders(),
+        headers: opencodeJsonHeaders(channelId),
         body: postBody,
       }, "debounced message")
       if (resp.status === 404) {
@@ -1020,7 +1032,7 @@ export function createMessageHandler(
       const url = `${serverUrl}/session/${currentSessionId}/prompt_async`
       const resp = await fetchWithWakeRetry(url, {
         method: "POST",
-        headers: opencodeJsonHeaders(),
+        headers: opencodeJsonHeaders(channelId),
         body: postBody,
       }, "debounced message (streaming)")
       if (resp.status === 404) {

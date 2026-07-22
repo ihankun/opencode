@@ -475,11 +475,13 @@ export class TelegramPlugin extends BaseChannelPlugin {
             action: "question_answer",
             requestId: payload.requestId ?? "",
             answers: JSON.stringify(payload.answers ?? []),
+            channelId: "telegram",
           }
           : {
             action: "permission_reply",
             requestId: payload.requestId ?? "",
             reply: payload.reply ?? "reject",
+            channelId: "telegram",
           }
         await this.onCardAction({
           action: {

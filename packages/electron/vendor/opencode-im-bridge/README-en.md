@@ -18,9 +18,10 @@
 - **SSE streaming** — Consumes the opencode SSE event stream and debounces card updates to stay within rate limits.
 - **Conversation memory** — SQLite-backed per-thread history is prepended to each message, giving the agent context across turns.
 - **Session auto-discovery** — Finds and binds to the latest opencode TUI session for a working directory. Survives restarts.
+- **Channel project isolation** — IM sessions are stored under `~/.opencode/im/<channel>[im]/`, such as `feishu[im]` and `qq[im]`.
 - **Graceful recovery** — Reconnects to the opencode server with exponential backoff (up to 10 attempts) on startup.
 - **Extensible channel layer** — `ChannelPlugin` interface lets you add any platform without touching core logic.
-- **File and image support** — Handles image and file messages (not just text). Downloads attachments to `${OPENCODE_CWD}/.opencode-im-bridge/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
+- **File and image support** — Handles image and file messages (not just text). Downloads attachments to `~/.opencodex/.opencode-lark/attachments/` and forwards the local path to opencode for analysis. 50 MB size limit, streaming download, filename sanitization included.
 
 ---
 
@@ -38,7 +39,7 @@
 
 > ⏳ = In development
 
-Downloaded files are saved to `${OPENCODE_CWD}/.opencode-lark/attachments/` (falls back to the system temp directory if that path isn't writable).
+Downloaded files are saved to `~/.opencodex/.opencode-lark/attachments/` (falls back to the system temp directory if that path isn't writable).
 
 ### Platform Comparison
 

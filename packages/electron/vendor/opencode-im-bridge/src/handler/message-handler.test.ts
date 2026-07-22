@@ -15,6 +15,7 @@ const advanceTimers = async (ms: number) => {
 
 import type { FeishuMessageEvent } from "../types.js"
 import { FileTooLargeError } from "../feishu/api-client.js"
+import { getChannelWorkingDirectory } from "../utils/paths.js"
 
 function makeEvent(overrides: Partial<FeishuMessageEvent> = {}): FeishuMessageEvent {
   return {
@@ -248,11 +249,46 @@ describe("createMessageHandler", () => {
     )
     expect(postCall).toBeDefined()
     expect(new Headers((postCall![1] as RequestInit).headers).get("x-opencode-directory")).toBe(
-      process.env.OPENCODE_CWD || process.cwd(),
+      getChannelWorkingDirectory("feishu"),
     )
     const body = JSON.parse((postCall![1] as { body: string }).body)
     expect(body.parts[0].text).toContain("1. first item")
     expect(body.parts[0].text).toContain("2. second item")
+  })
+
+  it("sends the model and variant selected for the IM session", async () => {
+    mockFetchOk("")
+    const deps = makeDeps()
+    deps.sessionManager.getSession = vi.fn().mockReturnValue({
+      feishu_key: "chat-1",
+      session_id: "ses-1",
+      agent: "build",
+      model: "opencode/mimo-v2.5-free#fast",
+      created_at: 1,
+      last_active: 1,
+    })
+    const { handleMessage: handler } = createMessageHandler(deps)
+
+    const handlerPromise = handler(makeEvent())
+
+    await waitFor(() => {
+      expect(deps.eventListeners.size).toBe(1)
+    })
+
+    ;[...deps.eventListeners.get("ses-1")!].forEach(fn => fn({
+      type: "session.status",
+      properties: { sessionID: "ses-1", status: { type: "idle" } },
+    }))
+
+    await handlerPromise
+
+    const postCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call: unknown[]) => typeof call[0] === "string" && (call[0] as string).includes("/message"),
+    )
+    const body = JSON.parse((postCall![1] as { body: string }).body)
+    expect(body.agent).toBe("build")
+    expect(body.model).toEqual({ providerID: "opencode", modelID: "mimo-v2.5-free" })
+    expect(body.variant).toBe("fast")
   })
 
   it("skips empty text messages", async () => {

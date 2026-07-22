@@ -1,5 +1,8 @@
 import { type DatabaseSync } from "node:sqlite"
+import { mkdir } from "node:fs/promises"
+import { resolve } from "node:path"
 import { createLogger } from "../utils/logger.js"
+import { getChannelWorkingDirectory } from "../utils/paths.js"
 import type { SessionMapping } from "../types.js"
 
 const logger = createLogger("session-manager")
@@ -9,6 +12,7 @@ interface SessionManagerOptions {
   db: DatabaseSync
   defaultAgent: string
   defaultModel?: string | null
+  createDirectory?: (directory: string) => Promise<void>
 }
 
 export interface SessionManager {
@@ -22,12 +26,12 @@ export interface SessionManager {
   validateAndCleanupStale(): Promise<number>
 }
 
-function getWorkingDirectory(): string {
+function getDefaultWorkingDirectory(): string {
   return process.env.OPENCODE_CWD || process.cwd()
 }
 
-function directoryHeaders(): Record<string, string> {
-  return { "x-opencode-directory": getWorkingDirectory() }
+function directoryHeaders(directory: string): Record<string, string> {
+  return { "x-opencode-directory": directory }
 }
 
 interface TuiSession {
@@ -42,6 +46,9 @@ export function createSessionManager(
   options: SessionManagerOptions,
 ): SessionManager {
   const { serverUrl, db, defaultAgent, defaultModel = null } = options
+  const createDirectory = options.createDirectory ?? (async (directory: string) => {
+    await mkdir(directory, { recursive: true })
+  })
   const taggedExternalSessions = new Set<string>()
 
   db.exec(`
@@ -98,10 +105,10 @@ export function createSessionManager(
   /** Check whether a session ID actually exists on the opencode server.
    *  Returns false ONLY on 404. All other errors (500, 429, network) return true (conservative). */
 
-  async function sessionExistsOnServer(sessionId: string): Promise<boolean> {
+  async function sessionExistsOnServer(sessionId: string, directory: string): Promise<boolean> {
     try {
       const resp = await fetch(`${serverUrl}/session/${sessionId}`, {
-        headers: directoryHeaders(),
+        headers: directoryHeaders(directory),
       })
       return resp.status !== 404
     } catch {
@@ -109,19 +116,18 @@ export function createSessionManager(
     }
   }
 
-  async function discoverTuiSession(): Promise<TuiSession | null> {
-    const cwd = getWorkingDirectory()
-    const url = `${serverUrl}/session?roots=true&limit=1&directory=${encodeURIComponent(cwd)}`
+  async function discoverTuiSession(directory: string): Promise<TuiSession | null> {
+    const url = `${serverUrl}/session?roots=true&limit=1&directory=${encodeURIComponent(directory)}`
 
     try {
-      const resp = await fetch(url, { headers: directoryHeaders() })
+      const resp = await fetch(url, { headers: directoryHeaders(directory) })
       if (!resp.ok) return null
 
       const sessions = (await resp.json()) as TuiSession[]
       const candidate = sessions[0] ?? null
       if (!candidate) return null
 
-      const exists = await sessionExistsOnServer(candidate.id)
+      const exists = await sessionExistsOnServer(candidate.id, directory)
       if (!exists) {
         logger.warn(`Discovered TUI session ${candidate.id} returned 404, skipping`)
         return null
@@ -133,16 +139,16 @@ export function createSessionManager(
     }
   }
 
-  async function markExternalSession(sessionId: string, channelId?: string): Promise<void> {
-    if (!channelId) return
+  async function markExternalSession(sessionId: string, channelId: string, directory: string): Promise<boolean> {
     const cacheKey = `${sessionId}:${channelId}`
-    if (taggedExternalSessions.has(cacheKey)) return
+    if (taggedExternalSessions.has(cacheKey)) return true
 
     try {
-      const current = await fetch(`${serverUrl}/session/${sessionId}`, { headers: directoryHeaders() })
-      if (!current.ok) return
+      const current = await fetch(`${serverUrl}/session/${sessionId}`, { headers: directoryHeaders(directory) })
+      if (!current.ok) return current.status !== 404
 
       const session = (await current.json()) as TuiSession
+      if (session.directory && resolve(session.directory) !== resolve(directory)) return false
       const channels = Array.isArray(session.metadata?.["opencodex.externalChannels"])
         ? session.metadata["opencodex.externalChannels"].filter(
             (value): value is string => typeof value === "string",
@@ -150,14 +156,14 @@ export function createSessionManager(
         : []
       if (channels.includes(channelId)) {
         taggedExternalSessions.add(cacheKey)
-        return
+        return true
       }
 
       const response = await fetch(`${serverUrl}/session/${sessionId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          ...directoryHeaders(),
+          ...directoryHeaders(directory),
         },
         body: JSON.stringify({
           metadata: {
@@ -168,21 +174,23 @@ export function createSessionManager(
       })
       if (!response.ok) {
         logger.warn(`Failed to tag external session ${sessionId}: HTTP ${response.status}`)
-        return
+        return true
       }
       taggedExternalSessions.add(cacheKey)
+      return true
     } catch (error) {
       logger.warn(`Failed to tag external session ${sessionId}: ${error}`)
+      return true
     }
   }
 
-  async function createNewSession(feishuKey: string, channelId?: string): Promise<string> {
+  async function createNewSession(feishuKey: string, directory: string, channelId?: string): Promise<string> {
     const channelName = channelId ? channelId.charAt(0).toUpperCase() + channelId.slice(1) : "Feishu"
     const resp = await fetch(`${serverUrl}/session`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...directoryHeaders(),
+        ...directoryHeaders(directory),
       },
       body: JSON.stringify({
         title: `${channelName} chat ${feishuKey}`,
@@ -200,29 +208,34 @@ export function createSessionManager(
 
   return {
     async getOrCreate(feishuKey, agent, channelId) {
+      const directory = channelId ? getChannelWorkingDirectory(channelId) : getDefaultWorkingDirectory()
+      if (channelId) await createDirectory(directory)
+
       const existing = getStmt.get(feishuKey) as SessionMapping | null
       if (existing) {
-        updateActiveStmt.run(Date.now(), feishuKey)
-        await markExternalSession(existing.session_id, channelId)
-        return existing.session_id
+        const valid = !channelId || await markExternalSession(existing.session_id, channelId, directory)
+        if (valid) {
+          updateActiveStmt.run(Date.now(), feishuKey)
+          return existing.session_id
+        }
+        deleteMappingStmt.run(feishuKey)
+        logger.info(`Moved ${feishuKey} away from a legacy IM working directory`)
       }
 
       const agentName = agent ?? defaultAgent
       logger.info(`Resolving session for ${feishuKey} (agent: ${agentName})`)
 
-      const discovered = await discoverTuiSession()
+      const discovered = channelId ? null : await discoverTuiSession(directory)
       if (discovered) {
         const now = Date.now()
         upsertStmt.run(feishuKey, discovered.id, agentName, defaultModel, now, now, 1)
-
-        await markExternalSession(discovered.id, channelId)
 
         logger.info(`Bound to TUI session: ${feishuKey} → ${discovered.id}`)
 
         return discovered.id
       }
 
-      const sessionId = await createNewSession(feishuKey, channelId)
+      const sessionId = await createNewSession(feishuKey, directory, channelId)
       const now = Date.now()
       upsertStmt.run(feishuKey, sessionId, agentName, defaultModel, now, now, 0)
       if (channelId) taggedExternalSessions.add(`${sessionId}:${channelId}`)

@@ -11,7 +11,7 @@ export interface DirectoryContextValue {
   currentDirectory: string | undefined
   setCurrentDirectory: (directory: string | undefined) => void
   savedDirectories: SavedDirectory[]
-  addDirectory: (path: string) => void
+  addDirectory: (path: string, options?: { select?: boolean }) => void
   removeDirectory: (path: string) => void
   reorderDirectories: (draggedPath: string, targetPath: string) => void
   pathInfo: ApiPath | null

@@ -296,7 +296,7 @@ export function createStreamingBridge(
               logger.info(`Question event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
               const questionCard = channelId === "telegram"
                 ? buildTelegramQuestionCard(action)
-                : buildQuestionCard(action)
+                : buildQuestionCard(action, channelId)
               sendInteractiveCard(questionCard).catch((err) => {
                 logger.warn(`Question card send failed: ${err}`)
               })
@@ -309,7 +309,7 @@ export function createStreamingBridge(
               logger.info(`Permission event received in bridge for session ${sessionId}, requestId=${action.requestId}`)
               const permissionCard = channelId === "telegram"
                 ? buildTelegramPermissionCard(action)
-                : buildPermissionCard(action)
+                : buildPermissionCard(action, channelId)
               sendInteractiveCard(permissionCard).catch((err) => {
                 logger.warn(`Permission card send failed: ${err}`)
               })
@@ -508,6 +508,7 @@ function buildSubAgentNotificationCard(
 
 export function buildQuestionCard(
   action: QuestionAsked,
+  channelId: string = "feishu",
 ): Record<string, unknown> {
   const elements: Record<string, unknown>[] = []
 
@@ -529,6 +530,7 @@ export function buildQuestionCard(
         action: "question_answer",
         requestId: action.requestId,
         answers: JSON.stringify([[question.options[0]?.label]]),
+        channelId,
       },
     })
     // Add other options if any, for simplicity in V2 just append them
@@ -542,6 +544,7 @@ export function buildQuestionCard(
           action: "question_answer",
           requestId: action.requestId,
           answers: JSON.stringify([[opt.label]]),
+          channelId,
         },
       })
     }
@@ -564,6 +567,7 @@ export function buildQuestionCard(
 
 export function buildPermissionCard(
   action: PermissionRequested,
+  channelId: string = "feishu",
 ): Record<string, unknown> {
   return {
     schema: "2.0",
@@ -582,19 +586,19 @@ export function buildPermissionCard(
           tag: "button",
           text: { tag: "plain_text", content: "✅ Allow Once" },
           type: "primary",
-          value: { action: "permission_reply", requestId: action.requestId, reply: "once" },
+          value: { action: "permission_reply", requestId: action.requestId, reply: "once", channelId },
         },
         {
           tag: "button",
           text: { tag: "plain_text", content: "✅ Always Allow" },
           type: "default",
-          value: { action: "permission_reply", requestId: action.requestId, reply: "always" },
+          value: { action: "permission_reply", requestId: action.requestId, reply: "always", channelId },
         },
         {
           tag: "button",
           text: { tag: "plain_text", content: "❌ Reject" },
           type: "danger",
-          value: { action: "permission_reply", requestId: action.requestId, reply: "reject" },
+          value: { action: "permission_reply", requestId: action.requestId, reply: "reject", channelId },
         },
       ],
     },
