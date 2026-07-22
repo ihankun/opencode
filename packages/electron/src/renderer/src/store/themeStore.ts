@@ -197,7 +197,6 @@ const STORAGE_KEY_COLOR_MODE = 'theme-mode'
 const STORAGE_KEY_CUSTOM_CSS = 'theme-custom-css'
 const STORAGE_KEY_CUSTOM_CSS_SNIPPETS = 'theme-custom-css-snippets'
 const STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID = 'theme-active-custom-css-snippet-id'
-const STORAGE_KEY_SAFE_MODE = 'opencodex-safe-mode'
 const STORAGE_KEY_COLLAPSE_USER_MESSAGES = 'collapse-user-messages'
 const STORAGE_KEY_RENDER_USER_MARKDOWN = 'render-user-markdown'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
@@ -908,7 +907,7 @@ class ThemeStore {
   }
 
   private applyCustomCSS() {
-    const css = localStorage.getItem(STORAGE_KEY_SAFE_MODE) === 'true' ? '' : this.state.customCSS.trim()
+    const css = this.state.customCSS.trim()
     let el = document.getElementById(STYLE_ID_CUSTOM) as HTMLStyleElement | null
 
     if (!css) {
@@ -927,7 +926,7 @@ class ThemeStore {
   /** 毛玻璃开关：data-glass 属性驱动 CSS */
   private applyGlassClass() {
     const root = document.documentElement
-    if (this.state.glassEffect && localStorage.getItem(STORAGE_KEY_SAFE_MODE) !== 'true') {
+    if (this.state.glassEffect) {
       root.setAttribute('data-glass', '')
     } else {
       root.removeAttribute('data-glass')

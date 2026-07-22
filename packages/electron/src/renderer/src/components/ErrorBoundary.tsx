@@ -58,17 +58,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             >
               Reload
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem('opencodex-safe-mode', 'true')
-                localStorage.removeItem('opencodex-boot-in-progress')
-                window.location.reload()
-              }}
-              className="rounded-lg border border-warning-100/40 px-3 py-2 text-[length:var(--fs-sm)] font-medium text-warning-100 hover:bg-warning-100/10"
-            >
-              使用安全模式重启
-            </button>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, useState } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import 'katex/dist/katex.min.css'
 import './index.css'
@@ -22,14 +22,6 @@ import { applyLocalServiceUrl } from './utils/localServiceUrl'
 import { initializeModels } from './hooks/useModels'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { accessibilityStore } from './store/accessibilityStore'
-
-const SAFE_MODE_KEY = 'opencodex-safe-mode'
-const BOOT_MARKER_KEY = 'opencodex-boot-in-progress'
-const previousBoot = Number(localStorage.getItem(BOOT_MARKER_KEY))
-if (Number.isFinite(previousBoot) && Date.now() - previousBoot < 5 * 60_000) {
-  localStorage.setItem(SAFE_MODE_KEY, 'true')
-}
-localStorage.setItem(BOOT_MARKER_KEY, String(Date.now()))
 
 // Polyfill: randomUUID 在非 HTTPS 环境可能缺失（如局域网 HTTP）
 // 统一补齐，避免业务层 scattered fallback。
@@ -206,7 +198,6 @@ function bootstrap() {
           <DirectoryProvider>
             <SessionProvider>
               <FullscreenProvider>
-                <SafeModeBanner />
                 <App />
               </FullscreenProvider>
             </SessionProvider>
@@ -215,33 +206,10 @@ function bootstrap() {
       </ErrorBoundary>
     </StrictMode>,
   )
-  window.setTimeout(() => localStorage.removeItem(BOOT_MARKER_KEY), 5_000)
 }
 
 function StartupFallback() {
   return <div className="fixed inset-0 flex items-center justify-center bg-bg-000 text-[length:var(--fs-sm)] text-text-300">OpenCodex 正在启动…</div>
-}
-
-function SafeModeBanner() {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(SAFE_MODE_KEY) === 'true')
-  if (!enabled) return null
-  return (
-    <div className="fixed inset-x-0 top-0 z-[9998] flex h-9 items-center justify-center gap-3 border-b border-warning-100/30 bg-warning-100/10 px-3 text-[length:var(--fs-xs)] text-warning-100">
-      安全模式已启用：自定义 CSS、毛玻璃和非必要视觉效果已暂停。
-      <button
-        type="button"
-        className="font-medium underline underline-offset-2"
-        onClick={() => {
-          localStorage.removeItem(SAFE_MODE_KEY)
-          localStorage.removeItem(BOOT_MARKER_KEY)
-          setEnabled(false)
-          window.location.reload()
-        }}
-      >
-        正常模式重启
-      </button>
-    </div>
-  )
 }
 
 async function startApp() {
