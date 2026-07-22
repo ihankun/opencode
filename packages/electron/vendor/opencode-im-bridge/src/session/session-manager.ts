@@ -12,7 +12,7 @@ interface SessionManagerOptions {
 }
 
 export interface SessionManager {
-  getOrCreate(feishuKey: string, agent?: string): Promise<string>
+  getOrCreate(feishuKey: string, agent?: string, channelId?: string): Promise<string>
   getExisting(feishuKey: string): Promise<string | undefined>
   getSession(feishuKey: string): SessionMapping | null
   deleteMapping(feishuKey: string): boolean
@@ -34,6 +34,7 @@ interface TuiSession {
   id: string
   title?: string
   directory?: string
+  metadata?: Record<string, unknown>
   time?: { created: number; updated: number }
 }
 
@@ -41,6 +42,7 @@ export function createSessionManager(
   options: SessionManagerOptions,
 ): SessionManager {
   const { serverUrl, db, defaultAgent, defaultModel = null } = options
+  const taggedExternalSessions = new Set<string>()
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS feishu_sessions (
@@ -131,14 +133,61 @@ export function createSessionManager(
     }
   }
 
-  async function createNewSession(feishuKey: string): Promise<string> {
+  async function markExternalSession(sessionId: string, channelId?: string): Promise<void> {
+    if (!channelId) return
+    const cacheKey = `${sessionId}:${channelId}`
+    if (taggedExternalSessions.has(cacheKey)) return
+
+    try {
+      const current = await fetch(`${serverUrl}/session/${sessionId}`, { headers: directoryHeaders() })
+      if (!current.ok) return
+
+      const session = (await current.json()) as TuiSession
+      const channels = Array.isArray(session.metadata?.["opencodex.externalChannels"])
+        ? session.metadata["opencodex.externalChannels"].filter(
+            (value): value is string => typeof value === "string",
+          )
+        : []
+      if (channels.includes(channelId)) {
+        taggedExternalSessions.add(cacheKey)
+        return
+      }
+
+      const response = await fetch(`${serverUrl}/session/${sessionId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...directoryHeaders(),
+        },
+        body: JSON.stringify({
+          metadata: {
+            ...session.metadata,
+            "opencodex.externalChannels": [...channels, channelId],
+          },
+        }),
+      })
+      if (!response.ok) {
+        logger.warn(`Failed to tag external session ${sessionId}: HTTP ${response.status}`)
+        return
+      }
+      taggedExternalSessions.add(cacheKey)
+    } catch (error) {
+      logger.warn(`Failed to tag external session ${sessionId}: ${error}`)
+    }
+  }
+
+  async function createNewSession(feishuKey: string, channelId?: string): Promise<string> {
+    const channelName = channelId ? channelId.charAt(0).toUpperCase() + channelId.slice(1) : "Feishu"
     const resp = await fetch(`${serverUrl}/session`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...directoryHeaders(),
       },
-      body: JSON.stringify({ title: `Feishu chat ${feishuKey}` }),
+      body: JSON.stringify({
+        title: `${channelName} chat ${feishuKey}`,
+        metadata: channelId ? { "opencodex.externalChannels": [channelId] } : undefined,
+      }),
     })
 
     if (!resp.ok) {
@@ -150,10 +199,11 @@ export function createSessionManager(
   }
 
   return {
-    async getOrCreate(feishuKey, agent) {
+    async getOrCreate(feishuKey, agent, channelId) {
       const existing = getStmt.get(feishuKey) as SessionMapping | null
       if (existing) {
         updateActiveStmt.run(Date.now(), feishuKey)
+        await markExternalSession(existing.session_id, channelId)
         return existing.session_id
       }
 
@@ -165,14 +215,17 @@ export function createSessionManager(
         const now = Date.now()
         upsertStmt.run(feishuKey, discovered.id, agentName, defaultModel, now, now, 1)
 
+        await markExternalSession(discovered.id, channelId)
+
         logger.info(`Bound to TUI session: ${feishuKey} → ${discovered.id}`)
 
         return discovered.id
       }
 
-      const sessionId = await createNewSession(feishuKey)
+      const sessionId = await createNewSession(feishuKey, channelId)
       const now = Date.now()
       upsertStmt.run(feishuKey, sessionId, agentName, defaultModel, now, now, 0)
+      if (channelId) taggedExternalSessions.add(`${sessionId}:${channelId}`)
 
       logger.info(`Session created: ${feishuKey} → ${sessionId}`)
 

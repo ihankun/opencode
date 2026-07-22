@@ -624,7 +624,7 @@ export function createMessageHandler(
     }
 
     // ── 6. Get/create session ──
-    let sessionId = await sessionManager.getOrCreate(feishuKey)
+    let sessionId = await sessionManager.getOrCreate(feishuKey, undefined, channelId)
     ownedSessions.add(sessionId)
     // ── 6a. First-bind notification ──
     if (!notifiedFeishuKeys.has(feishuKey)) {
@@ -725,7 +725,7 @@ export function createMessageHandler(
         if (!(err instanceof SessionGoneError)) throw err
         logger.warn(`Session ${currentSessionId} returned 404 — clearing stale mapping and retrying`)
         sessionManager.deleteMapping(feishuKey)
-        const newSessionId = await sessionManager.getOrCreate(feishuKey, preferredAgent)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey, preferredAgent, channelId)
         ownedSessions.add(newSessionId)
         logger.info(`Session self-healed: ${currentSessionId} → ${newSessionId}`)
         currentSessionId = newSessionId
@@ -794,7 +794,7 @@ export function createMessageHandler(
           // 404 self-healing: clear stale mapping, get new session, retry once
           logger.warn(`Session ${sessionId} returned 404 in streaming path — clearing stale mapping and retrying`)
           sessionManager.deleteMapping(feishuKey)
-          const newSessionId = await sessionManager.getOrCreate(feishuKey)
+          const newSessionId = await sessionManager.getOrCreate(feishuKey, undefined, channelId)
           ownedSessions.add(newSessionId)
           logger.info(`Session self-healed (streaming): ${sessionId} → ${newSessionId}`)
           sessionId = newSessionId
@@ -920,6 +920,7 @@ export function createMessageHandler(
     const thinkingMessageId = context.thinkingMessageId
     const reactionId = context.reactionId
     const reactionMessageId = context.reactionMessageId
+    const channelId = (event as { _channelId?: string })._channelId || "feishu"
 
     // Resolve feishuKey from first event
     const feishuKey =
@@ -934,7 +935,7 @@ export function createMessageHandler(
     )
 
     // Get/create session
-    let sessionId = await sessionManager.getOrCreate(feishuKey)
+    let sessionId = await sessionManager.getOrCreate(feishuKey, undefined, channelId)
     ownedSessions.add(sessionId)
 
     // First-bind notification
@@ -943,7 +944,7 @@ export function createMessageHandler(
       const bindMsg = "已连接 session: " + sessionId
       const qqPlugin = deps.channelManager?.getChannel("qq")
       const feishuPlugin = deps.channelManager?.getChannel("feishu")
-      const plugin = (event as any)._channelId === "qq" ? qqPlugin : feishuPlugin
+      const plugin = channelId === "qq" ? qqPlugin : feishuPlugin
 
       if (plugin?.outbound) {
         await plugin.outbound.sendText({ address: event.chat_id }, bindMsg)
@@ -978,7 +979,6 @@ export function createMessageHandler(
 
     // Add platform context signature
     if (parts[0]) {
-      const channelId = (event as any)._channelId || "feishu"
       const platformPlugin = deps.channelManager?.getChannel(channelId)
       parts[0] = {
         type: "text",
@@ -1041,7 +1041,7 @@ export function createMessageHandler(
         if (!(err instanceof SessionGoneError)) throw err
         logger.warn(`Session ${currentSessionId} returned 404 in debounced path — clearing stale mapping and retrying`)
         sessionManager.deleteMapping(feishuKey)
-        const newSessionId = await sessionManager.getOrCreate(feishuKey)
+        const newSessionId = await sessionManager.getOrCreate(feishuKey, undefined, channelId)
         ownedSessions.add(newSessionId)
         logger.info(`Session self-healed (debounced): ${currentSessionId} → ${newSessionId}`)
         currentSessionId = newSessionId
@@ -1106,7 +1106,7 @@ export function createMessageHandler(
         if (err instanceof SessionGoneError) {
           logger.warn(`Session ${sessionId} returned 404 in debounced streaming path — clearing stale mapping and retrying`)
           sessionManager.deleteMapping(feishuKey)
-          const newSessionId = await sessionManager.getOrCreate(feishuKey)
+          const newSessionId = await sessionManager.getOrCreate(feishuKey, undefined, channelId)
           ownedSessions.add(newSessionId)
           logger.info(`Session self-healed (debounced streaming): ${sessionId} → ${newSessionId}`)
           sessionId = newSessionId

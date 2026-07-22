@@ -98,7 +98,7 @@ describeOrSkip("session-manager", () => {
       })
 
       sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
-      const result = await sm.getOrCreate("chat-2")
+      const result = await sm.getOrCreate("chat-2", undefined, "qq")
 
       expect(result).toBe(createdSessionId)
 
@@ -112,6 +112,52 @@ describeOrSkip("session-manager", () => {
       )
       expect(createCall).toBeDefined()
       expect(new Headers((createCall![1] as RequestInit).headers).get("x-opencode-directory")).toBe("/test/project")
+      expect(JSON.parse((createCall![1] as RequestInit).body as string)).toEqual({
+        title: "Qq chat chat-2",
+        metadata: { "opencodex.externalChannels": ["qq"] },
+      })
+    })
+
+    it("tags an existing mapped session with its external channel", async () => {
+      const now = Date.now()
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS feishu_sessions (
+          feishu_key TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          agent TEXT NOT NULL,
+          model TEXT,
+          created_at INTEGER NOT NULL,
+          last_active INTEGER NOT NULL,
+          is_bound INTEGER DEFAULT 0
+        )
+      `)
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("chat-existing", "ses-existing", DEFAULT_AGENT, now, now, 1)
+
+      mockFetch(async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url
+        if (!url.endsWith("/session/ses-existing")) return new Response("Not found", { status: 404 })
+        if (init?.method === "PATCH") return new Response(JSON.stringify({ id: "ses-existing" }), { status: 200 })
+        return new Response(
+          JSON.stringify({ id: "ses-existing", metadata: { retained: true, "opencodex.externalChannels": ["qq"] } }),
+          { status: 200 },
+        )
+      })
+
+      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      expect(await sm.getOrCreate("chat-existing", undefined, "feishu")).toBe("ses-existing")
+
+      const patchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        call => (call[1] as RequestInit | undefined)?.method === "PATCH",
+      )
+      expect(patchCall).toBeDefined()
+      expect(JSON.parse((patchCall![1] as RequestInit).body as string)).toEqual({
+        metadata: {
+          retained: true,
+          "opencodex.externalChannels": ["qq", "feishu"],
+        },
+      })
     })
 
     it("reuses cached session without any API call", async () => {

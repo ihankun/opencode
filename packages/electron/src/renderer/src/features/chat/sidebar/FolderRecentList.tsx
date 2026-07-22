@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ApiSession } from '../../../api'
+import { isExternalChannelSession, type ApiSession } from '../../../api'
 import {
   FolderIcon,
   FolderOpenIcon,
@@ -639,7 +639,7 @@ function FolderRecentSection({
   )
   const visibleSessions = useMemo(() => {
     const pinnedSet = new Set(pinnedEntries.map(entry => entry.sessionId))
-    return sessions.filter(session => !pinnedSet.has(session.id))
+    return sessions.filter(session => !pinnedSet.has(session.id) && !isExternalChannelSession(session))
   }, [pinnedEntries, sessions])
 
   const handleRename = useCallback(

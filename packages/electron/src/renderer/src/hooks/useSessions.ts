@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getSessions,
+  getGlobalSessions,
   createSession,
   archiveSession,
   subscribeToEvents,
@@ -24,6 +25,8 @@ interface UseSessionsOptions {
   directory?: string
   /** 延迟启用，用于懒加载 */
   enabled?: boolean
+  /** 跨项目加载会话 */
+  global?: boolean
 }
 
 interface UseSessionsResult {
@@ -51,12 +54,12 @@ interface UseSessionsResult {
 
 const sessionListCache = new Map<string, ApiSession[]>()
 
-function sessionCacheKey(serverId: string, directory: string | undefined, rootsOnly: boolean, search: string) {
-  return `${serverId}\0${directory ?? ''}\0${rootsOnly ? 'roots' : 'all'}\0${search}`
+function sessionCacheKey(serverId: string, directory: string | undefined, rootsOnly: boolean, search: string, global: boolean) {
+  return `${serverId}\0${global ? 'global' : 'project'}\0${directory ?? ''}\0${rootsOnly ? 'roots' : 'all'}\0${search}`
 }
 
 export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult {
-  const { pageSize = 20, initialSearch = '', rootsOnly = true, directory, enabled = true } = options
+  const { pageSize = 20, initialSearch = '', rootsOnly = true, directory, enabled = true, global = false } = options
 
   // 标准化 directory 路径 (移除末尾斜杠，统一正斜杠)
   const normalizedDirectory = directory ? directory.replace(/\\/g, '/').replace(/\/$/, '') : undefined
@@ -111,7 +114,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       if (!append) setError(null)
 
       try {
-        const data = await getSessions({
+        const data = await (global ? getGlobalSessions : getSessions)({
           roots: rootsOnly,
           limit: currentLimitRef.current,
           directory: normalizedDirectory,
@@ -126,7 +129,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         }
 
         const nextSessions = data.filter(session => !isScheduledTaskSession(session))
-        sessionListCache.set(sessionCacheKey(requestServerId, normalizedDirectory, rootsOnly, queryParams.search ?? ''), nextSessions)
+        sessionListCache.set(sessionCacheKey(requestServerId, normalizedDirectory, rootsOnly, queryParams.search ?? '', global), nextSessions)
         setSessions(prev => (areSessionListsSame(prev, nextSessions) ? prev : nextSessions))
         hasLoadedSessionsRef.current = true
         setHasMore(data.length >= currentLimitRef.current)
@@ -157,7 +160,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         }
       }
     },
-    [rootsOnly, normalizedDirectory, enabled],
+    [rootsOnly, normalizedDirectory, enabled, global],
   )
 
   fetchSessionsRef.current = fetchSessions
@@ -275,13 +278,13 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       serverIdRef.current = serverId
       requestIdRef.current++
       currentLimitRef.current = pageSize
-      const cached = sessionListCache.get(sessionCacheKey(serverId, normalizedDirectory, rootsOnly, searchRef.current))
+      const cached = sessionListCache.get(sessionCacheKey(serverId, normalizedDirectory, rootsOnly, searchRef.current, global))
       hasLoadedSessionsRef.current = cached !== undefined
       setIsLoading(cached === undefined)
       setSessions(cached ?? [])
       void fetchSessionsRef.current({ search: searchRef.current || undefined })
     })
-  }, [enabled, normalizedDirectory, pageSize, rootsOnly])
+  }, [enabled, normalizedDirectory, pageSize, rootsOnly, global])
 
   // 加载更多：递增 limit 重新拉取完整列表（与 SessionContext 一致）
   const loadMore = useCallback(async () => {

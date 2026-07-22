@@ -29,7 +29,7 @@ import {
   GitBranchIcon,
   MessageSquareIcon,
 } from '../../../components/Icons'
-import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList } from '../../../hooks'
+import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList, useSessions } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
 import { useLayoutStore, childSessionStore } from '../../../store'
 import { useBusySessions } from '../../../store/activeSessionStore'
@@ -42,6 +42,7 @@ import {
   getSession,
   getSessions,
   getVcsInfo,
+  isExternalChannelSession,
   isScheduledTaskSession,
   subscribeToConnectionState,
   type ApiSession,
@@ -134,7 +135,7 @@ function ProjectInfoHover({ project, disabled, children }: { project: ProjectIte
     if (request !== requestRef.current) return
     setDetails({
       branch: vcsInfo?.branch ?? null,
-      sessionCount: sessions?.filter(session => !isScheduledTaskSession(session)).length ?? null,
+      sessionCount: sessions?.filter(session => !isScheduledTaskSession(session) && !isExternalChannelSession(session)).length ?? null,
     })
     loadedAtRef.current = Date.now()
     setIsLoading(false)
@@ -422,6 +423,17 @@ export function SidePanel({
 
   const { sessions, isLoading, isLoadingMore, hasMore, search, setSearch, loadMore, deleteSession, refresh } =
     useSessionContext()
+  const {
+    sessions: globalSessions,
+    isLoading: isLoadingGlobalSessions,
+    isLoadingMore: isLoadingMoreGlobalSessions,
+    hasMore: hasMoreGlobalSessions,
+    loadMore: loadMoreGlobalSessions,
+  } = useSessions({ global: true, pageSize: 30 })
+  const externalChannelSessions = useMemo(
+    () => globalSessions.filter(isExternalChannelSession),
+    [globalSessions],
+  )
 
   const pinnedEntries = useSyncExternalStore(
     pinnedSessionsStore.subscribe,
@@ -448,6 +460,9 @@ export function SidePanel({
     for (const s of defaultSessions.sessions) {
       map.set(s.id, s)
     }
+    for (const s of externalChannelSessions) {
+      map.set(s.id, s)
+    }
     // fetchedSessions 作为补充（其他项目的 session）
     for (const [id, s] of Object.entries(fetchedSessions)) {
       if (!map.has(id)) {
@@ -455,7 +470,7 @@ export function SidePanel({
       }
     }
     return map
-  }, [sessions, defaultSessions.sessions, fetchedSessions])
+  }, [sessions, defaultSessions.sessions, externalChannelSessions, fetchedSessions])
 
   const orderedSessions = useMemo(() => {
     const pinnedSet = new Set(pinnedEntries.map(e => e.sessionId))
@@ -733,19 +748,23 @@ export function SidePanel({
   const projectBusyCount = useMemo(
     () =>
       busySessions.filter(entry => {
+        const session = sessionLookup.get(entry.sessionId)
+        if (session && isExternalChannelSession(session)) return false
         if (!entry.directory) return false
         return Boolean(findProjectGroupForDirectory(displayedProjects, entry.directory))
       }).length,
-    [busySessions, displayedProjects],
+    [busySessions, displayedProjects, sessionLookup],
   )
 
   const conversationBusyCount = useMemo(
     () =>
       busySessions.filter(entry => {
+        const session = sessionLookup.get(entry.sessionId)
+        if (session && isExternalChannelSession(session)) return true
         if (!entry.directory) return true
         return !findProjectGroupForDirectory(displayedProjects, entry.directory)
       }).length,
-    [busySessions, displayedProjects],
+    [busySessions, displayedProjects, sessionLookup],
   )
 
   useEffect(() => {
@@ -1257,7 +1276,7 @@ export function SidePanel({
     onToggleProjectSelection: toggleProjectSelection,
   }
 
-  const defaultConversationSource =
+  const localConversationSource =
     currentProject.id === 'global'
       ? {
           sessions: orderedSessions,
@@ -1273,6 +1292,36 @@ export function SidePanel({
           hasMore: false,
           onLoadMore: () => {},
         }
+  const conversationSessions = useMemo(() => {
+    const merged = new Map(
+      localConversationSource.sessions
+        .filter(
+          session =>
+            isExternalChannelSession(session) ||
+            !findProjectGroupForDirectory(displayedProjects, session.directory),
+        )
+        .map(session => [session.id, session]),
+    )
+    externalChannelSessions.forEach(session => merged.set(session.id, session))
+
+    const pinned = pinnedEntries
+      .map(entry => merged.get(entry.sessionId))
+      .filter((session): session is ApiSession => Boolean(session))
+    const pinnedIds = new Set(pinned.map(session => session.id))
+    const recent = Array.from(merged.values())
+      .filter(session => !pinnedIds.has(session.id))
+      .toSorted((left, right) => right.time.updated - left.time.updated)
+    return [...pinned, ...recent]
+  }, [displayedProjects, externalChannelSessions, localConversationSource.sessions, pinnedEntries])
+  const defaultConversationSource = {
+    sessions: conversationSessions,
+    isLoading: localConversationSource.isLoading || isLoadingGlobalSessions,
+    isLoadingMore: localConversationSource.isLoadingMore || isLoadingMoreGlobalSessions,
+    hasMore: localConversationSource.hasMore || hasMoreGlobalSessions,
+    onLoadMore: async () => {
+      await Promise.all([Promise.resolve(localConversationSource.onLoadMore()), loadMoreGlobalSessions()])
+    },
+  }
 
   // 统一的结构，通过 CSS 控制显示/隐藏
   return (
@@ -1454,7 +1503,7 @@ export function SidePanel({
                 const usesActiveSessionSource = Boolean(
                   isActive && currentDirectory && isSameDirectory(currentProject.worktree, project.worktree),
                 )
-                const projectSessionSource = usesActiveSessionSource
+                const rawProjectSessionSource = usesActiveSessionSource
                   ? {
                       sessions: orderedSessions,
                       isLoading: isLoading || shouldWaitForWorkspaceResolution,
@@ -1469,6 +1518,10 @@ export function SidePanel({
                       hasMore: false,
                       onLoadMore: () => {},
                     }
+                const projectSessionSource = {
+                  ...rawProjectSessionSource,
+                  sessions: rawProjectSessionSource.sessions.filter(session => !isExternalChannelSession(session)),
+                }
                 const itemLabel = project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (
                   <div

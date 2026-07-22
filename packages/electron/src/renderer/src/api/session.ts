@@ -32,6 +32,11 @@ export function isScheduledTaskSession(session: Pick<ApiSession, 'title'>) {
   return session.title.startsWith('[自动化] ') || session.title.startsWith('[定时任务] ')
 }
 
+export function isExternalChannelSession(session: Pick<ApiSession, 'metadata'>) {
+  const channels = session.metadata?.['opencodex.externalChannels']
+  return Array.isArray(channels) && channels.some(channel => typeof channel === 'string' && channel.length > 0)
+}
+
 // ============================================
 // Session Status & Diff
 // ============================================
@@ -132,6 +137,24 @@ export async function getSessions(params: SessionListParams = {}): Promise<ApiSe
     })
   requests.set(key, { promise, expiresAt: 0 })
   return promise
+}
+
+/**
+ * 获取所有项目的 session。用于展示不应随项目目录分组的外部渠道会话。
+ */
+export async function getGlobalSessions(params: SessionListParams = {}): Promise<ApiSession[]> {
+  const sdk = getSDKClient()
+  const { directory, roots, start, search, limit, archived } = params
+  return unwrap(
+    await sdk.experimental.session.list({
+      directory: formatPathForApi(directory),
+      roots,
+      start,
+      search,
+      limit,
+      archived,
+    }),
+  )
 }
 
 /**
