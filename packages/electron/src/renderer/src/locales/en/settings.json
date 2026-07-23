@@ -9,6 +9,8 @@
     "noResults": "No matching settings"
   },
   "tabs": {
+    "general": "General",
+    "generalDesc": "File opening, menu bar, and Dock behavior",
     "servers": "Servers",
     "serversDesc": "Backend connections and fast active endpoint switching",
     "hosting": "Code Hosting",
@@ -55,6 +57,17 @@
     "general": "General Settings",
     "archived": "Archive",
     "security": "Security Settings"
+  },
+  "general": {
+    "desktopBehavior": "Desktop behavior",
+    "defaultFileOpenTarget": "Default file open target",
+    "defaultFileOpenTargetDesc": "Choose the app used by the project header’s Open Location button. Leave it automatic to keep the existing selection rules.",
+    "automaticOpenTarget": "Automatic (keep existing rules)",
+    "loadingOpenTargets": "Loading available apps…",
+    "showMenuBarIcon": "Show in menu bar",
+    "showMenuBarIconDesc": "Keep an OpenCodex icon in the system menu bar or tray so the app can be reopened after its main window closes.",
+    "hideDockOnClose": "Hide Dock icon after closing",
+    "hideDockOnCloseDesc": "Hide the macOS Dock icon after the main window closes and restore it when the window reopens."
   },
   "archived": {
     "title": "Archived Chats",

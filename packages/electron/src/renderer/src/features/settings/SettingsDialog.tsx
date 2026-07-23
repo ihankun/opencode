@@ -41,12 +41,14 @@ const SecuritySettings = lazy(() => import('./components/SecuritySettings').then
 const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
 const ImBotSettings = lazy(() => import('./components/ImBotSettings').then(module => ({ default: module.ImBotSettings })))
+const GeneralSettings = lazy(() => import('./components/GeneralSettings').then(module => ({ default: module.GeneralSettings })))
 
 // ============================================
 // Types
 // ============================================
 
 export type SettingsTab =
+  | 'general'
   | 'agent'
   | 'appearance'
   | 'chat'
@@ -69,7 +71,7 @@ export type SettingsTab =
 interface SettingsDialogProps {
   isOpen: boolean
   onClose: () => void
-  initialTab?: SettingsTab | 'general'
+  initialTab?: SettingsTab
 }
 
 // ============================================
@@ -77,6 +79,7 @@ interface SettingsDialogProps {
 // ============================================
 
 const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
+  general: <CogIcon size={15} />,
   servers: <GlobeIcon size={15} />,
   hosting: <GitBranchIcon size={15} />,
   agent: <AgentIcon size={15} />,
@@ -108,6 +111,7 @@ const TAB_IDS: SettingsTab[] = [
   'hosting',
   'imBot',
   'hooks',
+  'general',
   'appearance',
   'notifications',
   'keybindings',
@@ -118,6 +122,7 @@ const TAB_IDS: SettingsTab[] = [
 ]
 
 const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
+  general: 'tabs.general',
   servers: 'tabs.servers',
   hosting: 'tabs.hosting',
   agent: 'tabs.agent',
@@ -139,6 +144,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
+  general: 'tabs.generalDesc',
   servers: 'tabs.serversDesc',
   hosting: 'tabs.hostingDesc',
   agent: 'tabs.agentDesc',
@@ -163,7 +169,7 @@ const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
   { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models'] },
   { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
   { labelKey: 'groups.advanced', tabs: ['hosting', 'imBot', 'hooks'] },
-  { labelKey: 'groups.general', tabs: ['appearance', 'notifications', 'keybindings'] },
+  { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
   { labelKey: 'groups.security', tabs: ['security', 'config', 'about'] },
 ]
@@ -176,6 +182,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
   const { t } = useTranslation(['common'])
   const content = (() => {
     switch (tab) {
+    case 'general':
+      return <GeneralSettings />
     case 'agent':
       return <AgentSettings />
     case 'appearance':
@@ -230,10 +238,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
   const scrollRef = useRef<HTMLDivElement>(null)
   const highlightFrameRef = useRef<number | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const normalizeTab = useCallback((next: SettingsDialogProps['initialTab']): SettingsTab => {
-    if (!next || next === 'general') return 'chat'
-    return next
-  }, [])
+  const normalizeTab = useCallback((next: SettingsDialogProps['initialTab']): SettingsTab => next || 'servers', [])
   const [tab, setTab] = useState<SettingsTab>(normalizeTab(initialTab))
   const close = useCallback((event?: React.SyntheticEvent) => {
     event?.preventDefault()

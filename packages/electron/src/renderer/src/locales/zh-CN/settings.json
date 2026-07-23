@@ -9,6 +9,8 @@
     "noResults": "没有匹配的设置"
   },
   "tabs": {
+    "general": "常规",
+    "generalDesc": "文件打开方式、菜单栏和 Dock 行为",
     "servers": "服务器",
     "serversDesc": "后端连接和快速切换活跃端点",
     "hosting": "代码托管",
@@ -55,6 +57,17 @@
     "general": "常规设置",
     "archived": "归档列表",
     "security": "安全设置"
+  },
+  "general": {
+    "desktopBehavior": "桌面行为",
+    "defaultFileOpenTarget": "默认文件打开目标",
+    "defaultFileOpenTargetDesc": "设置项目顶部“打开位置”按钮默认使用的应用；留空时沿用原有的自动选择规则。",
+    "automaticOpenTarget": "自动选择（沿用现有规则）",
+    "loadingOpenTargets": "正在获取可用应用…",
+    "showMenuBarIcon": "在菜单栏中显示",
+    "showMenuBarIconDesc": "在系统菜单栏或托盘中保留 OpenCodex 图标，关闭主窗口后仍可从这里重新打开。",
+    "hideDockOnClose": "关闭后隐藏 Dock 图标",
+    "hideDockOnCloseDesc": "关闭主窗口后隐藏 macOS Dock 图标；重新打开窗口时会自动恢复。"
   },
   "archived": {
     "title": "已归档对话",

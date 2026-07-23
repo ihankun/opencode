@@ -19,6 +19,11 @@ import { getSecureCredential, getServerCredential, listServerCredentialIDs, setS
 import type { ServerCredential } from "./credentials"
 import { shouldUseMockKeychain } from "./keychain"
 import { ImBridgeService } from "./imBridge"
+import { DesktopPreferencesStore } from "./desktopPreferences"
+import {
+  DEFAULT_DESKTOP_PREFERENCES,
+  type DesktopPreferences,
+} from "../shared/desktopPreferences"
 
 let mainWindow: BrowserWindow | undefined
 let internalBrowserWindow: BrowserWindow | undefined
@@ -27,6 +32,8 @@ let serverError: string | undefined
 let tray: Tray | undefined
 let isQuitting = false
 let isStoppingForQuit = false
+let desktopPreferencesStore: DesktopPreferencesStore
+let desktopPreferences: DesktopPreferences = { ...DEFAULT_DESKTOP_PREFERENCES }
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
@@ -94,6 +101,13 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
   if (value !== "system" && value !== "light" && value !== "dark") return
   if (nativeTheme.themeSource === value) return
   nativeTheme.themeSource = value
+})
+
+ipcMain.handle("desktop-preferences:get", () => desktopPreferencesStore.current())
+ipcMain.handle("desktop-preferences:set", async (_event, value: unknown) => {
+  desktopPreferences = await desktopPreferencesStore.save(value)
+  applyDesktopPreferences()
+  return desktopPreferences
 })
 
 ipcMain.handle("im-bridge:config-get", () => imBridgeService.config())
@@ -268,14 +282,15 @@ async function createWindow() {
     if (isQuitting) return
     event.preventDefault()
     mainWindow?.hide()
+    if (desktopPreferences.hideDockOnClose) app.dock?.hide()
   })
   mainWindow.once("ready-to-show", () => {
     writeLog("main", "window ready-to-show")
-    mainWindow?.show()
+    showWindow()
   })
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-load", { errorCode, errorDescription, validatedURL })
-    mainWindow?.show()
+    showWindow()
   })
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     if (level < 2) return
@@ -296,18 +311,19 @@ async function createWindow() {
   setTimeout(() => {
     if (!mainWindow || mainWindow.isVisible()) return
     writeLog("main", "forcing window show after timeout")
-    mainWindow.show()
+    showWindow()
   }, 2_000)
 
   void mainWindow.loadURL(url).catch((error: unknown) => {
     writeLog("main", "window loadURL failed", error)
-    mainWindow?.show()
+    showWindow()
   })
   void imBridgeService.autoStart().catch((error) => writeLog("im-bridge", "automatic remote start failed", error))
   void startServer(url)
 }
 
 function showWindow() {
+  showDockIcon()
   if (!mainWindow || mainWindow.isDestroyed()) {
     void createWindow()
     return
@@ -342,14 +358,20 @@ function createTray() {
   tray.on("click", showWindow)
 }
 
+function destroyTray() {
+  tray?.destroy()
+  tray = undefined
+}
+
 function iconPath(filename: string) {
   return join(__dirname, "../../assets", filename)
 }
 
-function setDockIcon() {
+function showDockIcon() {
   if (process.platform !== "darwin") return
 
   try {
+    void app.dock?.show()
     const image = nativeImage.createFromPath(iconPath("icon.icns"))
     if (image.isEmpty()) {
       writeLog("main", "dock icon skipped because image is empty", { path: iconPath("icon.icns") })
@@ -359,6 +381,17 @@ function setDockIcon() {
   } catch (error) {
     writeLog("main", "dock icon failed", error)
   }
+}
+
+function applyDesktopPreferences() {
+  if (desktopPreferences.showMenuBarIcon) createTray()
+  if (!desktopPreferences.showMenuBarIcon) destroyTray()
+  if (process.platform !== "darwin") return
+  if (desktopPreferences.hideDockOnClose && mainWindow && !mainWindow.isVisible()) {
+    app.dock?.hide()
+    return
+  }
+  showDockIcon()
 }
 
 async function startServer(url: string) {
@@ -423,6 +456,7 @@ if (usesMockKeychain) {
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
+desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 
@@ -619,10 +653,10 @@ app.on("window-all-closed", () => {
 
 void app.whenReady().then(async () => {
   writeLog("main", "app ready")
+  desktopPreferences = await desktopPreferencesStore.load()
   await ensureSecurityIntegration().catch((error) => writeLog("security", "failed to initialize security plugins", error))
   configureNotificationPermissionHandler()
-  createTray()
-  setDockIcon()
+  applyDesktopPreferences()
   taskScheduler.start()
   return createWindow()
 }).catch((error: unknown) => {

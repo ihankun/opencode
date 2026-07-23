@@ -373,7 +373,7 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
           )}
 
           {/* Path input */}
-          <div className="relative flex-1 bg-bg-000/40 rounded-lg border border-border-200/60 focus-within:border-accent-main-100/50 transition-colors flex items-center px-3 py-2.5">
+          <div className="relative flex-1 bg-bg-000/40 rounded-lg border border-border-200/60 flex items-center px-3 py-2.5">
             <FolderIcon className="text-text-400 w-4 h-4 shrink-0 mr-2.5" />
             <input
               ref={inputRef}
@@ -385,7 +385,7 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
               }}
               onKeyDown={handleKeyDown}
               placeholder={t('projectDialog.typePath')}
-              className="flex-1 bg-transparent border-none outline-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400 font-mono"
+              className="flex-1 bg-transparent border-none !outline-none !ring-0 !shadow-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400 font-mono"
               autoComplete="off"
               spellCheck={false}
             />

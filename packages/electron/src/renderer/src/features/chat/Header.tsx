@@ -31,26 +31,8 @@ import { createWorkspaceCheckpoint, deleteWorkspaceCheckpoint, getWorkspaceCheck
 import type { WorkspaceCheckpoint } from '../../api/checkpoint'
 import { useRouter } from '../../hooks/useRouter'
 import { useServerStore } from '../../hooks/useServerStore'
-import vscodeIcon from '../../../../../assets/app-vscode.png'
-import finderIcon from '../../../../../assets/app-finder.png'
-import terminalIcon from '../../../../../assets/app-terminal.png'
-import intellijIdeaIcon from '../../../../../assets/app-intellij-idea.png'
-import cursorIcon from '../../../../../assets/app-cursor.png'
-
-type LocationApp = { id: string; name: string; icon?: string }
-
-const locationAppIcons: Record<string, string> = {
-  vscode: vscodeIcon,
-  intellij: intellijIdeaIcon,
-  cursor: cursorIcon,
-  terminal: terminalIcon,
-}
-
-function LocationAppIcon({ app, className }: { app: LocationApp; className: string }) {
-  const icon = app.name === 'Finder' ? finderIcon : locationAppIcons[app.id] ?? app.icon
-  if (!icon) return null
-  return <img src={icon} alt="" aria-hidden="true" className={className} />
-}
+import { useDesktopPreferences } from '../../store/desktopPreferencesStore'
+import { LocationAppIcon, type LocationApp } from './LocationAppIcon'
 
 interface HeaderProps {
   onOpenSidebar?: () => void
@@ -218,6 +200,7 @@ export function Header({
   const { navigateToSession } = useRouter()
   const { activeServer, getHealth, checkHealth } = useServerStore()
   const { presentation, interaction } = useChatViewport()
+  const desktopPreferences = useDesktopPreferences()
 
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
   const [locationMenuOpen, setLocationMenuOpen] = useState(false)
@@ -270,6 +253,12 @@ export function Header({
     const saved = localStorage.getItem('opencodex.location-app')
     if (saved) setSelectedLocationApp(saved)
   }, [])
+
+  useEffect(() => {
+    if (desktopPreferences.defaultLocationApp) {
+      setSelectedLocationApp(desktopPreferences.defaultLocationApp)
+    }
+  }, [desktopPreferences.defaultLocationApp])
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {

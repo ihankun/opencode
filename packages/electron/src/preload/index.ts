@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron"
 import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
+import type { DesktopPreferences } from "../shared/desktopPreferences"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 
@@ -298,6 +299,8 @@ export type CustomOpenCodeApi = {
   capturePreview(rect: { x: number; y: number; width: number; height: number }): Promise<{ saved: boolean; file?: string }>
   locationApps(): Promise<CustomOpenCodeLocationApp[]>
   openLocation(input: { path: string; appId: string }): Promise<boolean>
+  desktopPreferences(): Promise<DesktopPreferences>
+  updateDesktopPreferences(preferences: DesktopPreferences): Promise<DesktopPreferences>
   waitConsoleLogin(login: CustomOpenCodeConsoleLoginStart): Promise<CustomOpenCodeConsoleLoginResult>
   notificationPermission(): Promise<CustomOpenCodeNotificationPermission>
   sendNotification(input: {
@@ -382,6 +385,8 @@ const api: CustomOpenCodeApi = {
   capturePreview: (rect) => ipcRenderer.invoke("preview:capture", rect),
   locationApps: () => ipcRenderer.invoke("location:apps"),
   openLocation: (input) => ipcRenderer.invoke("location:open", input),
+  desktopPreferences: () => ipcRenderer.invoke("desktop-preferences:get"),
+  updateDesktopPreferences: (preferences) => ipcRenderer.invoke("desktop-preferences:set", preferences),
   waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
