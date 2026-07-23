@@ -210,7 +210,7 @@ async function main(): Promise<void> {
 
   // Phase 4a: Discover server defaults for agent and model
   let defaultAgent = config.defaultAgent
-  let defaultModel: string | null = null
+  let defaultModel: string | null = config.defaultModel || null
 
   try {
     const agentResp = await fetch(`${serverUrl}/agent`)
@@ -226,19 +226,23 @@ async function main(): Promise<void> {
     logger.warn(`Failed to discover server default agent: ${err}`)
   }
 
-  try {
-    const home = homedir()
-    const statePath = resolve(home, ".local", "state", "opencode", "model.json")
-    const content = await readFile(statePath, "utf-8")
-    const state = JSON.parse(content) as {
-      favorite?: Array<{ providerID: string; modelID: string }>
+  if (!defaultModel) {
+    try {
+      const home = homedir()
+      const statePath = resolve(home, ".local", "state", "opencode", "model.json")
+      const content = await readFile(statePath, "utf-8")
+      const state = JSON.parse(content) as {
+        favorite?: Array<{ providerID: string; modelID: string }>
+      }
+      const favoriteModel = state.favorite?.[0]
+      if (favoriteModel) {
+        defaultModel = `${favoriteModel.providerID}/${favoriteModel.modelID}`
+        logger.info(`Discovered server default model: "${defaultModel}"`)
+      }
+    } catch {
     }
-    const favoriteModel = state.favorite?.[0]
-    if (favoriteModel) {
-      defaultModel = `${favoriteModel.providerID}/${favoriteModel.modelID}`
-      logger.info(`Discovered server default model: "${defaultModel}"`)
-    }
-  } catch {
+  } else {
+    logger.info(`Using configured IM default model: "${defaultModel}"`)
   }
 
   const sessionManager = createSessionManager({

@@ -102,6 +102,7 @@ const AppConfigSchema = z.object({
   wechat: WechatConfigSchema.optional(),
   dingtalk: DingTalkConfigSchema.optional(),
   defaultAgent: z.string().default("build"),
+  defaultModel: z.string().default(""),
   dataDir: z.string().default("./data"),
   progress: ProgressConfigSchema.optional(),
   cron: CronConfigSchema.optional(),
@@ -219,6 +220,7 @@ export async function loadConfig(configPath?: string): Promise<AppConfig> {
         botName: process.env["DINGTALK_BOT_NAME"],
       } : undefined,
       defaultAgent: process.env["OPENCODE_DEFAULT_AGENT"] ?? "build",
+      defaultModel: process.env["OPENCODE_DEFAULT_MODEL"] ?? "",
       dataDir: process.env["OPENCODE_DATA_DIR"] ?? "./data",
       cron: cronConfigured ? {
         enabled: cronEnabledEnv !== "false",

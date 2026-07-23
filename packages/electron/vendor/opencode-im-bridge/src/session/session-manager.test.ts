@@ -102,6 +102,7 @@ describeOrSkip("session-manager", () => {
         serverUrl: SERVER_URL,
         db,
         defaultAgent: DEFAULT_AGENT,
+        defaultModel: "opencode/mimo-v2.5-free",
         createDirectory: async () => undefined,
       })
       const result = await sm.getOrCreate("chat-2", undefined, "qq")
@@ -112,6 +113,7 @@ describeOrSkip("session-manager", () => {
       const mapping = sm.getSession("chat-2")
       expect(mapping).not.toBeNull()
       expect(mapping!.is_bound).toBe(0)
+      expect(mapping!.model).toBe("opencode/mimo-v2.5-free")
 
       const createCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
         (call) => (call[1] as RequestInit | undefined)?.method === "POST",
@@ -241,7 +243,12 @@ describeOrSkip("session-manager", () => {
         return new Response("Not found", { status: 404 })
       })
 
-      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      sm = createSessionManager({
+        serverUrl: SERVER_URL,
+        db,
+        defaultAgent: DEFAULT_AGENT,
+        defaultModel: "model-default",
+      })
 
       // First call — triggers discovery
       await sm.getOrCreate("chat-3")
@@ -593,7 +600,12 @@ describeOrSkip("session-manager", () => {
 
   describe("setMapping", () => {
     it("resets agent and model when binding the same key to a different session", () => {
-      sm = createSessionManager({ serverUrl: SERVER_URL, db, defaultAgent: DEFAULT_AGENT })
+      sm = createSessionManager({
+        serverUrl: SERVER_URL,
+        db,
+        defaultAgent: DEFAULT_AGENT,
+        defaultModel: "model-default",
+      })
 
       const now = Date.now()
       db.prepare(
@@ -607,7 +619,28 @@ describeOrSkip("session-manager", () => {
       expect(mapping).not.toBeNull()
       expect(mapping!.session_id).toBe("ses-new")
       expect(mapping!.agent).toBe(DEFAULT_AGENT)
-      expect(mapping!.model).toBe("model-old")
+      expect(mapping!.model).toBe("model-default")
+    })
+
+    it("preserves a custom model when updating the same session mapping", () => {
+      sm = createSessionManager({
+        serverUrl: SERVER_URL,
+        db,
+        defaultAgent: DEFAULT_AGENT,
+        defaultModel: "model-default",
+      })
+
+      const now = Date.now()
+      db.prepare(
+        "INSERT INTO feishu_sessions (feishu_key, session_id, agent, model, created_at, last_active, is_bound) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run("key-same", "ses-same", "gpt-4.1", "model-custom", now, now, 1)
+
+      const changed = sm.setMapping("key-same", "ses-same", "researcher")
+      expect(changed).toBe(true)
+
+      const mapping = sm.getSession("key-same")
+      expect(mapping?.agent).toBe("researcher")
+      expect(mapping?.model).toBe("model-custom")
     })
   })
 })

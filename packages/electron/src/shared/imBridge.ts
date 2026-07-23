@@ -8,6 +8,7 @@ export type ImBridgeConfig = {
   serverUrl: string
   directory: string
   defaultAgent: string
+  defaultModel: string
   messageDebounceMs: number
   feishu: ImBridgeChannelConfig & {
     appId: string

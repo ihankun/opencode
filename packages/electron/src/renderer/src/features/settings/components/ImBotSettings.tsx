@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
-import { useDirectory, useServerStore } from '../../../hooks'
+import { useDirectory, useModels, useServerStore } from '../../../hooks'
 import type { ImBridgeConfig, ImBridgeState } from '../../../../../shared/imBridge'
 import { SettingsCard, Toggle } from './SettingsUI'
 
@@ -16,6 +16,7 @@ export function ImBotSettings() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const available = typeof window.customOpenCode?.imBridgeConfig === 'function'
+  const { models, isLoading: modelsLoading, error: modelsError } = useModels(config?.serverId)
 
   useEffect(() => {
     if (!available) return
@@ -97,7 +98,7 @@ export function ImBotSettings() {
               onChange={event => {
                 const selected = servers.find(server => server.id === event.target.value)
                 if (!selected) return
-                setConfig({ ...config, serverId: selected.id, serverUrl: selected.url })
+                setConfig({ ...config, serverId: selected.id, serverUrl: selected.url, defaultModel: '' })
               }}
             >
               {servers.map(server => <option key={server.id} value={server.id}>{server.name} · {server.url}</option>)}
@@ -106,14 +107,30 @@ export function ImBotSettings() {
           <Field label={t('imBot.agent')}>
             <input className={inputClass} value={config.defaultAgent} onChange={event => setConfig({ ...config, defaultAgent: event.target.value })} placeholder="build" />
           </Field>
+          <Field label={t('imBot.defaultModel')}>
+            <select
+              className={inputClass}
+              value={config.defaultModel}
+              disabled={modelsLoading}
+              onChange={event => setConfig({ ...config, defaultModel: event.target.value })}
+            >
+              <option value="">{modelsLoading ? t('imBot.modelsLoading') : t('imBot.automaticModel')}</option>
+              {models.map(model => (
+                <option key={`${model.providerId}/${model.id}`} value={`${model.providerId}/${model.id}`}>
+                  {model.name} · {model.providerName}
+                </option>
+              ))}
+            </select>
+            {modelsError ? <span className="mt-1 block text-danger-100">{t('imBot.modelsLoadFailed')}</span> : null}
+          </Field>
+          <Field label={t('imBot.debounce')}>
+            <input type="number" min={0} className={inputClass} value={config.messageDebounceMs} onChange={event => setConfig({ ...config, messageDebounceMs: Math.max(0, Number(event.target.value)) })} />
+          </Field>
           <Field label={t('imBot.directory')} className="md:col-span-2">
             <div className="flex gap-2">
               <input className={inputClass} value={config.directory} onChange={event => setConfig({ ...config, directory: event.target.value })} />
               {currentDirectory ? <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setConfig({ ...config, directory: currentDirectory })}>{t('imBot.useCurrentProject')}</Button> : null}
             </div>
-          </Field>
-          <Field label={t('imBot.debounce')}>
-            <input type="number" min={0} className={inputClass} value={config.messageDebounceMs} onChange={event => setConfig({ ...config, messageDebounceMs: Math.max(0, Number(event.target.value)) })} />
           </Field>
         </div>
       </SettingsCard>

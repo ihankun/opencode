@@ -268,7 +268,7 @@ export function createSessionManager(
       const agentName = agent ?? (sameSession ? existing?.agent : defaultAgent) ?? defaultAgent
 
       const now = Date.now()
-      const nextModel = existing?.model ?? defaultModel
+      const nextModel = sameSession ? existing?.model ?? defaultModel : defaultModel
 
       const result = upsertStmt.run(feishuKey, sessionId, agentName, nextModel, now, now, 1)
       if (result.changes > 0) {
