@@ -543,6 +543,7 @@ ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String
 ipcMain.handle("plugin:inspect", (_event, specs: unknown) => inspectPlugins(specs))
 ipcMain.handle("mcp:search", (_event, input: unknown) => searchMcpServers(input))
 ipcMain.handle("mcp:source-set", (_event, input: unknown) => setMcpMarketplaceSource(input))
+ipcMain.handle("mcp:source-list", (_event, input: unknown) => mcpSources(input))
 ipcMain.handle("expert-kit:search", (_event, query: unknown) => searchExpertKits(String(query ?? "")))
 ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) => installExpertKit(String(id ?? ""), Boolean(force)))
 ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => removeExpertKit(String(id ?? ""), Boolean(force)))
@@ -999,6 +1000,55 @@ async function setMcpMarketplaceSource(input: unknown) {
   if (input.provider === "official" || input.provider === "netease") sources[key] = input.provider
   else delete sources[key]
   await writeFile(mcpMarketplaceSourceFile(), JSON.stringify(sources, null, 2), "utf8")
+}
+
+async function mcpSources(input: unknown) {
+  if (!isRecord(input) || !Array.isArray(input.names)) throw new Error("MCP server names are required")
+  const names = input.names.filter(isString)
+  const sourceDirectory = typeof input.directory === "string" && input.directory ? input.directory : undefined
+  const directory = sourceDirectory ? resolve(sourceDirectory) : undefined
+  const files = [
+    ...["config.json", "opencode.json", "opencode.jsonc"].map((file) => join(pluginConfigDir(), file)),
+    ...(directory ? [
+      join(directory, "opencode.json"),
+      join(directory, "opencode.jsonc"),
+      join(directory, ".opencode", "opencode.json"),
+      join(directory, ".opencode", "opencode.jsonc"),
+    ] : []),
+  ]
+  const configured: Record<string, string> = {}
+  const plugins: string[] = []
+
+  for (const file of files) {
+    const source = await readFile(file, "utf8").catch(() => "")
+    if (!source) continue
+    const errors: ParseError[] = []
+    const value = parseJsonc(source, errors, { allowTrailingComma: true })
+    if (errors.length || !isRecord(value)) continue
+    if (isRecord(value.mcp)) {
+      Object.keys(value.mcp).forEach((name) => {
+        configured[name] = file
+      })
+    }
+    if (Array.isArray(value.plugin)) {
+      value.plugin.forEach((entry) => {
+        const spec = typeof entry === "string" ? entry : Array.isArray(entry) && typeof entry[0] === "string" ? entry[0] : ""
+        if (spec && !plugins.includes(spec)) plugins.push(spec)
+      })
+    }
+  }
+
+  const stored = await readFile(mcpMarketplaceSourceFile(), "utf8").then((value) => JSON.parse(value), () => ({}))
+  const marketplace = isRecord(stored) ? stored : {}
+  return Object.fromEntries(names.map((name) => {
+    const provider = marketplace[`${sourceDirectory ?? "global"}\0${name}`]
+    if (provider === "official" || provider === "netease") {
+      return [name, { kind: "marketplace" as const, detail: provider, provider }]
+    }
+    if (configured[name]) return [name, { kind: "config" as const, detail: configured[name] }]
+    if (plugins.length) return [name, { kind: "plugin" as const, detail: plugins.join(", ") }]
+    return [name, { kind: "runtime" as const, detail: "" }]
+  }))
 }
 
 type NetEaseExpertKit = {
@@ -1645,6 +1695,7 @@ async function writeSkillFiles(rawRoot: string, rawFiles: unknown) {
 }
 
 async function ensureSkillRootConfig() {
+  const root = resolve(app.getPath("userData"), "skills")
   const configDir = pluginConfigDir()
   await mkdir(configDir, { recursive: true })
   const file = await pluginConfigFile(configDir, "server")
@@ -1661,7 +1712,7 @@ async function ensureSkillRootConfig() {
   }
 
   const paths = Array.isArray(config.skills?.paths) ? config.skills.paths.filter(isString) : []
-  if (paths.includes("~/.opencodex/skills")) return { changed: false as const, file }
+  if (paths.includes("~/.opencodex/skills")) return { changed: false as const, file, root }
   await writeFile(
     file,
     applyEdits(
@@ -1674,7 +1725,7 @@ async function ensureSkillRootConfig() {
       }),
     ),
   )
-  return { changed: true as const, file }
+  return { changed: true as const, file, root }
 }
 
 function isString(value: unknown): value is string {

@@ -39,6 +39,7 @@ import { openUrl } from '../utils/browserOpen'
 import { Button, Dialog } from './ui'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { serverStore } from '../store/serverStore'
+import type { CustomOpenCodeMcpSource } from '../../../preload'
 
 // ============================================
 // Types
@@ -47,6 +48,7 @@ import { serverStore } from '../store/serverStore'
 interface ServerEntry {
   name: string
   status: MCPStatus
+  source?: CustomOpenCodeMcpSource
 }
 
 type McpMarketItem = Awaited<ReturnType<typeof window.customOpenCode.searchMcpServers>>['data'][number]
@@ -96,10 +98,13 @@ export const McpPanel = memo(function McpPanel({ isResizing: _isResizing }: McpP
         name,
         status: status as MCPStatus,
       }))
+      const sources = serverStore.getActiveServerId() === 'local' && typeof window.customOpenCode?.mcpSources === 'function'
+        ? await window.customOpenCode.mcpSources({ directory: currentDirectory, names: entries.map(entry => entry.name) })
+        : {}
 
       // 按名称排序
       entries.sort((a, b) => a.name.localeCompare(b.name))
-      setServers(entries)
+      setServers(entries.map(entry => ({ ...entry, source: sources[entry.name] })))
     } catch (err) {
       apiErrorHandler('load MCP status', err)
       setError(t('mcpPanel.failedToLoad'))
@@ -645,6 +650,15 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
   }
 
   const errorMessage = getErrorMessage()
+  const source = (() => {
+    if (!server.source) return t('mcpPanel.sourceRemote')
+    if (server.source.kind === 'marketplace') return t('mcpPanel.sourceMarketplace', {
+      source: t(`mcpPanel.provider_${server.source.provider}`),
+    })
+    if (server.source.kind === 'plugin') return t('mcpPanel.sourcePlugin', { source: server.source.detail })
+    if (server.source.kind === 'config') return t('mcpPanel.sourceConfig', { source: server.source.detail })
+    return t('mcpPanel.sourceRuntime')
+  })()
 
   // 状态颜色和标签
   const getStatusInfo = () => {
@@ -767,6 +781,7 @@ const ServerItem = memo(function ServerItem({ server, isLoading, onConnect, onDi
               </span>
             )}
           </div>
+          <div className="truncate font-mono text-[length:var(--fs-xxs)] text-text-500" title={source}>{source}</div>
         </div>
 
         {/* Actions */}

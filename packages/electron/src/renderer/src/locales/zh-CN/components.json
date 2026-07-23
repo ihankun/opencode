@@ -242,6 +242,11 @@
     "disconnect": "断开连接",
     "connect": "连接",
     "authenticate": "认证",
+    "sourceMarketplace": "来源：MCP 市场 · {{source}}",
+    "sourcePlugin": "来源：插件 · {{source}}",
+    "sourceConfig": "来源：配置文件 · {{source}}",
+    "sourceRuntime": "来源：运行时提供",
+    "sourceRemote": "来源：远程服务器",
     "remove": "移除 MCP 服务器",
     "removeConfirm": "移除 MCP 服务器“{{name}}”？它的配置会被删除。"
   },

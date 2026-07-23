@@ -354,6 +354,11 @@
     "disconnect": "Disconnect",
     "connect": "Connect",
     "authenticate": "Authenticate",
+    "sourceMarketplace": "Source: MCP Marketplace · {{source}}",
+    "sourcePlugin": "Source: Plugin · {{source}}",
+    "sourceConfig": "Source: Config file · {{source}}",
+    "sourceRuntime": "Source: Runtime",
+    "sourceRemote": "Source: Remote server",
     "remove": "Remove MCP server",
     "removeConfirm": "Remove MCP server “{{name}}”? Its configuration will be deleted."
   },

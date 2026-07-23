@@ -77,6 +77,7 @@ export const SkillPanel = memo(function SkillPanel({
   const [marketTotal, setMarketTotal] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'create' | 'github' | null>(null)
+  const [userSkillRoot, setUserSkillRoot] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const workspaceDirectories = useMemo(
     () => uniqueWorkspaceDirectories([
@@ -93,6 +94,7 @@ export const SkillPanel = memo(function SkillPanel({
       setError(null)
       if (typeof window.customOpenCode?.ensureSkillRoot === 'function') {
         const result = await window.customOpenCode.ensureSkillRoot()
+        setUserSkillRoot(result.root)
         if (result.changed) await restartElectronServer()
       }
       const results = await Promise.all(
@@ -181,12 +183,13 @@ export const SkillPanel = memo(function SkillPanel({
   const skillGroups = useMemo(
     () => groupSkills(filteredSkills, {
       homeDirectory: pathInfo?.home,
+      userSkillRoot,
       workspaceDirectories,
       systemLabel: t('skillPanel.systemDefaultSkills'),
       projectLabel: t('skillPanel.projectSkillSource'),
       otherLabel: t('skillPanel.otherSkillSource'),
     }),
-    [filteredSkills, pathInfo?.home, t, workspaceDirectories],
+    [filteredSkills, pathInfo?.home, t, userSkillRoot, workspaceDirectories],
   )
 
   return (
@@ -301,7 +304,7 @@ export const SkillPanel = memo(function SkillPanel({
               <SkillSection
                 key={section.id}
                 section={section}
-                homeDirectory={pathInfo?.home}
+                userSkillRoot={userSkillRoot}
                 onDeleted={async name => {
                   await loadSkills()
                   showToast(t('skillPanel.deletedSkill', { name }))
@@ -1137,6 +1140,7 @@ type SkillSource = {
 
 function groupSkills(skills: Skill[], options: {
   homeDirectory?: string
+  userSkillRoot?: string
   workspaceDirectories: WorkspaceSkillDirectory[]
   systemLabel: string
   projectLabel: string
@@ -1209,6 +1213,7 @@ function sortSkillSourceGroups(groups: SkillSourceGroup[]) {
 
 function getSkillSource(skill: Skill, options: {
   homeDirectory?: string
+  userSkillRoot?: string
   workspaceDirectories: WorkspaceSkillDirectory[]
   systemLabel: string
   projectLabel: string
@@ -1219,7 +1224,7 @@ function getSkillSource(skill: Skill, options: {
   const normalizedHome = normalizePath(options.homeDirectory)
   const workspace = options.workspaceDirectories.find(directory => isUnderPath(normalizedSource, directory.path))
 
-  if (skill.location === '<built-in>' || isUnderPath(normalizedSource, joinNormalized(normalizedHome, '.opencodex', 'skills'))) {
+  if (skill.location === '<built-in>' || isUnderPath(normalizedSource, normalizePath(options.userSkillRoot))) {
     return {
       section: 'system',
       id: 'system-default',
@@ -1311,7 +1316,7 @@ function isSamePath(a: string, b: string) {
   return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase()
 }
 
-function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: string; onDeleted: (name: string) => void | Promise<void> }) {
+function SkillSection(props: { section: SkillSectionGroup; userSkillRoot?: string; onDeleted: (name: string) => void | Promise<void> }) {
   const { t } = useTranslation(['components'])
   const [expanded, setExpanded] = useState(true)
   const section = props.section
@@ -1341,7 +1346,7 @@ function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: strin
                 key={project.id}
                 project={project}
                 defaultExpanded={false}
-                homeDirectory={props.homeDirectory}
+                userSkillRoot={props.userSkillRoot}
                 onDeleted={props.onDeleted}
               />
             ))
@@ -1355,7 +1360,7 @@ function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: strin
                 key={group.id}
                 group={group}
                 defaultExpanded={section.id === 'system'}
-                homeDirectory={props.homeDirectory}
+                userSkillRoot={props.userSkillRoot}
                 onDeleted={props.onDeleted}
               />
             ))}
@@ -1364,7 +1369,7 @@ function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: strin
                 key={project.id}
                 project={project}
                 defaultExpanded={false}
-                homeDirectory={props.homeDirectory}
+                userSkillRoot={props.userSkillRoot}
                 onDeleted={props.onDeleted}
               />
             ))}
@@ -1378,7 +1383,7 @@ function SkillSection(props: { section: SkillSectionGroup; homeDirectory?: strin
 function SkillProject(props: {
   project: SkillProjectGroup
   defaultExpanded?: boolean
-  homeDirectory?: string
+  userSkillRoot?: string
   onDeleted: (name: string) => void | Promise<void>
 }) {
   const project = props.project
@@ -1407,7 +1412,7 @@ function SkillProject(props: {
             <SkillSource
               key={group.id}
               group={group}
-              homeDirectory={props.homeDirectory}
+              userSkillRoot={props.userSkillRoot}
               onDeleted={props.onDeleted}
             />
           ))}
@@ -1420,7 +1425,7 @@ function SkillProject(props: {
 function SkillSource(props: {
   group: SkillSourceGroup
   defaultExpanded?: boolean
-  homeDirectory?: string
+  userSkillRoot?: string
   onDeleted: (name: string) => void | Promise<void>
 }) {
   const group = props.group
@@ -1446,7 +1451,7 @@ function SkillSource(props: {
           key={skill.name}
           skill={skill}
           sourcePath={group.displayPath}
-          homeDirectory={props.homeDirectory}
+          userSkillRoot={props.userSkillRoot}
           onDeleted={props.onDeleted}
         />
       ))}
@@ -1461,7 +1466,7 @@ function SkillSource(props: {
 const SkillItem = memo(function SkillItem(props: {
   skill: Skill
   sourcePath: string
-  homeDirectory?: string
+  userSkillRoot?: string
   onDeleted: (name: string) => void | Promise<void>
 }) {
   const { t } = useTranslation(['components', 'common'])
@@ -1471,7 +1476,7 @@ const SkillItem = memo(function SkillItem(props: {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [editing, setEditing] = useState(false)
-  const canDelete = isUserSkill(skill, props.homeDirectory) && typeof window.customOpenCode?.deleteSkill === 'function'
+  const canDelete = isUserSkill(skill, props.userSkillRoot) && typeof window.customOpenCode?.deleteSkill === 'function'
 
   const deleteSkill = async () => {
     if (!canDelete) return
@@ -1547,7 +1552,7 @@ const SkillItem = memo(function SkillItem(props: {
   )
 })
 
-function isUserSkill(skill: Skill, homeDirectory?: string) {
+function isUserSkill(skill: Skill, userSkillRoot?: string) {
   if (skill.location === '<built-in>') return false
-  return isUnderPath(normalizePath(skill.location), joinNormalized(normalizePath(homeDirectory), '.opencodex', 'skills'))
+  return isUnderPath(normalizePath(skill.location), normalizePath(userSkillRoot))
 }
