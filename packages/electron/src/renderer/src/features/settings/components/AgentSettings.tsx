@@ -10,6 +10,7 @@ import { useDirectory, useModels } from '../../../hooks'
 import type { AgentConfig, Config } from '../../../types/api/config'
 import { Button, Dialog } from '../../../components/ui'
 import { apiErrorHandler } from '../../../utils'
+import { desktopPreferencesStore, useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 
 type AgentDraft = AgentConfig & { name: string }
 
@@ -48,6 +49,7 @@ export function AgentSettings() {
   const [toolCardStyle, setToolCardStyle] = useState(themeStore.toolCardStyle)
   const [immersiveMode, setImmersiveMode] = useState(themeStore.immersiveMode)
   const [compactInlinePermission, setCompactInlinePermission] = useState(themeStore.compactInlinePermission)
+  const desktopPreferences = useDesktopPreferences()
 
   const handleAlwaysAllowModeChange = (mode: AlwaysAllowMode) => {
     setAlwaysAllowMode(mode)
@@ -100,6 +102,12 @@ export function AgentSettings() {
     setCompactInlinePermission(next)
   }
 
+  const handleBackgroundSubagentsToggle = () => {
+    void desktopPreferencesStore
+      .update({ backgroundSubagents: !desktopPreferences.backgroundSubagents })
+      .catch(cause => apiErrorHandler('update background subagents', cause))
+  }
+
   return (
     <div>
       <AgentProfiles />
@@ -133,6 +141,18 @@ export function AgentSettings() {
           onClick={handleQueueFollowupMessagesToggle}
         >
           <Toggle enabled={queueFollowupMessages} onChange={handleQueueFollowupMessagesToggle} />
+        </SettingRow>
+
+        <SettingRow
+          label={t('agent.backgroundSubagents')}
+          description={t('agent.backgroundSubagentsDesc')}
+          onClick={handleBackgroundSubagentsToggle}
+        >
+          <Toggle
+            enabled={desktopPreferences.backgroundSubagents}
+            onChange={handleBackgroundSubagentsToggle}
+            ariaLabel={t('agent.backgroundSubagents')}
+          />
         </SettingRow>
       </SettingsSection>
 

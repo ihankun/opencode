@@ -105,8 +105,10 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
 
 ipcMain.handle("desktop-preferences:get", () => desktopPreferencesStore.current())
 ipcMain.handle("desktop-preferences:set", async (_event, value: unknown) => {
+  const backgroundSubagents = desktopPreferences.backgroundSubagents
   desktopPreferences = await desktopPreferencesStore.save(value)
   applyDesktopPreferences()
+  if (backgroundSubagents !== desktopPreferences.backgroundSubagents && server) void restartServer()
   return desktopPreferences
 })
 
@@ -118,10 +120,12 @@ ipcMain.handle("im-bridge:stop", () => imBridgeService.stop())
 ipcMain.handle("im-bridge:restart", () => imBridgeService.restart(server?.state.url))
 
 ipcMain.handle("credential:get", (_event, id: unknown) => {
+  assertMainWindow(_event)
   if (typeof id !== "string") throw new Error("Invalid server credential id")
   return getServerCredential(id)
 })
 ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) => {
+  assertMainWindow(_event)
   if (typeof id !== "string") throw new Error("Invalid server credential id")
   if (rawCredential === null) return setServerCredential(id, null)
   if (!rawCredential || typeof rawCredential !== "object") throw new Error("Invalid server credential")
@@ -132,6 +136,7 @@ ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) =
   return setServerCredential(id, { username: credential.username, password: credential.password })
 })
 ipcMain.handle("secure-environment:set", (_event, scope: unknown, rawValues: unknown) => {
+  assertMainWindow(_event)
   if (typeof scope !== "string" || !scope.trim() || scope.length > 500) throw new Error("Invalid secure environment scope")
   const id = `environment.${createHash("sha256").update(scope).digest("hex").slice(0, 24)}`
   if (rawValues === null) return setSecureCredential(id, null)
@@ -148,12 +153,16 @@ ipcMain.handle("hosting:credentials", async () => {
   return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, ids.has(`hosting.${provider}`)]))
 })
 ipcMain.handle("hosting:credential-set", (_event, provider: unknown, rawCredential: unknown) => {
+  assertMainWindow(_event)
   const name = normalizeHostingProvider(provider)
   if (rawCredential === null) return setServerCredential(`hosting.${name}`, null)
   if (!isRecord(rawCredential) || typeof rawCredential.username !== "string" || typeof rawCredential.password !== "string") throw new Error("Invalid hosting credential")
   return setServerCredential(`hosting.${name}`, { username: rawCredential.username, password: rawCredential.password })
 })
-ipcMain.handle("hosting:pr-create", (_event, input: unknown) => createHostedPullRequest(input))
+ipcMain.handle("hosting:pr-create", (_event, input: unknown) => {
+  assertMainWindow(_event)
+  return createHostedPullRequest(input)
+})
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -397,7 +406,10 @@ function applyDesktopPreferences() {
 async function startServer(url: string) {
   try {
     serverError = undefined
-    server = await spawnServer(app.getPath("userData"), allowedOrigins(url), await secureEnvironment())
+    server = await spawnServer(app.getPath("userData"), allowedOrigins(url), {
+      ...await secureEnvironment(),
+      OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: desktopPreferences.backgroundSubagents ? "true" : "false",
+    })
     mainWindow?.webContents.send("server:updated", currentServerState())
     void syncImBridgeServer(server.state.url).catch((error) => writeLog("im-bridge", "automatic start failed", error))
   } catch (error) {
@@ -504,17 +516,22 @@ function notifyScheduledTaskFinished(run: ScheduledTaskRun, task: ScheduledTask)
 }
 
 ipcMain.handle("server:get", currentServerState)
-ipcMain.handle("server:restart", restartServer)
+ipcMain.handle("server:restart", (_event) => {
+  assertMainWindow(_event)
+  return restartServer()
+})
 ipcMain.handle("security:get", readSecurityConfig)
 ipcMain.handle("security:audit", readSecurityAudit)
 ipcMain.handle("security:set", async (_event, value: unknown) => {
+  assertMainWindow(_event)
   const config = normalizeSecurityConfig(value)
   await writeSecurityConfig(config)
   await restartServer()
   return config
 })
 ipcMain.handle("security:windows-sandbox-status", windowsSandboxStatus)
-ipcMain.handle("security:windows-sandbox-install", async () => {
+ipcMain.handle("security:windows-sandbox-install", async (_event) => {
+  assertMainWindow(_event)
   if (process.platform !== "win32") throw new Error("Windows sandbox installation is only available on Windows")
   const result = await runWindowsSandbox(["install", "--force"])
   if (result.code === 10) return { ...(await windowsSandboxStatus()), cancelled: true }
@@ -529,7 +546,10 @@ ipcMain.handle("mcp:source-set", (_event, input: unknown) => setMcpMarketplaceSo
 ipcMain.handle("expert-kit:search", (_event, query: unknown) => searchExpertKits(String(query ?? "")))
 ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) => installExpertKit(String(id ?? ""), Boolean(force)))
 ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => removeExpertKit(String(id ?? ""), Boolean(force)))
-ipcMain.handle("plugin:install", (_event, spec: unknown) => installPlugin(String(spec ?? "")))
+ipcMain.handle("plugin:install", (_event, spec: unknown) => {
+  assertMainWindow(_event)
+  return installPlugin(String(spec ?? ""))
+})
 ipcMain.handle("task:list", () => taskScheduler.list())
 ipcMain.handle("task:run-list", (_event, taskID: unknown) => taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined))
 ipcMain.handle("task:settings", () => taskScheduler.settings())
@@ -572,11 +592,23 @@ ipcMain.handle("task:run-cancel", async (_event, id: unknown) => {
   notifyTasksChanged()
   return run
 })
-ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => writeSkillFiles(String(root ?? ""), files))
+ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => {
+  assertMainWindow(_event)
+  return writeSkillFiles(String(root ?? ""), files)
+})
 ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
-ipcMain.handle("skill:delete", (_event, location: unknown) => deleteSkill(String(location ?? "")))
-ipcMain.handle("browser:open-external", (_event, url: unknown) => openExternalUrl(String(url ?? "")))
-ipcMain.handle("browser:open-internal", (_event, url: unknown) => openInternalUrl(String(url ?? "")))
+ipcMain.handle("skill:delete", (_event, location: unknown) => {
+  assertMainWindow(_event)
+  return deleteSkill(String(location ?? ""))
+})
+ipcMain.handle("browser:open-external", (_event, url: unknown) => {
+  assertMainWindow(_event)
+  return openExternalUrl(String(url ?? ""))
+})
+ipcMain.handle("browser:open-internal", (_event, url: unknown) => {
+  assertMainWindow(_event)
+  return openInternalUrl(String(url ?? ""))
+})
 ipcMain.handle("preview:discover", (_event, host: unknown) => discoverPreviewPorts(String(host ?? "")))
 ipcMain.handle("preview:capture", (_event, rect: unknown) => capturePreview(rect))
 ipcMain.handle("location:apps", locationApps)
@@ -1511,6 +1543,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
+function assertMainWindow(event: Electron.IpcMainInvokeEvent): void {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win || win !== mainWindow) {
+    throw new Error("This operation is restricted to the main window")
+  }
+}
+
 async function patchPluginConfig(dir: string, target: PluginInstallTarget, spec: string) {
   const file = await pluginConfigFile(dir, target.kind)
   const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
@@ -1758,7 +1797,15 @@ async function openInternalUrl(rawUrl: string) {
   const url = new URL(rawUrl)
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
   if (url.username || url.password) throw new Error("URLs with embedded credentials are not allowed")
-  if (url.hostname === "169.254.169.254" || url.hostname.toLowerCase() === "metadata.google.internal") {
+  const blockedMetadataHosts = [
+    "169.254.169.254",
+    "metadata.google.internal",
+    "100.100.100.200",
+    "metadata.tencentyun.com",
+    "169.254.170.2",
+    "fd00:ec2::254",
+  ]
+  if (blockedMetadataHosts.includes(url.hostname.toLowerCase())) {
     throw new Error("Cloud metadata endpoints are blocked")
   }
 

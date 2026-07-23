@@ -540,6 +540,25 @@ const MarkdownMermaid = memo(function MarkdownMermaid({ code, isIncomplete }: Cu
 
     let cancelled = false
 
+    function sanitizeSvg(raw: string): string {
+      try {
+        const doc = new DOMParser().parseFromString(raw, 'image/svg+xml')
+        const svg = doc.querySelector('svg')
+        if (!svg) return ''
+        svg.querySelectorAll('script').forEach(el => el.remove())
+        svg.querySelectorAll('*').forEach(el => {
+          Array.from(el.attributes).forEach(attr => {
+            if (attr.name.startsWith('on') || attr.name === 'href' && attr.value.trimStart().toLowerCase().startsWith('javascript:')) {
+              el.removeAttribute(attr.name)
+            }
+          })
+        })
+        return svg.outerHTML
+      } catch {
+        return ''
+      }
+    }
+
     async function renderDiagram() {
       try {
         setSvg('')
@@ -552,7 +571,7 @@ const MarkdownMermaid = memo(function MarkdownMermaid({ code, isIncomplete }: Cu
           theme: resolvedTheme === 'dark' ? 'dark' : 'default',
         })
         const result = await mermaid.render(createMermaidRenderId(renderPrefix), code)
-        if (!cancelled) setSvg(result.svg)
+        if (!cancelled) setSvg(sanitizeSvg(result.svg))
       } catch (err) {
         if (import.meta.env.DEV) {
           console.warn('[Markdown] Mermaid render failed:', err)
