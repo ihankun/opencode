@@ -27,7 +27,6 @@ import {
   CheckIcon,
   CloseIcon,
   SpinnerIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   PackagePlusIcon,
   TeachIcon,
@@ -85,8 +84,8 @@ interface SidePanelProps {
 function navigationItemClass(active: boolean) {
   return `h-7 flex items-center rounded-lg active:scale-[0.98] transition-all duration-300 overflow-hidden ${
     active
-      ? 'sidebar-selected-row text-text-100'
-      : 'sidebar-hover-row text-text-300 hover:text-text-100'
+      ? 'sidebar-selected-row sidebar-primary-text'
+      : 'sidebar-hover-row sidebar-primary-text'
   }`
 }
 
@@ -1502,8 +1501,8 @@ export function SidePanel({
         }}
       >
         {showLabels && (
-          <section className="mt-2">
-            <div className="mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
+          <section className="mx-2 mt-2">
+            <div className="sidebar-muted-text mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)]">
               <span>{t('sidebar.projects')}</span>
               {projectBusyCount > 0 && (
                 <span
@@ -1597,8 +1596,8 @@ export function SidePanel({
                             : ''
                         } ${
                           isActive
-                            ? 'sidebar-selected-row text-text-100'
-                            : 'sidebar-hover-row text-text-300 hover:text-text-100'
+                            ? 'sidebar-selected-row sidebar-primary-text'
+                            : 'sidebar-hover-row sidebar-primary-text'
                         }`}
                       >
                         <button
@@ -1667,7 +1666,7 @@ export function SidePanel({
                       isExpanded &&
                       sidebarTab === 'recents' &&
                       (projectSessionSource.sessions.length > 0 || projectSessionSource.isLoading || search) && (
-                        <div className="ml-7 mt-0.5 mb-0.5">
+                        <div className="ml-[18px] mt-0.5 mb-0.5">
                           <SessionList
                             sessions={visibleProjectSessions}
                             selectedId={selectedSessionId}
@@ -1702,13 +1701,9 @@ export function SidePanel({
                               onClick={() => setExpandedProjectSessionIds(prev =>
                                 prev.includes(project.id) ? prev : [...prev, project.id],
                               )}
-                              className="group flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[length:var(--fs-xs)] font-medium text-text-400 transition-colors hover:bg-bg-200/45 hover:text-text-200"
+                              className="sidebar-muted-text sidebar-primary-text-hover flex w-full items-center justify-start rounded-md py-1 pl-4 pr-2 text-[length:var(--fs-sm)] transition-colors hover:bg-bg-200/45"
                             >
                               <span>{t('sidebar.showMoreChats')}</span>
-                              <ChevronDownIcon
-                                size={12}
-                                className="text-text-500 transition-colors group-hover:text-text-300"
-                              />
                             </button>
                           )}
                         </div>
@@ -1725,7 +1720,7 @@ export function SidePanel({
       >
         <div className="flex flex-col">
           <div className="mx-2 flex shrink-0 items-center gap-1">
-            <div className="pl-[6px] py-1 text-left text-[length:var(--fs-sm)] text-text-500">
+            <div className="sidebar-muted-text pl-[6px] py-1 text-left text-[length:var(--fs-sm)]">
               <span>{t('sidebar.conversations')}</span>
             </div>
             {conversationBusyCount > 0 && (
@@ -1784,7 +1779,7 @@ export function SidePanel({
 
           {/* Recents Tab */}
           {sidebarTab === 'recents' && (
-            <div>
+            <div className="-ml-0.5">
               <SessionList
                 sessions={defaultConversationSource.sessions}
                 selectedId={selectedSessionId}

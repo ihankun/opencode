@@ -373,7 +373,7 @@
     "moveFolderUp": "Move folder up",
     "moveFolderDown": "Move folder down",
     "noChatsInFolder": "No chats in this folder",
-    "showMoreChats": "Show more chats",
+    "showMoreChats": "Expand",
     "selectedSessions": "{{count}} session(s) selected",
     "selectedProjects": "{{count}} project(s) selected",
     "selectItems": "Select items to manage",

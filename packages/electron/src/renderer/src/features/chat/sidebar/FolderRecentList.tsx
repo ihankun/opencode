@@ -9,7 +9,6 @@ import {
   PinIcon,
   SpinnerIcon,
   CheckIcon,
-  ChevronDownIcon,
 } from '../../../components/Icons'
 import { ExpandableSection } from '../../../components/ui'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -466,7 +465,7 @@ function PinnedFolderSection({
           <span className="size-5 shrink-0 flex items-center justify-center">
             <PinIcon size={15} className="text-accent-main-100" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)] font-medium text-text-300">
+          <span className="sidebar-primary-text min-w-0 flex-1 truncate text-[length:var(--fs-sm)] font-medium">
             {t('sessions.pinned')}
           </span>
         </button>
@@ -723,9 +722,9 @@ function FolderRecentSection({
             title={project.worktree}
           >
             <span className="size-5 shrink-0 flex items-center justify-center">
-              <FolderDisplayIcon size={15} className="text-text-400" />
+              <FolderDisplayIcon size={15} className="sidebar-primary-text" />
             </span>
-            <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)] font-medium text-text-300">
+            <span className="sidebar-primary-text min-w-0 flex-1 truncate text-[length:var(--fs-sm)] font-medium">
               {projectName}
             </span>
             {folderStatus && (
@@ -829,23 +828,12 @@ function FolderRecentSection({
                       disabled={isLoadingMore}
                       aria-busy={isLoadingMore}
                       aria-label={isLoadingMore ? t('common:loadingMore') : t('sidebar.showMoreChats')}
-                      className="group w-full rounded-md px-2 py-1.5 text-[length:var(--fs-xs)] text-text-400/85 transition-colors hover:text-text-200 disabled:cursor-default disabled:opacity-70"
+                      className="sidebar-muted-text sidebar-primary-text-hover w-full rounded-md px-2 py-1 text-left text-[length:var(--fs-sm)] transition-colors disabled:cursor-default disabled:opacity-70"
                     >
-                      <span className="flex items-center justify-center">
-                        <span className="relative inline-flex shrink-0 items-center gap-1.5 font-medium">
-                          <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute right-full top-1/2 mr-2 h-px w-6 -translate-y-1/2 bg-text-600/35 transition-colors group-hover:bg-text-500/55"
-                          />
+                      <span className="flex items-center justify-start">
+                        <span className="inline-flex shrink-0 items-center gap-1.5">
                           <span>{t('sidebar.showMoreChats')}</span>
-                          {isLoadingMore ? (
-                            <SpinnerIcon size={12} className="animate-spin text-text-400" />
-                          ) : (
-                            <ChevronDownIcon
-                              size={12}
-                              className="text-text-400/90 transition-colors group-hover:text-text-200"
-                            />
-                          )}
+                          {isLoadingMore && <SpinnerIcon size={12} className="animate-spin text-text-400" />}
                         </span>
                       </span>
                     </button>

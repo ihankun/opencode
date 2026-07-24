@@ -20,6 +20,7 @@ import { useMobileCollapse } from './input/useMobileCollapse'
 import { useAttachmentRail } from './input/useAttachmentRail'
 import { useInputHistory } from './input/useInputHistory'
 import { normalizeVoiceRecording } from './input/voiceAudio'
+import { projectOptionsInSidebarOrder } from './projectOptions'
 import {
   TEXT_STYLE,
   bytesToDataUrl,
@@ -373,7 +374,7 @@ type TaskPreflightIssue = { level: 'error' | 'warning' | 'info'; message: string
 
 function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: string; onApplyProfile: (profile: ProjectProfile) => void; onPreflight: (issues: TaskPreflightIssue[]) => void }) {
   const { t } = useTranslation('chat')
-  const { currentDirectory, setCurrentDirectory, savedDirectories, recentProjects } = useDirectory()
+  const { currentDirectory, setCurrentDirectory, savedDirectories } = useDirectory()
   const { servers, activeServer, setActiveServer, checkHealth, getHealth } = useServerStore()
   const [menu, setMenu] = useState<'project' | 'server' | 'mode' | 'branch'>()
   const [branches, setBranches] = useState<VcsBranch[]>([])
@@ -385,22 +386,10 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
   const appliedProfileRef = useRef('')
   const appliedBranchRef = useRef('')
   const menuRef = useRef<HTMLDivElement>(null)
-  const projects = useMemo(() => {
-    const directories = [...savedDirectories].toSorted(
-      (a, b) => (recentProjects[b.path] ?? b.addedAt) - (recentProjects[a.path] ?? a.addedAt),
-    )
-    if (!currentDirectory || directories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
-      return directories
-    }
-    return [
-      ...directories,
-      {
-        path: currentDirectory,
-        name: getDirectoryName(currentDirectory) || currentDirectory,
-        addedAt: Date.now(),
-      },
-    ]
-  }, [currentDirectory, recentProjects, savedDirectories])
+  const projects = useMemo(
+    () => projectOptionsInSidebarOrder(savedDirectories, currentDirectory),
+    [currentDirectory, savedDirectories],
+  )
   const projectName = currentDirectory
     ? projects.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
       getDirectoryName(currentDirectory) ||
@@ -841,7 +830,7 @@ function InputBoxComponent({
   homeMode = false,
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
-  const { currentDirectory, savedDirectories, recentProjects } = useDirectory()
+  const { currentDirectory, savedDirectories } = useDirectory()
   const taskProjectProfile = projectProfileStore.get(currentDirectory)
   const taskExecutionTarget = executionTargetStore.getDraft(paneId)
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
@@ -1201,23 +1190,10 @@ function InputBoxComponent({
   // 计算
   const inputDisabled = !!disabled
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !inputDisabled
-  const projectOptions = useMemo(() => {
-    const directories = [...savedDirectories].toSorted(
-      (a, b) => (recentProjects[b.path] ?? b.addedAt) - (recentProjects[a.path] ?? a.addedAt),
-    )
-    if (!currentDirectory || directories.some(directory => isSameDirectory(directory.path, currentDirectory))) {
-      return directories
-    }
-
-    return [
-      ...directories,
-      {
-        path: currentDirectory,
-        name: getDirectoryName(currentDirectory) || currentDirectory,
-        addedAt: Date.now(),
-      },
-    ]
-  }, [currentDirectory, recentProjects, savedDirectories])
+  const projectOptions = useMemo(
+    () => projectOptionsInSidebarOrder(savedDirectories, currentDirectory),
+    [currentDirectory, savedDirectories],
+  )
   const selectedProjectName = currentDirectory
     ? projectOptions.find(directory => isSameDirectory(directory.path, currentDirectory))?.name ||
       getDirectoryName(currentDirectory) ||

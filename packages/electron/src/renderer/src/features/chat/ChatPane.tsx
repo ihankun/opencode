@@ -33,6 +33,7 @@ import type { MessageError } from '../../types/message'
 import { getInternalDragSnapshot, subscribeInternalDrag, subscribeInternalDrop } from '../../lib/internalDragCore'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { I18nTrans } from '../../components/I18nTrans'
+import { selectableAgentsInDisplayOrder } from './agentOrder'
 
 interface ChatPaneProps {
   paneId: string
@@ -445,7 +446,7 @@ export const ChatPane = memo(function ChatPane({
   )
 
   const handleToggleAgentWithSync = useCallback(() => {
-    const primaryAgents = agents.filter(a => a.mode !== 'subagent' && !a.hidden)
+    const primaryAgents = selectableAgentsInDisplayOrder(agents)
     if (primaryAgents.length <= 1) return
     const currentIndex = primaryAgents.findIndex(a => a.name === selectedAgent)
     const nextIndex = (currentIndex + 1) % primaryAgents.length

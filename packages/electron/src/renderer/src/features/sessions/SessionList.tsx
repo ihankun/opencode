@@ -651,10 +651,10 @@ export function SessionListItem({
         onTouchEnd={!isEditMode ? handleTouchEnd : undefined}
         className={`group relative flex items-center gap-2 px-2 py-1 rounded-md cursor-default transition-colors duration-150 select-none ${
           isSelected && !isEditMode
-            ? 'sidebar-selected-row text-text-100'
+            ? 'sidebar-selected-row sidebar-primary-text'
             : isEditMode && isChecked
-              ? 'text-text-100'
-              : 'sidebar-hover-row text-text-300 hover:text-text-100'
+              ? 'sidebar-primary-text'
+              : 'sidebar-hover-row sidebar-primary-text'
         } ${showActions && !isEditMode ? 'bg-bg-200/35' : ''}`}
       >
         {/* 选中左侧色条 */}

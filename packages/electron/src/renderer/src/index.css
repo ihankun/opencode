@@ -861,10 +861,36 @@ html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
 
 .sidebar-surface {
   background-color: hsl(var(--sidebar-bg));
+  --sidebar-text-primary: 0 0% 0%;
+  --sidebar-text-muted: 0 0% 46%;
   --sidebar-font-regular: 400;
   --sidebar-font-emphasis: 500;
   --sidebar-font-strong: 600;
   font-weight: var(--sidebar-font-regular);
+}
+
+:root[data-mode='dark'] .sidebar-surface {
+  --sidebar-text-primary: 0 0% 100%;
+  --sidebar-text-muted: 0 0% 54%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) .sidebar-surface {
+    --sidebar-text-primary: 0 0% 100%;
+    --sidebar-text-muted: 0 0% 54%;
+  }
+}
+
+.sidebar-primary-text {
+  color: hsl(var(--sidebar-text-primary));
+}
+
+.sidebar-muted-text {
+  color: hsl(var(--sidebar-text-muted));
+}
+
+.sidebar-primary-text-hover:hover {
+  color: hsl(var(--sidebar-text-primary));
 }
 
 .sidebar-surface .font-medium {

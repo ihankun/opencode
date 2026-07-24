@@ -62,6 +62,7 @@ import { createTaskFromCommand } from '../api/task'
 import { executionTargetStore } from '../store/executionTargetStore'
 import { serverStore } from '../store/serverStore'
 import i18n from '../i18n'
+import { selectableAgentsInDisplayOrder } from '../features/chat/agentOrder'
 
 const handleError = createErrorHandler('session')
 
@@ -543,7 +544,7 @@ export function useChatSession({
   // agents 列表加载后，校验当前选中的 agent 是否存在于列表中
   useEffect(() => {
     if (agents.length === 0) return
-    const primaryAgents = agents.filter(a => a.mode !== 'subagent' && !a.hidden)
+    const primaryAgents = selectableAgentsInDisplayOrder(agents)
     if (primaryAgents.length === 0) return
 
     // 当前选中的 agent 在列表中存在就不动
@@ -1210,7 +1211,7 @@ export function useChatSession({
 
   // Toggle agent (cycle through primary agents only, matching toolbar display)
   const handleToggleAgent = useCallback(() => {
-    const primaryAgents = agents.filter(a => a.mode !== 'subagent' && !a.hidden)
+    const primaryAgents = selectableAgentsInDisplayOrder(agents)
     if (primaryAgents.length <= 1) return
     const currentIndex = primaryAgents.findIndex(a => a.name === selectedAgent)
     const nextIndex = (currentIndex + 1) % primaryAgents.length

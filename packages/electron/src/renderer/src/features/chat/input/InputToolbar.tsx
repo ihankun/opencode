@@ -23,6 +23,7 @@ import { CircularProgress } from '../../../components/CircularProgress'
 import { ModelSelector, type ModelSelectorHandle } from '../ModelSelector'
 import { ContextDetailsDialog } from '../sidebar/ContextDetailsDialog'
 import { useChatViewport } from '../chatViewport'
+import { selectableAgentsInDisplayOrder } from '../agentOrder'
 import { formatTokens, formatCost } from '../../../hooks'
 import { isTauri, isTauriMobile, extToMime } from '../../../utils/tauri'
 import type { ApiAgent } from '../../../api/client'
@@ -568,7 +569,7 @@ export function InputToolbar({
     return () => clearTimeout(timerId)
   }, [variantMenuOpen, focusMenuItem])
 
-  const selectableAgents = agents.filter(a => a.mode !== 'subagent' && !a.hidden)
+  const selectableAgents = useMemo(() => selectableAgentsInDisplayOrder(agents), [agents])
   const currentAgent = agents.find(a => a.name === selectedAgent)
   const currentAgentDescription = currentAgent ? getAgentDescription(currentAgent, t) : undefined
 
