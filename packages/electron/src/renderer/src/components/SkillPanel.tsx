@@ -41,6 +41,8 @@ import type { Skill } from '../types/api/skill'
 import { useDirectory } from '../hooks'
 import { apiErrorHandler, getDirectoryName } from '../utils'
 import { ConfirmDialog } from './ui/ConfirmDialog'
+import { expertKitSourcesForSkill } from './skillExpertKitSources'
+import type { CustomOpenCodeExpertKitSkillSource } from '../../../preload'
 
 // ============================================
 // SkillPanel Component
@@ -78,6 +80,7 @@ export const SkillPanel = memo(function SkillPanel({
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'create' | 'github' | null>(null)
   const [userSkillRoot, setUserSkillRoot] = useState('')
+  const [expertKitSources, setExpertKitSources] = useState<CustomOpenCodeExpertKitSkillSource[]>([])
   const menuRef = useRef<HTMLDivElement>(null)
   const workspaceDirectories = useMemo(
     () => uniqueWorkspaceDirectories([
@@ -96,6 +99,9 @@ export const SkillPanel = memo(function SkillPanel({
         const result = await window.customOpenCode.ensureSkillRoot()
         setUserSkillRoot(result.root)
         if (result.changed) await restartElectronServer()
+      }
+      if (typeof window.customOpenCode?.expertKitSkillSources === 'function') {
+        setExpertKitSources(await window.customOpenCode.expertKitSkillSources())
       }
       const results = await Promise.all(
         (workspaceDirectories.length > 0 ? workspaceDirectories : [undefined]).map(async directory => {
@@ -186,10 +192,12 @@ export const SkillPanel = memo(function SkillPanel({
       userSkillRoot,
       workspaceDirectories,
       systemLabel: t('skillPanel.systemDefaultSkills'),
+      expertKitLabel: t('skillPanel.expertKitSkills'),
+      expertKitSources,
       projectLabel: t('skillPanel.projectSkillSource'),
       otherLabel: t('skillPanel.otherSkillSource'),
     }),
-    [filteredSkills, pathInfo?.home, t, userSkillRoot, workspaceDirectories],
+    [expertKitSources, filteredSkills, pathInfo?.home, t, userSkillRoot, workspaceDirectories],
   )
 
   return (
@@ -1143,18 +1151,33 @@ function groupSkills(skills: Skill[], options: {
   userSkillRoot?: string
   workspaceDirectories: WorkspaceSkillDirectory[]
   systemLabel: string
+  expertKitLabel: string
+  expertKitSources: readonly CustomOpenCodeExpertKitSkillSource[]
   projectLabel: string
   otherLabel: string
 }) {
   const sections: SkillSectionGroup[] = [
     { id: 'system', title: options.systemLabel, alwaysShow: true, groups: [] },
+    { id: 'expert-kit', title: options.expertKitLabel, groups: [] },
     { id: 'project', title: options.projectLabel, groups: [] },
     { id: 'other', title: options.otherLabel, groups: [] },
   ]
 
   skills.forEach(skill => {
+    const expertKits = expertKitSourcesForSkill(skill.location, options.userSkillRoot, options.expertKitSources)
+    if (expertKits.length > 0) {
+      const section = sections.find(item => item.id === 'expert-kit')!
+      expertKits.forEach(kit => addSkillToSourceGroup(section.groups, {
+        section: section.id,
+        id: `expert-kit:${kit.id}`,
+        label: kit.name,
+        detail: options.expertKitLabel,
+        displayPath: `${options.expertKitLabel}/${kit.name}`,
+      }, skill))
+      return
+    }
     const source = getSkillSource(skill, options)
-    const section = sections.find(item => item.id === source.section) ?? sections[2]
+    const section = sections.find(item => item.id === source.section) ?? sections.at(-1)!
     if (source.section === 'project' && source.project) {
       const project = section.projects?.find(item => item.id === source.project?.id)
       if (project) {
@@ -1216,6 +1239,8 @@ function getSkillSource(skill: Skill, options: {
   userSkillRoot?: string
   workspaceDirectories: WorkspaceSkillDirectory[]
   systemLabel: string
+  expertKitLabel: string
+  expertKitSources: readonly CustomOpenCodeExpertKitSkillSource[]
   projectLabel: string
   otherLabel: string
 }) {

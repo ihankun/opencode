@@ -264,6 +264,7 @@
     "noSkills": "暂无技能",
     "noSkillsInGroup": "此分组暂无技能",
     "systemDefaultSkills": "系统默认技能",
+    "expertKitSkills": "专家套件",
     "projectSkillSource": "工作区",
     "otherSkillSource": "其他",
     "addSkill": "添加技能",

@@ -548,6 +548,7 @@ ipcMain.handle("mcp:search", (_event, input: unknown) => searchMcpServers(input)
 ipcMain.handle("mcp:source-set", (_event, input: unknown) => setMcpMarketplaceSource(input))
 ipcMain.handle("mcp:source-list", (_event, input: unknown) => mcpSources(input))
 ipcMain.handle("expert-kit:search", (_event, query: unknown) => searchExpertKits(String(query ?? "")))
+ipcMain.handle("expert-kit:skill-sources", expertKitSkillSources)
 ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) => installExpertKit(String(id ?? ""), Boolean(force)))
 ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => removeExpertKit(String(id ?? ""), Boolean(force)))
 ipcMain.handle("plugin:install", (_event, spec: unknown) => {
@@ -1089,7 +1090,7 @@ type NetEaseExpertKit = {
 }
 
 type ExpertKitState = {
-  kits: Record<string, { provider: "netease"; version: string; installedAt: string; skills: string[] }>
+  kits: Record<string, { provider: "netease"; name: string; version: string; installedAt: string; skills: string[] }>
   skills: Record<string, { hash: string; owners: string[] }>
 }
 
@@ -1174,6 +1175,15 @@ async function searchExpertKits(raw: string) {
     }))
 }
 
+async function expertKitSkillSources() {
+  const state = await readExpertKitState()
+  return Object.entries(state.kits).map(([id, kit]) => ({
+    id,
+    name: kit.name,
+    skills: kit.skills,
+  }))
+}
+
 async function installExpertKit(raw: string, force: boolean) {
   const kit = (await neteaseExpertKits()).find((item) => item.id === raw.trim())
   if (!kit) throw new Error("Expert kit was not found in the NetEase marketplace")
@@ -1250,6 +1260,7 @@ async function installExpertKit(raw: string, force: boolean) {
     })
     state.kits[kit.id] = {
       provider: "netease",
+      name: kit.name,
       version: kit.version,
       installedAt: state.kits[kit.id]?.installedAt ?? new Date().toISOString(),
       skills: prepared.map((item) => item.slug),

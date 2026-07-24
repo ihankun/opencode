@@ -94,6 +94,12 @@ export type CustomOpenCodeExpertKit = {
   updateAvailable: boolean
 }
 
+export type CustomOpenCodeExpertKitSkillSource = {
+  id: string
+  name: string
+  skills: string[]
+}
+
 export type CustomOpenCodePluginInstallResult = {
   ok: true
   spec: string
@@ -291,6 +297,7 @@ export type CustomOpenCodeApi = {
   setMcpMarketplaceSource(input: { directory?: string; name: string; provider: "official" | "netease" | null }): Promise<void>
   mcpSources(input: { directory?: string; names: string[] }): Promise<Record<string, CustomOpenCodeMcpSource>>
   searchExpertKits(query: string): Promise<CustomOpenCodeExpertKit[]>
+  expertKitSkillSources(): Promise<CustomOpenCodeExpertKitSkillSource[]>
   installExpertKit(id: string, force?: boolean): Promise<void>
   removeExpertKit(id: string, force?: boolean): Promise<void>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
@@ -379,6 +386,7 @@ const api: CustomOpenCodeApi = {
   setMcpMarketplaceSource: (input) => ipcRenderer.invoke("mcp:source-set", input),
   mcpSources: (input) => ipcRenderer.invoke("mcp:source-list", input),
   searchExpertKits: (query) => ipcRenderer.invoke("expert-kit:search", query),
+  expertKitSkillSources: () => ipcRenderer.invoke("expert-kit:skill-sources"),
   installExpertKit: (id, force) => ipcRenderer.invoke("expert-kit:install", id, force),
   removeExpertKit: (id, force) => ipcRenderer.invoke("expert-kit:remove", id, force),
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
