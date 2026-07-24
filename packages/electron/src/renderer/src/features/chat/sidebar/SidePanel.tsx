@@ -10,6 +10,11 @@ import { NotificationItem } from './NotificationItem'
 import { SidebarFooter } from './SidebarFooter'
 import { buildActiveSessionTree } from './activeSessionTree'
 import {
+  PROJECT_SESSION_PREVIEW_LIMIT,
+  collapsedProjectSessionPreviews,
+  projectSessionsForDisplay,
+} from './projectSessionPreview'
+import {
   FolderIcon,
   FolderOpenIcon,
   GlobeIcon,
@@ -22,6 +27,7 @@ import {
   CheckIcon,
   CloseIcon,
   SpinnerIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   PackagePlusIcon,
   TeachIcon,
@@ -304,6 +310,11 @@ export function SidePanel({
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
+  const [expandedProjectSessionIds, setExpandedProjectSessionIds] = useState<string[]>([])
+
+  useEffect(() => {
+    setExpandedProjectSessionIds(prev => collapsedProjectSessionPreviews(prev, expandedProjectIds))
+  }, [expandedProjectIds])
 
   // ---- 编辑模式状态 ----
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1351,13 +1362,13 @@ export function SidePanel({
       )}
 
       {/* ===== Navigation - 图标位置固定 ===== */}
-      <div className="flex flex-col gap-0 mx-2">
+      <div className="mx-2 flex shrink-0 flex-col gap-0">
         {/* New Chat - 图标始终在 padding-left: 6px 位置，收起时刚好居中 */}
         <button
           type="button"
           onClick={onNewSession}
           aria-label={t('sidebar.newChat')}
-          className={`${navigationItemClass(activeNavigation === 'new')} group`}
+          className={`${navigationItemClass(false)} group`}
           style={{
             width: showLabels ? '100%' : 32,
             paddingLeft: 6,
@@ -1469,7 +1480,27 @@ export function SidePanel({
             </button>
           </>
         )}
+      </div>
 
+      <div
+        ref={recentsSelectionRootRef}
+        onScroll={event => {
+          const element = event.currentTarget
+          if (
+            sidebarTab === 'recents' &&
+            defaultConversationSource.hasMore &&
+            !defaultConversationSource.isLoadingMore &&
+            element.scrollHeight - element.scrollTop - element.clientHeight < 100
+          ) {
+            defaultConversationSource.onLoadMore()
+          }
+        }}
+        className="flex-1 min-h-0 overflow-y-auto custom-scrollbar transition-all duration-300 ease-out"
+        style={{
+          opacity: showLabels ? 1 : 0,
+          visibility: showLabels ? 'visible' : 'hidden',
+        }}
+      >
         {showLabels && (
           <section className="mt-2">
             <div className="mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)] text-text-500">
@@ -1497,7 +1528,7 @@ export function SidePanel({
               onTouchMove={handleProjectTouchMove}
               onTouchEnd={handleProjectTouchEnd}
               onTouchCancel={handleProjectTouchEnd}
-              className="overflow-y-auto custom-scrollbar"
+              className="pb-1"
             >
               {displayedProjectOrder.map(projectId => {
                 const project = projectById.get(projectId)
@@ -1534,6 +1565,17 @@ export function SidePanel({
                     ).values(),
                   ),
                 }
+                const isProjectSessionListExpanded =
+                  Boolean(search) || expandedProjectSessionIds.includes(project.id)
+                const visibleProjectSessions = projectSessionsForDisplay(
+                  projectSessionSource.sessions,
+                  isProjectSessionListExpanded,
+                  Boolean(search),
+                )
+                const hasHiddenProjectSessions =
+                  !search &&
+                  !isProjectSessionListExpanded &&
+                  projectSessionSource.sessions.length > PROJECT_SESSION_PREVIEW_LIMIT
                 const itemLabel = project.name || (isGlobal ? t('sidebar.global') : project.worktree)
                 return (
                   <div
@@ -1627,11 +1669,11 @@ export function SidePanel({
                       (projectSessionSource.sessions.length > 0 || projectSessionSource.isLoading || search) && (
                         <div className="ml-7 mt-0.5 mb-0.5">
                           <SessionList
-                            sessions={projectSessionSource.sessions}
+                            sessions={visibleProjectSessions}
                             selectedId={selectedSessionId}
                             isLoading={projectSessionSource.isLoading}
-                            isLoadingMore={projectSessionSource.isLoadingMore}
-                            hasMore={projectSessionSource.hasMore}
+                            isLoadingMore={false}
+                            hasMore={false}
                             search={search}
                             onSearchChange={setSearch}
                             onSelect={handleSelect}
@@ -1648,12 +1690,27 @@ export function SidePanel({
                             inlineChildSessions={inlineChildSessions}
                             onSelectChildSession={handleSelectActive}
                             pinnedDividerAfterIds={pinnedDividerAfterIds}
-                            embedded
+                            parentScroll
                             isEditMode={isEditMode}
                             selectedSessionIds={selectedSessionIds}
                             onToggleSessionSelection={toggleSessionSelection}
                             reorderScope={`project:${normalizeToForwardSlash(project.worktree)}`}
                           />
+                          {hasHiddenProjectSessions && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedProjectSessionIds(prev =>
+                                prev.includes(project.id) ? prev : [...prev, project.id],
+                              )}
+                              className="group flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[length:var(--fs-xs)] font-medium text-text-400 transition-colors hover:bg-bg-200/45 hover:text-text-200"
+                            >
+                              <span>{t('sidebar.showMoreChats')}</span>
+                              <ChevronDownIcon
+                                size={12}
+                                className="text-text-500 transition-colors group-hover:text-text-300"
+                              />
+                            </button>
+                          )}
                         </div>
                       )}
                   </div>
@@ -1662,17 +1719,11 @@ export function SidePanel({
             </div>
           </section>
         )}
-      </div>
-
       {/* ===== Main Content ===== */}
       <div
-        className="flex-1 flex flex-col min-h-0 overflow-hidden transition-all duration-300 ease-out"
-        style={{
-          opacity: showLabels ? 1 : 0,
-          visibility: showLabels ? 'visible' : 'hidden',
-        }}
+        className="flex flex-col"
       >
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex flex-col">
           <div className="mx-2 flex shrink-0 items-center gap-1">
             <div className="pl-[6px] py-1 text-left text-[length:var(--fs-sm)] text-text-500">
               <span>{t('sidebar.conversations')}</span>
@@ -1733,7 +1784,7 @@ export function SidePanel({
 
           {/* Recents Tab */}
           {sidebarTab === 'recents' && (
-            <div ref={recentsSelectionRootRef} className="flex-1 overflow-hidden">
+            <div>
               <SessionList
                 sessions={defaultConversationSource.sessions}
                 selectedId={selectedSessionId}
@@ -1756,6 +1807,7 @@ export function SidePanel({
                 inlineChildSessions={inlineChildSessions}
                 onSelectChildSession={handleSelectActive}
                 pinnedDividerAfterIds={pinnedDividerAfterIds}
+                parentScroll
                 isEditMode={isEditMode}
                 selectedSessionIds={selectedSessionIds}
                 onToggleSessionSelection={toggleSessionSelection}
@@ -1770,7 +1822,7 @@ export function SidePanel({
 
           {/* Active Sessions Tab */}
           {sidebarTab === 'active' && (
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-3">
+            <div className="px-2 pb-3">
               {busySessions.length === 0 && notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-text-400 opacity-60">
                   <p className="text-[length:var(--fs-sm)]">{t('sidebar.noActiveSessions')}</p>
@@ -1824,6 +1876,7 @@ export function SidePanel({
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Spacer for collapsed */}

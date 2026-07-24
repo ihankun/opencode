@@ -38,6 +38,7 @@ interface SessionListProps {
   onSelectChildSession?: (session: ApiSession) => void
   pinnedDividerAfterIds?: Set<string>
   embedded?: boolean
+  parentScroll?: boolean
   /** 同一 scope 下持久化用户手动调整的会话顺序 */
   reorderScope?: string
   // ---- 编辑模式 ----
@@ -74,6 +75,7 @@ export function SessionList({
   onSelectChildSession,
   pinnedDividerAfterIds,
   embedded = false,
+  parentScroll = false,
   reorderScope,
   isEditMode = false,
   selectedSessionIds,
@@ -191,7 +193,7 @@ export function SessionList({
   })
 
   return (
-    <div className={`flex flex-col ${embedded ? '' : 'h-full'}`}>
+    <div className={`flex flex-col ${embedded || parentScroll ? '' : 'h-full'}`}>
       {/* Search Bar + New Chat */}
       {showHeader && (
         <div className="px-3 pb-2 flex-shrink-0">
@@ -229,7 +231,9 @@ export function SessionList({
         onTouchMove={reorderEnabled ? handleReorderTouchMove : undefined}
         onTouchEnd={reorderEnabled ? handleReorderTouchEnd : undefined}
         onTouchCancel={reorderEnabled ? handleReorderTouchEnd : undefined}
-        className={`${embedded ? 'max-h-52' : 'flex-1'} overflow-y-auto custom-scrollbar px-2 ${
+        className={`${embedded ? 'max-h-52' : parentScroll ? '' : 'flex-1'} ${
+          parentScroll ? 'overflow-visible' : 'overflow-y-auto custom-scrollbar'
+        } px-2 ${
           isCompact ? 'pb-2 space-y-0.5' : 'pb-4 space-y-4'
         }`}
       >
