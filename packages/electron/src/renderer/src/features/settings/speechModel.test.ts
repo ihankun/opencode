@@ -15,10 +15,20 @@ describe('speech model preferences', () => {
       model: ' whisper-large-v3 ',
       language: ' zh ',
     })).toEqual({
+      provider: 'openai-transcription',
       baseUrl: 'https://speech.example.com/v1',
       model: 'whisper-large-v3',
       language: 'zh',
     })
+  })
+
+  test('preserves supported provider adapters', () => {
+    expect(normalizeSpeechModelPreferences({
+      provider: 'openai-chat-audio',
+      baseUrl: 'https://speech.example.com/v1',
+      model: 'audio-asr',
+      language: '',
+    }).provider).toBe('openai-chat-audio')
   })
 
   test('falls back when required string fields are empty', () => {

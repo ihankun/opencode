@@ -632,6 +632,10 @@ ipcMain.handle("speech-model:config-set", (_event, value: unknown) => {
   assertMainWindow(_event)
   return speechModelService.save(value)
 })
+ipcMain.handle("speech-model:models", (_event, value: unknown) => {
+  assertMainWindow(_event)
+  return speechModelService.models(value)
+})
 ipcMain.handle("speech-model:transcribe", (_event, value: unknown) => {
   assertMainWindow(_event)
   return speechModelService.transcribe(value)

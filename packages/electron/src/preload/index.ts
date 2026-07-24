@@ -3,6 +3,8 @@ import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 import type { DesktopPreferences } from "../shared/desktopPreferences"
 import type {
   SpeechModelConfig,
+  SpeechModelDiscoveryInput,
+  SpeechModelOption,
   SpeechModelUpdate,
   SpeechTranscriptionInput,
 } from "../shared/speechModel"
@@ -326,6 +328,7 @@ export type CustomOpenCodeApi = {
   microphonePermission(): Promise<CustomOpenCodeMicrophonePermission>
   speechModelConfig(): Promise<SpeechModelConfig>
   updateSpeechModelConfig(config: SpeechModelUpdate): Promise<SpeechModelConfig>
+  speechModels(config: SpeechModelDiscoveryInput): Promise<SpeechModelOption[]>
   transcribeAudio(input: SpeechTranscriptionInput): Promise<{ text: string }>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
   exportDebugLogs(): Promise<string>
@@ -412,6 +415,7 @@ const api: CustomOpenCodeApi = {
   microphonePermission: () => ipcRenderer.invoke("microphone:permission"),
   speechModelConfig: () => ipcRenderer.invoke("speech-model:config-get"),
   updateSpeechModelConfig: (config) => ipcRenderer.invoke("speech-model:config-set", config),
+  speechModels: (config) => ipcRenderer.invoke("speech-model:models", config),
   transcribeAudio: (input) => ipcRenderer.invoke("speech-model:transcribe", input),
   onNotificationClicked(callback) {
     const listener = (_event: unknown, data: { sessionId?: string; directory?: string }) => callback(data)

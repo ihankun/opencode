@@ -19,6 +19,7 @@ import { FloatingActions, CollapsedCapsule } from './input/InputActions'
 import { useMobileCollapse } from './input/useMobileCollapse'
 import { useAttachmentRail } from './input/useAttachmentRail'
 import { useInputHistory } from './input/useInputHistory'
+import { normalizeVoiceRecording } from './input/voiceAudio'
 import {
   TEXT_STYLE,
   bytesToDataUrl,
@@ -880,7 +881,7 @@ function InputBoxComponent({
       return
     }
     const config = await window.customOpenCode.speechModelConfig().catch(() => undefined)
-    if (!config?.hasApiKey) {
+    if (!config || (config.apiKeyRequired && !config.hasApiKey)) {
       notificationStore.push(
         'error',
         t('inputToolbar.voicePermissionTitle'),
@@ -953,9 +954,10 @@ function InputBoxComponent({
         setVoiceTranscribing(true)
         try {
           const audio = new Blob(state.chunks, { type: recorder.mimeType || state.chunks[0]?.type || 'audio/webm' })
+          const normalized = await normalizeVoiceRecording(audio)
           const result = await window.customOpenCode.transcribeAudio({
-            data: await audio.arrayBuffer(),
-            mimeType: audio.type,
+            data: await normalized.arrayBuffer(),
+            mimeType: normalized.type,
           })
           if (result.text) {
             setText(current => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${result.text}`)

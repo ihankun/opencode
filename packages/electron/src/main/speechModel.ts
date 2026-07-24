@@ -1,16 +1,17 @@
-import { Blob } from "node:buffer"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import {
   DEFAULT_SPEECH_MODEL_PREFERENCES,
   normalizeSpeechModelPreferences,
   type SpeechModelConfig,
+  type SpeechModelDiscoveryInput,
   type SpeechModelPreferences,
   type SpeechModelUpdate,
   type SpeechTranscriptionInput,
 } from "../shared/speechModel.ts"
 import { getSecureCredential, setSecureCredential } from "./credentials"
 import { writeLog } from "./logging"
+import { speechProvider } from "./speech/providers/factory.ts"
 
 const credentialID = "speech.transcription"
 const maxAudioBytes = 25 * 1024 * 1024
@@ -30,6 +31,7 @@ export class SpeechModelService {
     return {
       ...this.preferences,
       hasApiKey: Boolean((await getSecureCredential(credentialID))?.apiKey),
+      apiKeyRequired: endpointRequiresAuth(validateBaseUrl(this.preferences.baseUrl)),
     }
   }
 
@@ -48,38 +50,62 @@ export class SpeechModelService {
     return this.config()
   }
 
+  async models(value: unknown) {
+    if (!value || typeof value !== "object") throw new Error("Invalid speech model discovery configuration")
+    const input = value as Partial<SpeechModelDiscoveryInput>
+    const preferences = normalizeSpeechModelPreferences(input)
+    const baseUrl = validateBaseUrl(preferences.baseUrl)
+    const apiKey = typeof input.apiKey === "string" && input.apiKey.trim()
+      ? input.apiKey.trim()
+      : (await getSecureCredential(credentialID))?.apiKey ?? ""
+    if (endpointRequiresAuth(baseUrl) && !apiKey) {
+      throw new Error("Configure the speech model API key before loading models")
+    }
+    writeLog("main", "speech model discovery started", {
+      endpoint: baseUrl.origin,
+      provider: preferences.provider,
+    })
+    const result = await speechProvider(preferences.provider).listModels({
+      baseUrl,
+      model: preferences.model,
+      language: preferences.language,
+      apiKey,
+    }, AbortSignal.timeout(10_000))
+    writeLog("main", "speech model discovery completed", { models: result.length })
+    return result
+  }
+
   async transcribe(value: unknown) {
     const input = normalizeTranscriptionInput(value)
     const credential = await getSecureCredential(credentialID)
-    if (!credential?.apiKey) throw new Error("Configure the speech model API key in Settings first")
-    const endpoint = transcriptionEndpoint(this.preferences.baseUrl)
-    const form = new FormData()
-    form.append("file", new Blob([input.data], { type: input.mimeType }), `recording.${audioExtension(input.mimeType)}`)
-    form.append("model", this.preferences.model)
-    if (this.preferences.language) form.append("language", this.preferences.language)
+    const baseUrl = validateBaseUrl(this.preferences.baseUrl)
+    if (endpointRequiresAuth(baseUrl) && !credential?.apiKey) {
+      throw new Error("Configure the speech model API key in Settings first")
+    }
     writeLog("main", "speech transcription started", {
-      endpoint: endpoint.origin,
+      endpoint: baseUrl.origin,
+      provider: this.preferences.provider,
       model: this.preferences.model,
       bytes: input.data.byteLength,
       mimeType: input.mimeType,
     })
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${credential.apiKey}` },
-      body: form,
+    const text = await speechProvider(this.preferences.provider).transcribe({
+      baseUrl,
+      model: this.preferences.model,
+      language: this.preferences.language,
+      apiKey: credential?.apiKey ?? "",
+    }, {
+      ...input,
       signal: AbortSignal.timeout(120_000),
+    }).catch(error => {
+      writeLog("main", "speech transcription failed", {
+        provider: this.preferences.provider,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      throw error
     })
-    const body = await response.text()
-    if (!response.ok) {
-      writeLog("main", "speech transcription failed", { status: response.status, body: body.slice(0, 1_000) })
-      throw new Error(speechServiceError(response.status, body))
-    }
-    const result = JSON.parse(body) as unknown
-    if (!result || typeof result !== "object" || !("text" in result) || typeof result.text !== "string") {
-      throw new Error("Speech service returned an invalid response")
-    }
-    writeLog("main", "speech transcription completed", { characters: result.text.length })
-    return { text: result.text.trim() }
+    writeLog("main", "speech transcription completed", { characters: text.length })
+    return { text }
   }
 }
 
@@ -94,44 +120,15 @@ function normalizeTranscriptionInput(value: unknown): SpeechTranscriptionInput {
   return { data: input.data, mimeType: input.mimeType }
 }
 
-function transcriptionEndpoint(baseUrl: string) {
-  const url = validateBaseUrl(baseUrl)
-  url.pathname = `${url.pathname.replace(/\/+$/, "")}/audio/transcriptions`
-  url.search = ""
-  url.hash = ""
-  return url
-}
-
-function validateBaseUrl(value: string) {
+export function validateBaseUrl(value: string) {
   const url = new URL(value)
   if (url.username || url.password) throw new Error("Speech model URLs cannot contain credentials")
-  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1"
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && !endpointRequiresAuth(url))) {
     throw new Error("Use HTTPS for remote speech services; HTTP is only allowed for local services")
   }
   return url
 }
 
-function audioExtension(mimeType: string) {
-  const normalized = mimeType.toLowerCase()
-  if (normalized.includes("mp4")) return "m4a"
-  if (normalized.includes("ogg")) return "ogg"
-  if (normalized.includes("wav")) return "wav"
-  return "webm"
-}
-
-function speechServiceError(status: number, body: string) {
-  try {
-    const value = JSON.parse(body) as unknown
-    if (value && typeof value === "object" && "error" in value) {
-      const error = value.error
-      if (typeof error === "string") return `Speech service HTTP ${status}: ${error}`
-      if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
-        return `Speech service HTTP ${status}: ${error.message}`
-      }
-    }
-  } catch {
-    // The service may return plain text or an upstream proxy page.
-  }
-  return `Speech service HTTP ${status}${body ? `: ${body.slice(0, 500)}` : ""}`
+function endpointRequiresAuth(url: URL) {
+  return url.hostname !== "localhost" && url.hostname !== "127.0.0.1" && url.hostname !== "::1"
 }

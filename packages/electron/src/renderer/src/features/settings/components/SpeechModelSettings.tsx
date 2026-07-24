@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SpeechModelConfig } from '../../../../../shared/speechModel'
+import type {
+  SpeechModelConfig,
+  SpeechModelDiscoveryInput,
+  SpeechModelOption,
+  SpeechProviderType,
+} from '../../../../../shared/speechModel'
 import { Button } from '../../../components/ui/Button'
 import { SettingsCard, SettingsSection } from './SettingsUI'
 
@@ -10,16 +15,48 @@ export function SpeechModelSettings() {
   const { t } = useTranslation(['settings', 'common'])
   const [config, setConfig] = useState<SpeechModelConfig>()
   const [apiKey, setApiKey] = useState('')
+  const [models, setModels] = useState<SpeechModelOption[]>([])
   const [busy, setBusy] = useState(false)
+  const [modelsLoading, setModelsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string }>()
   const available = typeof window.customOpenCode?.speechModelConfig === 'function'
+    && typeof window.customOpenCode?.speechModels === 'function'
+
+  const loadModels = useCallback(async (input: SpeechModelDiscoveryInput, showError: boolean) => {
+    setModelsLoading(true)
+    try {
+      const result = await window.customOpenCode.speechModels(input)
+      setModels(result)
+      if (showError) {
+        setMessage({
+          type: 'success',
+          text: t('speechModel.modelsLoaded', { count: result.length }),
+        })
+      }
+    } catch (error) {
+      setModels([])
+      if (showError) {
+        setMessage({
+          type: 'error',
+          text: t('speechModel.modelsLoadFailed', {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        })
+      }
+    } finally {
+      setModelsLoading(false)
+    }
+  }, [t])
 
   useEffect(() => {
     if (!available) return
     void window.customOpenCode.speechModelConfig()
-      .then(setConfig)
+      .then(value => {
+        setConfig(value)
+        if (value.hasApiKey || !value.apiKeyRequired) void loadModels(value, false)
+      })
       .catch(error => setMessage({ type: 'error', text: error instanceof Error ? error.message : String(error) }))
-  }, [available])
+  }, [available, loadModels])
 
   if (!available) return <SettingsCard title={t('speechModel.title')} description={t('speechModel.desktopOnly')}><div /></SettingsCard>
   if (!config) return <div className="text-[length:var(--fs-sm)] text-text-400">{t('common:loading')}</div>
@@ -29,6 +66,7 @@ export function SpeechModelSettings() {
     setMessage(undefined)
     try {
       const next = await window.customOpenCode.updateSpeechModelConfig({
+        provider: config.provider,
         baseUrl: config.baseUrl,
         model: config.model,
         language: config.language,
@@ -37,6 +75,7 @@ export function SpeechModelSettings() {
       setConfig(next)
       setApiKey('')
       setMessage({ type: 'success', text: t('speechModel.saved') })
+      if (next.hasApiKey || !next.apiKeyRequired) void loadModels(next, false)
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -49,6 +88,7 @@ export function SpeechModelSettings() {
     setMessage(undefined)
     try {
       const next = await window.customOpenCode.updateSpeechModelConfig({
+        provider: config.provider,
         baseUrl: config.baseUrl,
         model: config.model,
         language: config.language,
@@ -56,6 +96,7 @@ export function SpeechModelSettings() {
       })
       setConfig(next)
       setApiKey('')
+      setModels([])
       setMessage({ type: 'success', text: t('speechModel.apiKeyCleared') })
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : String(error) })
@@ -64,17 +105,42 @@ export function SpeechModelSettings() {
     }
   }
 
+  const likelyModels = models.filter(item => item.likelySpeechModel)
+  const modelOptions = likelyModels.length > 0 ? likelyModels : models
+
   return (
     <SettingsSection title={t('speechModel.title')}>
       <p className="text-[length:var(--fs-sm)] leading-relaxed text-text-400">{t('speechModel.description')}</p>
-      <SettingsCard title={t('speechModel.openAiCompatible')} description={t('speechModel.openAiCompatibleDesc')}>
+      <SettingsCard title={t('speechModel.service')} description={t('speechModel.serviceDesc')}>
         <div className="space-y-4">
+          <label className="block space-y-1.5" data-setting-label={t('speechModel.provider')}>
+            <span className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('speechModel.provider')}</span>
+            <select
+              value={config.provider}
+              onChange={event => {
+                setConfig({ ...config, provider: event.target.value as SpeechProviderType })
+                setModels([])
+              }}
+              className={inputClass}
+            >
+              <option value="openai-transcription">{t('speechModel.providerMultipart')}</option>
+              <option value="openai-chat-audio">{t('speechModel.providerChatAudio')}</option>
+              <option value="openrouter-transcription">{t('speechModel.providerJsonTranscription')}</option>
+            </select>
+            <span className="block text-[length:var(--fs-xs)] text-text-500">
+              {t(`speechModel.providerDesc.${config.provider}`)}
+            </span>
+          </label>
+
           <label className="block space-y-1.5" data-setting-label={t('speechModel.baseUrl')}>
             <span className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('speechModel.baseUrl')}</span>
             <input
               type="url"
               value={config.baseUrl}
-              onChange={event => setConfig({ ...config, baseUrl: event.target.value })}
+              onChange={event => {
+                setConfig({ ...config, baseUrl: event.target.value })
+                setModels([])
+              }}
               placeholder="https://api.openai.com/v1"
               spellCheck={false}
               className={inputClass}
@@ -83,14 +149,43 @@ export function SpeechModelSettings() {
           </label>
 
           <label className="block space-y-1.5" data-setting-label={t('speechModel.model')}>
-            <span className="text-[length:var(--fs-sm)] font-medium text-text-200">{t('speechModel.model')}</span>
+            <span className="flex items-center justify-between gap-3 text-[length:var(--fs-sm)] font-medium text-text-200">
+              <span>{t('speechModel.model')}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                isLoading={modelsLoading}
+                disabled={!config.baseUrl.trim()}
+                onClick={() => void loadModels({
+                  provider: config.provider,
+                  baseUrl: config.baseUrl,
+                  model: config.model,
+                  language: config.language,
+                  apiKey: apiKey.trim() || undefined,
+                }, true)}
+              >
+                {t('speechModel.refreshModels')}
+              </Button>
+            </span>
             <input
+              list="speech-model-options"
               value={config.model}
               onChange={event => setConfig({ ...config, model: event.target.value })}
               placeholder="whisper-1"
               spellCheck={false}
               className={inputClass}
             />
+            <datalist id="speech-model-options">
+              {modelOptions.map(item => (
+                <option key={item.id} value={item.id}>{item.ownedBy}</option>
+              ))}
+            </datalist>
+            <span className="block text-[length:var(--fs-xs)] text-text-500">
+              {modelOptions.length > 0
+                ? t('speechModel.modelOptionsAvailable', { count: modelOptions.length })
+                : t('speechModel.modelManualHint')}
+            </span>
           </label>
 
           <label className="block space-y-1.5" data-setting-label={t('speechModel.language')}>

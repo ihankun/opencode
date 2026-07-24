@@ -33,7 +33,7 @@ export const SETTINGS_SEARCH_DEFINITIONS: SettingsSearchDefinition[] = [
   ...definitions('imBot', ['imBot.serviceTitle', 'imBot.connectionTitle', 'imBot.channelsTitle']),
   ...definitions('providers', ['tabs.providers']),
   ...definitions('models', ['models.visibility']),
-  ...definitions('speechModel', ['speechModel.baseUrl', 'speechModel.model', 'speechModel.language', 'speechModel.apiKey']),
+  ...definitions('speechModel', ['speechModel.provider', 'speechModel.baseUrl', 'speechModel.model', 'speechModel.language', 'speechModel.apiKey']),
   ...definitions('agent', ['agent.behavior', 'agent.backgroundSubagents', 'agent.toolInteraction', 'chat.alwaysAllowMode', 'chat.approvePendingOnFullAuto', 'chat.queueFollowupMessages', 'chat.immersiveMode', 'chat.inlineToolRequests', 'chat.descriptiveToolSteps', 'chat.processCollapse', 'chat.compactInlinePermission', 'chat.toolCardStyle']),
   ...definitions('chat', ['chat.pathsFormatting', 'chat.conversationExperience', 'chat.stepFinishInfo', 'chat.externalDropMentionMode', 'chat.collapseLongMessages', 'chat.renderUserMarkdown', 'chat.outlineCurrentHighlight', 'chat.actionsOnLatestAssistantOnly', 'chat.desktopCollapsedInputDock', 'chat.thinkingDisplay']),
   ...definitions('workspace', ['workspace.layout', 'workspace.terminal', 'workspace.sidebar', 'appearance.wideMode', 'appearance.wakeLock', 'appearance.codeWordWrap', 'workspace.manualTerminalTitles', 'appearance.diffStyle', 'workspace.terminalCopyOnSelect', 'workspace.terminalRightClickPaste', 'appearance.folderStyleRecents', 'appearance.showChildSessions']),
