@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
 import { AlertCircleIcon, CloseIcon, PlugIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
-import { OutlineIndex } from '../../components/OutlineIndex'
+import { OutlineIndex, type OutlineIndexHandle } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
 import { PaneDropOverlay, resolveDropZone, type DropZone, type PaneDropOverlayHandle } from './PaneDropOverlay'
 import { useChatSession, useModels, useModelSelection, useSessionStats } from '../../hooks'
@@ -231,13 +231,13 @@ export const ChatPane = memo(function ChatPane({
   // ============================================
   // Visible Message IDs (for outline index)
   // ============================================
-  const [visibleMessageIds, setVisibleMessageIds] = useState<string[]>([])
+  const outlineIndexRef = useRef<OutlineIndexHandle>(null)
   const visibleMessageIdsRef = useRef<string[]>([])
   const setVisibleMessageIdsStable = useCallback((ids: string[]) => {
     const prev = visibleMessageIdsRef.current
     if (prev.length === ids.length && prev.every((id, i) => id === ids[i])) return
     visibleMessageIdsRef.current = ids
-    setVisibleMessageIds(ids)
+    outlineIndexRef.current?.setVisibleMessageIds(ids)
   }, [])
   const [isAtBottom, setIsAtBottom] = useState(true)
 
@@ -851,9 +851,9 @@ export const ChatPane = memo(function ChatPane({
       </div>
 
       <OutlineIndex
+        ref={outlineIndexRef}
         sourceEntries={chatPageViewModel.outlineSourceEntries}
         ownerByMessageId={chatPageViewModel.outlineOwnerByMessageId}
-        visibleMessageIds={visibleMessageIds}
         currentHighlightEnabled={outlineCurrentHighlight}
         onScrollToMessageId={handleOutlineScrollToMessage}
       />

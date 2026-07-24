@@ -16,7 +16,17 @@
 // Touch 版本：触摸 tick 列激活鱼眼 + 震动 + overlay 居中标题
 // ============================================
 
-import { memo, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { CSSProperties } from 'react'
 import type { Message } from '../types/message'
 import { useChatViewport } from '../features/chat/chatViewport'
@@ -40,6 +50,10 @@ interface OutlineIndexProps {
   visibleMessageIds?: string[]
   currentHighlightEnabled?: boolean
   onScrollToMessageId: (messageId: string) => void
+}
+
+export interface OutlineIndexHandle {
+  setVisibleMessageIds: (ids: string[]) => void
 }
 
 interface FisheyeConfig {
@@ -346,15 +360,25 @@ function TickRail({ entries, visual }: TickRailProps) {
 
 // ─── Entry Point ────────────────────────────
 
-export const OutlineIndex = memo(function OutlineIndex({
+export const OutlineIndex = memo(forwardRef<OutlineIndexHandle, OutlineIndexProps>(function OutlineIndex({
   messages = EMPTY_MESSAGES,
   sourceEntries,
   ownerByMessageId,
-  visibleMessageIds,
+  visibleMessageIds: controlledVisibleMessageIds,
   currentHighlightEnabled = true,
   onScrollToMessageId,
-}: OutlineIndexProps) {
+}, ref) {
   const { interaction, presentation } = useChatViewport()
+  const [observedVisibleMessageIds, setObservedVisibleMessageIds] = useState<string[]>([])
+  const visibleMessageIds = controlledVisibleMessageIds ?? observedVisibleMessageIds
+  useImperativeHandle(ref, () => ({
+    setVisibleMessageIds: ids => {
+      setObservedVisibleMessageIds(previous => {
+        if (previous.length === ids.length && previous.every((id, index) => id === ids[index])) return previous
+        return ids
+      })
+    },
+  }), [])
   const visual = presentation.isCompact ? COMPACT_VISUAL : DESKTOP_VISUAL
   const outlineSourceEntries = useMemo(() => sourceEntries ?? buildOutlineSourceEntries(messages), [messages, sourceEntries])
   const allEntries = useMemo(() => formatEntries(outlineSourceEntries, visual), [outlineSourceEntries, visual])
@@ -394,7 +418,7 @@ export const OutlineIndex = memo(function OutlineIndex({
   ) : (
     <PointerFisheye entries={entries} onSelect={onScrollToMessageId} visual={visual} ownerVisibleIndex={ownerVisibleIndex} />
   )
-})
+}))
 
 // ─── PointerFisheye ─────────────────────────
 
@@ -410,6 +434,8 @@ const PointerFisheye = memo(function PointerFisheye({ entries, onSelect, visual,
   const onSelectRef = useRef(onSelect)
   const ownerVisibleIndexRef = useRef(ownerVisibleIndex)
   const fisheyeRef = useRef(visual.fisheye)
+  const pointerMoveRafRef = useRef<number | null>(null)
+  const pendingCursorYRef = useRef(0)
   useEffect(() => {
     entriesRef.current = entries
     onSelectRef.current = onSelect
@@ -454,6 +480,10 @@ const PointerFisheye = memo(function PointerFisheye({ entries, onSelect, visual,
   }, [])
 
   const deactivate = useCallback(() => {
+    if (pointerMoveRafRef.current !== null) {
+      cancelAnimationFrame(pointerMoveRafRef.current)
+      pointerMoveRafRef.current = null
+    }
     hoveringRef.current = false
     focusIdxRef.current = -1
     setZoneActive(false)
@@ -476,19 +506,26 @@ const PointerFisheye = memo(function PointerFisheye({ entries, onSelect, visual,
   }, [setZoneActive, getTicks])
 
   const onZoneMove = useCallback((e: React.MouseEvent) => {
-    const rail = railRef.current
-    if (!rail) return
-    // 主线程每帧唯一的工作：写一个变量。其余 transform 交给合成线程。
-    rail.style.setProperty('--oi-cursor-y', String(e.clientY))
-    // 算最近焦点（纯数值），仅在变化时重新着色（paint-only，非每帧）
-    const next = nearestIndexFromY(entriesRef.current.length, e.clientY, railCenterRef.current, fisheyeRef.current)
-    if (next !== focusIdxRef.current) {
+    pendingCursorYRef.current = e.clientY
+    if (pointerMoveRafRef.current !== null) return
+    pointerMoveRafRef.current = requestAnimationFrame(() => {
+      pointerMoveRafRef.current = null
+      const rail = railRef.current
+      if (!rail) return
+      const cursorY = pendingCursorYRef.current
+      rail.style.setProperty('--oi-cursor-y', String(cursorY))
+      const next = nearestIndexFromY(entriesRef.current.length, cursorY, railCenterRef.current, fisheyeRef.current)
+      if (next === focusIdxRef.current) return
       if (ticksRef.current.length === 0) ticksRef.current = getTicks()
       focusIdxRef.current = next
       repaintTicks(ticksRef.current, next, ownerVisibleIndexRef.current)
-    }
+    })
   }, [getTicks])
   const onZoneLeave = useCallback(() => deactivate(), [deactivate])
+
+  useEffect(() => () => {
+    if (pointerMoveRafRef.current !== null) cancelAnimationFrame(pointerMoveRafRef.current)
+  }, [])
 
   const onZoneClick = useCallback(() => {
     const idx = focusIdxRef.current

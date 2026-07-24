@@ -41,6 +41,7 @@ import {
   buildTurnDurationMap,
   computeExpandedPageRange,
   expandSelectionWithPageKeys,
+  resolveAtBottomState,
   seedMeasuredPageHeightsFromPreviousPages,
   type ChatPage,
   type StableChatPage,
@@ -176,13 +177,20 @@ export const ChatArea = memo(
       const pendingScrollClearTimerRef = useRef<number | null>(null)
       const pendingAnchorClearRafRef = useRef<number | null>(null)
       const pendingSessionResetRafRef = useRef<number | null>(null)
+      const visibleIdsPublishRafRef = useRef<number | null>(null)
       const lastScrollRootSizeRef = useRef({ width: 0, height: 0 })
+      const scrollOffsetFromBottomRef = useRef(0)
+      const measuredPageHeightsRef = useRef<Record<string, number>>({})
+      const lastPublishedVisibleIdsRef = useRef<string[]>([])
       const previousActivePagesRef = useRef<{ sessionId?: string | null; pages: StableChatPage[] }>({ pages: [] })
       const lastStreamingPageKeysRef = useRef<ReadonlySet<string>>(new Set())
       const settlingScrollMessageIdRef = useRef<string | null>(null)
+      const pendingScrollBehaviorRef = useRef<ScrollBehavior>('auto')
       const loadMoreRequestIdRef = useRef(0)
       const topSentinelVisibleRef = useRef(false)
       const lastWheelInputAtRef = useRef(0)
+      const allowBottomReattachRef = useRef(false)
+      const touchScrollYRef = useRef<number | null>(null)
       const tryLoadMoreRef = useRef<() => void>(NOOP)
 
       useEffect(() => {
@@ -226,15 +234,14 @@ export const ChatArea = memo(
         previousActivePagesRef.current = { sessionId, pages: activePages }
         if (previous.sessionId !== sessionId || previous.pages.length === 0 || activePages.length === 0) return
 
-        setMeasuredPageHeights(current => {
-          const seeded = seedMeasuredPageHeightsFromPreviousPages({
-            pages: activePages,
-            previousPages: previous.pages,
-            measuredPageHeights: current,
-          })
-          if (seeded === current) return current
-          return seeded
+        const seeded = seedMeasuredPageHeightsFromPreviousPages({
+          pages: activePages,
+          previousPages: previous.pages,
+          measuredPageHeights: measuredPageHeightsRef.current,
         })
+        if (seeded === measuredPageHeightsRef.current) return
+        measuredPageHeightsRef.current = seeded
+        setMeasuredPageHeights(seeded)
       }, [activePages, sessionId])
 
       const pendingTargetPageIndex = useMemo(
@@ -300,6 +307,13 @@ export const ChatArea = memo(
           }),
         [activePages, measuredPageHeights, renderPageSelection],
       )
+      const observedMessageIdsSignature = useMemo(
+        () =>
+          renderSegments
+            .flatMap(segment => (segment.kind === 'expanded' ? segment.page.messageIds : []))
+            .join('\u001f'),
+        [renderSegments],
+      )
 
       const clearPendingLoadMoreTimer = useCallback(() => {
         if (pendingLoadMoreTimerRef.current === null) return
@@ -326,7 +340,10 @@ export const ChatArea = memo(
         pendingSessionResetRafRef.current = requestAnimationFrame(() => {
           pendingSessionResetRafRef.current = null
           setIsLoadingMore(false)
+          measuredPageHeightsRef.current = {}
           setMeasuredPageHeights({})
+          scrollOffsetFromBottomRef.current = 0
+          setScrollOffsetFromBottom(0)
           setPendingScrollMessageId(null)
         })
       }, [])
@@ -338,6 +355,7 @@ export const ChatArea = memo(
           if (scrollSnapshotRafRef.current !== null) cancelAnimationFrame(scrollSnapshotRafRef.current)
           if (pendingAnchorClearRafRef.current !== null) cancelAnimationFrame(pendingAnchorClearRafRef.current)
           if (pendingSessionResetRafRef.current !== null) cancelAnimationFrame(pendingSessionResetRafRef.current)
+          if (visibleIdsPublishRafRef.current !== null) cancelAnimationFrame(visibleIdsPublishRafRef.current)
         }
       }, [clearPendingLoadMoreTimer, clearPendingScrollTimer])
 
@@ -354,13 +372,23 @@ export const ChatArea = memo(
         if (scrollSnapshotRafRef.current !== null) cancelAnimationFrame(scrollSnapshotRafRef.current)
         scrollSnapshotRafRef.current = requestAnimationFrame(() => {
           scrollSnapshotRafRef.current = null
-          setScrollOffsetFromBottom(prev => {
-            const delta = nextOffset - prev
-            if (Math.abs(delta) < 1) return prev
-            return nextOffset
-          })
+          if (Math.abs(nextOffset - scrollOffsetFromBottomRef.current) < 1) return
+          if (!isAtBottomRef.current) {
+            pendingLayoutAnchorRef.current = captureLoadMoreAnchor(root)
+          }
+          scrollOffsetFromBottomRef.current = nextOffset
+          setScrollOffsetFromBottom(nextOffset)
         })
       }, [])
+
+      const commitAtBottom = useCallback(
+        (next: boolean) => {
+          const previous = isAtBottomRef.current
+          isAtBottomRef.current = next
+          if (previous !== next) onAtBottomChange?.(next)
+        },
+        [onAtBottomChange],
+      )
 
       useEffect(() => {
         const root = scrollRoot
@@ -392,33 +420,68 @@ export const ChatArea = memo(
         const onScroll = () => {
           const hasOverflow = root.scrollHeight > root.clientHeight + 1
           const distFromBottom = Math.abs(root.scrollTop)
-          const atBottom = !hasOverflow || distFromBottom <= atBottomThreshold
-          const previous = isAtBottomRef.current
-          isAtBottomRef.current = atBottom
-          if (previous !== atBottom) onAtBottomChange?.(atBottom)
+          const atBottom = resolveAtBottomState({
+            previous: isAtBottomRef.current,
+            distanceFromBottom: hasOverflow ? distFromBottom : 0,
+            threshold: atBottomThreshold,
+            allowReattach: allowBottomReattachRef.current,
+          })
+          commitAtBottom(atBottom)
+          if (atBottom) allowBottomReattachRef.current = false
 
           if (!atBottom) loadMoreBlockedRef.current = false
           updateScrollOffsetSnapshot()
         }
 
-        const onWheel = () => {
+        const onWheel = (event: WheelEvent) => {
           lastWheelInputAtRef.current = Date.now()
+          if (event.deltaY < 0) allowBottomReattachRef.current = false
+          if (event.deltaY > 0) allowBottomReattachRef.current = true
+        }
+
+        const onKeyDown = (event: KeyboardEvent) => {
+          if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') {
+            allowBottomReattachRef.current = false
+          }
+          if (event.key === 'ArrowDown' || event.key === 'PageDown' || event.key === 'End') {
+            allowBottomReattachRef.current = true
+          }
+        }
+
+        const onTouchStart = (event: TouchEvent) => {
+          touchScrollYRef.current = event.touches[0]?.clientY ?? null
+        }
+
+        const onTouchMove = (event: TouchEvent) => {
+          const currentY = event.touches[0]?.clientY
+          const previousY = touchScrollYRef.current
+          if (currentY == null || previousY == null) return
+          if (currentY > previousY) allowBottomReattachRef.current = false
+          if (currentY < previousY) allowBottomReattachRef.current = true
+          touchScrollYRef.current = currentY
         }
 
         root.addEventListener('scroll', onScroll, { passive: true })
         root.addEventListener('wheel', onWheel, { passive: true })
+        root.addEventListener('keydown', onKeyDown)
+        root.addEventListener('touchstart', onTouchStart, { passive: true })
+        root.addEventListener('touchmove', onTouchMove, { passive: true })
         updateScrollOffsetSnapshot()
         return () => {
           root.removeEventListener('scroll', onScroll)
           root.removeEventListener('wheel', onWheel)
+          root.removeEventListener('keydown', onKeyDown)
+          root.removeEventListener('touchstart', onTouchStart)
+          root.removeEventListener('touchmove', onTouchMove)
         }
-      }, [atBottomThreshold, onAtBottomChange, updateScrollOffsetSnapshot])
+      }, [atBottomThreshold, commitAtBottom, updateScrollOffsetSnapshot])
 
       const prevSessionIdRef = useRef(sessionId)
       useEffect(() => {
         if (sessionId === prevSessionIdRef.current) return
         prevSessionIdRef.current = sessionId
-        isAtBottomRef.current = true
+        commitAtBottom(true)
+        allowBottomReattachRef.current = false
         loadMoreBlockedRef.current = true
         pendingLoadMoreAnchorRef.current = null
         previousActivePagesRef.current = { sessionId, pages: [] }
@@ -431,7 +494,7 @@ export const ChatArea = memo(
         settlingScrollMessageIdRef.current = null
         clearPendingScrollTimer()
         resetSessionViewState()
-        onAtBottomChange?.(true)
+        lastPublishedVisibleIdsRef.current = []
         onVisibleMessageIdsChange?.([])
 
         requestAnimationFrame(() => {
@@ -445,7 +508,7 @@ export const ChatArea = memo(
         clearPendingLoadMoreTimer,
         clearPendingLoadMoreAnchorMessage,
         clearPendingScrollTimer,
-        onAtBottomChange,
+        commitAtBottom,
         onVisibleMessageIdsChange,
         resetSessionViewState,
         sessionId,
@@ -532,7 +595,7 @@ export const ChatArea = memo(
           topSentinelVisibleRef.current = false
           clearPendingLoadMoreTimer()
         }
-      }, [clearPendingLoadMoreTimer, tryLoadMore, visibleMessages])
+      }, [clearPendingLoadMoreTimer, scrollRoot, tryLoadMore])
 
       useLayoutEffect(() => {
         const anchor = pendingLoadMoreAnchorRef.current
@@ -583,6 +646,21 @@ export const ChatArea = memo(
         if (!root) return
 
         const visibleIds = new Set<string>()
+        const publishVisibleIds = () => {
+          visibleIdsPublishRafRef.current = null
+          const ids = Array.from(root.querySelectorAll<HTMLElement>('[data-message-id]')).flatMap(element => {
+            const id = element.getAttribute('data-message-id')
+            return id && visibleIds.has(id) ? [id] : []
+          })
+          const previous = lastPublishedVisibleIdsRef.current
+          if (previous.length === ids.length && previous.every((id, index) => id === ids[index])) return
+          lastPublishedVisibleIdsRef.current = ids
+          onVisibleIdsChangeRef.current?.(ids)
+        }
+        const scheduleVisibleIdsPublish = () => {
+          if (visibleIdsPublishRafRef.current !== null) return
+          visibleIdsPublishRafRef.current = requestAnimationFrame(publishVisibleIds)
+        }
         const observer = new IntersectionObserver(
           entries => {
             let changed = false
@@ -599,7 +677,7 @@ export const ChatArea = memo(
                 changed = true
               }
             }
-            if (changed) onVisibleIdsChangeRef.current?.(Array.from(visibleIds))
+            if (changed) scheduleVisibleIdsPublish()
           },
           { root, rootMargin: '100% 0px' },
         )
@@ -607,8 +685,14 @@ export const ChatArea = memo(
         const elements = root.querySelectorAll<HTMLElement>('[data-message-id]')
         elements.forEach(element => observer.observe(element))
 
-        return () => observer.disconnect()
-      }, [activePages, expandedPageRange.endIndex, expandedPageRange.startIndex])
+        return () => {
+          observer.disconnect()
+          if (visibleIdsPublishRafRef.current !== null) {
+            cancelAnimationFrame(visibleIdsPublishRafRef.current)
+            visibleIdsPublishRafRef.current = null
+          }
+        }
+      }, [observedMessageIdsSignature, scrollRoot])
 
       useEffect(() => {
         if (!pendingScrollMessageId) return
@@ -617,7 +701,7 @@ export const ChatArea = memo(
         if (settlingScrollMessageIdRef.current === pendingScrollMessageId) return
 
         settlingScrollMessageIdRef.current = pendingScrollMessageId
-        target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        target.scrollIntoView({ block: 'start', behavior: pendingScrollBehaviorRef.current })
         clearPendingScrollTimer()
         pendingScrollClearTimerRef.current = window.setTimeout(() => {
           pendingScrollClearTimerRef.current = null
@@ -635,16 +719,15 @@ export const ChatArea = memo(
 
       const updateMeasuredPageHeight = useCallback((pageKey: string, nextHeight: number) => {
         if (nextHeight <= 0) return
-        setMeasuredPageHeights(previous => {
-          const current = previous[pageKey] ?? null
-          if (current !== null && Math.abs(current - nextHeight) < 1) return previous
-          const root = scrollRef.current
-          if (root && !isAtBottomRef.current && current !== null && Math.abs(current - nextHeight) >= 1) {
-            pendingLayoutAnchorRef.current = captureLoadMoreAnchor(root)
-          }
-          const next = { ...previous, [pageKey]: nextHeight }
-          return next
-        })
+        const current = measuredPageHeightsRef.current[pageKey] ?? null
+        if (current !== null && Math.abs(current - nextHeight) < 1) return
+        const root = scrollRef.current
+        if (root && !isAtBottomRef.current && current !== null) {
+          pendingLayoutAnchorRef.current = captureLoadMoreAnchor(root)
+        }
+        const next = { ...measuredPageHeightsRef.current, [pageKey]: nextHeight }
+        measuredPageHeightsRef.current = next
+        setMeasuredPageHeights(next)
       }, [])
 
       const requestScrollToMessage = useCallback(
@@ -666,6 +749,7 @@ export const ChatArea = memo(
           updateScrollOffsetSnapshot()
           settlingScrollMessageIdRef.current = null
           clearPendingScrollTimer()
+          pendingScrollBehaviorRef.current = 'auto'
           setPendingScrollMessageId(messageId)
         },
         [activePages, clearPendingScrollTimer, measuredPageHeights, updateScrollOffsetSnapshot],
@@ -677,6 +761,8 @@ export const ChatArea = memo(
           scrollToBottom: (instant = false) => {
             const root = scrollRef.current
             if (!root) return
+            allowBottomReattachRef.current = true
+            commitAtBottom(true)
             root.scrollTo({ top: 0, behavior: instant ? 'auto' : 'smooth' })
           },
           scrollToBottomIfAtBottom: () => {
@@ -698,7 +784,7 @@ export const ChatArea = memo(
             requestScrollToMessage(messageId, 'smooth')
           },
         }),
-        [requestScrollToMessage, visibleMessages],
+        [commitAtBottom, requestScrollToMessage, visibleMessages],
       )
 
       return (

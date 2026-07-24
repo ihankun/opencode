@@ -1,7 +1,7 @@
 import type { Message } from '../../types/message'
 
-export const PAGE_MESSAGE_COUNT = 20
-export const EXPANDED_PAGE_RADIUS = 0
+export const PAGE_MESSAGE_COUNT = 12
+export const EXPANDED_PAGE_RADIUS = 1
 export const PREMEASURE_PAGE_RADIUS = 1
 export const PREMEASURE_MIN_MESSAGE_BUDGET = 20
 export const PREMEASURE_MAX_MESSAGE_BUDGET = 60
@@ -29,6 +29,16 @@ export interface StableChatPage extends ChatPage {
 export interface PageRange {
   startIndex: number
   endIndex: number
+}
+
+export function resolveAtBottomState(options: {
+  previous: boolean
+  distanceFromBottom: number
+  threshold: number
+  allowReattach: boolean
+}): boolean {
+  if (options.distanceFromBottom > options.threshold) return false
+  return options.previous || options.allowReattach
 }
 
 export type PageRenderSegment =
