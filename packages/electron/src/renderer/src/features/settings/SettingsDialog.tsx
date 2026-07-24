@@ -18,6 +18,7 @@ import {
   ArchiveIcon,
   ShieldIcon,
   GitBranchIcon,
+  MicrophoneIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
@@ -42,6 +43,7 @@ const MemorySettings = lazy(() => import('./components/MemorySettings').then(mod
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
 const ImBotSettings = lazy(() => import('./components/ImBotSettings').then(module => ({ default: module.ImBotSettings })))
 const GeneralSettings = lazy(() => import('./components/GeneralSettings').then(module => ({ default: module.GeneralSettings })))
+const SpeechModelSettings = lazy(() => import('./components/SpeechModelSettings').then(module => ({ default: module.SpeechModelSettings })))
 
 // ============================================
 // Types
@@ -53,6 +55,7 @@ export type SettingsTab =
   | 'appearance'
   | 'chat'
   | 'models'
+  | 'speechModel'
   | 'providers'
   | 'notifications'
   | 'service'
@@ -85,6 +88,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   agent: <AgentIcon size={15} />,
   chat: <MessageSquareIcon size={15} />,
   models: <CpuIcon size={15} />,
+  speechModel: <MicrophoneIcon size={15} />,
   providers: <KeyIcon size={15} />,
   appearance: <SunIcon size={15} />,
   workspace: <LayersIcon size={15} />,
@@ -104,6 +108,7 @@ const TAB_IDS: SettingsTab[] = [
   'servers',
   'providers',
   'models',
+  'speechModel',
   'agent',
   'chat',
   'workspace',
@@ -128,6 +133,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   agent: 'tabs.agent',
   chat: 'tabs.chat',
   models: 'tabs.models',
+  speechModel: 'tabs.speechModel',
   providers: 'tabs.providers',
   appearance: 'tabs.appearance',
   workspace: 'tabs.workspace',
@@ -150,6 +156,7 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   agent: 'tabs.agentDesc',
   chat: 'tabs.chatDesc',
   models: 'tabs.modelsDesc',
+  speechModel: 'tabs.speechModelDesc',
   providers: 'tabs.providersDesc',
   appearance: 'tabs.appearanceDesc',
   workspace: 'tabs.workspaceDesc',
@@ -166,7 +173,7 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models'] },
+  { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models', 'speechModel'] },
   { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
   { labelKey: 'groups.advanced', tabs: ['hosting', 'imBot', 'hooks'] },
   { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
@@ -192,6 +199,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ChatSettings />
     case 'models':
       return <ModelsSettings />
+    case 'speechModel':
+      return <SpeechModelSettings />
     case 'providers':
       return <ProviderSettings />
     case 'notifications':

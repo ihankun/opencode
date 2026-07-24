@@ -79,17 +79,10 @@ interface HistoryEntry {
   attachments: Attachment[]
 }
 
-interface SpeechRecognitionConstructor {
-  new (): {
-    lang: string
-    continuous: boolean
-    interimResults: boolean
-    onresult: ((event: { resultIndex: number; results: ArrayLike<{ 0?: { transcript?: string } }> }) => void) | null
-    onerror: ((event: { error: string; message?: string }) => void) | null
-    onend: (() => void) | null
-    start: () => void
-    stop: () => void
-  }
+interface VoiceRecorderState {
+  recorder: MediaRecorder
+  stream: MediaStream
+  chunks: Blob[]
 }
 
 interface DraggedFileInfo {
@@ -872,13 +865,29 @@ function InputBoxComponent({
   // 文本状态
   const [text, setText] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
-  const voiceRecognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null)
-  const voiceSupported = typeof window !== 'undefined' && Boolean((window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ?? (window as typeof window & { webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition)
+  const [voiceTranscribing, setVoiceTranscribing] = useState(false)
+  const voiceRecorderRef = useRef<VoiceRecorderState | null>(null)
+  const voiceSupported = typeof window !== 'undefined'
+    && typeof MediaRecorder !== 'undefined'
+    && Boolean(navigator.mediaDevices?.getUserMedia)
+    && typeof window.customOpenCode?.transcribeAudio === 'function'
   const toggleVoice = useCallback(async () => {
+    if (voiceTranscribing) return
     if (voiceListening) {
-      voiceRecognitionRef.current?.stop()
-      voiceRecognitionRef.current = null
+      const active = voiceRecorderRef.current
+      if (active && active.recorder.state !== 'inactive') active.recorder.stop()
       setVoiceListening(false)
+      return
+    }
+    const config = await window.customOpenCode.speechModelConfig().catch(() => undefined)
+    if (!config?.hasApiKey) {
+      notificationStore.push(
+        'error',
+        t('inputToolbar.voicePermissionTitle'),
+        t('inputToolbar.voiceModelNotConfigured'),
+        sessionId ?? '',
+        currentDirectory,
+      )
       return
     }
     const permission = await window.customOpenCode?.microphonePermission?.().catch(() => 'unknown' as const)
@@ -893,42 +902,82 @@ function InputBoxComponent({
       )
       return
     }
-    const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }
-    const Constructor = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition
-    if (!Constructor) return
-    const recognition = new Constructor()
-    recognition.lang = navigator.language || 'zh-CN'
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.onresult = event => {
-      const transcript = Array.from({ length: event.results.length - event.resultIndex }, (_, index) => event.results[event.resultIndex + index]?.[0]?.transcript ?? '').join('').trim()
-      if (transcript) setText(current => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${transcript}`)
-    }
-    recognition.onerror = event => {
-      voiceRecognitionRef.current = null
-      setVoiceListening(false)
-      if (event.error === 'aborted') return
-      const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
-        ? t('inputToolbar.voicePermissionDenied')
-        : event.error === 'audio-capture'
-          ? t('inputToolbar.voiceAudioUnavailable')
-          : event.error === 'network'
-            ? t('inputToolbar.voiceNetworkError')
-            : event.error === 'no-speech'
-              ? t('inputToolbar.voiceNoSpeech')
-              : t('inputToolbar.voiceRecognitionFailed', { error: event.message || event.error })
-      notificationStore.push('error', t('inputToolbar.voicePermissionTitle'), message, sessionId ?? '', currentDirectory)
-    }
-    recognition.onend = () => {
-      voiceRecognitionRef.current = null
-      setVoiceListening(false)
-    }
-    voiceRecognitionRef.current = recognition
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(error => {
+      const denied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')
+      notificationStore.push(
+        'error',
+        t('inputToolbar.voicePermissionTitle'),
+        denied ? t('inputToolbar.voicePermissionDenied') : t('inputToolbar.voiceAudioUnavailable'),
+        sessionId ?? '',
+        currentDirectory,
+      )
+      return undefined
+    })
+    if (!stream) return
     try {
-      recognition.start()
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type))
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      const state: VoiceRecorderState = { recorder, stream, chunks: [] }
+      voiceRecorderRef.current = state
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) state.chunks.push(event.data)
+      }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        if (voiceRecorderRef.current === state) voiceRecorderRef.current = null
+        state.stream.getTracks().forEach(track => track.stop())
+        setVoiceListening(false)
+        setVoiceTranscribing(false)
+        notificationStore.push(
+          'error',
+          t('inputToolbar.voicePermissionTitle'),
+          t('inputToolbar.voiceAudioUnavailable'),
+          sessionId ?? '',
+          currentDirectory,
+        )
+      }
+      recorder.onstop = async () => {
+        if (voiceRecorderRef.current === state) voiceRecorderRef.current = null
+        state.stream.getTracks().forEach(track => track.stop())
+        setVoiceListening(false)
+        if (state.chunks.length === 0) {
+          notificationStore.push(
+            'error',
+            t('inputToolbar.voicePermissionTitle'),
+            t('inputToolbar.voiceNoSpeech'),
+            sessionId ?? '',
+            currentDirectory,
+          )
+          return
+        }
+        setVoiceTranscribing(true)
+        try {
+          const audio = new Blob(state.chunks, { type: recorder.mimeType || state.chunks[0]?.type || 'audio/webm' })
+          const result = await window.customOpenCode.transcribeAudio({
+            data: await audio.arrayBuffer(),
+            mimeType: audio.type,
+          })
+          if (result.text) {
+            setText(current => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${result.text}`)
+            requestAnimationFrame(() => textareaRef.current?.focus())
+          }
+        } catch (error) {
+          notificationStore.push(
+            'error',
+            t('inputToolbar.voicePermissionTitle'),
+            t('inputToolbar.voiceRecognitionFailed', { error: error instanceof Error ? error.message : String(error) }),
+            sessionId ?? '',
+            currentDirectory,
+          )
+        } finally {
+          setVoiceTranscribing(false)
+        }
+      }
+      recorder.start(1_000)
       setVoiceListening(true)
     } catch (error) {
-      voiceRecognitionRef.current = null
+      stream.getTracks().forEach(track => track.stop())
+      voiceRecorderRef.current = null
       setVoiceListening(false)
       notificationStore.push(
         'error',
@@ -938,7 +987,18 @@ function InputBoxComponent({
         currentDirectory,
       )
     }
-  }, [currentDirectory, sessionId, t, voiceListening])
+  }, [currentDirectory, sessionId, t, voiceListening, voiceTranscribing])
+  useEffect(
+    () => () => {
+      const active = voiceRecorderRef.current
+      if (!active) return
+      active.recorder.onstop = null
+      if (active.recorder.state !== 'inactive') active.recorder.stop()
+      active.stream.getTracks().forEach(track => track.stop())
+      voiceRecorderRef.current = null
+    },
+    [],
+  )
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -2311,6 +2371,7 @@ function InputBoxComponent({
                       hasMessages={hasMessages}
                       voiceSupported={voiceSupported}
                       voiceListening={voiceListening}
+                      voiceTranscribing={voiceTranscribing}
                       onVoiceToggle={toggleVoice}
                     />
                   </div>

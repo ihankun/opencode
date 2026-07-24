@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron"
 import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 import type { DesktopPreferences } from "../shared/desktopPreferences"
+import type {
+  SpeechModelConfig,
+  SpeechModelUpdate,
+  SpeechTranscriptionInput,
+} from "../shared/speechModel"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 
@@ -319,6 +324,9 @@ export type CustomOpenCodeApi = {
     directory?: string
   }): Promise<CustomOpenCodeNotificationSendResult>
   microphonePermission(): Promise<CustomOpenCodeMicrophonePermission>
+  speechModelConfig(): Promise<SpeechModelConfig>
+  updateSpeechModelConfig(config: SpeechModelUpdate): Promise<SpeechModelConfig>
+  transcribeAudio(input: SpeechTranscriptionInput): Promise<{ text: string }>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
   exportDebugLogs(): Promise<string>
   diagnostics(): Promise<CustomOpenCodeDiagnostics>
@@ -402,6 +410,9 @@ const api: CustomOpenCodeApi = {
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
   microphonePermission: () => ipcRenderer.invoke("microphone:permission"),
+  speechModelConfig: () => ipcRenderer.invoke("speech-model:config-get"),
+  updateSpeechModelConfig: (config) => ipcRenderer.invoke("speech-model:config-set", config),
+  transcribeAudio: (input) => ipcRenderer.invoke("speech-model:transcribe", input),
   onNotificationClicked(callback) {
     const listener = (_event: unknown, data: { sessionId?: string; directory?: string }) => callback(data)
     ipcRenderer.on("notification:clicked", listener)

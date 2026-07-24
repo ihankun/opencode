@@ -20,6 +20,7 @@ import type { ServerCredential } from "./credentials"
 import { shouldUseMockKeychain } from "./keychain"
 import { ImBridgeService } from "./imBridge"
 import { DesktopPreferencesStore } from "./desktopPreferences"
+import { SpeechModelService } from "./speechModel"
 import {
   DEFAULT_DESKTOP_PREFERENCES,
   type DesktopPreferences,
@@ -34,6 +35,7 @@ let isQuitting = false
 let isStoppingForQuit = false
 let desktopPreferencesStore: DesktopPreferencesStore
 let desktopPreferences: DesktopPreferences = { ...DEFAULT_DESKTOP_PREFERENCES }
+let speechModelService: SpeechModelService
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
@@ -469,6 +471,7 @@ app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
 desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
+speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 
@@ -621,6 +624,18 @@ ipcMain.handle("microphone:permission", (_event) => {
   assertMainWindow(_event)
   return microphonePermission()
 })
+ipcMain.handle("speech-model:config-get", (_event) => {
+  assertMainWindow(_event)
+  return speechModelService.config()
+})
+ipcMain.handle("speech-model:config-set", (_event, value: unknown) => {
+  assertMainWindow(_event)
+  return speechModelService.save(value)
+})
+ipcMain.handle("speech-model:transcribe", (_event, value: unknown) => {
+  assertMainWindow(_event)
+  return speechModelService.transcribe(value)
+})
 ipcMain.handle("logging:export", exportDebugLogs)
 ipcMain.handle("diagnostics:get", async () => {
   const security = await readSecurityConfig()
@@ -691,6 +706,7 @@ app.on("window-all-closed", () => {
 void app.whenReady().then(async () => {
   writeLog("main", "app ready")
   desktopPreferences = await desktopPreferencesStore.load()
+  await speechModelService.load()
   await ensureSecurityIntegration().catch((error) => writeLog("security", "failed to initialize security plugins", error))
   configureAppPermissionHandlers()
   applyDesktopPreferences()
