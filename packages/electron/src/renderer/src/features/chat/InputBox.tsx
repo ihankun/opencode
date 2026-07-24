@@ -85,7 +85,7 @@ interface SpeechRecognitionConstructor {
     continuous: boolean
     interimResults: boolean
     onresult: ((event: { resultIndex: number; results: ArrayLike<{ 0?: { transcript?: string } }> }) => void) | null
-    onerror: (() => void) | null
+    onerror: ((event: { error: string; message?: string }) => void) | null
     onend: (() => void) | null
     start: () => void
     stop: () => void
@@ -874,10 +874,23 @@ function InputBoxComponent({
   const [voiceListening, setVoiceListening] = useState(false)
   const voiceRecognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null)
   const voiceSupported = typeof window !== 'undefined' && Boolean((window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ?? (window as typeof window & { webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition)
-  const toggleVoice = useCallback(() => {
+  const toggleVoice = useCallback(async () => {
     if (voiceListening) {
       voiceRecognitionRef.current?.stop()
+      voiceRecognitionRef.current = null
       setVoiceListening(false)
+      return
+    }
+    const permission = await window.customOpenCode?.microphonePermission?.().catch(() => 'unknown' as const)
+    if (permission === 'cancelled' || permission === 'settings-opened') return
+    if (permission === 'denied' || permission === 'restricted') {
+      notificationStore.push(
+        'error',
+        t('inputToolbar.voicePermissionTitle'),
+        t(permission === 'restricted' ? 'inputToolbar.voicePermissionRestricted' : 'inputToolbar.voicePermissionDenied'),
+        sessionId ?? '',
+        currentDirectory,
+      )
       return
     }
     const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }
@@ -891,12 +904,41 @@ function InputBoxComponent({
       const transcript = Array.from({ length: event.results.length - event.resultIndex }, (_, index) => event.results[event.resultIndex + index]?.[0]?.transcript ?? '').join('').trim()
       if (transcript) setText(current => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${transcript}`)
     }
-    recognition.onerror = () => setVoiceListening(false)
-    recognition.onend = () => setVoiceListening(false)
+    recognition.onerror = event => {
+      voiceRecognitionRef.current = null
+      setVoiceListening(false)
+      if (event.error === 'aborted') return
+      const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
+        ? t('inputToolbar.voicePermissionDenied')
+        : event.error === 'audio-capture'
+          ? t('inputToolbar.voiceAudioUnavailable')
+          : event.error === 'network'
+            ? t('inputToolbar.voiceNetworkError')
+            : event.error === 'no-speech'
+              ? t('inputToolbar.voiceNoSpeech')
+              : t('inputToolbar.voiceRecognitionFailed', { error: event.message || event.error })
+      notificationStore.push('error', t('inputToolbar.voicePermissionTitle'), message, sessionId ?? '', currentDirectory)
+    }
+    recognition.onend = () => {
+      voiceRecognitionRef.current = null
+      setVoiceListening(false)
+    }
     voiceRecognitionRef.current = recognition
-    recognition.start()
-    setVoiceListening(true)
-  }, [voiceListening])
+    try {
+      recognition.start()
+      setVoiceListening(true)
+    } catch (error) {
+      voiceRecognitionRef.current = null
+      setVoiceListening(false)
+      notificationStore.push(
+        'error',
+        t('inputToolbar.voicePermissionTitle'),
+        t('inputToolbar.voiceRecognitionFailed', { error: error instanceof Error ? error.message : String(error) }),
+        sessionId ?? '',
+        currentDirectory,
+      )
+    }
+  }, [currentDirectory, sessionId, t, voiceListening])
   // 附件状态（图片、文件、文件夹、agent）
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)

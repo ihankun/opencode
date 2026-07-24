@@ -234,6 +234,13 @@
     "skipToComposer": "Skip to conversation composer",
     "startVoice": "Start voice input",
     "stopVoice": "Stop voice input",
+    "voicePermissionTitle": "Voice input unavailable",
+    "voicePermissionDenied": "Microphone access was denied. Allow OpenCodex under System Settings → Privacy & Security → Microphone.",
+    "voicePermissionRestricted": "Microphone access is restricted by system policy. Check the device privacy or management settings.",
+    "voiceAudioUnavailable": "No available microphone was detected. Check the device connection and system input settings.",
+    "voiceNetworkError": "The speech recognition service could not be reached. Check the network and try again.",
+    "voiceNoSpeech": "No speech was detected. Move closer to the microphone and try again.",
+    "voiceRecognitionFailed": "Speech recognition failed: {{error}}",
     "default": "Default",
     "variants": {
       "default": "Default",

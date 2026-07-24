@@ -119,6 +119,7 @@ export type CustomOpenCodeSkillDeleteResult = {
 }
 
 export type CustomOpenCodeNotificationPermission = "default" | "granted" | "denied"
+export type CustomOpenCodeMicrophonePermission = "not-determined" | "granted" | "denied" | "restricted" | "unknown" | "cancelled" | "settings-opened"
 
 export type CustomOpenCodeNotificationSendResult = {
   ok: boolean
@@ -317,6 +318,7 @@ export type CustomOpenCodeApi = {
     sessionId?: string
     directory?: string
   }): Promise<CustomOpenCodeNotificationSendResult>
+  microphonePermission(): Promise<CustomOpenCodeMicrophonePermission>
   onNotificationClicked(callback: (data: { sessionId?: string; directory?: string }) => void): () => void
   exportDebugLogs(): Promise<string>
   diagnostics(): Promise<CustomOpenCodeDiagnostics>
@@ -399,6 +401,7 @@ const api: CustomOpenCodeApi = {
   waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),
+  microphonePermission: () => ipcRenderer.invoke("microphone:permission"),
   onNotificationClicked(callback) {
     const listener = (_event: unknown, data: { sessionId?: string; directory?: string }) => callback(data)
     ipcRenderer.on("notification:clicked", listener)

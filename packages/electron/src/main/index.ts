@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell } from "electron"
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell, systemPreferences } from "electron"
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
@@ -617,6 +617,10 @@ ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
 ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
 ipcMain.handle("notification:permission", notificationPermission)
 ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
+ipcMain.handle("microphone:permission", (_event) => {
+  assertMainWindow(_event)
+  return microphonePermission()
+})
 ipcMain.handle("logging:export", exportDebugLogs)
 ipcMain.handle("diagnostics:get", async () => {
   const security = await readSecurityConfig()
@@ -688,7 +692,7 @@ void app.whenReady().then(async () => {
   writeLog("main", "app ready")
   desktopPreferences = await desktopPreferencesStore.load()
   await ensureSecurityIntegration().catch((error) => writeLog("security", "failed to initialize security plugins", error))
-  configureNotificationPermissionHandler()
+  configureAppPermissionHandlers()
   applyDesktopPreferences()
   taskScheduler.start()
   return createWindow()
@@ -1732,14 +1736,26 @@ function isString(value: unknown): value is string {
   return typeof value === "string"
 }
 
-function configureNotificationPermissionHandler() {
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    if (permission !== "notifications") {
+function configureAppPermissionHandlers() {
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _requestingOrigin, details) => {
+    if (!webContents || webContents.id !== mainWindow?.webContents.id) return false
+    if (permission === "notifications") return true
+    return permission === "media" && details.mediaType === "audio"
+  })
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (webContents.id !== mainWindow?.webContents.id) {
       callback(false)
       return
     }
-    writeLog("main", "notification permission requested")
-    callback(true)
+    if (permission === "notifications") {
+      writeLog("main", "notification permission requested")
+      callback(true)
+      return
+    }
+    const mediaTypes = permission === "media" && "mediaTypes" in details ? details.mediaTypes : undefined
+    const microphone = mediaTypes?.includes("audio") && !mediaTypes.includes("video")
+    writeLog("main", "media permission requested", { permission, mediaTypes, granted: Boolean(microphone) })
+    callback(Boolean(microphone))
   })
 }
 
@@ -2186,6 +2202,47 @@ async function notificationPermission() {
   writeLog("main", "notification permission checked", { supported })
   if (!supported) return "denied" as const
   return "granted" as const
+}
+
+async function microphonePermission() {
+  const owner = mainWindow
+  if (!owner) return "unknown" as const
+  const current = systemPreferences.getMediaAccessStatus("microphone")
+  writeLog("main", "microphone permission checked", { status: current })
+  if (process.platform !== "darwin" || current === "granted" || current === "restricted") return current
+  const chinese = app.getLocale().toLowerCase().startsWith("zh")
+  if (current === "denied") {
+    const result = await dialog.showMessageBox(owner, {
+      type: "warning",
+      title: chinese ? "需要麦克风权限" : "Microphone Access Required",
+      message: chinese ? "OpenCodex 的麦克风权限已关闭" : "Microphone access for OpenCodex is turned off",
+      detail: chinese
+        ? "请在“系统设置 → 隐私与安全性 → 麦克风”中允许 OpenCodex。修改后需要重启应用。"
+        : "Allow OpenCodex under System Settings → Privacy & Security → Microphone, then restart the app.",
+      buttons: chinese ? ["打开系统设置", "取消"] : ["Open System Settings", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (result.response !== 0) return "cancelled" as const
+    await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+    return "settings-opened" as const
+  }
+  const result = await dialog.showMessageBox(owner, {
+    type: "info",
+    title: chinese ? "允许语音输入" : "Enable Voice Input",
+    message: chinese ? "OpenCodex 需要使用麦克风" : "OpenCodex needs microphone access",
+    detail: chinese
+      ? "麦克风仅用于将语音转换成输入框文字，不会自动发送。继续后 macOS 会显示系统授权窗口。"
+      : "The microphone is only used to convert speech into text in the composer and will not send anything automatically. macOS will ask for permission next.",
+    buttons: chinese ? ["继续", "取消"] : ["Continue", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (result.response !== 0) return "cancelled" as const
+  const granted = await systemPreferences.askForMediaAccess("microphone")
+  const status = granted ? "granted" as const : "denied" as const
+  writeLog("main", "microphone permission requested", { status })
+  return status
 }
 
 async function sendNativeNotification(input: unknown) {

@@ -20,6 +20,12 @@ const config: Configuration = {
     target: ["dmg", "zip"],
     category: "public.app-category.developer-tools",
     identity: process.env.CSC_IDENTITY ?? "-",
+    entitlements: "build/entitlements.mac.plist",
+    entitlementsInherit: "build/entitlements.mac.inherit.plist",
+    extendInfo: {
+      NSMicrophoneUsageDescription: "OpenCodex uses the microphone to convert your speech into text.",
+      NSSpeechRecognitionUsageDescription: "OpenCodex uses speech recognition to transcribe voice input.",
+    },
   },
   win: {
     icon: "assets/icon.ico",
