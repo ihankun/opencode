@@ -1,4 +1,4 @@
-import { listOpenAiModels, providerHttpError } from "./modelDiscovery.ts"
+import { listOpenAiModels, parseProviderJson, providerHttpError } from "./modelDiscovery.ts"
 import type { SpeechProvider } from "./types.ts"
 
 export const openAiChatAudioProvider: SpeechProvider = {
@@ -9,9 +9,9 @@ export const openAiChatAudioProvider: SpeechProvider = {
     const response = await fetch(request.endpoint, request.init)
     const body = await response.text()
     if (!response.ok) throw new Error(providerHttpError("Speech transcription", response.status, body))
-    const value = JSON.parse(body) as unknown
+    const value = parseProviderJson("Speech transcription", body)
     const text = chatCompletionText(value)
-    if (!text) throw new Error("Speech transcription returned an invalid chat completion")
+    if (!text) throw new Error("Speech transcription returned an empty chat completion")
     return text
   },
 }
@@ -34,15 +34,23 @@ export function openAiChatAudioRequest(config: Parameters<SpeechProvider["transc
         model: config.model,
         messages: [{
           role: "user",
-          content: [{
-            type: "input_audio",
-            input_audio: {
-              data: `data:${input.mimeType};base64,${Buffer.from(input.data).toString("base64")}`,
-              format: audioFormat(input.mimeType),
+          content: [
+            {
+              type: "text",
+              text: config.language
+                ? `Transcribe this audio. The expected language is ${config.language}. Return only the transcript.`
+                : "Transcribe this audio. Return only the transcript.",
             },
-          }],
+            {
+              type: "input_audio",
+              input_audio: {
+                data: Buffer.from(input.data).toString("base64"),
+                format: audioFormat(input.mimeType),
+              },
+            },
+          ],
         }],
-        ...(config.language ? { asr_options: { language: config.language } } : {}),
+        stream: false,
       }),
       redirect: "error",
       signal: input.signal,
@@ -59,7 +67,7 @@ function audioFormat(mimeType: string) {
   return "webm"
 }
 
-function chatCompletionText(value: unknown) {
+export function chatCompletionText(value: unknown) {
   if (!value || typeof value !== "object" || !("choices" in value) || !Array.isArray(value.choices)) return ""
   const choice = value.choices[0]
   if (!choice || typeof choice !== "object" || !("message" in choice)) return ""

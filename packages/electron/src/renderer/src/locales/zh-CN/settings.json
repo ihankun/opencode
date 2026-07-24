@@ -80,10 +80,12 @@
     "provider": "接口协议",
     "providerMultipart": "OpenAI 转写接口（文件上传）",
     "providerChatAudio": "OpenAI 音频消息（Chat Completions）",
+    "providerDashScopeChatAudio": "百炼 Qwen-ASR（Chat Completions）",
     "providerJsonTranscription": "JSON 转写接口（OpenRouter 格式）",
     "providerDesc": {
       "openai-transcription": "调用 POST /audio/transcriptions，以 multipart/form-data 上传录音文件。",
-      "openai-chat-audio": "调用 POST /chat/completions，以 input_audio Data URL 发送录音，适用于采用音频消息协议的兼容服务。",
+      "openai-chat-audio": "调用 POST /chat/completions，以纯 Base64 input_audio 发送录音和转写提示词，适用于标准音频消息协议。",
+      "dashscope-chat-audio": "调用 POST /chat/completions，以 Data URL input_audio 和 asr_options 适配百炼 Qwen-ASR。",
       "openrouter-transcription": "调用 POST /audio/transcriptions，以 JSON input_audio 发送 Base64 录音。"
     },
     "baseUrl": "API 地址",

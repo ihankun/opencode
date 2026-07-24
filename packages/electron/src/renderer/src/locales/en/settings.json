@@ -80,10 +80,12 @@
     "provider": "API protocol",
     "providerMultipart": "OpenAI transcription (file upload)",
     "providerChatAudio": "OpenAI audio message (Chat Completions)",
+    "providerDashScopeChatAudio": "Alibaba Qwen-ASR (Chat Completions)",
     "providerJsonTranscription": "JSON transcription (OpenRouter format)",
     "providerDesc": {
       "openai-transcription": "Calls POST /audio/transcriptions and uploads the recording as multipart/form-data.",
-      "openai-chat-audio": "Calls POST /chat/completions with an input_audio data URL for compatible audio-message services.",
+      "openai-chat-audio": "Calls POST /chat/completions with raw Base64 input_audio and a transcription prompt for the standard audio-message protocol.",
+      "dashscope-chat-audio": "Calls POST /chat/completions with Data URL input_audio and asr_options for Alibaba Qwen-ASR.",
       "openrouter-transcription": "Calls POST /audio/transcriptions with a JSON input_audio containing Base64 audio."
     },
     "baseUrl": "API base URL",

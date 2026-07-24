@@ -125,6 +125,7 @@ export function SpeechModelSettings() {
             >
               <option value="openai-transcription">{t('speechModel.providerMultipart')}</option>
               <option value="openai-chat-audio">{t('speechModel.providerChatAudio')}</option>
+              <option value="dashscope-chat-audio">{t('speechModel.providerDashScopeChatAudio')}</option>
               <option value="openrouter-transcription">{t('speechModel.providerJsonTranscription')}</option>
             </select>
             <span className="block text-[length:var(--fs-xs)] text-text-500">

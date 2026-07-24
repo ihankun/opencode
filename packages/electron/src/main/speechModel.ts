@@ -23,15 +23,20 @@ export class SpeechModelService {
 
   async load() {
     this.preferences = await readFile(this.file, "utf8")
-      .then(content => normalizeSpeechModelPreferences(JSON.parse(content)))
+      .then(content => {
+        const preferences = normalizeSpeechModelPreferences(JSON.parse(content))
+        validateBaseUrl(preferences.baseUrl)
+        return preferences
+      })
       .catch(() => ({ ...DEFAULT_SPEECH_MODEL_PREFERENCES }))
   }
 
   async config(): Promise<SpeechModelConfig> {
+    const baseUrl = validateBaseUrl(this.preferences.baseUrl)
     return {
       ...this.preferences,
-      hasApiKey: Boolean((await getSecureCredential(credentialID))?.apiKey),
-      apiKeyRequired: endpointRequiresAuth(validateBaseUrl(this.preferences.baseUrl)),
+      hasApiKey: Boolean(credentialApiKey(await getSecureCredential(credentialID), baseUrl, baseUrl.origin)),
+      apiKeyRequired: endpointRequiresAuth(baseUrl),
     }
   }
 
@@ -39,11 +44,16 @@ export class SpeechModelService {
     if (!value || typeof value !== "object") throw new Error("Invalid speech model configuration")
     const input = value as Partial<SpeechModelUpdate>
     const preferences = normalizeSpeechModelPreferences(input)
-    validateBaseUrl(preferences.baseUrl)
+    const baseUrl = validateBaseUrl(preferences.baseUrl)
+    const previousBaseUrl = validateBaseUrl(this.preferences.baseUrl)
+    const credential = await getSecureCredential(credentialID)
     if (typeof input.apiKey === "string" && input.apiKey.trim()) {
-      await setSecureCredential(credentialID, { apiKey: input.apiKey.trim() })
+      await setSecureCredential(credentialID, { apiKey: input.apiKey.trim(), origin: baseUrl.origin })
+    } else if (input.clearApiKey === true || baseUrl.origin !== previousBaseUrl.origin) {
+      await setSecureCredential(credentialID, null)
+    } else if (credential?.apiKey && !credential.origin) {
+      await setSecureCredential(credentialID, { apiKey: credential.apiKey, origin: baseUrl.origin })
     }
-    if (input.clearApiKey === true) await setSecureCredential(credentialID, null)
     await mkdir(dirname(this.file), { recursive: true })
     await writeFile(this.file, `${JSON.stringify(preferences, null, 2)}\n`, { mode: 0o600 })
     this.preferences = preferences
@@ -57,7 +67,11 @@ export class SpeechModelService {
     const baseUrl = validateBaseUrl(preferences.baseUrl)
     const apiKey = typeof input.apiKey === "string" && input.apiKey.trim()
       ? input.apiKey.trim()
-      : (await getSecureCredential(credentialID))?.apiKey ?? ""
+      : credentialApiKey(
+          await getSecureCredential(credentialID),
+          baseUrl,
+          validateBaseUrl(this.preferences.baseUrl).origin,
+        )
     if (endpointRequiresAuth(baseUrl) && !apiKey) {
       throw new Error("Configure the speech model API key before loading models")
     }
@@ -79,7 +93,8 @@ export class SpeechModelService {
     const input = normalizeTranscriptionInput(value)
     const credential = await getSecureCredential(credentialID)
     const baseUrl = validateBaseUrl(this.preferences.baseUrl)
-    if (endpointRequiresAuth(baseUrl) && !credential?.apiKey) {
+    const apiKey = credentialApiKey(credential, baseUrl, baseUrl.origin)
+    if (endpointRequiresAuth(baseUrl) && !apiKey) {
       throw new Error("Configure the speech model API key in Settings first")
     }
     writeLog("main", "speech transcription started", {
@@ -93,7 +108,7 @@ export class SpeechModelService {
       baseUrl,
       model: this.preferences.model,
       language: this.preferences.language,
-      apiKey: credential?.apiKey ?? "",
+      apiKey,
     }, {
       ...input,
       signal: AbortSignal.timeout(120_000),
@@ -131,4 +146,10 @@ export function validateBaseUrl(value: string) {
 
 function endpointRequiresAuth(url: URL) {
   return url.hostname !== "localhost" && url.hostname !== "127.0.0.1" && url.hostname !== "::1"
+}
+
+function credentialApiKey(credential: Record<string, string> | undefined, baseUrl: URL, legacyOrigin: string) {
+  if (!credential?.apiKey) return ""
+  if (credential.origin) return credential.origin === baseUrl.origin ? credential.apiKey : ""
+  return baseUrl.origin === legacyOrigin ? credential.apiKey : ""
 }

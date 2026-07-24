@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeWav } from './voiceAudio'
+import { encodeWav, wavByteLength } from './voiceAudio'
 
 describe('voice WAV encoding', () => {
   test('writes a mono 16-bit PCM WAV header and samples', () => {
@@ -14,5 +14,9 @@ describe('voice WAV encoding', () => {
     expect(view.getInt16(44, true)).toBe(-32_768)
     expect(view.getInt16(46, true)).toBe(0)
     expect(view.getInt16(48, true)).toBe(32_767)
+  })
+
+  test('calculates the normalized WAV size before allocating the output buffer', () => {
+    expect(wavByteLength(1, 16_000)).toBe(32_044)
   })
 })

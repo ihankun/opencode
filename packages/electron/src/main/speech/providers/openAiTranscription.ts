@@ -1,5 +1,5 @@
 import { Blob } from "node:buffer"
-import { listOpenAiModels, providerHttpError } from "./modelDiscovery.ts"
+import { listOpenAiModels, parseProviderJson, providerHttpError } from "./modelDiscovery.ts"
 import type { SpeechProvider } from "./types.ts"
 
 export const openAiTranscriptionProvider: SpeechProvider = {
@@ -10,11 +10,13 @@ export const openAiTranscriptionProvider: SpeechProvider = {
     const response = await fetch(request.endpoint, request.init)
     const body = await response.text()
     if (!response.ok) throw new Error(providerHttpError("Speech transcription", response.status, body))
-    const value = JSON.parse(body) as unknown
+    const value = parseProviderJson("Speech transcription", body)
     if (!value || typeof value !== "object" || !("text" in value) || typeof value.text !== "string") {
       throw new Error("Speech transcription returned an invalid response")
     }
-    return value.text.trim()
+    const text = value.text.trim()
+    if (!text) throw new Error("Speech transcription returned an empty response")
+    return text
   },
 }
 

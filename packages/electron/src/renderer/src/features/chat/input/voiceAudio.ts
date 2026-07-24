@@ -1,9 +1,13 @@
 const speechSampleRate = 16_000
+const maxNormalizedAudioBytes = 25 * 1024 * 1024
 
 export async function normalizeVoiceRecording(recording: Blob) {
   const context = new AudioContext()
   const decoded = await context.decodeAudioData(await recording.arrayBuffer())
     .finally(() => context.close())
+  if (wavByteLength(decoded.duration, speechSampleRate) > maxNormalizedAudioBytes) {
+    throw new Error('The speech recording exceeds the 25 MB limit')
+  }
   const offline = new OfflineAudioContext(
     1,
     Math.max(1, Math.ceil(decoded.duration * speechSampleRate)),
@@ -15,6 +19,10 @@ export async function normalizeVoiceRecording(recording: Blob) {
   source.start()
   const rendered = await offline.startRendering()
   return new Blob([encodeWav(rendered.getChannelData(0), speechSampleRate)], { type: 'audio/wav' })
+}
+
+export function wavByteLength(durationSeconds: number, sampleRate: number) {
+  return 44 + Math.ceil(durationSeconds * sampleRate) * 2
 }
 
 export function encodeWav(samples: Float32Array, sampleRate: number) {

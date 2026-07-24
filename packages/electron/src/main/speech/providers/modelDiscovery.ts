@@ -1,10 +1,19 @@
 import type { SpeechModelOption } from "../../../shared/speechModel.ts"
 import type { SpeechProviderConfig } from "./types.ts"
 
-const speechModelPattern = /(^|[-_.:/])(asr|stt)([-_.:/]|$)|whisper|transcri|voxtral|speech.?to.?text/i
+const speechModelPattern = /(^|[-_.:/])(asr|stt|audio)([-_.:/]|$)|whisper|transcri|voxtral|speech.?to.?text/i
 
 export async function listOpenAiModels(config: SpeechProviderConfig, signal: AbortSignal) {
-  const response = await fetch(modelListEndpoint(config.baseUrl), {
+  return listModels(modelListEndpoint(config.baseUrl), config, signal)
+}
+
+export async function listOpenRouterModels(config: SpeechProviderConfig, signal: AbortSignal) {
+  return (await listModels(openRouterModelListEndpoint(config.baseUrl), config, signal))
+    .map(model => ({ ...model, likelySpeechModel: true }))
+}
+
+async function listModels(endpoint: URL, config: SpeechProviderConfig, signal: AbortSignal) {
+  const response = await fetch(endpoint, {
     headers: {
       Accept: "application/json",
       ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
@@ -14,7 +23,7 @@ export async function listOpenAiModels(config: SpeechProviderConfig, signal: Abo
   })
   const body = await response.text()
   if (!response.ok) throw new Error(providerHttpError("Model discovery", response.status, body))
-  return parseModelList(JSON.parse(body))
+  return parseModelList(parseProviderJson("Model discovery", body))
 }
 
 export function modelListEndpoint(baseUrl: URL) {
@@ -22,6 +31,12 @@ export function modelListEndpoint(baseUrl: URL) {
   endpoint.pathname = `${endpoint.pathname.replace(/\/+$/, "")}/models`
   endpoint.search = ""
   endpoint.hash = ""
+  return endpoint
+}
+
+export function openRouterModelListEndpoint(baseUrl: URL) {
+  const endpoint = modelListEndpoint(baseUrl)
+  endpoint.searchParams.set("output_modalities", "transcription")
   return endpoint
 }
 
@@ -55,4 +70,12 @@ export function providerHttpError(action: string, status: number, body: string) 
     // Some compatible services return plain text or an upstream proxy page.
   }
   return `${action} failed (${status})${body ? `: ${body.slice(0, 500)}` : ""}`
+}
+
+export function parseProviderJson(action: string, body: string) {
+  try {
+    return JSON.parse(body) as unknown
+  } catch {
+    throw new Error(`${action} returned invalid JSON`)
+  }
 }

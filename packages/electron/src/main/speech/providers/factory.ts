@@ -1,4 +1,5 @@
 import type { SpeechProviderType } from "../../../shared/speechModel.ts"
+import { dashscopeChatAudioProvider } from "./dashscopeChatAudio.ts"
 import { openAiChatAudioProvider } from "./openAiChatAudio.ts"
 import { openAiTranscriptionProvider } from "./openAiTranscription.ts"
 import { openRouterTranscriptionProvider } from "./openRouterTranscription.ts"
@@ -7,6 +8,7 @@ import { openRouterTranscriptionProvider } from "./openRouterTranscription.ts"
 // renjfk/opencode-voice and cgarrot/opencode-stt. Recording and UI remain native to OpenCodex.
 export function speechProvider(type: SpeechProviderType) {
   if (type === "openai-chat-audio") return openAiChatAudioProvider
+  if (type === "dashscope-chat-audio") return dashscopeChatAudioProvider
   if (type === "openrouter-transcription") return openRouterTranscriptionProvider
   return openAiTranscriptionProvider
 }

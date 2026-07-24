@@ -1,6 +1,7 @@
 export const SPEECH_PROVIDER_TYPES = [
   'openai-transcription',
   'openai-chat-audio',
+  'dashscope-chat-audio',
   'openrouter-transcription',
 ] as const
 

@@ -1,19 +1,21 @@
-import { listOpenAiModels, providerHttpError } from "./modelDiscovery.ts"
+import { listOpenRouterModels, parseProviderJson, providerHttpError } from "./modelDiscovery.ts"
 import type { SpeechProvider } from "./types.ts"
 
 export const openRouterTranscriptionProvider: SpeechProvider = {
   id: "openrouter-transcription",
-  listModels: listOpenAiModels,
+  listModels: listOpenRouterModels,
   async transcribe(config, input) {
     const request = openRouterTranscriptionRequest(config, input)
     const response = await fetch(request.endpoint, request.init)
     const body = await response.text()
     if (!response.ok) throw new Error(providerHttpError("Speech transcription", response.status, body))
-    const value = JSON.parse(body) as unknown
+    const value = parseProviderJson("Speech transcription", body)
     if (!value || typeof value !== "object" || !("text" in value) || typeof value.text !== "string") {
       throw new Error("Speech transcription returned an invalid response")
     }
-    return value.text.trim()
+    const text = value.text.trim()
+    if (!text) throw new Error("Speech transcription returned an empty response")
+    return text
   },
 }
 
@@ -37,6 +39,7 @@ export function openRouterTranscriptionRequest(config: Parameters<SpeechProvider
           data: Buffer.from(input.data).toString("base64"),
           format: audioFormat(input.mimeType),
         },
+        ...(config.language ? { language: config.language } : {}),
       }),
       redirect: "error",
       signal: input.signal,
