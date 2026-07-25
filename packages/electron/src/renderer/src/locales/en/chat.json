@@ -366,6 +366,13 @@
     "contextUsage": "Context Usage",
     "viewDetails": "View details",
     "appearance": "Appearance",
+    "quota": {
+      "title": "Remaining quota",
+      "loading": "Loading quota…",
+      "empty": "No quota data to display",
+      "unavailable": "Quota is temporarily unavailable",
+      "loadFailed": "Failed to load quota"
+    },
     "accountLogin": "Log in",
     "accountProfile": "Profile",
     "accountLogout": "Log out",

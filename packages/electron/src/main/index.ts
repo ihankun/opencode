@@ -22,12 +22,21 @@ import { ImBridgeService } from "./imBridge"
 import { DesktopPreferencesStore } from "./desktopPreferences"
 import { SpeechModelService } from "./speechModel"
 import {
+  getOpenCodeGoQuotaConfig,
+  queryProviderQuotas,
+  updateOpenCodeGoQuotaConfig,
+} from "./quota/index.ts"
+import type { OpenCodeGoLoginResult, OpenCodeGoQuotaConfigUpdate, QuotaQueryInput } from "../shared/quota.ts"
+import {
   DEFAULT_DESKTOP_PREFERENCES,
   type DesktopPreferences,
 } from "../shared/desktopPreferences"
 
 let mainWindow: BrowserWindow | undefined
 let internalBrowserWindow: BrowserWindow | undefined
+let openCodeGoLoginWindow: BrowserWindow | undefined
+let openCodeGoLoginWait: Promise<OpenCodeGoLoginResult> | undefined
+const internalBrowserPartition = "persist:opencodex-browser"
 let server: SidecarHandle | undefined
 let serverError: string | undefined
 let tray: Tray | undefined
@@ -112,6 +121,41 @@ ipcMain.handle("desktop-preferences:set", async (_event, value: unknown) => {
   applyDesktopPreferences()
   if (backgroundSubagents !== desktopPreferences.backgroundSubagents && server) void restartServer()
   return desktopPreferences
+})
+ipcMain.handle("quota:query", (_event, value: unknown) => {
+  assertMainWindow(_event)
+  if (!isRecord(value) || !Array.isArray(value.providerIds) || typeof value.localServer !== "boolean") {
+    throw new Error("Invalid quota query")
+  }
+  if (!value.providerIds.every(id => typeof id === "string")) throw new Error("Invalid quota provider ids")
+  return queryProviderQuotas(app.getPath("userData"), {
+    providerIds: value.providerIds,
+    localServer: value.localServer,
+  } satisfies QuotaQueryInput)
+})
+ipcMain.handle("quota:opencode-go-config", (_event) => {
+  assertMainWindow(_event)
+  return getOpenCodeGoQuotaConfig(app.getPath("userData"))
+})
+ipcMain.handle("quota:opencode-go-config-set", async (_event, value: unknown) => {
+  assertMainWindow(_event)
+  if (!isRecord(value) || typeof value.workspaceId !== "string") throw new Error("Invalid OpenCode Go quota config")
+  if (value.authCookie !== undefined && typeof value.authCookie !== "string") throw new Error("Invalid OpenCode Go auth cookie")
+  if (value.clearAuthCookie !== undefined && typeof value.clearAuthCookie !== "boolean") throw new Error("Invalid OpenCode Go auth cookie action")
+  if (value.clearAuthCookie === true) await clearOpenCodeGoBrowserAuth()
+  return updateOpenCodeGoQuotaConfig(app.getPath("userData"), {
+    workspaceId: value.workspaceId,
+    ...(typeof value.authCookie === "string" ? { authCookie: value.authCookie } : {}),
+    ...(value.clearAuthCookie === true ? { clearAuthCookie: true } : {}),
+  } satisfies OpenCodeGoQuotaConfigUpdate)
+})
+ipcMain.handle("quota:opencode-go-login", (_event, value: unknown) => {
+  assertMainWindow(_event)
+  if (value !== undefined && !isRecord(value)) throw new Error("Invalid OpenCode Go login options")
+  if (isRecord(value) && value.force !== undefined && typeof value.force !== "boolean") {
+    throw new Error("Invalid OpenCode Go login mode")
+  }
+  return loginOpenCodeGoQuota(isRecord(value) && value.force === true)
 })
 
 ipcMain.handle("im-bridge:config-get", () => imBridgeService.config())
@@ -1922,7 +1966,7 @@ async function openInternalUrl(rawUrl: string) {
         sandbox: true,
         safeDialogs: true,
         webSecurity: true,
-        partition: "persist:opencodex-browser",
+        partition: internalBrowserPartition,
       },
     })
     internalBrowserWindow.webContents.session.setPermissionCheckHandler(() => false)
@@ -1951,6 +1995,157 @@ async function openInternalUrl(rawUrl: string) {
   internalBrowserWindow.show()
   internalBrowserWindow.focus()
   return true
+}
+
+function loginOpenCodeGoQuota(force: boolean) {
+  if (openCodeGoLoginWindow && !openCodeGoLoginWindow.isDestroyed() && openCodeGoLoginWait) {
+    openCodeGoLoginWindow.show()
+    openCodeGoLoginWindow.focus()
+    return openCodeGoLoginWait
+  }
+
+  const loginWindow = new BrowserWindow({
+    title: "登录 OpenCode Go",
+    width: 920,
+    height: 760,
+    minWidth: 640,
+    minHeight: 560,
+    show: false,
+    parent: mainWindow,
+    autoHideMenuBar: true,
+    icon: iconPath(process.platform === "darwin" ? "icon.icns" : "icon.ico"),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      safeDialogs: true,
+      webSecurity: true,
+      partition: internalBrowserPartition,
+    },
+  })
+  openCodeGoLoginWindow = loginWindow
+  const browserSession = loginWindow.webContents.session
+  browserSession.setPermissionCheckHandler(() => false)
+  browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+
+  openCodeGoLoginWait = new Promise<OpenCodeGoLoginResult>((resolve) => {
+    let settled = false
+    let inspecting = false
+
+    const cleanup = () => {
+      loginWindow.removeListener("closed", onClosed)
+      loginWindow.webContents.removeListener("did-navigate", onDidNavigate)
+      loginWindow.webContents.removeListener("did-navigate-in-page", onDidNavigate)
+      loginWindow.webContents.removeListener("did-finish-load", onDidFinishLoad)
+      browserSession.cookies.removeListener("changed", onCookieChanged)
+      if (openCodeGoLoginWindow === loginWindow) openCodeGoLoginWindow = undefined
+      openCodeGoLoginWait = undefined
+    }
+    const finish = (result: OpenCodeGoLoginResult, close: boolean) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(result)
+      if (close && !loginWindow.isDestroyed()) loginWindow.close()
+    }
+    const inspect = async (target: string) => {
+      if (settled || inspecting) return
+      let url: URL
+      try {
+        url = new URL(target)
+      } catch {
+        return
+      }
+      if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "opencode.ai") return
+      const workspaceId = url.pathname.match(/\/workspace\/([^/]+)/)?.[1]
+      if (!workspaceId) return
+
+      inspecting = true
+      const authCookie = (await browserSession.cookies.get({
+        url: "https://opencode.ai",
+        name: "auth",
+      })).find(cookie => (cookie.domain ?? "").replace(/^\./, "").toLowerCase() === "opencode.ai")?.value
+      if (!authCookie) {
+        inspecting = false
+        return
+      }
+
+      try {
+        const config = await updateOpenCodeGoQuotaConfig(app.getPath("userData"), {
+          workspaceId,
+          authCookie,
+        })
+        finish({ status: "success", config }, true)
+      } catch (error) {
+        inspecting = false
+        writeLog("quota", "failed to save OpenCode Go browser login", { error })
+      }
+    }
+    const onClosed = () => finish({ status: "cancelled" }, false)
+    const onDidNavigate = (_event: Electron.Event, target: string) => {
+      void inspect(target)
+    }
+    const onDidFinishLoad = () => {
+      void inspect(loginWindow.webContents.getURL())
+    }
+    const onCookieChanged = (
+      _event: Electron.Event,
+      cookie: Electron.Cookie,
+      _cause: string,
+      removed: boolean,
+    ) => {
+      if (removed || cookie.name !== "auth") return
+      if ((cookie.domain ?? "").replace(/^\./, "").toLowerCase() !== "opencode.ai") return
+      void inspect(loginWindow.webContents.getURL())
+    }
+
+    loginWindow.on("closed", onClosed)
+    loginWindow.webContents.on("did-navigate", onDidNavigate)
+    loginWindow.webContents.on("did-navigate-in-page", onDidNavigate)
+    loginWindow.webContents.on("did-finish-load", onDidFinishLoad)
+    browserSession.cookies.on("changed", onCookieChanged)
+    loginWindow.webContents.setWindowOpenHandler(({ url }) => {
+      try {
+        const target = new URL(url)
+        if (target.protocol === "https:") void loginWindow.loadURL(target.toString())
+      } catch {
+        writeLog("quota", "blocked malformed OpenCode Go login popup", { url })
+      }
+      return { action: "deny" }
+    })
+    loginWindow.webContents.on("will-navigate", (event, target) => {
+      try {
+        if (new URL(target).protocol === "https:") return
+      } catch {
+        // Block malformed navigation targets.
+      }
+      event.preventDefault()
+      writeLog("quota", "blocked OpenCode Go login navigation", { target })
+    })
+
+    void (async () => {
+      if (force) await clearOpenCodeGoBrowserAuth()
+      await loginWindow.loadURL("https://opencode.ai/auth")
+      if (settled || loginWindow.isDestroyed()) return
+      loginWindow.show()
+      loginWindow.focus()
+    })().catch(error => {
+      writeLog("quota", "failed to open OpenCode Go login", { error })
+      finish({ status: "cancelled" }, true)
+    })
+  })
+  return openCodeGoLoginWait
+}
+
+async function clearOpenCodeGoBrowserAuth() {
+  const browserSession = session.fromPartition(internalBrowserPartition)
+  const cookies = await browserSession.cookies.get({ name: "auth" })
+  await Promise.all(cookies
+    .filter(cookie => (cookie.domain ?? "").replace(/^\./, "").toLowerCase() === "opencode.ai")
+    .map(cookie => browserSession.cookies.remove(
+      `https://opencode.ai${cookie.path?.startsWith("/") ? cookie.path : "/"}`,
+      "auth",
+    )))
 }
 
 async function discoverPreviewPorts(rawHost: string) {

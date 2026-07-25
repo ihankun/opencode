@@ -364,6 +364,13 @@
     "contextUsage": "上下文用量",
     "viewDetails": "查看详情",
     "appearance": "外观",
+    "quota": {
+      "title": "剩余用量",
+      "loading": "正在查询余量…",
+      "empty": "暂无可显示的余量",
+      "unavailable": "暂时无法查询",
+      "loadFailed": "余量查询失败"
+    },
     "accountLogin": "登录账号",
     "accountProfile": "个人信息",
     "accountLogout": "退出登录",

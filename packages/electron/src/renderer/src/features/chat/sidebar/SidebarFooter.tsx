@@ -2,12 +2,18 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import {
+  ChevronDownIcon,
+  GaugeIcon,
   CogIcon,
   SunIcon,
   MoonIcon,
   SystemIcon,
 } from '../../../components/Icons'
-import { useTheme } from '../../../hooks'
+import { getProviders } from '../../../api'
+import { useServerStore, useTheme } from '../../../hooks'
+import { useDesktopPreferences } from '../../../store/desktopPreferencesStore'
+import { serverStore } from '../../../store/serverStore'
+import type { QuotaProviderResult } from '../../../../../shared/quota'
 
 function AccountIndicator({ connectionState, size = 24 }: { connectionState: string; size?: number }) {
   const statusColor =
@@ -37,9 +43,15 @@ export interface SidebarFooterProps {
 }
 
 export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: SidebarFooterProps) {
-  const { t } = useTranslation(['chat', 'common'])
+  const { t, i18n } = useTranslation(['chat', 'common'])
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
+  const { activeServer } = useServerStore()
+  const preferences = useDesktopPreferences()
   const [isOpen, setIsOpen] = useState(false)
+  const [quotaExpanded, setQuotaExpanded] = useState(false)
+  const [quotaLoading, setQuotaLoading] = useState(false)
+  const [quotaResults, setQuotaResults] = useState<QuotaProviderResult[]>([])
+  const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set())
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [isVisible, setIsVisible] = useState(false)
   const prevShowLabelsRef = useRef(showLabels)
@@ -93,11 +105,46 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   // 关闭菜单
   const closeMenu = useCallback(() => {
     setIsVisible(false)
+    setQuotaExpanded(false)
     // 使用 ref 追踪 timeout 以便清理
     const closeTimeoutId = setTimeout(() => setIsOpen(false), 150)
     // 保存到 ref 以便清理
     closeTimeoutIdRef.current = closeTimeoutId
   }, [])
+
+  useEffect(() => {
+    void getProviders()
+      .then(value => setConnectedProviders(new Set(value.connected)))
+      .catch(() => setConnectedProviders(new Set()))
+  }, [activeServer?.id, isOpen])
+
+  const enabledQuotaProviders = preferences.quotaProviders.filter(item => item.enabled && connectedProviders.has(item.id))
+
+  const toggleQuota = useCallback(() => {
+    if (quotaExpanded) {
+      setQuotaExpanded(false)
+      return
+    }
+    setQuotaExpanded(true)
+    if (!window.customOpenCode?.queryQuota || enabledQuotaProviders.length === 0) return
+    setQuotaLoading(true)
+    void window.customOpenCode.queryQuota({
+      providerIds: enabledQuotaProviders.map(item => item.id),
+      localServer: serverStore.isActiveLocalServer(),
+    })
+      .then(setQuotaResults)
+      .catch(error => {
+        setQuotaResults(enabledQuotaProviders.map(item => ({
+          providerId: item.id,
+          label: item.id,
+          status: 'error',
+          rows: [],
+          error: error instanceof Error ? error.message : t('sidebar.quota.loadFailed'),
+          fetchedAt: Date.now(),
+        })))
+      })
+      .finally(() => setQuotaLoading(false))
+  }, [enabledQuotaProviders, quotaExpanded, t])
 
   // 切换菜单
   const toggleMenu = useCallback(() => {
@@ -162,7 +209,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
         <div
           ref={menuRef}
           className={`
-        fixed z-[9999] rounded-lg border border-border-200/60 glass-alt shadow-lg overflow-hidden
+        fixed z-[9999] max-h-[min(78vh,680px)] overflow-y-auto rounded-lg border border-border-200/60 glass-alt shadow-lg
         transition-all duration-150 ease-out
         ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
       `}
@@ -210,6 +257,90 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
           {/* Menu Items */}
           <div className="p-1">
             {/* 登录入口先隐藏；供应商 API Key 暂时统一走 设置 -> 供应商 配置。 */}
+
+            {enabledQuotaProviders.length > 0 && (
+              <div className="mb-0.5">
+                <button
+                  type="button"
+                  onClick={toggleQuota}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-300 transition-colors hover:bg-bg-200/50 hover:text-text-100"
+                >
+                  <GaugeIcon size={14} />
+                  <span className="flex-1">{t('sidebar.quota.title')}</span>
+                  <ChevronDownIcon
+                    size={13}
+                    className={`text-text-400 transition-transform ${quotaExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {quotaExpanded && (
+                  <div className="mx-2 mb-2 mt-1 space-y-2 border-l border-border-200/50 pl-3">
+                    {quotaLoading ? (
+                      <div className="py-2 text-[length:var(--fs-xs)] text-text-400">
+                        {t('sidebar.quota.loading')}
+                      </div>
+                    ) : quotaResults.length === 0 ? (
+                      <div className="py-2 text-[length:var(--fs-xs)] text-text-400">
+                        {t('sidebar.quota.empty')}
+                      </div>
+                    ) : (
+                      quotaResults.map(provider => (
+                        <div key={provider.providerId} className="space-y-1.5">
+                          <div className="truncate text-[length:var(--fs-xs)] font-semibold text-text-200">
+                            {provider.label}
+                          </div>
+                          {provider.status !== 'ok' ? (
+                            <div className="rounded-md bg-danger-100/8 px-2 py-1.5 text-[length:var(--fs-xxs)] leading-relaxed text-danger-100">
+                              {provider.error || t('sidebar.quota.unavailable')}
+                            </div>
+                          ) : (
+                            provider.rows.map((row, index) => (
+                              <div key={`${row.label}-${index}`} className="space-y-1">
+                                <div className="flex items-baseline gap-2 text-[length:var(--fs-xs)]">
+                                  <span className="min-w-0 flex-1 truncate text-text-300">{row.label}</span>
+                                  {row.kind === 'percent' ? (
+                                    <span className="font-medium tabular-nums text-text-200">{Math.round(row.percentRemaining ?? 0)}%</span>
+                                  ) : (
+                                    <span className="max-w-[55%] truncate font-medium tabular-nums text-text-200">{row.value}</span>
+                                  )}
+                                  {row.resetAt && (
+                                    <span className="shrink-0 tabular-nums text-text-500">
+                                      {new Intl.DateTimeFormat(i18n.language, {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      }).format(new Date(row.resetAt))}
+                                    </span>
+                                  )}
+                                </div>
+                                {row.kind === 'percent' && (
+                                  <div className="h-1 overflow-hidden rounded-full bg-bg-300/80">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        (row.percentRemaining ?? 0) <= 10
+                                          ? 'bg-danger-100'
+                                          : (row.percentRemaining ?? 0) <= 25
+                                            ? 'bg-warning-100'
+                                            : 'bg-accent-main-100'
+                                      }`}
+                                      style={{ width: `${Math.max(0, Math.min(100, row.percentRemaining ?? 0))}%` }}
+                                    />
+                                  </div>
+                                )}
+                                {row.detail && (
+                                  <div className="truncate text-[length:var(--fs-xxs)] text-text-500">{row.detail}</div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               onClick={() => {

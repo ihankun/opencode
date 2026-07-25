@@ -16,6 +16,7 @@ test("desktop preferences use requested defaults and persist normalized values",
       showMenuBarIcon: true,
       hideDockOnClose: false,
       backgroundSubagents: false,
+      quotaProviders: [],
     })
 
     assert.deepEqual(await store.save({
@@ -23,11 +24,19 @@ test("desktop preferences use requested defaults and persist normalized values",
       showMenuBarIcon: false,
       hideDockOnClose: true,
       backgroundSubagents: true,
+      quotaProviders: [
+        { id: "openai", enabled: true },
+        { id: "deepseek", enabled: false },
+      ],
     }), {
       defaultLocationApp: "cursor",
       showMenuBarIcon: false,
       hideDockOnClose: true,
       backgroundSubagents: true,
+      quotaProviders: [
+        { id: "openai", enabled: true },
+        { id: "deepseek", enabled: false },
+      ],
     })
 
     assert.deepEqual(JSON.parse(await readFile(file, "utf8")), {
@@ -35,6 +44,10 @@ test("desktop preferences use requested defaults and persist normalized values",
       showMenuBarIcon: false,
       hideDockOnClose: true,
       backgroundSubagents: true,
+      quotaProviders: [
+        { id: "openai", enabled: true },
+        { id: "deepseek", enabled: false },
+      ],
     })
   } finally {
     await rm(directory, { recursive: true, force: true })
