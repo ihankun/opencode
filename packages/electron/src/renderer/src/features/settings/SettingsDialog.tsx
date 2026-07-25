@@ -424,11 +424,11 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
         title=""
         ariaLabel={t('title')}
         width="100%"
-        className="h-full"
+        className="settings-dialog h-full"
         showCloseButton={false}
         rawContent
       >
-        <div className="settings-surface flex min-h-0 flex-1 flex-col">
+        <div className="settings-surface settings-mobile-surface flex min-h-0 flex-1 flex-col">
           {/* Sticky Header + Tabs */}
           <div className="shrink-0">
             {/* Title bar */}
@@ -498,6 +498,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
       title=""
       ariaLabel={t('title')}
       width="min(97vw, 1040px)"
+      className="settings-dialog"
       showCloseButton={false}
       rawContent
     >
@@ -507,7 +508,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
           role="tablist"
           aria-orientation="vertical"
           aria-label={t('title')}
-          className="w-[200px] xl:w-[236px] shrink-0 border-r border-border-100/60 py-4 px-2 xl:px-2.5 flex flex-col overflow-y-auto scrollbar-none"
+          className="settings-sidebar-surface w-[200px] xl:w-[236px] shrink-0 border-r border-border-100/60 py-4 px-2 xl:px-2.5 flex flex-col overflow-y-auto scrollbar-none"
           onKeyDown={handleTabKeyDown}
         >
           <div className="px-2.5 xl:px-3 mb-4">
@@ -556,7 +557,7 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
         </nav>
 
         {/* Right Content */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="settings-content-surface flex-1 min-w-0 flex flex-col">
           {/* Content Header - sticky at top */}
           <div className="shrink-0 border-b border-border-100/60 px-5 xl:px-6 py-3.5 flex items-center justify-between gap-4">
             <div className="min-w-0">

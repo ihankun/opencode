@@ -352,6 +352,8 @@
     "pinProject": "置顶项目",
     "unpinProject": "取消置顶",
     "showProjectInFinder": "在访达中显示",
+    "showProjectInExplorer": "在资源管理器中显示",
+    "showProjectInFileManager": "在文件管理器中显示",
     "removeProject": "移除项目",
     "removeProjectConfirm": "确定从列表中移除此项目文件夹？文件不会被删除。",
     "projectBranch": "项目分支",

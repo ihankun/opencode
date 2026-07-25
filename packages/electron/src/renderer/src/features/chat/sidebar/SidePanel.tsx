@@ -270,6 +270,7 @@ export function SidePanel({
   onOpenSettings,
 }: SidePanelProps) {
   const { t } = useTranslation(['chat', 'common'])
+  const desktopPlatform = getDesktopPlatform()
   const {
     currentDirectory,
     savedDirectories,
@@ -1437,7 +1438,7 @@ export function SidePanel({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ===== Header ===== */}
-      {isMobile || !(isElectron() && getDesktopPlatform() === 'windows') ? (
+      {isMobile || !(isElectron() && desktopPlatform === 'windows') ? (
         <div className="mobile-safe-topbar-14 window-drag-region relative shrink-0">
           {isMobile && (
             <button
@@ -1948,7 +1949,15 @@ export function SidePanel({
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 transition-colors hover:bg-bg-200"
           >
             <FolderOpenIcon size={14} />
-            <span>{t('sidebar.showProjectInFinder')}</span>
+            <span>
+              {t(
+                desktopPlatform === 'windows'
+                  ? 'sidebar.showProjectInExplorer'
+                  : desktopPlatform === 'macos'
+                    ? 'sidebar.showProjectInFinder'
+                    : 'sidebar.showProjectInFileManager',
+              )}
+            </span>
           </button>
           <div className="my-1 border-t border-border-200/60" />
           <button

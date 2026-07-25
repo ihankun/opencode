@@ -851,11 +851,22 @@ html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
   --chat-bg: 0 0% 7%;
 }
 
+/* Codex dark: keep the opaque fallback close to the visual weight of macOS vibrancy. */
+:root:root[data-theme-preset='codex'][data-mode='dark']:not([data-glass]):not([data-platform='windows']) {
+  --sidebar-bg: 0 0% 14%;
+  --sidebar-selected-bg: 0 0% 24%;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:root[data-theme-preset='codex']:not([data-mode]) {
     --sidebar-bg: 0 0% 24%;
     --sidebar-selected-bg: 0 0% 36%;
     --chat-bg: 0 0% 7%;
+  }
+
+  :root:root[data-theme-preset='codex']:not([data-mode]):not([data-glass]):not([data-platform='windows']) {
+    --sidebar-bg: 0 0% 14%;
+    --sidebar-selected-bg: 0 0% 24%;
   }
 }
 
@@ -1547,6 +1558,49 @@ textarea[data-composer-input]:focus-visible {
     background-color: hsl(0 0% 18% / 0.48);
     -webkit-backdrop-filter: blur(32px) saturate(180%);
     backdrop-filter: blur(32px) saturate(180%);
+  }
+}
+
+/*
+ * Settings uses separate frosted surfaces so the navigation pane blurs the app
+ * behind it directly instead of inheriting a single, overly transparent panel.
+ */
+:root[data-theme-preset='codex'][data-glass] .settings-dialog {
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-theme-preset='codex'][data-glass] .settings-mobile-surface,
+:root[data-theme-preset='codex'][data-glass] .settings-content-surface {
+  background-color: hsl(var(--bg-000) / 0.9);
+  -webkit-backdrop-filter: blur(36px) saturate(165%);
+  backdrop-filter: blur(36px) saturate(165%);
+}
+
+:root[data-theme-preset='codex'][data-glass] .settings-sidebar-surface {
+  background-color: hsl(var(--bg-100) / 0.86);
+  -webkit-backdrop-filter: blur(44px) saturate(175%);
+  backdrop-filter: blur(44px) saturate(175%);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .settings-mobile-surface,
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .settings-content-surface {
+  background-color: hsl(0 0% 9% / 0.88);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .settings-sidebar-surface {
+  background-color: hsl(0 0% 12% / 0.84);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .settings-mobile-surface,
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .settings-content-surface {
+    background-color: hsl(0 0% 9% / 0.88);
+  }
+
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .settings-sidebar-surface {
+    background-color: hsl(0 0% 12% / 0.84);
   }
 }
 
