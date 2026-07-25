@@ -27,12 +27,11 @@ import {
   CheckIcon,
   CloseIcon,
   SpinnerIcon,
-  ChevronRightIcon,
   PackagePlusIcon,
-  TeachIcon,
   ClockIcon,
   GitBranchIcon,
   MessageSquareIcon,
+  PinIcon,
 } from '../../../components/Icons'
 import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList, useSessions } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
@@ -71,11 +70,10 @@ interface SidePanelProps {
   selectedSessionId: string | null
   onAddProject: () => void
   onOpenSearch?: () => void
-  onOpenSkills?: () => void
   onOpenPlugins?: () => void
   onOpenTasks?: () => void
   onExpandSidebar?: () => void
-  activeNavigation?: 'new' | 'skills' | 'plugins' | 'tasks' | null
+  activeNavigation?: 'new' | 'plugins' | 'tasks' | null
   isMobile?: boolean
   isExpanded?: boolean
   onOpenSettings?: () => void
@@ -93,9 +91,9 @@ interface ProjectItem {
   id: string
   worktree: string
   name: string
+  pinnedAt?: number
   canReorder?: boolean
   memberDirectories?: string[]
-  reorderPath?: string
   workspaceDirectories?: string[]
   sectionKind?: 'project' | 'workspace'
 }
@@ -263,7 +261,6 @@ export function SidePanel({
   selectedSessionId,
   onAddProject,
   onOpenSearch,
-  onOpenSkills,
   onOpenPlugins,
   onOpenTasks,
   onExpandSidebar,
@@ -280,6 +277,7 @@ export function SidePanel({
     removeDirectory,
     addDirectory,
     reorderDirectories,
+    setDirectoriesPinned,
     pathInfo,
   } = useDirectory()
   const catalogDirectories = useMemo(
@@ -306,6 +304,12 @@ export function SidePanel({
     isOpen: false,
     projectId: null,
   })
+  const [projectContextMenu, setProjectContextMenu] = useState<{
+    projectId: string
+    x: number
+    y: number
+  } | null>(null)
+  const projectContextMenuRef = useRef<HTMLDivElement>(null)
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
@@ -327,6 +331,30 @@ export function SidePanel({
   const [batchDeleteSessionConfirm, setBatchDeleteSessionConfirm] = useState(false)
   const [batchRemoveProjectConfirm, setBatchRemoveProjectConfirm] = useState(false)
   const [isBatchDeleting, setIsBatchDeleting] = useState(false)
+
+  useEffect(() => {
+    if (!projectContextMenu) return
+
+    const close = (event: MouseEvent) => {
+      if (projectContextMenuRef.current?.contains(event.target as Node)) return
+      setProjectContextMenu(null)
+    }
+    const closeImmediately = () => setProjectContextMenu(null)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeImmediately()
+    }
+
+    window.addEventListener('mousedown', close, true)
+    window.addEventListener('keydown', closeOnEscape, true)
+    window.addEventListener('resize', closeImmediately)
+    window.addEventListener('scroll', closeImmediately, true)
+    return () => {
+      window.removeEventListener('mousedown', close, true)
+      window.removeEventListener('keydown', closeOnEscape, true)
+      window.removeEventListener('resize', closeImmediately)
+      window.removeEventListener('scroll', closeImmediately, true)
+    }
+  }, [projectContextMenu])
 
   const getVisibleSelectionIds = useCallback((kind: 'session' | 'project') => {
     const root = recentsSelectionRootRef.current
@@ -672,10 +700,11 @@ export function SidePanel({
         const existing = groups.get(projectId)
 
         if (existing) {
+          const pinnedAt = Math.max(existing.pinnedAt ?? 0, directory.pinnedAt ?? 0) || undefined
           groups.set(projectId, {
             ...existing,
+            pinnedAt,
             memberDirectories: [...(existing.memberDirectories ?? []), directory.path],
-            reorderPath: existing.reorderPath ?? directory.path,
           })
           continue
         }
@@ -684,9 +713,9 @@ export function SidePanel({
           id: projectId,
           worktree: projectId,
           name: savedNameByPath.get(projectId) ?? getDirectoryName(projectId),
+          pinnedAt: directory.pinnedAt,
           canReorder: true,
           memberDirectories: [directory.path],
-          reorderPath: directory.path,
           workspaceDirectories,
         })
       }
@@ -963,7 +992,6 @@ export function SidePanel({
         name: getDirectoryName(workspaceDirectory),
         canReorder: isSavedWorkspace,
         memberDirectories: isSavedWorkspace ? [workspaceDirectory] : [],
-        reorderPath: isSavedWorkspace ? workspaceDirectory : undefined,
         sectionKind: 'workspace' as const,
       }
     })
@@ -1013,14 +1041,44 @@ export function SidePanel({
     [getProjectDirectoriesToRemove, removeDirectory],
   )
 
+  const handleTogglePinnedProject = useCallback(
+    (project: ProjectItem) => {
+      setDirectoriesPinned(
+        project.memberDirectories?.length ? project.memberDirectories : [project.id],
+        project.pinnedAt === undefined,
+      )
+      setProjectContextMenu(null)
+    },
+    [setDirectoriesPinned],
+  )
+
+  const handleShowProjectInFinder = useCallback(async (project: ProjectItem) => {
+    setProjectContextMenu(null)
+    if (!isElectron()) return
+    try {
+      await window.customOpenCode.openLocation({ path: project.worktree, appId: 'default' })
+    } catch (error) {
+      uiErrorHandler('open project in file manager', error)
+    }
+  }, [])
+
+  const handleOpenProjectContextMenu = useCallback((projectId: string, x: number, y: number) => {
+    setProjectContextMenu({
+      projectId,
+      x: Math.max(8, Math.min(x, window.innerWidth - 184)),
+      y: Math.max(8, Math.min(y, window.innerHeight - 124)),
+    })
+  }, [])
+
   const handleReorderProjectGroup = useCallback(
-    (draggedPath: string, targetPath: string) => {
+    (draggedPath: string, targetPath: string, position: 'before' | 'after') => {
       const draggedProject = folderProjects.find(project => isSameDirectory(project.id, draggedPath))
       const targetProject = folderProjects.find(project => isSameDirectory(project.id, targetPath))
-      const draggedReorderPath = draggedProject?.reorderPath
-      const targetReorderPath = targetProject?.reorderPath
-      if (!draggedReorderPath || !targetReorderPath) return
-      reorderDirectories(draggedReorderPath, targetReorderPath)
+      if ((draggedProject?.pinnedAt !== undefined) !== (targetProject?.pinnedAt !== undefined)) return
+      const draggedDirectories = draggedProject?.memberDirectories
+      const targetDirectories = targetProject?.memberDirectories
+      if (!draggedDirectories?.length || !targetDirectories?.length) return
+      reorderDirectories(draggedDirectories, targetDirectories, position)
     },
     [folderProjects, reorderDirectories],
   )
@@ -1041,11 +1099,17 @@ export function SidePanel({
   } = useReorderableList({
     ids: displayedProjects.map(project => project.id),
     canDrag: id => !!projectById.get(id)?.canReorder && !isEditMode,
-    onCommit: (draggedId, targetId) => {
+    onCommit: (draggedId, targetId, order) => {
       const draggedProject = projectById.get(draggedId)
       const targetProject = projectById.get(targetId)
       if (!draggedProject?.canReorder || !targetProject?.canReorder) return
-      handleReorderProjectGroup(draggedProject.worktree, targetProject.worktree)
+      handleReorderProjectGroup(
+        draggedProject.worktree,
+        targetProject.worktree,
+        order.indexOf(draggedId) > displayedProjects.findIndex(project => project.id === draggedId)
+          ? 'after'
+          : 'before',
+      )
     },
     onDragActivated: () => {
       expandedProjectsBeforeDragRef.current = expandedProjectIds
@@ -1057,6 +1121,15 @@ export function SidePanel({
       expandedProjectsBeforeDragRef.current = null
     },
   })
+  const pinnedProjectOrder = displayedProjectOrder.filter(
+    projectId => projectById.get(projectId)?.pinnedAt !== undefined,
+  )
+  const regularProjectOrder = displayedProjectOrder.filter(
+    projectId => projectById.get(projectId)?.pinnedAt === undefined,
+  )
+  const contextMenuProject = projectContextMenu
+    ? projectById.get(projectContextMenu.projectId)
+    : undefined
 
   const handleSelect = useCallback(
     (session: ApiSession) => {
@@ -1337,6 +1410,28 @@ export function SidePanel({
     hasMore: localConversationSource.hasMore,
     onLoadMore: localConversationSource.onLoadMore,
   }
+  const projectsHeading = (
+    <div className="sidebar-muted-text mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)]">
+      <span>{t('sidebar.projects')}</span>
+      {projectBusyCount > 0 && (
+        <span
+          className="ml-1.5 inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100"
+          title={t('sidebar.active')}
+        >
+          {projectBusyCount}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onAddProject}
+        className="ml-auto rounded-md p-1 text-text-500 transition-colors hover:bg-bg-200/60 hover:text-text-200"
+        aria-label={t('sidebar.addProject')}
+        title={t('sidebar.addProject')}
+      >
+        <PlusIcon size={13} />
+      </button>
+    </div>
+  )
 
   // 统一的结构，通过 CSS 控制显示/隐藏
   return (
@@ -1389,29 +1484,6 @@ export function SidePanel({
             style={{ opacity: showLabels ? undefined : 0 }}
           >
             {newChatShortcut}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenSkills}
-          aria-label={t('sidebar.skills')}
-          className={navigationItemClass(activeNavigation === 'skills')}
-          style={{
-            width: showLabels ? '100%' : 32,
-            paddingLeft: 6,
-            paddingRight: 6,
-          }}
-          title={t('sidebar.skills')}
-        >
-          <span className="size-5 flex items-center justify-center shrink-0">
-            <TeachIcon size={16} />
-          </span>
-          <span
-            className="ml-2 text-[length:var(--fs-base)] whitespace-nowrap transition-opacity duration-300"
-            style={{ opacity: showLabels ? 1 : 0 }}
-          >
-            {t('sidebar.skills')}
           </span>
         </button>
 
@@ -1502,26 +1574,11 @@ export function SidePanel({
       >
         {showLabels && (
           <section className="mx-2 mt-2">
-            <div className="sidebar-muted-text mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)]">
-              <span>{t('sidebar.projects')}</span>
-              {projectBusyCount > 0 && (
-                <span
-                  className="ml-1.5 inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100"
-                  title={t('sidebar.active')}
-                >
-                  {projectBusyCount}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={onAddProject}
-                className="ml-auto rounded-md p-1 text-text-500 transition-colors hover:bg-bg-200/60 hover:text-text-200"
-                aria-label={t('sidebar.addProject')}
-                title={t('sidebar.addProject')}
-              >
-                <PlusIcon size={13} />
-              </button>
-            </div>
+            {pinnedProjectOrder.length > 0 ? (
+              <div className="sidebar-muted-text mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)]">
+                <span>{t('sidebar.pinnedProjects')}</span>
+              </div>
+            ) : projectsHeading}
             <div
               ref={projectsDropdownRef}
               onTouchMove={handleProjectTouchMove}
@@ -1529,9 +1586,11 @@ export function SidePanel({
               onTouchCancel={handleProjectTouchEnd}
               className="pb-1"
             >
-              {displayedProjectOrder.map(projectId => {
+              {[...pinnedProjectOrder, ...regularProjectOrder].map(projectId => {
                 const project = projectById.get(projectId)
                 if (!project) return null
+                const beginsRegularSection =
+                  pinnedProjectOrder.length > 0 && projectId === regularProjectOrder[0]
                 const isGlobal = project.id === 'global'
                 const isActive = currentProject?.id === project.id
                 const isExpanded = expandedProjectIds.includes(project.id)
@@ -1580,11 +1639,18 @@ export function SidePanel({
                   <div
                     key={project.id}
                   >
+                    {beginsRegularSection && <div className="mt-2">{projectsHeading}</div>}
                     <ProjectInfoHover project={project} disabled={isGlobal || isMobile}>
                       <div
                         ref={element => registerProjectRef(project.id, element)}
                         data-reorder-preview
                         onClick={() => handleSelectProject(project.id)}
+                        onContextMenu={event => {
+                          if (isGlobal) return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          handleOpenProjectContextMenu(project.id, event.clientX, event.clientY)
+                        }}
                         onTouchStart={
                           project.canReorder && !isEditMode
                             ? event => handleProjectTouchStart(project.id, event)
@@ -1628,38 +1694,6 @@ export function SidePanel({
                           </span>
                           <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">{itemLabel}</span>
                         </button>
-                        {!isGlobal && (
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation()
-                              handleToggleProject(project.id)
-                            }}
-                            aria-label={t(isExpanded ? 'sidebar.collapseProject' : 'sidebar.expandProject')}
-                            aria-expanded={isExpanded}
-                            className="flex size-6 shrink-0 items-center justify-center rounded text-text-500 transition-colors hover:bg-bg-200/70 hover:text-text-200"
-                            title={t(isExpanded ? 'sidebar.collapseProject' : 'sidebar.expandProject')}
-                          >
-                            <ChevronRightIcon
-                              size={14}
-                              className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
-                            />
-                          </button>
-                        )}
-                        {!isGlobal && (
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation()
-                              setProjectDeleteConfirm({ isOpen: true, projectId: project.id })
-                            }}
-                            aria-label={t('sidebar.removeProject')}
-                            className="rounded p-1 text-text-400 transition-all hover:bg-danger-100/10 hover:text-danger-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100"
-                            title={t('common:remove')}
-                          >
-                            <TrashIcon size={12} />
-                          </button>
-                        )}
                       </div>
                     </ProjectInfoHover>
                     {!isGlobal &&
@@ -1711,6 +1745,9 @@ export function SidePanel({
                   </div>
                 )
               })}
+              {pinnedProjectOrder.length > 0 && regularProjectOrder.length === 0 && (
+                <div className="mt-2">{projectsHeading}</div>
+              )}
             </div>
           </section>
         )}
@@ -1883,6 +1920,52 @@ export function SidePanel({
         connectionState={connectionState?.state || 'disconnected'}
         onOpenSettings={onOpenSettings}
       />
+
+      {projectContextMenu && contextMenuProject && createPortal(
+        <div
+          ref={projectContextMenuRef}
+          role="menu"
+          aria-label={contextMenuProject.name}
+          onContextMenu={event => event.preventDefault()}
+          className="fixed z-[10000] w-44 rounded-lg border border-border-200 bg-bg-100 p-1 shadow-xl"
+          style={{ left: projectContextMenu.x, top: projectContextMenu.y }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => handleTogglePinnedProject(contextMenuProject)}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 transition-colors hover:bg-bg-200"
+          >
+            <PinIcon size={14} />
+            <span>
+              {t(contextMenuProject.pinnedAt === undefined ? 'sidebar.pinProject' : 'sidebar.unpinProject')}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => void handleShowProjectInFinder(contextMenuProject)}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 transition-colors hover:bg-bg-200"
+          >
+            <FolderOpenIcon size={14} />
+            <span>{t('sidebar.showProjectInFinder')}</span>
+          </button>
+          <div className="my-1 border-t border-border-200/60" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setProjectContextMenu(null)
+              setProjectDeleteConfirm({ isOpen: true, projectId: contextMenuProject.id })
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-danger-100 transition-colors hover:bg-danger-100/10"
+          >
+            <TrashIcon size={14} />
+            <span>{t('sidebar.removeProject')}</span>
+          </button>
+        </div>,
+        document.body,
+      )}
 
       {/* Confirm Dialog */}
       <ConfirmDialog

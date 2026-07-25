@@ -83,6 +83,7 @@ import {
   Play,
   Upload,
   PackagePlus,
+  Puzzle,
   Shield,
   Hammer,
   Target,
@@ -232,6 +233,7 @@ export const VolumeOffIcon = wrap(VolumeX)
 export const PlayIcon = wrap(Play)
 export const UploadIcon = wrap(Upload)
 export const PackagePlusIcon = wrap(PackagePlus)
+export const PuzzleIcon = wrap(Puzzle)
 export const ShieldIcon = wrap(Shield)
 export const BuildAgentIcon = wrap(Hammer)
 export const PlanAgentIcon = wrap(ListTodo)

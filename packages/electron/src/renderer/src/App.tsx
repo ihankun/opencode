@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Sidebar } from './features/chat'
@@ -9,7 +9,16 @@ import type { CommandItem } from './components/CommandPalette'
 import { ToastContainer } from './components/ToastContainer'
 import { DesktopTitlebar } from './components/DesktopTitlebar'
 import { ElectronWindowsTitlebar } from './components/ElectronWindowsTitlebar'
-import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './components/Icons'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LayersIcon,
+  PlugIcon,
+  PuzzleIcon,
+  SearchIcon,
+  SidebarIcon,
+  TeachIcon,
+} from './components/Icons'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
 import { useCloseServiceDialog } from './hooks/useCloseServiceDialog'
@@ -81,8 +90,8 @@ const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
-type MainUtilityPage = 'skills' | 'plugins' | 'tasks'
-type PluginPageTab = 'plugins' | 'mcp' | 'kits'
+type MainUtilityPage = 'plugins' | 'tasks'
+type ExtensionPageTab = 'skills' | 'plugins' | 'mcp' | 'kits'
 
 function ElectronSidebarToggle({
   expanded,
@@ -178,7 +187,7 @@ function App() {
         : focusedController?.effectiveDirectory || currentDirectory
       : undefined
   const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
-  const [pluginPageTab, setPluginPageTab] = useState<PluginPageTab>('plugins')
+  const [extensionPageTab, setExtensionPageTab] = useState<ExtensionPageTab>('skills')
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false)
 
   useEffect(() => {
@@ -358,9 +367,8 @@ function App() {
     }
   }, [isMobilePanelLayout, scrollMobilePagerTo, setSidebarExpanded])
 
-  const openSkillPage = useCallback(() => openUtilityPage('skills'), [openUtilityPage])
   const openPluginPage = useCallback(() => {
-    setPluginPageTab('plugins')
+    setExtensionPageTab('skills')
     openUtilityPage('plugins')
   }, [openUtilityPage])
   const openTaskPage = useCallback(() => openUtilityPage('tasks'), [openUtilityPage])
@@ -1025,46 +1033,38 @@ function App() {
         {utilityPage === 'tasks' ? <TaskPanel onOpenSession={(sessionID, directory) => handleSelectSession({ id: sessionID, directory })} /> : utilityPage === 'plugins' ? (
           <div className="flex h-full min-h-0 flex-col">
             <div className="window-drag-region shrink-0 border-b border-border-200/60 px-5 pb-3 pt-2.5">
-              <div className="mb-2 flex items-start justify-between gap-4">
+              <div className="mb-2">
                 <div>
                   <div className="text-[length:var(--fs-md)] font-semibold text-text-100">{t('components:extensionHub.title')}</div>
-                  <div className="mt-0.5 text-[length:var(--fs-xs)] text-text-400">{t(`components:extensionHub.${pluginPageTab}Description`)}</div>
-                </div>
-                <div className="rounded-md border border-warning-100/20 bg-warning-100/5 px-2 py-1 text-[length:var(--fs-xxs)] text-warning-100">
-                  {t('components:extensionHub.reviewHint')}
+                  <div className="mt-0.5 text-[length:var(--fs-xs)] text-text-400">{t(`components:extensionHub.${extensionPageTab}Description`)}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPluginPageTab('plugins')}
-                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'plugins' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
-              >
-                {t('chat:sidebar.plugins')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPluginPageTab('mcp')}
-                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'mcp' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
-              >
-                {t('chat:sidebar.mcpServers')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPluginPageTab('kits')}
-                className={`rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${pluginPageTab === 'kits' ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
-              >
-                {t('components:expertKit.nav')}
-              </button>
+              <div role="tablist" aria-label={t('components:extensionHub.title')} className="scrollbar-none flex items-center gap-1 overflow-x-auto">
+                {([
+                  { id: 'skills', label: t('chat:sidebar.skills'), icon: <TeachIcon size={14} /> },
+                  { id: 'plugins', label: t('chat:sidebar.plugins'), icon: <PuzzleIcon size={14} /> },
+                  { id: 'mcp', label: t('chat:sidebar.mcpServers'), icon: <PlugIcon size={14} /> },
+                  { id: 'kits', label: t('components:expertKit.nav'), icon: <LayersIcon size={14} /> },
+                ] satisfies { id: ExtensionPageTab; label: string; icon: ReactNode }[]).map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={extensionPageTab === item.id}
+                    onClick={() => setExtensionPageTab(item.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] font-medium transition-colors ${extensionPageTab === item.id ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-100'}`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
-              {pluginPageTab === 'plugins' ? <PluginPanel /> : pluginPageTab === 'mcp' ? <McpPanel /> : <ExpertKitPanel />}
+              {extensionPageTab === 'skills' ? <SkillPanel /> : extensionPageTab === 'plugins' ? <PluginPanel /> : extensionPageTab === 'mcp' ? <McpPanel /> : <ExpertKitPanel />}
             </div>
           </div>
-        ) : (
-          <SkillPanel windowDraggableHeader />
-        )}
+        ) : null}
       </Suspense>
     </div>
   )
@@ -1143,7 +1143,6 @@ function App() {
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
                     onOpenSearch={() => setSessionSearchOpen(true)}
-                    onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
                     activeUtilityPage={utilityPage}
@@ -1237,7 +1236,6 @@ function App() {
                   onClose={handleCloseSidebar}
                   onOpenSettings={openSettings}
                   onOpenSearch={() => setSessionSearchOpen(true)}
-                  onOpenSkills={openSkillPage}
                   onOpenPlugins={openPluginPage}
                   onOpenTasks={openTaskPage}
                   activeUtilityPage={utilityPage}
@@ -1261,7 +1259,6 @@ function App() {
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
                     onOpenSearch={() => setSessionSearchOpen(true)}
-                    onOpenSkills={openSkillPage}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
                     activeUtilityPage={utilityPage}

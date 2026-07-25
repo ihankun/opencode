@@ -1,10 +1,10 @@
 {
   "extensionHub": {
     "title": "扩展与能力",
+    "skillsDescription": "创建、导入和管理可复用的技能指令，扩展智能体工作流。",
     "pluginsDescription": "运行时插件可以扩展 OpenCode 的行为；安装前请检查来源、权限和配置变更。",
     "mcpDescription": "MCP 连接为智能体提供外部工具和数据源，凭据会单独加密保存。",
-    "kitsDescription": "专家包是一组经过组织的技能与配置，可一次安装或更新。",
-    "reviewHint": "安装即授予代码执行能力，请先审查"
+    "kitsDescription": "专家包是一组经过组织的技能与配置，可一次安装或更新。"
   },
   "commandPalette": {
     "placeholder": "输入命令...",

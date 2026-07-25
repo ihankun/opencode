@@ -5,6 +5,7 @@ export interface SavedDirectory {
   path: string
   name: string
   addedAt: number
+  pinnedAt?: number
 }
 
 export interface DirectoryContextValue {
@@ -13,7 +14,8 @@ export interface DirectoryContextValue {
   savedDirectories: SavedDirectory[]
   addDirectory: (path: string, options?: { select?: boolean }) => void
   removeDirectory: (path: string) => void
-  reorderDirectories: (draggedPath: string, targetPath: string) => void
+  reorderDirectories: (draggedPaths: string[], targetPaths: string[], position?: 'before' | 'after') => void
+  setDirectoriesPinned: (paths: string[], pinned: boolean) => void
   pathInfo: ApiPath | null
   sidebarExpanded: boolean
   setSidebarExpanded: (expanded: boolean) => void

@@ -298,7 +298,7 @@ export function Dialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[300]"
+      className="window-no-drag fixed inset-0 z-[300]"
       style={{
         backgroundColor: isVisible ? 'hsl(var(--always-black) / 0.2)' : 'hsl(var(--always-black) / 0)',
         transition: 'background-color 150ms ease-out',

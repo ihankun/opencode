@@ -10,6 +10,7 @@ import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { serverStore } from '../store/serverStore'
 import { initialOpenDirectory, onOpenDirectory, platformKind } from '../platform'
 import { DirectoryContext, type DirectoryContextValue, type SavedDirectory } from './DirectoryContext.shared'
+import { reorderDirectoryGroup, updatePinnedDirectories } from './directoryOrdering'
 
 const STORAGE_KEY_SAVED = 'opencode-saved-directories'
 const STORAGE_KEY_RECENT = 'opencode-recent-projects'
@@ -33,6 +34,7 @@ function readSavedDirectories(): SavedDirectory[] {
         path,
         name: typeof item.name === 'string' && item.name.trim() ? item.name : getDirectoryName(path) || path,
         addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
+        pinnedAt: typeof item.pinnedAt === 'number' ? item.pinnedAt : undefined,
       },
     ]
   })
@@ -180,27 +182,25 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     [urlDirectory, setCurrentDirectory],
   )
 
-  const reorderDirectories = useCallback((draggedPath: string, targetPath: string) => {
-    const normalizedDragged = normalizeToForwardSlash(draggedPath)
-    const normalizedTarget = normalizeToForwardSlash(targetPath)
+  const reorderDirectories = useCallback((draggedPaths: string[], targetPaths: string[], position: 'before' | 'after' = 'before') => {
+    const normalizedDragged = draggedPaths.map(normalizeToForwardSlash).filter(Boolean)
+    const normalizedTarget = targetPaths.map(normalizeToForwardSlash).filter(Boolean)
 
-    if (!normalizedDragged || !normalizedTarget || isSameDirectory(normalizedDragged, normalizedTarget)) {
+    if (
+      normalizedDragged.length === 0 ||
+      normalizedTarget.length === 0 ||
+      normalizedDragged.some(dragged => normalizedTarget.some(target => isSameDirectory(dragged, target)))
+    ) {
       return
     }
 
     setSavedDirectories(prev => {
-      const next = [...prev]
-      const draggedIndex = next.findIndex(directory => isSameDirectory(directory.path, normalizedDragged))
-      const targetIndex = next.findIndex(directory => isSameDirectory(directory.path, normalizedTarget))
-
-      if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
-        return prev
-      }
-
-      const [draggedDirectory] = next.splice(draggedIndex, 1)
-      next.splice(targetIndex, 0, draggedDirectory)
-      return next
+      return reorderDirectoryGroup(prev, normalizedDragged, normalizedTarget, position)
     })
+  }, [])
+
+  const setDirectoriesPinned = useCallback((paths: string[], pinned: boolean) => {
+    setSavedDirectories(prev => updatePinnedDirectories(prev, paths, pinned ? Date.now() : undefined))
   }, [])
 
   // Tauri: 启动时获取 CLI 传入的目录 + 监听后续 open-directory 事件
@@ -240,6 +240,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       addDirectory,
       removeDirectory,
       reorderDirectories,
+      setDirectoriesPinned,
       pathInfo,
       sidebarExpanded,
       setSidebarExpanded,
@@ -252,6 +253,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       addDirectory,
       removeDirectory,
       reorderDirectories,
+      setDirectoriesPinned,
       pathInfo,
       sidebarExpanded,
       setSidebarExpanded,

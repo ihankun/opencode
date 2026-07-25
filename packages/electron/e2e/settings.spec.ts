@@ -35,6 +35,28 @@ test('opens and closes settings from the desktop event', async () => {
   await expect(settings).toBeHidden()
 })
 
+test('shows consolidated extension tabs and closes settings above the draggable header', async () => {
+  const guide = page.getByRole('dialog', { name: /首次使用引导|getting started/i })
+  if (await guide.isVisible()) await guide.getByRole('button', { name: /跳过引导|skip/i }).click()
+
+  await expect(page.getByRole('button', { name: /^(技能|skills)$/i })).toHaveCount(0)
+  await page.getByRole('button', { name: /插件|plugins/i }).click()
+  await expect(page.getByText(/扩展与能力|extensions (?:&|and) capabilities/i)).toBeVisible()
+  const extensionTabs = page.getByRole('tablist', { name: /扩展与能力|extensions (?:&|and) capabilities/i }).getByRole('tab')
+  await expect(extensionTabs).toHaveCount(4)
+  await expect(extensionTabs.nth(0)).toHaveAccessibleName(/技能|skills/i)
+  await expect(extensionTabs.nth(1)).toHaveAccessibleName(/插件|plugins/i)
+  await expect(extensionTabs.nth(2)).toHaveAccessibleName(/^MCP$/)
+  await expect(extensionTabs.nth(3)).toHaveAccessibleName(/专家套件|expert kits/i)
+  await expect(extensionTabs.locator('svg')).toHaveCount(4)
+
+  await page.evaluate(() => window.dispatchEvent(new Event('titlebar:open-settings')))
+  const settings = page.getByRole('dialog', { name: /设置|settings/i })
+  await expect(settings).toBeVisible()
+  await settings.getByRole('button', { name: /关闭设置|close settings/i }).click()
+  await expect(settings).toBeHidden()
+})
+
 test('first-use guide can be skipped and stays completed', async () => {
   await page.evaluate(() => window.dispatchEvent(new Event('onboarding:restart')))
   const guide = page.getByRole('dialog', { name: /首次使用引导|getting started/i })

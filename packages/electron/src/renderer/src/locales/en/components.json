@@ -1,10 +1,10 @@
 {
   "extensionHub": {
     "title": "Extensions & capabilities",
+    "skillsDescription": "Create, import, and manage reusable instructions that extend agent workflows.",
     "pluginsDescription": "Runtime plugins can extend OpenCode behavior. Review provenance, permissions, and config changes before installing.",
     "mcpDescription": "MCP connections provide external tools and data sources; credentials are stored separately and encrypted.",
-    "kitsDescription": "Expert kits bundle organized skills and configuration for one-step installation and updates.",
-    "reviewHint": "Install grants code execution; review first"
+    "kitsDescription": "Expert kits bundle organized skills and configuration for one-step installation and updates."
   },
   "commandPalette": {
     "placeholder": "Type a command...",

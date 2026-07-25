@@ -24,10 +24,9 @@ interface SidebarProps {
   onClose: () => void
   onOpenSettings?: () => void
   onOpenSearch?: () => void
-  onOpenSkills?: () => void
   onOpenPlugins?: () => void
   onOpenTasks?: () => void
-  activeUtilityPage?: 'skills' | 'plugins' | 'tasks' | null
+  activeUtilityPage?: 'plugins' | 'tasks' | null
   projectDialogOpen?: boolean
   onProjectDialogClose?: () => void
   mobileInline?: boolean
@@ -43,7 +42,6 @@ export const Sidebar = memo(function Sidebar({
   onClose,
   onOpenSettings,
   onOpenSearch,
-  onOpenSkills,
   onOpenPlugins,
   onOpenTasks,
   activeUtilityPage,
@@ -273,7 +271,6 @@ export const Sidebar = memo(function Sidebar({
               isExpanded={true}
               onOpenSettings={onOpenSettings}
               onOpenSearch={onOpenSearch}
-              onOpenSkills={onOpenSkills}
               onOpenPlugins={onOpenPlugins}
               onOpenTasks={onOpenTasks}
               onExpandSidebar={onOpen}
@@ -332,7 +329,6 @@ export const Sidebar = memo(function Sidebar({
             isExpanded={true}
             onOpenSettings={onOpenSettings}
             onOpenSearch={onOpenSearch}
-            onOpenSkills={onOpenSkills}
             onOpenPlugins={onOpenPlugins}
             onOpenTasks={onOpenTasks}
             onExpandSidebar={onOpen}
@@ -373,7 +369,6 @@ export const Sidebar = memo(function Sidebar({
           isExpanded={isOpen}
           onOpenSettings={onOpenSettings}
           onOpenSearch={onOpenSearch}
-          onOpenSkills={onOpenSkills}
           onOpenPlugins={onOpenPlugins}
           onOpenTasks={onOpenTasks}
           onExpandSidebar={onOpen}
