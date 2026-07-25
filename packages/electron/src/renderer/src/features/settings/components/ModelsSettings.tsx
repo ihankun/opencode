@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CloseIcon, SearchIcon } from '../../../components/Icons'
 import { useModels } from '../../../hooks'
-import { modelVisibilityStore, useHiddenModelKeys } from '../../../store'
+import {
+  defaultModelStore,
+  modelVisibilityStore,
+  useDefaultModelKey,
+  useHiddenModelKeys,
+} from '../../../store'
 import { groupModelsByProvider, getModelKey } from '../../../utils/modelUtils'
 import { settingsSearchInputClass, SettingsSection, Toggle } from './SettingsUI'
 
@@ -17,6 +22,7 @@ export function ModelsSettings() {
   const { t } = useTranslation('settings')
   const { models, isLoading } = useModels()
   const hiddenModelKeys = useHiddenModelKeys()
+  const defaultModelKey = useDefaultModelKey()
   const [query, setQuery] = useState('')
   const [enabledOnly, setEnabledOnly] = useState(false)
   const hiddenModelKeySet = useMemo(() => new Set(hiddenModelKeys), [hiddenModelKeys])
@@ -123,6 +129,13 @@ export function ModelsSettings() {
                       onChange={() => {
                         const nextVisible = !providerVisible
                         if (!nextVisible && providerVisibleCount >= visibleCount) return
+                        if (
+                          !nextVisible &&
+                          defaultModelKey &&
+                          providerModels.some(model => getModelKey(model) === defaultModelKey)
+                        ) {
+                          defaultModelStore.set(null)
+                        }
                         modelVisibilityStore.setManyVisible(providerModels, nextVisible)
                       }}
                     />
@@ -132,6 +145,7 @@ export function ModelsSettings() {
                     {group.models.map(model => {
                       const key = getModelKey(model)
                       const enabled = !hiddenModelKeySet.has(key)
+                      const isDefault = defaultModelKey === key
                       const context = formatContext(model.contextLimit)
 
                       return (
@@ -139,6 +153,7 @@ export function ModelsSettings() {
                           key={key}
                           onClick={() => {
                             if (enabled && visibleCount <= 1) return
+                            if (enabled && isDefault) defaultModelStore.set(null)
                             modelVisibilityStore.setVisible(model, !enabled)
                           }}
                           className="w-full flex items-center justify-between gap-4 px-4 py-3 hover:bg-bg-100/35 transition-colors"
@@ -149,27 +164,52 @@ export function ModelsSettings() {
                             onClick={e => {
                               e.stopPropagation()
                               if (enabled && visibleCount <= 1) return
+                              if (enabled && isDefault) defaultModelStore.set(null)
                               modelVisibilityStore.setVisible(model, !enabled)
                             }}
                             className="min-w-0 flex-1 text-left outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent-main-100 rounded-md"
                           >
-                            <div className="text-[length:var(--fs-md)] font-medium text-text-100 truncate">
-                              {model.name}
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-[length:var(--fs-md)] font-medium text-text-100">
+                                {model.name}
+                              </span>
+                              {isDefault && (
+                                <span className="shrink-0 rounded bg-success-100/10 px-1.5 py-0.5 text-[length:var(--fs-xxs)] font-medium text-success-100">
+                                  {t('models.defaultTag')}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 truncate">
                               {model.id}
                               {context ? ` · ${context}` : ''}
                             </div>
                           </button>
-                          <div className="shrink-0">
+                          <div className="flex shrink-0 items-center gap-2">
                             <Toggle
                               enabled={enabled}
                               ariaLabel={`${t('models.visibility')}: ${model.name}`}
                               onChange={() => {
                                 if (enabled && visibleCount <= 1) return
+                                if (enabled && isDefault) defaultModelStore.set(null)
                                 modelVisibilityStore.setVisible(model, !enabled)
                               }}
                             />
+                            {enabled && (
+                              <button
+                                type="button"
+                                onClick={event => {
+                                  event.stopPropagation()
+                                  defaultModelStore.set(isDefault ? null : key)
+                                }}
+                                className={`min-w-[72px] rounded-md border px-2 py-1 text-[length:var(--fs-xs)] font-medium transition-colors ${
+                                  isDefault
+                                    ? 'border-success-100/30 bg-success-100/10 text-success-100 hover:bg-success-100/15'
+                                    : 'border-border-200/70 text-text-300 hover:bg-bg-200/60 hover:text-text-100'
+                                }`}
+                              >
+                                {t(isDefault ? 'models.cancelDefault' : 'models.setDefault')}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )

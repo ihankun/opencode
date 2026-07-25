@@ -406,7 +406,10 @@
     "loading": "Loading models...",
     "empty": "No models available on the current server",
     "noResults": "No models match the current search",
-    "providerCount": "{{count}} models"
+    "providerCount": "{{count}} models",
+    "setDefault": "Set as Default",
+    "cancelDefault": "Clear Default",
+    "defaultTag": "Default Model"
   },
   "appearance": {
     "accessibility": "Accessibility",

@@ -406,7 +406,10 @@
     "loading": "正在加载模型...",
     "empty": "当前服务器没有可用模型",
     "noResults": "没有匹配当前搜索的模型",
-    "providerCount": "{{count}} 个模型"
+    "providerCount": "{{count}} 个模型",
+    "setDefault": "设为默认",
+    "cancelDefault": "取消默认",
+    "defaultTag": "默认模型"
   },
   "appearance": {
     "accessibility": "辅助功能",

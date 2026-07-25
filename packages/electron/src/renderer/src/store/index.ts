@@ -77,6 +77,7 @@ export { serviceStore, useServiceStore, exportServiceSettingsBackup, importServi
 export type { ServiceSettingsBackup } from './serviceStore'
 
 export { modelVisibilityStore, useHiddenModelKeys } from './modelVisibilityStore'
+export { defaultModelStore, useDefaultModelKey } from './defaultModelStore'
 
 export { soundStore, useSoundSettings, exportSoundBackup, importSoundBackup } from './soundStore'
 export type { SoundBackup, SoundSettings, EventSoundConfig } from './soundStore'

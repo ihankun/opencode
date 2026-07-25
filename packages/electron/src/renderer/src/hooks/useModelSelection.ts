@@ -14,6 +14,7 @@ import {
 } from '../utils/modelUtils'
 import { serverStorage } from '../utils/perServerStorage'
 import { STORAGE_KEY_SELECTED_MODEL } from '../constants'
+import { useDefaultModelKey } from '../store/defaultModelStore'
 
 interface UseModelSelectionOptions {
   models: ModelInfo[]
@@ -33,6 +34,7 @@ interface UseModelSelectionReturn {
 }
 
 export function useModelSelection({ models, sessionId = null }: UseModelSelectionOptions): UseModelSelectionReturn {
+  const defaultModelKey = useDefaultModelKey()
   const sessionSelection = sessionId ? getSessionModelSelection(sessionId) : undefined
   const initialSessionSelection = sessionId ? getSessionModelSelection(sessionId) : undefined
   const initialSessionModel = initialSessionSelection ? findModelByKey(models, initialSessionSelection.modelKey) : undefined
@@ -57,6 +59,9 @@ export function useModelSelection({ models, sessionId = null }: UseModelSelectio
   })
   const hydratedSessionRef = useRef<string | null>(initialSessionSelection && !initialSessionModel ? null : sessionId)
   const skipPersistenceRef = useRef<string | null>(null)
+  const previousSessionIdRef = useRef(sessionId)
+  const previousDefaultModelKeyRef = useRef(defaultModelKey)
+  const pendingDefaultModelKeyRef = useRef(!sessionId ? defaultModelKey : null)
 
   const persistedModel = selectedModelKey ? findModelByKey(models, selectedModelKey) : undefined
   const currentModel = useMemo(() => persistedModel ?? models[0], [models, persistedModel])
@@ -66,6 +71,33 @@ export function useModelSelection({ models, sessionId = null }: UseModelSelectio
     if (persistedModel && selectedModelKey === resolvedModelKey) return selectedVariant
     return getModelVariantPref(resolvedModelKey)
   }, [resolvedModelKey, persistedModel, selectedModelKey, selectedVariant])
+
+  useEffect(() => {
+    const enteredNewTask = previousSessionIdRef.current !== null && sessionId === null
+    const defaultChanged = previousDefaultModelKeyRef.current !== defaultModelKey
+    previousSessionIdRef.current = sessionId
+    previousDefaultModelKeyRef.current = defaultModelKey
+
+    if (sessionId) {
+      pendingDefaultModelKeyRef.current = null
+      return
+    }
+
+    if (enteredNewTask || defaultChanged) {
+      pendingDefaultModelKeyRef.current = defaultModelKey
+    }
+
+    const pendingDefaultModelKey = pendingDefaultModelKeyRef.current
+    if (!pendingDefaultModelKey || models.length === 0) return
+    pendingDefaultModelKeyRef.current = null
+
+    const defaultModel = findModelByKey(models, pendingDefaultModelKey)
+    if (!defaultModel) return
+    setSelection({
+      selectedModelKey: pendingDefaultModelKey,
+      selectedVariant: getModelVariantPref(pendingDefaultModelKey),
+    })
+  }, [defaultModelKey, models, sessionId])
 
   useEffect(() => {
     if (!sessionId) {

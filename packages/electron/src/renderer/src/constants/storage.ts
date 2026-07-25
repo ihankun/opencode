@@ -5,6 +5,9 @@
 /** 选中的模型 key */
 export const STORAGE_KEY_SELECTED_MODEL = 'selected-model-key'
 
+/** 新建任务时优先使用的默认模型 key */
+export const STORAGE_KEY_DEFAULT_MODEL = 'default-model-key'
+
 /** 选中的 agent */
 export const STORAGE_KEY_SELECTED_AGENT = 'selected-agent'
 
