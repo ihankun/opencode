@@ -30,6 +30,7 @@ import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
 import type { SessionStats } from '../../../hooks'
 import { autoApproveStore, type ApprovalMode } from '../../../store/autoApproveStore'
+import { DOCUMENT_FILE_EXTENSIONS, DOCUMENT_FILE_MIMES } from './inputUtils'
 
 interface InputToolbarProps {
   paneId: string
@@ -321,7 +322,7 @@ export function InputToolbar({
 
   // 根据模型能力计算支持的文件类型
   const caps = fileCapabilities ?? { image: false, pdf: false, audio: false, video: false }
-  const supportsAnyFile = caps.image || caps.pdf || caps.audio || caps.video
+  const supportsAnyFile = true
   const controlsDisabled = isSending
   const selectedVariantLabel = getVariantLabel(selectedVariant, t)
 
@@ -331,15 +332,14 @@ export function InputToolbar({
     const extensions: string[] = []
     const filterNames: string[] = []
 
+    accept.push(...DOCUMENT_FILE_MIMES, ...DOCUMENT_FILE_EXTENSIONS.map(extension => `.${extension}`))
+    extensions.push(...DOCUMENT_FILE_EXTENSIONS)
+    filterNames.push('Documents')
+
     if (caps.image) {
       accept.push('image/*')
       extensions.push('png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg')
       filterNames.push('Images')
-    }
-    if (caps.pdf) {
-      accept.push('application/pdf')
-      extensions.push('pdf')
-      filterNames.push('PDF')
     }
     if (caps.audio) {
       accept.push('audio/*')
@@ -356,7 +356,7 @@ export function InputToolbar({
       acceptString: accept.join(','),
       tauriFilters: extensions.length > 0 ? [{ name: filterNames.join(' / '), extensions }] : [],
     }
-  }, [caps.image, caps.pdf, caps.audio, caps.video])
+  }, [caps.image, caps.audio, caps.video])
   // State for menus
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [variantMenuOpen, setVariantMenuOpen] = useState(false)

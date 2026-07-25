@@ -25,6 +25,7 @@
     "openPanel": "打开面板"
   },
   "chatArea": {
+    "agentProcessing": "Agent 正在处理",
     "loadingSession": "加载会话中...",
     "loadingHistory": "加载历史记录..."
   },
@@ -63,6 +64,10 @@
   },
   "inputBox": {
     "dropFilesHere": "拖放文件到此处",
+    "unsupportedFilesTitle": "无法添加部分文件",
+    "unsupportedFilesDescription": "当前仅支持图片、PDF、Word、Excel、PowerPoint、音频和视频：{{files}}",
+    "fileReadFailedTitle": "文件读取失败",
+    "fileReadFailedDescription": "无法读取：{{files}}",
     "replyToAgentMobile": "回复 Agent...",
     "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令）"
   },

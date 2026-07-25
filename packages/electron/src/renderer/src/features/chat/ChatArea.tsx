@@ -21,6 +21,7 @@ import {
   useMemo,
   useState,
   type ReactNode,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
@@ -32,6 +33,7 @@ import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInli
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
 import { useChatViewport } from './chatViewport'
+import { rankOutlineVisibleMessageIds } from '../../components/outlineIndexModel'
 import {
   buildContentKeyedChatPages,
   buildExpandedPageSelection,
@@ -41,6 +43,7 @@ import {
   buildTurnDurationMap,
   computeExpandedPageRange,
   expandSelectionWithPageKeys,
+  retainNearbyPageSelection,
   resolveAtBottomState,
   seedMeasuredPageHeightsFromPreviousPages,
   type ChatPage,
@@ -51,6 +54,8 @@ const LOAD_MORE_ROOT_MARGIN = '240px 0px 0px 0px'
 const LOAD_MORE_WHEEL_COOLDOWN_MS = 90
 const LOAD_MORE_DEFER_MS = 100
 const PENDING_SCROLL_TARGET_KEEPALIVE_MS = 900
+const DISCLOSURE_ANCHOR_LOCK_MS = 420
+const PAGE_SELECTION_SETTLE_MS = 140
 
 type LoadMoreAnchorSnapshot = {
   messageId: string
@@ -138,7 +143,7 @@ export const ChatArea = memo(
         forkTargetIdMap: forkTargetIdMapProp,
         turnDurationMap: turnDurationMapProp,
         sessionId,
-        isStreaming: _isStreaming = false,
+        isStreaming = false,
         allowStreamingLayoutAnimation = true,
         loadState = 'idle',
         loadError,
@@ -168,12 +173,17 @@ export const ChatArea = memo(
       const [scrollOffsetFromBottom, setScrollOffsetFromBottom] = useState(0)
       const [viewportHeight, setViewportHeight] = useState(0)
       const [measuredPageHeights, setMeasuredPageHeights] = useState<Record<string, number>>({})
+      const [retainedPageSelection, setRetainedPageSelection] = useState<Set<number>>(new Set())
       const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null)
       const [pendingLoadMoreAnchorMessageId, setPendingLoadMoreAnchorMessageId] = useState<string | null>(null)
       const scrollSnapshotRafRef = useRef<number | null>(null)
       const pendingLoadMoreAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
       const pendingLayoutAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
+      const stableLayoutAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
+      const disclosureLayoutAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
       const pendingLoadMoreTimerRef = useRef<number | null>(null)
+      const disclosureAnchorTimerRef = useRef<number | null>(null)
+      const pageSelectionSettleTimerRef = useRef<number | null>(null)
       const pendingScrollClearTimerRef = useRef<number | null>(null)
       const pendingAnchorClearRafRef = useRef<number | null>(null)
       const pendingSessionResetRafRef = useRef<number | null>(null)
@@ -275,6 +285,20 @@ export const ChatArea = memo(
         () => buildExpandedPageSelection(expandedPageRange, [pendingTargetPageIndex, pendingLoadMoreAnchorPageIndex]),
         [expandedPageRange, pendingLoadMoreAnchorPageIndex, pendingTargetPageIndex],
       )
+      const latestExpandedPageSelectionRef = useRef(expandedPageSelection)
+      useLayoutEffect(() => {
+        latestExpandedPageSelectionRef.current = expandedPageSelection
+        setRetainedPageSelection(previous => retainNearbyPageSelection(expandedPageSelection, previous))
+        if (pageSelectionSettleTimerRef.current !== null) window.clearTimeout(pageSelectionSettleTimerRef.current)
+        pageSelectionSettleTimerRef.current = window.setTimeout(() => {
+          pageSelectionSettleTimerRef.current = null
+          setRetainedPageSelection(new Set(latestExpandedPageSelectionRef.current))
+        }, PAGE_SELECTION_SETTLE_MS)
+      }, [expandedPageSelection])
+      const stabilizedPageSelection = useMemo(
+        () => retainNearbyPageSelection(expandedPageSelection, retainedPageSelection),
+        [expandedPageSelection, retainedPageSelection],
+      )
 
       const streamingPageKeys = useMemo(() => {
         const keys = new Set<string>()
@@ -292,10 +316,10 @@ export const ChatArea = memo(
         () =>
           expandSelectionWithPageKeys({
             pages: activePages,
-            expandedPageSelection,
+            expandedPageSelection: stabilizedPageSelection,
             pageKeys: streamingPageKeys,
           }),
-        [activePages, expandedPageSelection, streamingPageKeys],
+        [activePages, stabilizedPageSelection, streamingPageKeys],
       )
 
       const renderSegments = useMemo(
@@ -345,6 +369,7 @@ export const ChatArea = memo(
           scrollOffsetFromBottomRef.current = 0
           setScrollOffsetFromBottom(0)
           setPendingScrollMessageId(null)
+          setRetainedPageSelection(new Set())
         })
       }, [])
 
@@ -356,6 +381,8 @@ export const ChatArea = memo(
           if (pendingAnchorClearRafRef.current !== null) cancelAnimationFrame(pendingAnchorClearRafRef.current)
           if (pendingSessionResetRafRef.current !== null) cancelAnimationFrame(pendingSessionResetRafRef.current)
           if (visibleIdsPublishRafRef.current !== null) cancelAnimationFrame(visibleIdsPublishRafRef.current)
+          if (disclosureAnchorTimerRef.current !== null) window.clearTimeout(disclosureAnchorTimerRef.current)
+          if (pageSelectionSettleTimerRef.current !== null) window.clearTimeout(pageSelectionSettleTimerRef.current)
         }
       }, [clearPendingLoadMoreTimer, clearPendingScrollTimer])
 
@@ -374,7 +401,11 @@ export const ChatArea = memo(
           scrollSnapshotRafRef.current = null
           if (Math.abs(nextOffset - scrollOffsetFromBottomRef.current) < 1) return
           if (!isAtBottomRef.current) {
-            pendingLayoutAnchorRef.current = captureLoadMoreAnchor(root)
+            const anchor = disclosureLayoutAnchorRef.current ?? captureLoadMoreAnchor(root)
+            stableLayoutAnchorRef.current = anchor
+            pendingLayoutAnchorRef.current = anchor
+          } else {
+            stableLayoutAnchorRef.current = null
           }
           scrollOffsetFromBottomRef.current = nextOffset
           setScrollOffsetFromBottom(nextOffset)
@@ -484,6 +515,13 @@ export const ChatArea = memo(
         allowBottomReattachRef.current = false
         loadMoreBlockedRef.current = true
         pendingLoadMoreAnchorRef.current = null
+        pendingLayoutAnchorRef.current = null
+        stableLayoutAnchorRef.current = null
+        disclosureLayoutAnchorRef.current = null
+        if (disclosureAnchorTimerRef.current !== null) {
+          window.clearTimeout(disclosureAnchorTimerRef.current)
+          disclosureAnchorTimerRef.current = null
+        }
         previousActivePagesRef.current = { sessionId, pages: [] }
         lastStreamingPageKeysRef.current = new Set()
         clearPendingLoadMoreAnchorMessage()
@@ -624,7 +662,8 @@ export const ChatArea = memo(
         if (!anchor || !root) return
 
         const target = root.querySelector<HTMLElement>(`[data-message-id="${anchor.messageId}"]`)
-        pendingLayoutAnchorRef.current = null
+        const disclosureLocked = disclosureLayoutAnchorRef.current === anchor
+        if (!disclosureLocked) pendingLayoutAnchorRef.current = null
         if (!target) return
 
         const rootRect = root.getBoundingClientRect()
@@ -634,6 +673,7 @@ export const ChatArea = memo(
           root.scrollTop += delta
           updateScrollOffsetSnapshot()
         }
+        if (!disclosureLocked) stableLayoutAnchorRef.current = captureLoadMoreAnchor(root)
       }, [activePages, measuredPageHeights, renderSegments, updateScrollOffsetSnapshot])
 
       const onVisibleIdsChangeRef = useRef(onVisibleMessageIdsChange)
@@ -648,10 +688,17 @@ export const ChatArea = memo(
         const visibleIds = new Set<string>()
         const publishVisibleIds = () => {
           visibleIdsPublishRafRef.current = null
-          const ids = Array.from(root.querySelectorAll<HTMLElement>('[data-message-id]')).flatMap(element => {
-            const id = element.getAttribute('data-message-id')
-            return id && visibleIds.has(id) ? [id] : []
-          })
+          const rootRect = root.getBoundingClientRect()
+          const ids = rankOutlineVisibleMessageIds(
+            Array.from(root.querySelectorAll<HTMLElement>('[data-message-id]')).flatMap(element => {
+              const messageId = element.getAttribute('data-message-id')
+              if (!messageId || !visibleIds.has(messageId)) return []
+              const rect = element.getBoundingClientRect()
+              return [{ messageId, top: rect.top, bottom: rect.bottom }]
+            }),
+            rootRect.top,
+            rootRect.bottom,
+          )
           const previous = lastPublishedVisibleIdsRef.current
           if (previous.length === ids.length && previous.every((id, index) => id === ids[index])) return
           lastPublishedVisibleIdsRef.current = ids
@@ -679,7 +726,7 @@ export const ChatArea = memo(
             }
             if (changed) scheduleVisibleIdsPublish()
           },
-          { root, rootMargin: '100% 0px' },
+          { root, rootMargin: '0px' },
         )
 
         const elements = root.querySelectorAll<HTMLElement>('[data-message-id]')
@@ -722,12 +769,34 @@ export const ChatArea = memo(
         const current = measuredPageHeightsRef.current[pageKey] ?? null
         if (current !== null && Math.abs(current - nextHeight) < 1) return
         const root = scrollRef.current
-        if (root && !isAtBottomRef.current && current !== null) {
-          pendingLayoutAnchorRef.current = captureLoadMoreAnchor(root)
+        if (root && !isAtBottomRef.current) {
+          pendingLayoutAnchorRef.current =
+            disclosureLayoutAnchorRef.current ?? stableLayoutAnchorRef.current ?? captureLoadMoreAnchor(root)
         }
         const next = { ...measuredPageHeightsRef.current, [pageKey]: nextHeight }
         measuredPageHeightsRef.current = next
         setMeasuredPageHeights(next)
+      }, [])
+
+      const captureAnchorBeforeDisclosure = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+        if (isAtBottomRef.current) return
+        if (!(event.target instanceof Element) || !event.target.closest('[aria-expanded]')) return
+
+        const root = scrollRef.current
+        if (!root) return
+        const anchor = captureLoadMoreAnchor(root)
+        if (!anchor) return
+
+        stableLayoutAnchorRef.current = anchor
+        disclosureLayoutAnchorRef.current = anchor
+        pendingLayoutAnchorRef.current = anchor
+        if (disclosureAnchorTimerRef.current !== null) window.clearTimeout(disclosureAnchorTimerRef.current)
+        disclosureAnchorTimerRef.current = window.setTimeout(() => {
+          disclosureAnchorTimerRef.current = null
+          disclosureLayoutAnchorRef.current = null
+          pendingLayoutAnchorRef.current = null
+          stableLayoutAnchorRef.current = captureLoadMoreAnchor(root)
+        }, DISCLOSURE_ANCHOR_LOCK_MS)
       }, [])
 
       const requestScrollToMessage = useCallback(
@@ -801,7 +870,9 @@ export const ChatArea = memo(
           <div
             ref={setScrollContainerRef}
             data-chat-scroll-root="true"
+            onClickCapture={captureAnchorBeforeDisclosure}
             className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar contain-content flex flex-col-reverse"
+            style={{ overflowAnchor: 'none' }}
           >
             <div className="flex-1" />
 
@@ -817,6 +888,21 @@ export const ChatArea = memo(
                 <div className="flex justify-start">
                   <div className="w-full min-w-0">
                     <RetryStatusInline status={retryStatus} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isStreaming && !retryStatus && (
+              <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0 py-3`}>
+                <div className="flex justify-start">
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="inline-flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/70 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-sm"
+                  >
+                    <span className="size-3.5 rounded-full border-2 border-text-400/30 border-t-accent-main-100 animate-spin" />
+                    <span>{t('chatArea.agentProcessing')}</span>
                   </div>
                 </div>
               </div>

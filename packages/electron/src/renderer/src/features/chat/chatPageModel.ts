@@ -56,15 +56,53 @@ export type PageRenderSegment =
 
 export type ExpandedPageSelection = Set<number>
 
+export function retainNearbyPageSelection(
+  current: ExpandedPageSelection,
+  previous: ExpandedPageSelection,
+  distance = 1,
+): ExpandedPageSelection {
+  if (previous.size === 0 || current.size === 0 || distance < 1) return current
+
+  let next = current
+  for (const previousIndex of previous) {
+    if (current.has(previousIndex)) continue
+    const nearby = Array.from(current).some(currentIndex => Math.abs(currentIndex - previousIndex) <= distance)
+    if (!nearby) continue
+    if (next === current) next = new Set(current)
+    next.add(previousIndex)
+  }
+  return next
+}
+
 export function computeAnchorRestoreScrollDelta(previousTopOffset: number, nextTopOffset: number): number {
   return nextTopOffset - previousTopOffset
 }
 
 function estimateMessageHeight(message: Message): number {
   if (message.info.role === 'user') {
-    return Math.max(72, message.parts.length * 40)
+    const textHeight = message.parts.reduce((height, part) => {
+      if (part.type !== 'text' || part.synthetic) return height
+      return height + estimateTextHeight(part.text, 8)
+    }, 0)
+    return Math.max(72, textHeight + message.parts.length * 20)
   }
-  return Math.max(160, message.parts.length * 80)
+  const contentHeight = message.parts.reduce((height, part) => {
+    if (part.type === 'text' && !part.synthetic) return height + estimateTextHeight(part.text)
+    if (part.type === 'reasoning') return height + 36
+    if (part.type === 'tool') return height + 48
+    if (part.type === 'subtask') return height + 72
+    if (part.type === 'file' || part.type === 'agent') return height + 44
+    return height + 20
+  }, 0)
+  return Math.max(160, contentHeight + 56)
+}
+
+function estimateTextHeight(text: string, maximumLines = 500): number {
+  if (!text) return 0
+  const estimatedLines = text
+    .split(/\r?\n/)
+    .reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 88)), 0)
+  return Math.min(maximumLines, estimatedLines) * 24
 }
 
 function estimateGroupHeight(messages: Message[]): number {

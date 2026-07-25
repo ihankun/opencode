@@ -25,6 +25,7 @@
     "openPanel": "Open panel"
   },
   "chatArea": {
+    "agentProcessing": "Agent is processing",
     "loadingSession": "Loading session...",
     "loadingHistory": "Loading history..."
   },
@@ -63,6 +64,10 @@
   },
   "inputBox": {
     "dropFilesHere": "Drop files here",
+    "unsupportedFilesTitle": "Some files could not be attached",
+    "unsupportedFilesDescription": "Supported types are images, PDF, Word, Excel, PowerPoint, audio, and video: {{files}}",
+    "fileReadFailedTitle": "Could not read file",
+    "fileReadFailedDescription": "Could not read: {{files}}",
     "replyToAgentMobile": "Reply to Agent...",
     "replyToAgent": "Reply to Agent (type @ to mention, / for commands)"
   },

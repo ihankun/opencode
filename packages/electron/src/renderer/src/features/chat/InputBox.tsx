@@ -850,7 +850,10 @@ function InputBoxComponent({
   )
 
   // 是否有任何文件附件能力
-  const supportsAnyFile = fileCaps.image || fileCaps.pdf || fileCaps.audio || fileCaps.video
+  // PDF and Office documents can always enter the attachment pipeline. The
+  // provider remains responsible for returning a visible unsupported-format
+  // error if the selected model cannot parse them.
+  const supportsAnyFile = true
 
   // 文本状态
   const [text, setText] = useState('')
@@ -1722,12 +1725,17 @@ function InputBoxComponent({
       if (files.length === 0 || !supportsAnyFile || isSubmitting) return
 
       const nextAttachments: Attachment[] = []
+      const unsupportedFiles: string[] = []
+      const unreadableFiles: string[] = []
 
       for (const rawFile of files) {
         const file = ensureFileMime(rawFile)
 
         // 按 MIME 类型检查模型能力
-        if (!isFileSupported(file.type, fileCaps)) continue
+        if (!isFileSupported(file.type, fileCaps)) {
+          unsupportedFiles.push(file.name)
+          continue
+        }
 
         try {
           const dataUrl = await readFileAsDataUrl(file)
@@ -1741,14 +1749,33 @@ function InputBoxComponent({
           })
         } catch (err) {
           console.warn('[InputBox] Failed to process file:', err)
+          unreadableFiles.push(file.name)
         }
       }
 
       if (nextAttachments.length > 0) {
         setAttachments(prev => [...prev, ...nextAttachments])
       }
+      if (unsupportedFiles.length > 0) {
+        notificationStore.push(
+          'error',
+          t('inputBox.unsupportedFilesTitle'),
+          t('inputBox.unsupportedFilesDescription', { files: unsupportedFiles.join(', ') }),
+          sessionId ?? '',
+          currentDirectory,
+        )
+      }
+      if (unreadableFiles.length > 0) {
+        notificationStore.push(
+          'error',
+          t('inputBox.fileReadFailedTitle'),
+          t('inputBox.fileReadFailedDescription', { files: unreadableFiles.join(', ') }),
+          sessionId ?? '',
+          currentDirectory,
+        )
+      }
     },
-    [supportsAnyFile, fileCaps, isSubmitting],
+    [currentDirectory, fileCaps, isSubmitting, sessionId, supportsAnyFile, t],
   )
 
   // 删除附件
@@ -1935,10 +1962,17 @@ function InputBoxComponent({
         }
       } catch (err) {
         console.warn('[InputBox] Failed to read dropped file for upload:', err)
+        notificationStore.push(
+          'error',
+          t('inputBox.fileReadFailedTitle'),
+          t('inputBox.fileReadFailedDescription', { files: fileInfo.name || getFileName(fileInfo.path) }),
+          sessionId ?? '',
+          currentDirectory,
+        )
         return null
       }
     },
-    [fileCaps],
+    [currentDirectory, fileCaps, sessionId, t],
   )
 
   const handleTauriExternalDrop = useCallback(

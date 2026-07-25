@@ -40,10 +40,31 @@ export function detectSlashTrigger(text: string, cursorPos: number): { query: st
 // File helpers
 // ============================================
 
+export const DOCUMENT_FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] as const
+
+export const DOCUMENT_FILE_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+] as const
+
+const DOCUMENT_FILE_MIME_SET = new Set<string>(DOCUMENT_FILE_MIMES)
+
+export function isDocumentFileMime(mime: string): boolean {
+  return DOCUMENT_FILE_MIME_SET.has(mime.toLowerCase())
+}
+
 /** 检查文件 MIME 类型是否被当前模型能力支持 */
 export function isFileSupported(mime: string, caps: FileCapabilities): boolean {
+  // Documents are always accepted by the composer. The server/provider is the
+  // source of truth for parsing support and returns a visible model error when
+  // a selected model cannot consume a particular document format.
+  if (isDocumentFileMime(mime)) return true
   if (mime.startsWith('image/')) return caps.image
-  if (mime === 'application/pdf') return caps.pdf
   if (mime.startsWith('audio/')) return caps.audio
   if (mime.startsWith('video/')) return caps.video
   return false

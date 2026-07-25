@@ -53,6 +53,13 @@ export function extToMime(ext: string): string {
     svg: 'image/svg+xml',
     // pdf
     pdf: 'application/pdf',
+    // office documents
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     // audio
     mp3: 'audio/mpeg',
     wav: 'audio/wav',

@@ -30,7 +30,12 @@ import {
 import type { CSSProperties } from 'react'
 import type { Message } from '../types/message'
 import { useChatViewport } from '../features/chat/chatViewport'
-import { buildOutlineSourceEntries, truncateOutlineLabel, type OutlineSourceEntry } from './outlineIndexModel'
+import {
+  buildOutlineSourceEntries,
+  findActiveOutlineIndex,
+  truncateOutlineLabel,
+  type OutlineSourceEntry,
+} from './outlineIndexModel'
 
 const EMPTY_MESSAGES: Message[] = []
 
@@ -180,27 +185,6 @@ function nearestIndexFromY(count: number, cursorY: number, railCenterY: number, 
   const centerY = railCenterY + (index - mid) * step
   return Math.abs(cursorY - centerY) <= fisheye.css.strengthRadius ? index : -1
 }
-
-/** 从 entries 中找偏置后的可见索引。
- *  取第二个匹配项（而非第一个），避免 viewport 顶部刚好落在上一条 prompt 尾部时误判。
- *  若只有一条匹配则退化为第一条。 */
-function findBiasedVisibleIndex(entries: OutlineEntry[], ownerVisibleIds?: Set<string>): number {
-  if (!ownerVisibleIds || ownerVisibleIds.size === 0) return -1
-  let first = -1
-  let second = -1
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]
-    if (entry && ownerVisibleIds.has(entry.messageId)) {
-      if (first === -1) first = i
-      else {
-        second = i
-        break
-      }
-    }
-  }
-  return second !== -1 ? second : first
-}
-
 
 function formatEntries(entries: OutlineSourceEntry[], visual: VisualConfig): OutlineEntry[] {
   return entries.map(entry => ({
@@ -382,10 +366,6 @@ export const OutlineIndex = memo(forwardRef<OutlineIndexHandle, OutlineIndexProp
   const visual = presentation.isCompact ? COMPACT_VISUAL : DESKTOP_VISUAL
   const outlineSourceEntries = useMemo(() => sourceEntries ?? buildOutlineSourceEntries(messages), [messages, sourceEntries])
   const allEntries = useMemo(() => formatEntries(outlineSourceEntries, visual), [outlineSourceEntries, visual])
-  const entries = useMemo(
-    () => sliceAroundVisible(allEntries, visibleMessageIds ?? [], visual.maxEntries),
-    [allEntries, visibleMessageIds, visual.maxEntries],
-  )
   const resolvedOwnerByMessageId = useMemo(() => {
     if (ownerByMessageId) return ownerByMessageId
 
@@ -397,19 +377,27 @@ export const OutlineIndex = memo(forwardRef<OutlineIndexHandle, OutlineIndexProp
     }
     return ownerMap
   }, [messages, ownerByMessageId])
+  const visibleOwnerIds = useMemo(() => {
+    const seen = new Set<string>()
+    return (visibleMessageIds ?? []).flatMap(messageId => {
+      const ownerId = resolvedOwnerByMessageId.get(messageId)
+      if (!ownerId || seen.has(ownerId)) return []
+      seen.add(ownerId)
+      return [ownerId]
+    })
+  }, [resolvedOwnerByMessageId, visibleMessageIds])
+  const entries = useMemo(
+    () => sliceAroundVisible(allEntries, visibleOwnerIds, visual.maxEntries),
+    [allEntries, visibleOwnerIds, visual.maxEntries],
+  )
 
-  // 构建 territory 映射：每个消息 ID → 所属 user prompt 的 ID
-  const ownerVisibleIds = useMemo(() => {
-    const set = new Set<string>()
-    if (!currentHighlightEnabled || !visibleMessageIds) return set
-
-    for (const vid of visibleMessageIds) {
-      const owner = resolvedOwnerByMessageId.get(vid)
-      if (owner) set.add(owner)
-    }
-    return set
-  }, [currentHighlightEnabled, resolvedOwnerByMessageId, visibleMessageIds])
-  const ownerVisibleIndex = useMemo(() => findBiasedVisibleIndex(entries, ownerVisibleIds), [entries, ownerVisibleIds])
+  const ownerVisibleIndex = useMemo(
+    () =>
+      currentHighlightEnabled
+        ? findActiveOutlineIndex(entries, visibleMessageIds ?? [], resolvedOwnerByMessageId)
+        : -1,
+    [currentHighlightEnabled, entries, resolvedOwnerByMessageId, visibleMessageIds],
+  )
 
   if (entries.length < 2) return null
 
