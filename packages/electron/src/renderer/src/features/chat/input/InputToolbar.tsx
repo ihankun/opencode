@@ -148,11 +148,15 @@ function getVariantLabel(variant: string | undefined, t: (key: string) => string
   const normalized = variant.toLowerCase()
   const knownLabels: Record<string, string> = {
     default: t('inputToolbar.variants.default'),
+    none: t('inputToolbar.variants.none'),
+    minimal: t('inputToolbar.variants.minimal'),
     low: t('inputToolbar.variants.low'),
     medium: t('inputToolbar.variants.medium'),
     middle: t('inputToolbar.variants.medium'),
     middlw: t('inputToolbar.variants.medium'),
     high: t('inputToolbar.variants.high'),
+    xhigh: t('inputToolbar.variants.xhigh'),
+    max: t('inputToolbar.variants.max'),
   }
 
   return knownLabels[normalized] ?? formatTitleCase(variant)

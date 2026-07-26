@@ -28,7 +28,7 @@ import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
 import { MessageErrorView } from '../message/parts'
 import { messageStore } from '../../store'
-import type { Message, MessageError } from '../../types/message'
+import { isVisibleTextPart, type Message, type MessageError } from '../../types/message'
 import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInline'
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
@@ -236,6 +236,18 @@ export const ChatArea = memo(
         () => turnDurationMapProp ?? buildTurnDurationMap(messages, visibleMessages),
         [messages, turnDurationMapProp, visibleMessages],
       )
+      const isWaitingForAgentReply = useMemo(() => {
+        if (!isStreaming) return false
+        const latestUserMessageIndex = messages.findLastIndex(message => message.info.role === 'user')
+        if (latestUserMessageIndex === -1) return false
+        return !messages
+          .slice(latestUserMessageIndex + 1)
+          .some(
+            message =>
+              message.info.role === 'assistant' &&
+              message.parts.some(part => isVisibleTextPart(part)),
+          )
+      }, [isStreaming, messages])
 
       const activePages = pageRecords ?? pages
 
@@ -893,7 +905,7 @@ export const ChatArea = memo(
               </div>
             )}
 
-            {isStreaming && !retryStatus && (
+            {isWaitingForAgentReply && !retryStatus && (
               <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0 py-3`}>
                 <div className="flex justify-start">
                   <div
