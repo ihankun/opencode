@@ -38,6 +38,7 @@ export type ViewMode = 'split' | 'unified'
 export interface DiffViewerProps {
   before: string
   after: string
+  lineNumbers?: DiffLineNumbers
   language?: string
   viewMode?: ViewMode
   /** 不传则填满父容器 */
@@ -61,6 +62,11 @@ export interface DiffViewerData {
   pairedLines: PairedLine[]
   unifiedLines: UnifiedLine[]
   lineNumberWidth: number
+}
+
+export interface DiffLineNumbers {
+  before?: readonly number[]
+  after?: readonly number[]
 }
 
 export type LineType = 'add' | 'delete' | 'context' | 'empty'
@@ -300,10 +306,18 @@ function getWrappedPairContent(pair: PairedLine): string {
   return pair.left.content.length >= pair.right.content.length ? pair.left.content : pair.right.content
 }
 
-function useDiffLineNumberWidth(before: string, after: string): number {
+function useDiffLineNumberWidth(before: string, after: string, lineNumbers?: DiffLineNumbers): number {
   return useMemo(
-    () => getLineNumberColumnWidth(Math.max(getLineCount(before), getLineCount(after))),
-    [before, after],
+    () =>
+      getLineNumberColumnWidth(
+        Math.max(
+          getLineCount(before),
+          getLineCount(after),
+          lineNumbers?.before?.reduce((max, line) => Math.max(max, line), 0) ?? 0,
+          lineNumbers?.after?.reduce((max, line) => Math.max(max, line), 0) ?? 0,
+        ),
+      ),
+    [before, after, lineNumbers?.after, lineNumbers?.before],
   )
 }
 
@@ -521,7 +535,14 @@ function CollapsedBar({
 // ============================================
 
 // eslint-disable-next-line react-refresh/only-export-components -- DiffViewer consumers share this data with fullscreen instances.
-export function useDiffViewerData(before: string, after: string, language = 'text', isResizing = false, enabled = true): DiffViewerData {
+export function useDiffViewerData(
+  before: string,
+  after: string,
+  language = 'text',
+  isResizing = false,
+  enabled = true,
+  lineNumbers?: DiffLineNumbers,
+): DiffViewerData {
   const shouldHighlight = enabled && !isResizing && language !== 'text'
   const { output: beforeTokens } = useSyntaxHighlight(before, {
     lang: language,
@@ -534,9 +555,15 @@ export function useDiffViewerData(before: string, after: string, language = 'tex
     enabled: shouldHighlight,
   })
   const skipWordDiff = isResizing
-  const pairedLines = useMemo(() => (enabled ? computePairedLines(before, after, skipWordDiff) : []), [before, after, enabled, skipWordDiff])
-  const unifiedLines = useMemo(() => (enabled ? computeUnifiedLines(before, after) : []), [before, after, enabled])
-  const lineNumberWidth = useDiffLineNumberWidth(enabled ? before : '', enabled ? after : '')
+  const pairedLines = useMemo(
+    () => (enabled ? computePairedLines(before, after, skipWordDiff, lineNumbers) : []),
+    [before, after, enabled, lineNumbers?.after, lineNumbers?.before, skipWordDiff],
+  )
+  const unifiedLines = useMemo(
+    () => (enabled ? computeUnifiedLines(before, after, lineNumbers) : []),
+    [before, after, enabled, lineNumbers?.after, lineNumbers?.before],
+  )
+  const lineNumberWidth = useDiffLineNumberWidth(enabled ? before : '', enabled ? after : '', lineNumbers)
 
   return useMemo(
     () => ({ beforeTokens, afterTokens, pairedLines, unifiedLines, lineNumberWidth }),
@@ -556,8 +583,8 @@ export const DiffViewer = memo(function DiffViewer({
   )
 })
 
-function DiffViewerWithData({ before, after, language = 'text', isResizing = false, ...props }: DiffViewerProps) {
-  const data = useDiffViewerData(before, after, language, isResizing)
+function DiffViewerWithData({ before, after, lineNumbers, language = 'text', isResizing = false, ...props }: DiffViewerProps) {
+  const data = useDiffViewerData(before, after, language, isResizing, true, lineNumbers)
   return <DiffViewerContent before={before} after={after} language={language} isResizing={isResizing} {...props} data={data} />
 }
 
@@ -1715,7 +1742,12 @@ function MergedWordDiffLine({ segments, lineTokens }: { segments: WordDiffSegmen
 // Diff Computation
 // ============================================
 
-function computePairedLines(before: string, after: string, skipWordDiff: boolean): PairedLine[] {
+function computePairedLines(
+  before: string,
+  after: string,
+  skipWordDiff: boolean,
+  lineNumbers?: DiffLineNumbers,
+): PairedLine[] {
   const changes = diffLines(before, after)
   const result: PairedLine[] = []
   const beforeLines = before.split('\n')
@@ -1753,11 +1785,21 @@ function computePairedLines(before: string, after: string, skipWordDiff: boolean
           result.push({
             left:
               oldLine !== undefined
-                ? { type: 'delete', content: oldLine, lineNo: oldIdx + j + 1, wordDiffSegments: leftSegments }
+                ? {
+                    type: 'delete',
+                    content: oldLine,
+                    lineNo: lineNumbers?.before?.[oldIdx + j] ?? oldIdx + j + 1,
+                    wordDiffSegments: leftSegments,
+                  }
                 : { type: 'empty', content: '' },
             right:
               newLine !== undefined
-                ? { type: 'add', content: newLine, lineNo: newIdx + j + 1, wordDiffSegments: rightSegments }
+                ? {
+                    type: 'add',
+                    content: newLine,
+                    lineNo: lineNumbers?.after?.[newIdx + j] ?? newIdx + j + 1,
+                    wordDiffSegments: rightSegments,
+                  }
                 : { type: 'empty', content: '' },
           })
         }
@@ -1770,7 +1812,11 @@ function computePairedLines(before: string, after: string, skipWordDiff: boolean
 
       for (let j = 0; j < count; j++) {
         result.push({
-          left: { type: 'delete', content: beforeLines[oldIdx + j] || '', lineNo: oldIdx + j + 1 },
+          left: {
+            type: 'delete',
+            content: beforeLines[oldIdx + j] || '',
+            lineNo: lineNumbers?.before?.[oldIdx + j] ?? oldIdx + j + 1,
+          },
           right: { type: 'empty', content: '' },
         })
       }
@@ -1779,15 +1825,27 @@ function computePairedLines(before: string, after: string, skipWordDiff: boolean
       for (let j = 0; j < count; j++) {
         result.push({
           left: { type: 'empty', content: '' },
-          right: { type: 'add', content: afterLines[newIdx + j] || '', lineNo: newIdx + j + 1 },
+          right: {
+            type: 'add',
+            content: afterLines[newIdx + j] || '',
+            lineNo: lineNumbers?.after?.[newIdx + j] ?? newIdx + j + 1,
+          },
         })
       }
       newIdx += count
     } else {
       for (let j = 0; j < count; j++) {
         result.push({
-          left: { type: 'context', content: beforeLines[oldIdx + j] || '', lineNo: oldIdx + j + 1 },
-          right: { type: 'context', content: afterLines[newIdx + j] || '', lineNo: newIdx + j + 1 },
+          left: {
+            type: 'context',
+            content: beforeLines[oldIdx + j] || '',
+            lineNo: lineNumbers?.before?.[oldIdx + j] ?? oldIdx + j + 1,
+          },
+          right: {
+            type: 'context',
+            content: afterLines[newIdx + j] || '',
+            lineNo: lineNumbers?.after?.[newIdx + j] ?? newIdx + j + 1,
+          },
         })
       }
       oldIdx += count
@@ -1799,7 +1857,7 @@ function computePairedLines(before: string, after: string, skipWordDiff: boolean
   return result
 }
 
-function computeUnifiedLines(before: string, after: string): UnifiedLine[] {
+function computeUnifiedLines(before: string, after: string, lineNumbers?: DiffLineNumbers): UnifiedLine[] {
   const changes = diffLines(before, after)
   const result: UnifiedLine[] = []
   const beforeLines = before.split('\n')
@@ -1813,12 +1871,20 @@ function computeUnifiedLines(before: string, after: string): UnifiedLine[] {
 
     if (change.removed) {
       for (let j = 0; j < count; j++) {
-        result.push({ type: 'delete', content: beforeLines[oldIdx + j] || '', oldLineNo: oldIdx + j + 1 })
+        result.push({
+          type: 'delete',
+          content: beforeLines[oldIdx + j] || '',
+          oldLineNo: lineNumbers?.before?.[oldIdx + j] ?? oldIdx + j + 1,
+        })
       }
       oldIdx += count
     } else if (change.added) {
       for (let j = 0; j < count; j++) {
-        result.push({ type: 'add', content: afterLines[newIdx + j] || '', newLineNo: newIdx + j + 1 })
+        result.push({
+          type: 'add',
+          content: afterLines[newIdx + j] || '',
+          newLineNo: lineNumbers?.after?.[newIdx + j] ?? newIdx + j + 1,
+        })
       }
       newIdx += count
     } else {
@@ -1826,8 +1892,8 @@ function computeUnifiedLines(before: string, after: string): UnifiedLine[] {
         result.push({
           type: 'context',
           content: afterLines[newIdx + j] || '',
-          oldLineNo: oldIdx + j + 1,
-          newLineNo: newIdx + j + 1,
+          oldLineNo: lineNumbers?.before?.[oldIdx + j] ?? oldIdx + j + 1,
+          newLineNo: lineNumbers?.after?.[newIdx + j] ?? newIdx + j + 1,
         })
       }
       oldIdx += count

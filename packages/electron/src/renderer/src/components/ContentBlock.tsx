@@ -150,10 +150,19 @@ export const ContentBlock = memo(function ContentBlock({
 
   const resolvedDiff = useMemo(() => {
     if (!diff) return null
-    if (typeof diff === 'object') return diff
+    if (typeof diff === 'object') {
+      return { ...diff, beforeLineNumbers: undefined, afterLineNumbers: undefined }
+    }
     return extractContentFromUnifiedDiff(diff)
   }, [diff])
-  const diffViewerData = useDiffViewerData(resolvedDiff?.before ?? '', resolvedDiff?.after ?? '', lang, false, isDiff)
+  const diffViewerData = useDiffViewerData(
+    resolvedDiff?.before ?? '',
+    resolvedDiff?.after ?? '',
+    lang,
+    false,
+    isDiff,
+    { before: resolvedDiff?.beforeLineNumbers, after: resolvedDiff?.afterLineNumbers },
+  )
 
   const fullscreenTitleExtra = useMemo(
     () =>

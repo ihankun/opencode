@@ -1229,12 +1229,21 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
 }: DiffPreviewPanelProps) {
   const language = detectLanguage(diff.file) || 'text'
   // 优先用 patch 提取 before/after，回退到直接的 before/after 字段（旧版后端兼容）
-  const { before, after } = useMemo(() => {
+  const { before, after, beforeLineNumbers, afterLineNumbers } = useMemo(() => {
     if (diff.patch) return extractContentFromUnifiedDiff(diff.patch)
-    if (diff.before !== undefined && diff.after !== undefined) return { before: diff.before, after: diff.after }
-    return { before: '', after: '' }
+    if (diff.before !== undefined && diff.after !== undefined) {
+      return { before: diff.before, after: diff.after, beforeLineNumbers: undefined, afterLineNumbers: undefined }
+    }
+    return { before: '', after: '', beforeLineNumbers: undefined, afterLineNumbers: undefined }
   }, [diff.patch, diff.before, diff.after])
-  const diffViewerData = useDiffViewerData(before, after, language, isResizing)
+  const diffViewerData = useDiffViewerData(
+    before,
+    after,
+    language,
+    isResizing,
+    true,
+    { before: beforeLineNumbers, after: afterLineNumbers },
+  )
   const { t } = useTranslation(['components', 'common'])
   const [fullscreenViewMode, setFullscreenViewMode] = useState<ViewMode>(viewMode)
   const [lineSelection, setLineSelection] = useState<DiffLineSelection | null>(null)

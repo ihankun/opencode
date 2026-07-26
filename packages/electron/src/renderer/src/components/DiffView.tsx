@@ -56,7 +56,7 @@ export const DiffView = memo(function DiffView({
   // Determine content to diff
   const content = useMemo(() => {
     if (before !== undefined && after !== undefined) {
-      return { before, after }
+      return { before, after, beforeLineNumbers: undefined, afterLineNumbers: undefined }
     }
     if (diff) {
       return extractContentFromUnifiedDiff(diff)
@@ -70,7 +70,14 @@ export const DiffView = memo(function DiffView({
     return explicitLanguage || detectLanguage(filePath)
   }, [filePath, explicitLanguage])
 
-  const diffViewerData = useDiffViewerData(content?.before ?? '', content?.after ?? '', language)
+  const diffViewerData = useDiffViewerData(
+    content?.before ?? '',
+    content?.after ?? '',
+    language,
+    false,
+    true,
+    { before: content?.beforeLineNumbers, after: content?.afterLineNumbers },
+  )
 
   const stats = useMemo(() => {
     if (!content) return { additions: 0, deletions: 0 }
