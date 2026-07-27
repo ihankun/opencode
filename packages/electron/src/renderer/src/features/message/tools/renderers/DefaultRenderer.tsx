@@ -15,7 +15,7 @@ import type { ToolRendererProps, ExtractedToolData } from '../types'
 export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRendererProps) {
   const { t } = useTranslation('message')
   const { state, tool } = part
-  const { toolCardStyle } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
+  const { toolCardStyle, collapseToolOutput } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
   const isCompact = toolCardStyle === 'compact'
   const isActive = state.status === 'running' || state.status === 'pending'
 
@@ -57,6 +57,7 @@ export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRenderer
           hasError={hasError}
           hasOutput={hasOutput}
           compact={isCompact}
+          defaultCollapsed={collapseToolOutput}
           onFullscreenChange={onFullscreenChange}
           fullscreenBaseId={`tool:${part.sessionID}:${part.messageID}:${part.id}:output`}
           stateBaseKey={`message:${part.messageID}:tool:${part.id}:output`}
@@ -80,6 +81,7 @@ interface OutputBlockProps {
   hasError: boolean
   hasOutput: boolean
   compact?: boolean
+  defaultCollapsed: boolean
   onFullscreenChange?: (isFullscreen: boolean) => void
   fullscreenBaseId: string
   stateBaseKey: string
@@ -92,6 +94,7 @@ function OutputBlock({
   hasError,
   hasOutput,
   compact,
+  defaultCollapsed,
   onFullscreenChange,
   fullscreenBaseId,
   stateBaseKey,
@@ -123,6 +126,7 @@ function OutputBlock({
         isLoading={true}
         loadingText=""
         compact={compact}
+        defaultCollapsed={defaultCollapsed}
         onFullscreenChange={onFullscreenChange}
         fullscreenId={`${fullscreenBaseId}:loading`}
       />
@@ -152,6 +156,7 @@ function OutputBlock({
               }
               language={detectLanguage(file.filePath)}
               compact={compact}
+              defaultCollapsed={defaultCollapsed}
               onFullscreenChange={onFullscreenChange}
               fullscreenId={`${fullscreenBaseId}:file:${file.filePath || idx}`}
             />
@@ -173,6 +178,7 @@ function OutputBlock({
           diffStats={data.diffStats}
           language={data.outputLang}
           compact={compact}
+          defaultCollapsed={defaultCollapsed}
           onFullscreenChange={onFullscreenChange}
           fullscreenId={`${fullscreenBaseId}:diff`}
         />
@@ -189,6 +195,7 @@ function OutputBlock({
         filePath={data.filePath}
         stats={data.exitCode !== undefined ? { exit: data.exitCode } : undefined}
         compact={compact}
+        defaultCollapsed={defaultCollapsed}
         onFullscreenChange={onFullscreenChange}
         fullscreenId={`${fullscreenBaseId}:text`}
       />

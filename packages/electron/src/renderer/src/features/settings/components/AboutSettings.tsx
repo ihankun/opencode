@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
-import { CopyIcon, DownloadIcon, ExternalLinkIcon, RetryIcon, UploadIcon } from '../../../components/Icons'
+import { DownloadIcon, ExternalLinkIcon, RetryIcon, UploadIcon } from '../../../components/Icons'
 import { hasUpdateAvailable, RELEASES_PAGE_URL, updateStore, useUpdateStore } from '../../../store/updateStore'
 import { saveData } from '../../../utils/downloadUtils'
 import { exportSettingsBackup, importSettingsBackup, previewBackupMeta } from '../../../utils/settingsBackup'
 import { openUrl } from '../../../utils/browserOpen'
 import { SettingsCard, SettingsSection } from './SettingsUI'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { serverStore } from '../../../store/serverStore'
 
 export function AboutSettings() {
   const { i18n, t } = useTranslation(['settings'])
@@ -18,11 +17,7 @@ export function AboutSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
-  const [logBusy, setLogBusy] = useState(false)
-  const [logError, setLogError] = useState<string | null>(null)
   const [pendingBackup, setPendingBackup] = useState<{ file: File; createdAt?: string } | null>(null)
-  const [diagnosticBusy, setDiagnosticBusy] = useState(false)
-  const [diagnosticStatus, setDiagnosticStatus] = useState<string | null>(null)
 
   useEffect(() => {
     void updateStore.checkForUpdates()
@@ -89,60 +84,6 @@ export function AboutSettings() {
       setBackupBusy(null)
     }
   }, [pendingBackup, t])
-
-  const handleExportLogs = useCallback(async () => {
-    setLogError(null)
-    setLogBusy(true)
-    try {
-      await window.customOpenCode.exportDebugLogs()
-    } catch (error) {
-      setLogError(error instanceof Error ? error.message : t('about.logExportFailed'))
-    } finally {
-      setLogBusy(false)
-    }
-  }, [t])
-
-  const diagnosticReport = useCallback(async () => {
-    const native = await window.customOpenCode.diagnostics()
-    return {
-      ...native,
-      servers: serverStore.getServers().map(server => ({
-        id: server.id,
-        name: server.name,
-        transport: new URL(server.url).protocol.replace(':', ''),
-        status: serverStore.getHealth(server.id)?.status ?? 'unknown',
-        authenticationConfigured: Boolean(server.auth),
-      })),
-      activeServerId: serverStore.getActiveServerId(),
-    }
-  }, [])
-
-  const handleCopyDiagnostics = useCallback(async () => {
-    setDiagnosticBusy(true)
-    setDiagnosticStatus(null)
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(await diagnosticReport(), null, 2))
-      setDiagnosticStatus(i18n.language.startsWith('zh') ? '诊断信息已复制，敏感凭据未包含在报告中。' : 'Diagnostics copied. Credentials are excluded from the report.')
-    } catch (error) {
-      setDiagnosticStatus(error instanceof Error ? error.message : String(error))
-    } finally {
-      setDiagnosticBusy(false)
-    }
-  }, [diagnosticReport, i18n.language])
-
-  const handleDownloadDiagnostics = useCallback(async () => {
-    setDiagnosticBusy(true)
-    setDiagnosticStatus(null)
-    try {
-      const report = JSON.stringify(await diagnosticReport(), null, 2)
-      saveData(new TextEncoder().encode(report), `opencodex-diagnostics-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')
-      setDiagnosticStatus(i18n.language.startsWith('zh') ? '诊断报告已导出。' : 'Diagnostic report exported.')
-    } catch (error) {
-      setDiagnosticStatus(error instanceof Error ? error.message : String(error))
-    } finally {
-      setDiagnosticBusy(false)
-    }
-  }, [diagnosticReport, i18n.language])
 
   return (
     <div className="space-y-7">
@@ -243,42 +184,6 @@ export function AboutSettings() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title={t('about.debugLogsCardTitle')} description={t('about.debugLogsCardDesc')}>
-          <div className="space-y-3">
-            <div className="rounded-lg border border-border-200/50 bg-bg-100/35 px-3 py-3 text-[length:var(--fs-sm)] text-text-300 leading-relaxed">
-              {t('about.debugLogsWarning')}
-            </div>
-            <Button size="sm" variant="secondary" isLoading={logBusy} onClick={handleExportLogs}>
-              {!logBusy && <DownloadIcon size={12} />}
-              {t('about.exportDebugLogs')}
-            </Button>
-            {logError && (
-              <div className="rounded-lg border border-danger-100/20 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100 leading-relaxed">
-                {logError}
-              </div>
-            )}
-          </div>
-        </SettingsCard>
-
-        <SettingsCard title={i18n.language.startsWith('zh') ? '诊断中心' : 'Diagnostics'} description={i18n.language.startsWith('zh') ? '汇总版本、Runner、服务器、安全策略和最近的脱敏日志。' : 'Collect versions, Runner and server health, security posture, and recent redacted logs.'}>
-          <div className="space-y-3">
-            <div className="rounded-lg border border-border-200/50 bg-bg-100/35 px-3 py-3 text-[length:var(--fs-sm)] leading-relaxed text-text-300">
-              {i18n.language.startsWith('zh') ? '报告不会包含密码、API Key、Token、服务器地址或用户目录，可直接用于问题反馈。' : 'The report excludes passwords, API keys, tokens, server addresses, and user directories, so it is safe to attach to a bug report.'}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" isLoading={diagnosticBusy} onClick={() => void handleCopyDiagnostics()}>
-                {!diagnosticBusy && <CopyIcon size={12} />}{i18n.language.startsWith('zh') ? '复制诊断信息' : 'Copy diagnostics'}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={diagnosticBusy} onClick={() => void handleDownloadDiagnostics()}>
-                <DownloadIcon size={12} />{i18n.language.startsWith('zh') ? '导出 JSON' : 'Export JSON'}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={diagnosticBusy} onClick={() => window.dispatchEvent(new Event('onboarding:restart'))}>
-                {i18n.language.startsWith('zh') ? '重新打开使用引导' : 'Restart getting started'}
-              </Button>
-            </div>
-            {diagnosticStatus && <div className="text-[length:var(--fs-xs)] text-text-400" role="status">{diagnosticStatus}</div>}
-          </div>
-        </SettingsCard>
       </SettingsSection>
       <ConfirmDialog isOpen={pendingBackup !== null} onClose={() => setPendingBackup(null)} onConfirm={() => void confirmImportBackup()} title={t('about.importBackup')} description={pendingBackup?.createdAt ? t('about.backupImportConfirmWithDate', { date: new Date(pendingBackup.createdAt).toLocaleString() }) : t('about.backupImportConfirm')} confirmText={t('about.importBackup')} variant="warning" isLoading={backupBusy === 'import'} />
     </div>

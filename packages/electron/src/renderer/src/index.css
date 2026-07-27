@@ -1444,10 +1444,8 @@ html[data-theme-switch-mask='leaving']::after {
   display: block;
   width: 5.25rem;
   height: 5.25rem;
-  border-radius: 999px;
-  box-shadow:
-    0 14px 30px hsl(0 0% 0% / 0.22),
-    0 0 0 1px hsl(0 0% 100% / 0.12);
+  object-fit: contain;
+  filter: drop-shadow(0 14px 18px hsl(0 0% 0% / 0.22));
 }
 
 .startup-title {

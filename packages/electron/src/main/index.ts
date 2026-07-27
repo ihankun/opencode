@@ -11,6 +11,7 @@ import windowState from "electron-window-state"
 import { applyEdits, modify, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import type { ParseError } from "jsonc-parser"
 import { diagnosticLogTail, exportDebugLogs, initLogging, writeLog } from "./logging"
+import { createUnresponsiveSampler } from "./unresponsive"
 import { sandboxRuntimeRoot, spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
@@ -358,6 +359,52 @@ async function createWindow() {
   })
   state.manage(mainWindow)
 
+  const sampler = createUnresponsiveSampler(mainWindow, "main")
+
+  let recoveryDialogShowing = false
+
+  const showRecoveryDialog = async (message: string, detail: string, wait: boolean) => {
+    if (recoveryDialogShowing || mainWindow.isDestroyed()) return
+    recoveryDialogShowing = true
+    try {
+      while (!mainWindow.isDestroyed()) {
+        const buttons = wait ? ["Relaunch", "Export Logs", "Keep Waiting"] : ["Relaunch", "Export Logs", "Quit"]
+        const result = await dialog.showMessageBox(mainWindow, {
+          type: "warning",
+          buttons,
+          defaultId: 0,
+          cancelId: 2,
+          message,
+          detail,
+        })
+        const button = buttons[result.response]
+        if (button === "Export Logs") {
+          const wasSampling = sampler.stopAndFlush()
+          await exportDebugLogs().catch((error) => writeLog("main", "failed to export debug logs", { error, level: "error" }))
+          if (wait && wasSampling) sampler.start()
+          continue
+        }
+        if (button === "Relaunch") {
+          sampler.stopAndFlush()
+          isQuitting = true
+          app.relaunch()
+          app.exit(0)
+          return
+        }
+        if (button === "Quit") {
+          sampler.stopAndFlush()
+          isQuitting = true
+          app.quit()
+          return
+        }
+        if (button === "Keep Waiting") return
+        return
+      }
+    } finally {
+      recoveryDialogShowing = false
+    }
+  }
+
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault()
     mainWindow?.setTitle("")
@@ -387,12 +434,30 @@ async function createWindow() {
     markFirstWindowReady()
     showWindow()
   })
+  mainWindow.webContents.on("did-fail-provisional-load", (_event, errorCode, errorDescription, validatedURL) => {
+    writeLog("main", "window did-fail-provisional-load", { errorCode, errorDescription, validatedURL })
+  })
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     if (level < 2) return
     writeLog("renderer", "console-message", { level, message, line, sourceId })
   })
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
-    writeLog("renderer", "render-process-gone", details)
+    sampler.stopAndFlush()
+    writeLog("renderer", "render-process-gone", { ...details, level: "error" })
+    void showRecoveryDialog(
+      "OpenCodex window terminated unexpectedly",
+      [`Reason: ${details.reason}`, `Code: ${details.exitCode ?? "<unknown>"}`].join("\n"),
+      false,
+    )
+  })
+  mainWindow.on("unresponsive", () => {
+    writeLog("window", "renderer unresponsive", { level: "error" })
+    sampler.start()
+    void showRecoveryDialog("OpenCodex is not responding", "You can relaunch the app, export the logs, or keep waiting.", true)
+  })
+  mainWindow.on("responsive", () => {
+    writeLog("window", "renderer responsive", { level: "error" })
+    sampler.stopAndFlush()
   })
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
     void openExternalUrl(target).catch((error) => writeLog("security", "blocked window open", { target, error }))

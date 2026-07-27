@@ -27,6 +27,7 @@ export function ChatSettings() {
   const [autoCollapseExecutionProcess, setAutoCollapseExecutionProcess] = useState(
     themeStore.autoCollapseExecutionProcess,
   )
+  const [collapseToolOutput, setCollapseToolOutput] = useState(themeStore.collapseToolOutput)
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
@@ -49,6 +50,12 @@ export function ChatSettings() {
     const next = !autoCollapseExecutionProcess
     setAutoCollapseExecutionProcess(next)
     themeStore.setAutoCollapseExecutionProcess(next)
+  }
+
+  const handleCollapseToolOutputToggle = () => {
+    const next = !collapseToolOutput
+    setCollapseToolOutput(next)
+    themeStore.setCollapseToolOutput(next)
   }
 
   const handleReasoningDisplayModeChange = (mode: ReasoningDisplayMode) => {
@@ -128,6 +135,14 @@ export function ChatSettings() {
             enabled={autoCollapseExecutionProcess}
             onChange={handleAutoCollapseExecutionProcessToggle}
           />
+        </SettingRow>
+
+        <SettingRow
+          label={t('chat.collapseToolOutput')}
+          description={t('chat.collapseToolOutputDesc')}
+          onClick={handleCollapseToolOutputToggle}
+        >
+          <Toggle enabled={collapseToolOutput} onChange={handleCollapseToolOutputToggle} />
         </SettingRow>
 
         <SettingRow

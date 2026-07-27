@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import 'katex/dist/katex.min.css'
 import './index.css'
 import './i18n'
+import appIcon from '../../../assets/opencode-icon.png'
 import { initOverlayScrollbars } from './lib/overlayScrollbar'
 import App from './App'
 import { DirectoryProvider, FullscreenProvider, SessionProvider } from './contexts'
@@ -215,7 +216,7 @@ function StartupFallback() {
       <div className="startup-glass-panel">
         <div className="startup-logo-wrap">
           <span className="startup-logo-halo" aria-hidden="true" />
-          <img className="startup-logo" src="/opencode.svg" alt="" />
+          <img className="startup-logo" src={appIcon} alt="" />
         </div>
         <div className="startup-title">正在启动 OpenCodex</div>
         <div className="startup-progress" aria-hidden="true">

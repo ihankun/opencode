@@ -191,6 +191,10 @@ export function useTheme() {
     themeStore.setAutoCollapseExecutionProcess(enabled)
   }, [])
 
+  const setCollapseToolOutput = useCallback((enabled: boolean) => {
+    themeStore.setCollapseToolOutput(enabled)
+  }, [])
+
   const setRenderUserMarkdown = useCallback((enabled: boolean) => {
     themeStore.setRenderUserMarkdown(enabled)
   }, [])
@@ -309,6 +313,8 @@ export function useTheme() {
     setCollapseUserMessages,
     autoCollapseExecutionProcess: state.autoCollapseExecutionProcess,
     setAutoCollapseExecutionProcess,
+    collapseToolOutput: state.collapseToolOutput,
+    setCollapseToolOutput,
     renderUserMarkdown: state.renderUserMarkdown,
     setRenderUserMarkdown,
 

@@ -120,6 +120,12 @@ export const ContentBlock = memo(function ContentBlock({
   const resolvedFullscreenId = fullscreenId ?? `content-block:${generatedFullscreenId}`
   const collapsed = compact ? false : cachedCollapsed
 
+  useEffect(() => {
+    const next = compact ? false : defaultCollapsed
+    if (cachedCollapsed === next) return
+    setCachedCollapsed(next, { touched: false, respectUser: true })
+  }, [cachedCollapsed, compact, defaultCollapsed, setCachedCollapsed])
+
   // Diff 统计
   const diffStats = useMemo(() => {
     if (!isDiff) return null

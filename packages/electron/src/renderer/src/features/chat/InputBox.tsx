@@ -2214,7 +2214,7 @@ function InputBoxComponent({
                 : 'absolute bottom-full left-0 right-0 flex justify-center pb-2 pointer-events-none'
             }
           >
-            <div className={isCollapsed ? undefined : 'pointer-events-auto'}>
+            <div className="w-full">
               <FloatingActions
                 showScrollToBottom={showScrollToBottom}
                 isCollapsed={isCollapsed}

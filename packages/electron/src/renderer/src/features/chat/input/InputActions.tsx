@@ -73,49 +73,55 @@ export const FloatingActions = memo(function FloatingActions({
   collapsedPermission,
   collapsedQuestion,
 }: FloatingActionsProps) {
+  const showFloatingScroll = !!showScrollToBottom && !isCollapsed
+
   return (
-    <div className="flex items-center justify-center gap-2">
-      {/* Collapsed Permission Capsule */}
-      <PresenceItem show={!!collapsedPermission}>
-        {collapsedPermission && (
-          <button
-            type="button"
-            onClick={collapsedPermission.onExpand}
-            className="flex items-center gap-1.5 px-3 h-[32px] rounded-full bg-accent-main-100/10 backdrop-blur-md border border-accent-main-100/20 text-[length:var(--fs-sm)] leading-[14px] text-accent-main-000 hover:bg-accent-main-100/20 transition-colors"
-          >
-            <PermissionListIcon size={14} />
-            <span className="whitespace-nowrap">{collapsedPermission.label}</span>
-            {collapsedPermission.queueLength > 1 && (
-              <span className="text-[length:var(--fs-xxs)] opacity-70">+{collapsedPermission.queueLength - 1}</span>
-            )}
-          </button>
-        )}
-      </PresenceItem>
+    <div className={`pointer-events-none relative flex w-full items-center justify-center ${!isCollapsed || collapsedPermission || collapsedQuestion || canRedo ? 'min-h-[32px]' : ''}`}>
+      <div className="pointer-events-auto flex items-center justify-center gap-2">
+        {/* Collapsed Permission Capsule */}
+        <PresenceItem show={!!collapsedPermission}>
+          {collapsedPermission && (
+            <button
+              type="button"
+              onClick={collapsedPermission.onExpand}
+              className="flex items-center gap-1.5 px-3 h-[32px] rounded-full bg-accent-main-100/10 backdrop-blur-md border border-accent-main-100/20 text-[length:var(--fs-sm)] leading-[14px] text-accent-main-000 hover:bg-accent-main-100/20 transition-colors"
+            >
+              <PermissionListIcon size={14} />
+              <span className="whitespace-nowrap">{collapsedPermission.label}</span>
+              {collapsedPermission.queueLength > 1 && (
+                <span className="text-[length:var(--fs-xxs)] opacity-70">+{collapsedPermission.queueLength - 1}</span>
+              )}
+            </button>
+          )}
+        </PresenceItem>
 
-      {/* Collapsed Question Capsule */}
-      <PresenceItem show={!!collapsedQuestion}>
-        {collapsedQuestion && (
-          <button
-            type="button"
-            onClick={collapsedQuestion.onExpand}
-            className="flex items-center gap-1.5 px-3 h-[32px] rounded-full bg-accent-main-100/10 backdrop-blur-md border border-accent-main-100/20 text-[length:var(--fs-sm)] leading-[14px] text-accent-main-000 hover:bg-accent-main-100/20 transition-colors"
-          >
-            <QuestionIcon size={14} />
-            <span className="whitespace-nowrap">{collapsedQuestion.label}</span>
-            {collapsedQuestion.queueLength > 1 && (
-              <span className="text-[length:var(--fs-xxs)] opacity-70">+{collapsedQuestion.queueLength - 1}</span>
-            )}
-          </button>
-        )}
-      </PresenceItem>
+        {/* Collapsed Question Capsule */}
+        <PresenceItem show={!!collapsedQuestion}>
+          {collapsedQuestion && (
+            <button
+              type="button"
+              onClick={collapsedQuestion.onExpand}
+              className="flex items-center gap-1.5 px-3 h-[32px] rounded-full bg-accent-main-100/10 backdrop-blur-md border border-accent-main-100/20 text-[length:var(--fs-sm)] leading-[14px] text-accent-main-000 hover:bg-accent-main-100/20 transition-colors"
+            >
+              <QuestionIcon size={14} />
+              <span className="whitespace-nowrap">{collapsedQuestion.label}</span>
+              {collapsedQuestion.queueLength > 1 && (
+                <span className="text-[length:var(--fs-xxs)] opacity-70">+{collapsedQuestion.queueLength - 1}</span>
+              )}
+            </button>
+          )}
+        </PresenceItem>
 
-      <PresenceItem show={!!canRedo}>
-        {canRedo && <UndoStatus revertSteps={revertSteps ?? 0} onRedo={onRedo} onRedoAll={onRedoAll} />}
-      </PresenceItem>
+        <PresenceItem show={!!canRedo}>
+          {canRedo && <UndoStatus revertSteps={revertSteps ?? 0} onRedo={onRedo} onRedoAll={onRedoAll} />}
+        </PresenceItem>
+      </div>
 
-      <PresenceItem show={!!showScrollToBottom && !isCollapsed}>
-        <ScrollToBottomButton onClick={onScrollToBottom} />
-      </PresenceItem>
+      <div className="pointer-events-auto absolute right-0 top-1/2 -translate-y-1/2">
+        <PresenceItem show={showFloatingScroll}>
+          {showFloatingScroll && <ScrollToBottomButton onClick={onScrollToBottom} />}
+        </PresenceItem>
+      </div>
     </div>
   )
 })
