@@ -13,6 +13,11 @@ export type TurnChangeSummary = {
   deletions: number
 }
 
+export type TurnTodoProgress = {
+  current: number
+  total: number
+}
+
 export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollapsePlan | null {
   if (messages.length === 0) return null
   if (messages.some(message => message.info.role !== 'assistant' || message.isStreaming)) return null
@@ -92,6 +97,27 @@ export function summarizeTurnChanges(userMessage: Message, assistantMessages: Me
   })
 
   return totalChanges(files)
+}
+
+export function summarizeTurnTodoProgress(assistantMessages: Message[]): TurnTodoProgress | undefined {
+  const todoPart = assistantMessages
+    .flatMap(message => message.parts)
+    .findLast(part => part.type === 'tool' && part.tool.toLocaleLowerCase().includes('todo'))
+  if (!todoPart || todoPart.type !== 'tool') return
+
+  const metadataTodos = todoPart.state.metadata?.todos
+  const inputTodos = todoPart.state.input?.todos
+  const todos = Array.isArray(metadataTodos) ? metadataTodos : Array.isArray(inputTodos) ? inputTodos : undefined
+  if (!todos?.length) return
+
+  const statuses = todos.map(todo => {
+    if (!todo || typeof todo !== 'object' || !('status' in todo)) return 'pending'
+    return String(todo.status)
+  })
+  const inProgressIndex = statuses.findIndex(status => status === 'in_progress')
+  const pendingIndex = statuses.findIndex(status => status === 'pending')
+  const currentIndex = inProgressIndex >= 0 ? inProgressIndex : pendingIndex >= 0 ? pendingIndex : statuses.length - 1
+  return { current: currentIndex + 1, total: statuses.length }
 }
 
 function addFileChanges(

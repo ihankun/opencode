@@ -10,7 +10,7 @@ import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredVal
 import { useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
-import { AlertCircleIcon, CloseIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
+import { AlertCircleIcon, CheckIcon, CloseIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex, type OutlineIndexHandle } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
@@ -21,7 +21,7 @@ import { useCancelHint } from '../../hooks/useCancelHint'
 import { InlineToolRequestContext, type InlineToolRequestContextValue } from './InlineToolRequestContext'
 import { ChatViewportProvider, canUseSplitPane, useChatViewportMaybe, type ChatViewportValue } from './chatViewport'
 import { useChatPageViewModel } from './useChatPageViewModel'
-import { summarizeTurnChanges } from '../message/autoCollapseExecution'
+import { summarizeTurnChanges, summarizeTurnTodoProgress } from '../message/autoCollapseExecution'
 import { SessionNavigationContext } from '../../contexts/SessionNavigationContext'
 import { paneLayoutStore } from '../../store/paneLayoutStore'
 import { autoApproveStore } from '../../store/autoApproveStore'
@@ -766,7 +766,7 @@ export const ChatPane = memo(function ChatPane({
   }, [questionRequestId])
 
   const { inlineToolRequests, outlineCurrentHighlight } = useTheme()
-  const latestTurnChangeSummary = useMemo(() => {
+  const latestTurnOverview = useMemo(() => {
     const userMessageIndex = renderedMessages.findLastIndex(message => message.info.role === 'user')
     if (userMessageIndex === -1) return
 
@@ -775,8 +775,13 @@ export const ChatPane = memo(function ChatPane({
       .slice(userMessageIndex + 1)
       .filter(message => message.info.role === 'assistant')
     if (assistantTurn.length === 0) return
-    const summary = summarizeTurnChanges(userMessage, assistantTurn)
-    return summary.files > 0 ? summary : undefined
+    const changes = summarizeTurnChanges(userMessage, assistantTurn)
+    const todoProgress = summarizeTurnTodoProgress(assistantTurn)
+    if (changes.files === 0 && !todoProgress) return
+    return {
+      changes: changes.files > 0 ? changes : undefined,
+      todoProgress,
+    }
   }, [renderedMessages])
 
   const inlineToolRequestCtx = useMemo<InlineToolRequestContextValue>(
@@ -937,15 +942,32 @@ export const ChatPane = memo(function ChatPane({
             </div>
           </div>
         )}
-        {latestTurnChangeSummary && (
+        {latestTurnOverview && (
           <div className="mx-auto mb-2 flex max-w-[95%] justify-center px-4 xl:max-w-7xl">
             <div className="pointer-events-auto inline-flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md">
               {isStreaming
                 ? <SpinnerIcon size={15} className="shrink-0 animate-spin text-accent-main-100" />
-                : <PatchIcon size={15} className="shrink-0 text-text-400" />}
-              <span>{t('message:executionProcess.changedFiles', { count: latestTurnChangeSummary.files })}</span>
-              <span className="font-mono font-medium text-success-100">+{latestTurnChangeSummary.additions}</span>
-              <span className="font-mono font-medium text-danger-100">-{latestTurnChangeSummary.deletions}</span>
+                : latestTurnOverview.changes
+                  ? <PatchIcon size={15} className="shrink-0 text-text-400" />
+                  : <CheckIcon size={15} className="shrink-0 text-success-100" />}
+              {latestTurnOverview.todoProgress && (
+                <>
+                  <span>
+                    {t('message:executionProcess.currentStep', {
+                      current: latestTurnOverview.todoProgress.current,
+                      total: latestTurnOverview.todoProgress.total,
+                    })}
+                  </span>
+                  {latestTurnOverview.changes && <span aria-hidden="true">·</span>}
+                </>
+              )}
+              {latestTurnOverview.changes && (
+                <>
+                  <span>{t('message:executionProcess.changedFiles', { count: latestTurnOverview.changes.files })}</span>
+                  <span className="font-mono font-medium text-success-100">+{latestTurnOverview.changes.additions}</span>
+                  <span className="font-mono font-medium text-danger-100">-{latestTurnOverview.changes.deletions}</span>
+                </>
+              )}
             </div>
           </div>
         )}
