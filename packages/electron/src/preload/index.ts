@@ -16,6 +16,8 @@ import type {
   SpeechTranscriptionInput,
 } from "../shared/speechModel"
 import type { ProjectDirectory, ProjectState } from "../shared/projects"
+import type { CachedSessionList } from "../shared/sessionListCache"
+import type { Session } from "@opencode-ai/sdk/v2/client"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 
@@ -335,6 +337,8 @@ export type CustomOpenCodeApi = {
   projectState(serverId: string): Promise<ProjectState>
   updateProjectDirectories(serverId: string, directories: ProjectDirectory[]): Promise<ProjectState>
   updateRecentProjects(serverId: string, recentProjects: Record<string, number>): Promise<ProjectState>
+  cachedSessions(serverId: string, directory?: string): Promise<CachedSessionList | undefined>
+  updateCachedSessions(serverId: string, directory: string, sessions: Session[]): Promise<CachedSessionList>
   queryQuota(input: QuotaQueryInput): Promise<QuotaProviderResult[]>
   openCodeGoQuotaConfig(): Promise<OpenCodeGoQuotaConfig>
   updateOpenCodeGoQuotaConfig(input: OpenCodeGoQuotaConfigUpdate): Promise<OpenCodeGoQuotaConfig>
@@ -435,6 +439,8 @@ const api: CustomOpenCodeApi = {
   projectState: (serverId) => ipcRenderer.invoke("projects:get", serverId),
   updateProjectDirectories: (serverId, directories) => ipcRenderer.invoke("projects:directories-set", serverId, directories),
   updateRecentProjects: (serverId, recentProjects) => ipcRenderer.invoke("projects:recent-set", serverId, recentProjects),
+  cachedSessions: (serverId, directory) => ipcRenderer.invoke("session-list-cache:get", serverId, directory),
+  updateCachedSessions: (serverId, directory, sessions) => ipcRenderer.invoke("session-list-cache:set", serverId, directory, sessions),
   queryQuota: (input) => ipcRenderer.invoke("quota:query", input),
   openCodeGoQuotaConfig: () => ipcRenderer.invoke("quota:opencode-go-config"),
   updateOpenCodeGoQuotaConfig: (input) => ipcRenderer.invoke("quota:opencode-go-config-set", input),

@@ -15,7 +15,13 @@ import { notificationStore } from '../store/notificationStore'
 import { soundStore } from '../store/soundStore'
 import { playNotificationSoundDeduped } from '../utils/notificationSoundBridge'
 import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
-import { subscribeToEvents, getSessionStatus, getPendingPermissions, getPendingQuestions } from '../api'
+import {
+  subscribeToConnectionState,
+  subscribeToEvents,
+  getSessionStatus,
+  getPendingPermissions,
+  getPendingQuestions,
+} from '../api'
 import { replyPermission } from '../api/permission'
 import { autoApproveStore } from '../store/autoApproveStore'
 import type { ApiMessage, ApiPart, ApiPermissionRequest, ApiQuestionRequest, SessionErrorPayload } from '../api/types'
@@ -122,6 +128,7 @@ const pendingQuestions = new Map<string, PendingRequest<ApiQuestionRequest>[]>()
 
 // 5秒后过期，防止内存泄漏
 const PENDING_TIMEOUT = 5000
+const HEALTH_RETRY_DELAYS = [500, 1500, 3000]
 
 function cleanupExpired<T>(map: Map<string, PendingRequest<T>[]>) {
   const now = Date.now()
@@ -274,6 +281,8 @@ export function useGlobalEvents(directories?: string[]) {
     let fetchVersion = 0
     let activeFetchVersion = 0
     let disposed = false
+    let healthRefreshVersion = 0
+    let healthRetryTimer: number | undefined
     const latePendingRequests = new Map<
       string,
       {
@@ -340,8 +349,39 @@ export function useGlobalEvents(directories?: string[]) {
     }
 
     const refreshActiveServerHealth = () => {
+      const version = ++healthRefreshVersion
       const activeServerId = serverStore.getActiveServerId()
-      void serverStore.checkHealth(activeServerId).catch(() => {})
+      if (healthRetryTimer !== undefined) {
+        window.clearTimeout(healthRetryTimer)
+        healthRetryTimer = undefined
+      }
+
+      const check = (attempt: number) => {
+        void serverStore.checkHealth(activeServerId)
+          .then(health => {
+            if (disposed || version !== healthRefreshVersion) return
+            if (serverStore.getActiveServerId() !== activeServerId) return
+            if (health.status === 'online' || health.status === 'unauthorized') return
+
+            const delay = HEALTH_RETRY_DELAYS[attempt]
+            if (delay === undefined) return
+            healthRetryTimer = window.setTimeout(() => {
+              healthRetryTimer = undefined
+              check(attempt + 1)
+            }, delay)
+          })
+          .catch(() => {
+            if (disposed || version !== healthRefreshVersion) return
+            const delay = HEALTH_RETRY_DELAYS[attempt]
+            if (delay === undefined) return
+            healthRetryTimer = window.setTimeout(() => {
+              healthRetryTimer = undefined
+              check(attempt + 1)
+            }, delay)
+          })
+      }
+
+      check(0)
     }
 
     const markPermissionReplied = (sessionID: string, requestID: string) => {
@@ -389,7 +429,7 @@ export function useGlobalEvents(directories?: string[]) {
     }
 
     const unsubscribeAutoApprove = autoApproveStore.subscribe(approveGlobalPendingPermissions)
-    const unsubscribeServerChange = serverStore.onServerChange((serverId, reason) => {
+    const unsubscribeServerChange = serverStore.onServerChange((_serverId, reason) => {
       if (reason === 'server-switch') {
         messageStore.clearAll()
         childSessionStore.clearAll()
@@ -397,7 +437,10 @@ export function useGlobalEvents(directories?: string[]) {
         followupQueueStore.reset()
         activeSessionStore.reset()
       }
-      void serverStore.checkHealth(serverId).catch(() => {})
+      refreshActiveServerHealth()
+    })
+    const unsubscribeConnectionState = subscribeToConnectionState(info => {
+      if (info.state === 'connected') refreshActiveServerHealth()
     })
 
     const unsubscribe = subscribeToEvents({
@@ -657,7 +700,6 @@ export function useGlobalEvents(directories?: string[]) {
         if (import.meta.env.DEV) {
           console.log(`[GlobalEvents] SSE reconnected (reason: ${reason}), notifying for data refresh`)
         }
-        refreshActiveServerHealth()
         // 重连后重新拉取全量状态 + pending requests
         fetchAndInitialize()
         // 通知所有 pub/sub 消费者
@@ -676,8 +718,11 @@ export function useGlobalEvents(directories?: string[]) {
       if (refreshRef.current === fetchAndInitialize) {
         refreshRef.current = null
       }
+      healthRefreshVersion += 1
+      if (healthRetryTimer !== undefined) window.clearTimeout(healthRetryTimer)
       unsubscribeAutoApprove()
       unsubscribeServerChange()
+      unsubscribeConnectionState()
       unsubscribe()
     }
   }, [])

@@ -22,6 +22,7 @@ import { ImBridgeService } from "./imBridge"
 import { DesktopPreferencesStore } from "./desktopPreferences"
 import { SpeechModelService } from "./speechModel"
 import { ProjectsStore } from "./projects"
+import { SessionListCacheStore } from "./sessionListCache"
 import {
   getOpenCodeGoQuotaConfig,
   queryProviderQuotas,
@@ -48,6 +49,7 @@ let desktopPreferencesStore: DesktopPreferencesStore
 let desktopPreferences: DesktopPreferences = { ...DEFAULT_DESKTOP_PREFERENCES }
 let speechModelService: SpeechModelService
 let projectsStore: ProjectsStore
+let sessionListCacheStore: SessionListCacheStore
 let speechModelReady: Promise<void> = Promise.resolve()
 let resolveFirstWindowReady: (() => void) | undefined
 const startupStartedAt = performance.now()
@@ -143,6 +145,17 @@ ipcMain.handle("projects:directories-set", (_event, serverId: unknown, directori
 ipcMain.handle("projects:recent-set", (_event, serverId: unknown, recentProjects: unknown) => {
   assertMainWindow(_event)
   return projectsStore.setRecentProjects(String(serverId ?? ""), recentProjects)
+})
+ipcMain.handle("session-list-cache:get", (_event, serverId: unknown, directory: unknown) => {
+  assertMainWindow(_event)
+  return sessionListCacheStore.get(
+    String(serverId ?? ""),
+    typeof directory === "string" && directory ? directory : undefined,
+  )
+})
+ipcMain.handle("session-list-cache:set", (_event, serverId: unknown, directory: unknown, sessions: unknown) => {
+  assertMainWindow(_event)
+  return sessionListCacheStore.set(String(serverId ?? ""), String(directory ?? ""), sessions)
 })
 ipcMain.handle("quota:query", (_event, value: unknown) => {
   assertMainWindow(_event)
@@ -569,6 +582,7 @@ app.setPath("userData", userDataRoot())
 desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
 speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
 projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
+sessionListCacheStore = new SessionListCacheStore(join(app.getPath("userData"), "session-list-cache.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 

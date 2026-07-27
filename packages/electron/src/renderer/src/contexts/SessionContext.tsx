@@ -32,8 +32,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
+  const [activeServerId, setActiveServerId] = useState(() => serverStore.getActiveServerId())
 
   const requestIdRef = useRef(0)
+  const cacheRequestIdRef = useRef(0)
+  const cacheWriteTimerRef = useRef<number | null>(null)
   const searchTimerRef = useRef<number | null>(null)
   const searchRef = useRef(search)
   const hasLoadedSessionsRef = useRef(false)
@@ -43,6 +46,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const retryTimerRef = useRef<number | null>(null)
   const scheduledSessionIdsRef = useRef(new Set<string>())
   const effectiveDirectoryRef = useRef<string | undefined>(undefined)
+  const loadedDirectoryRef = useRef<string | undefined>(undefined)
+  const loadedServerIdRef = useRef<string | undefined>(undefined)
+  const loadedSearchRef = useRef<string | undefined>(undefined)
   const fetchSessionsRef = useRef<
     (params?: SessionListParams & { append?: boolean; retryAttempt?: number }) => Promise<void>
   >(() => Promise.resolve())
@@ -60,6 +66,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     searchRef.current = search
   }, [search])
 
+  const restoreCachedSessions = useCallback(async (directory: string | undefined, serverId: string) => {
+    if (typeof window.customOpenCode?.cachedSessions !== 'function') return
+    const cacheRequestId = ++cacheRequestIdRef.current
+    const cached = await window.customOpenCode.cachedSessions(serverId, directory).catch(() => undefined)
+    if (!cached || cacheRequestId !== cacheRequestIdRef.current) return
+    if (serverStore.getActiveServerId() !== serverId || searchRef.current) return
+
+    const currentDirectory = effectiveDirectoryRef.current
+    if (currentDirectory && !isSameDirectory(currentDirectory, cached.directory)) return
+
+    loadedDirectoryRef.current = cached.directory
+    loadedServerIdRef.current = serverId
+    loadedSearchRef.current = ''
+    hasLoadedSessionsRef.current = true
+    setSessions(prev => (areSessionListsSame(prev, cached.sessions) ? prev : cached.sessions))
+    setHasMore(cached.sessions.length >= currentLimitRef.current)
+    setIsLoading(false)
+  }, [])
+
   // 核心获取逻辑
   // 注意：directory 传给 getSessions 时使用正斜杠格式
   // http 层的 fetchWithBothSlashesAndMerge 会处理两种斜杠格式的兼容
@@ -75,36 +100,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         // 使用正斜杠格式传给 API（http 层会处理兼容）
         const targetDir = effectiveDirectory
+        const targetServerId = activeServerId
 
-        if (!targetDir) {
-          if (!append) {
-            hasLoadedSessionsRef.current = true
-            setSessions([])
-            setHasMore(false)
-          }
-          return
-        }
+        if (!targetDir) return
 
-        const [sessionData, taskRuns] = await Promise.all([
-          getSessions({
-            roots: true,
-            limit: currentLimitRef.current,
-            directory: targetDir,
-            search: search || undefined,
-            ...queryParams,
-          }),
-          typeof window.customOpenCode?.listTaskRuns === 'function' ? window.customOpenCode.listTaskRuns() : Promise.resolve([]),
-        ])
-        scheduledSessionIdsRef.current = new Set(taskRuns.map(run => run.sessionID))
+        const sessionData = await getSessions({
+          roots: true,
+          limit: currentLimitRef.current,
+          directory: targetDir,
+          search: search || undefined,
+          ...queryParams,
+        })
         const data = sessionData.filter(session => !isScheduledTaskSession(session) && !scheduledSessionIdsRef.current.has(session.id))
 
-        if (requestId !== requestIdRef.current) return
+        if (requestId !== requestIdRef.current || serverStore.getActiveServerId() !== targetServerId) return
 
         // 自动检测路径风格（从后端返回的 directory 字段）
         if (data.length > 0 && data[0].directory) {
           autoDetectPathStyle(data[0].directory)
         }
 
+        loadedDirectoryRef.current = targetDir
+        loadedServerIdRef.current = targetServerId
+        loadedSearchRef.current = search
         if (append) {
           // 去重：过滤掉已存在的 session
           setSessions(prev => {
@@ -144,7 +162,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [effectiveDirectory, search],
+    [activeServerId, effectiveDirectory, search],
   )
 
   // 保持 fetchSessions ref 同步（用于 SSE onReconnected 回调）
@@ -153,6 +171,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const matchesCurrentDirectory = useCallback((session: ApiSession) => {
     return !!effectiveDirectoryRef.current && isSameDirectory(effectiveDirectoryRef.current, session.directory)
   }, [])
+
+  // 冷启动先恢复上次的会话摘要。默认工作目录尚未从内核取得时，
+  // 主进程会返回该服务器最后一次使用的目录缓存。
+  useEffect(() => {
+    if (search) {
+      cacheRequestIdRef.current += 1
+      return
+    }
+    void restoreCachedSessions(effectiveDirectory, activeServerId)
+  }, [activeServerId, effectiveDirectory, restoreCachedSessions, search])
 
   // 监听 directory 和 search 变化
   useEffect(() => {
@@ -267,14 +295,41 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    return serverStore.onServerChange(() => {
+    return serverStore.onServerChange((serverId, reason) => {
       currentLimitRef.current = 30
-      hasLoadedSessionsRef.current = false
-      setIsLoading(true)
-      setSessions([])
+      if (reason === 'server-switch') {
+        cacheRequestIdRef.current += 1
+        loadedDirectoryRef.current = undefined
+        loadedServerIdRef.current = undefined
+        loadedSearchRef.current = undefined
+        hasLoadedSessionsRef.current = false
+        setIsLoading(true)
+        setSessions([])
+        setActiveServerId(serverId)
+        return
+      }
       void fetchSessionsRef.current()
     })
   }, [])
+
+  // 会话创建、重命名、归档或 SSE 更新后同步刷新摘要缓存。
+  // 搜索结果以及目录/服务器切换过程中的旧列表不会写入缓存。
+  useEffect(() => {
+    if (search || loadedSearchRef.current) return
+    if (!effectiveDirectory || loadedServerIdRef.current !== activeServerId) return
+    if (!loadedDirectoryRef.current || !isSameDirectory(loadedDirectoryRef.current, effectiveDirectory)) return
+    if (typeof window.customOpenCode?.updateCachedSessions !== 'function') return
+    if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current)
+    cacheWriteTimerRef.current = window.setTimeout(() => {
+      cacheWriteTimerRef.current = null
+      void window.customOpenCode.updateCachedSessions(activeServerId, effectiveDirectory, sessions).catch(() => undefined)
+    }, 150)
+    return () => {
+      if (!cacheWriteTimerRef.current) return
+      clearTimeout(cacheWriteTimerRef.current)
+      cacheWriteTimerRef.current = null
+    }
+  }, [activeServerId, effectiveDirectory, search, sessions])
 
   // Actions
   const refresh = useCallback(() => fetchSessions(), [fetchSessions])
