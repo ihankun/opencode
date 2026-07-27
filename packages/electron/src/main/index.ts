@@ -333,7 +333,7 @@ async function createWindow() {
     defaultHeight: 760,
   })
 
-  mainWindow = new BrowserWindow({
+  const createdWindow = new BrowserWindow({
     title: "",
     x: state.x,
     y: state.y,
@@ -357,19 +357,20 @@ async function createWindow() {
       backgroundThrottling: true,
     },
   })
-  state.manage(mainWindow)
+  mainWindow = createdWindow
+  state.manage(createdWindow)
 
-  const sampler = createUnresponsiveSampler(mainWindow, "main")
+  const sampler = createUnresponsiveSampler(createdWindow, "main")
 
   let recoveryDialogShowing = false
 
   const showRecoveryDialog = async (message: string, detail: string, wait: boolean) => {
-    if (recoveryDialogShowing || mainWindow.isDestroyed()) return
+    if (recoveryDialogShowing || createdWindow.isDestroyed()) return
     recoveryDialogShowing = true
     try {
-      while (!mainWindow.isDestroyed()) {
+      while (!createdWindow.isDestroyed()) {
         const buttons = wait ? ["Relaunch", "Export Logs", "Keep Waiting"] : ["Relaunch", "Export Logs", "Quit"]
-        const result = await dialog.showMessageBox(mainWindow, {
+        const result = await dialog.showMessageBox(createdWindow, {
           type: "warning",
           buttons,
           defaultId: 0,
@@ -380,7 +381,11 @@ async function createWindow() {
         const button = buttons[result.response]
         if (button === "Export Logs") {
           const wasSampling = sampler.stopAndFlush()
-          await exportDebugLogs().catch((error) => writeLog("main", "failed to export debug logs", { error, level: "error" }))
+          try {
+            exportDebugLogs()
+          } catch (error) {
+            writeLog("main", "failed to export debug logs", { error, level: "error" })
+          }
           if (wait && wasSampling) sampler.start()
           continue
         }
@@ -405,43 +410,43 @@ async function createWindow() {
     }
   }
 
-  mainWindow.on("page-title-updated", (event) => {
+  createdWindow.on("page-title-updated", (event) => {
     event.preventDefault()
-    mainWindow?.setTitle("")
+    createdWindow.setTitle("")
   })
-  mainWindow.on("maximize", () => {
-    mainWindow?.webContents.send("window:maximize-change", true)
+  createdWindow.on("maximize", () => {
+    createdWindow.webContents.send("window:maximize-change", true)
   })
-  mainWindow.on("unmaximize", () => {
-    mainWindow?.webContents.send("window:maximize-change", false)
+  createdWindow.on("unmaximize", () => {
+    createdWindow.webContents.send("window:maximize-change", false)
   })
-  mainWindow.on("close", (event) => {
+  createdWindow.on("close", (event) => {
     if (isQuitting) return
     event.preventDefault()
-    mainWindow?.hide()
+    createdWindow.hide()
     if (desktopPreferences.hideDockOnClose) app.dock?.hide()
   })
-  mainWindow.once("ready-to-show", () => {
+  createdWindow.once("ready-to-show", () => {
     writeLog("startup", "window ready-to-show", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
     markFirstWindowReady()
     showWindow()
   })
-  mainWindow.webContents.once("did-finish-load", () => {
+  createdWindow.webContents.once("did-finish-load", () => {
     writeLog("startup", "renderer did-finish-load", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
   })
-  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+  createdWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-load", { errorCode, errorDescription, validatedURL })
     markFirstWindowReady()
     showWindow()
   })
-  mainWindow.webContents.on("did-fail-provisional-load", (_event, errorCode, errorDescription, validatedURL) => {
+  createdWindow.webContents.on("did-fail-provisional-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-provisional-load", { errorCode, errorDescription, validatedURL })
   })
-  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+  createdWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     if (level < 2) return
     writeLog("renderer", "console-message", { level, message, line, sourceId })
   })
-  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+  createdWindow.webContents.on("render-process-gone", (_event, details) => {
     sampler.stopAndFlush()
     writeLog("renderer", "render-process-gone", { ...details, level: "error" })
     void showRecoveryDialog(
@@ -450,33 +455,33 @@ async function createWindow() {
       false,
     )
   })
-  mainWindow.on("unresponsive", () => {
+  createdWindow.on("unresponsive", () => {
     writeLog("window", "renderer unresponsive", { level: "error" })
     sampler.start()
     void showRecoveryDialog("OpenCodex is not responding", "You can relaunch the app, export the logs, or keep waiting.", true)
   })
-  mainWindow.on("responsive", () => {
+  createdWindow.on("responsive", () => {
     writeLog("window", "renderer responsive", { level: "error" })
     sampler.stopAndFlush()
   })
-  mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+  createdWindow.webContents.setWindowOpenHandler(({ url: target }) => {
     void openExternalUrl(target).catch((error) => writeLog("security", "blocked window open", { target, error }))
     return { action: "deny" }
   })
-  mainWindow.webContents.on("will-navigate", (event, target) => {
+  createdWindow.webContents.on("will-navigate", (event, target) => {
     if (target === url) return
     event.preventDefault()
     writeLog("security", "blocked renderer navigation", { target })
   })
   setTimeout(() => {
-    if (!mainWindow) return
+    if (createdWindow.isDestroyed()) return
     markFirstWindowReady()
-    if (mainWindow.isVisible()) return
+    if (createdWindow.isVisible()) return
     writeLog("main", "forcing window show after timeout")
     showWindow()
   }, 2_000)
 
-  void mainWindow.loadURL(url).catch((error: unknown) => {
+  void createdWindow.loadURL(url).catch((error: unknown) => {
     writeLog("main", "window loadURL failed", error)
     markFirstWindowReady()
     showWindow()
