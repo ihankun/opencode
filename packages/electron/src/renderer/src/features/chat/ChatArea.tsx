@@ -30,7 +30,7 @@ import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
 import { ChevronRightIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
-import { hasRenderableParts, isVisibleTextPart, type Message, type MessageError } from '../../types/message'
+import { hasRenderableParts, type Message, type MessageError } from '../../types/message'
 import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInline'
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
@@ -251,7 +251,7 @@ export const ChatArea = memo(
           .some(
             message =>
               message.info.role === 'assistant' &&
-              message.parts.some(part => isVisibleTextPart(part)),
+              hasRenderableParts(message),
           )
       }, [isStreaming, messages])
 

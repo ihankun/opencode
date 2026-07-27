@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PathAutoIcon, PathUnixIcon, PathWindowsIcon } from '../../../components/Icons'
 import { usePathMode, useIsMobile, useTheme } from '../../../hooks'
-import { themeStore, type ReasoningDisplayMode, type CompletedAtFormat } from '../../../store/themeStore'
+import {
+  themeStore,
+  type CompletedAtFormat,
+  type EnterKeyBehavior,
+  type ReasoningDisplayMode,
+} from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
 import { getBrowserOpenMode, setBrowserOpenMode, type BrowserOpenMode } from '../../../utils/browserOpen'
 import type { PathMode } from '../../../utils/directoryUtils'
@@ -22,6 +27,7 @@ export function ChatSettings() {
   const [autoCollapseExecutionProcess, setAutoCollapseExecutionProcess] = useState(
     themeStore.autoCollapseExecutionProcess,
   )
+  const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
   const [reasoningDisplayMode, setReasoningDisplayMode] = useState(themeStore.reasoningDisplayMode)
@@ -48,6 +54,11 @@ export function ChatSettings() {
   const handleReasoningDisplayModeChange = (mode: ReasoningDisplayMode) => {
     setReasoningDisplayMode(mode)
     themeStore.setReasoningDisplayMode(mode)
+  }
+
+  const handleEnterKeyBehaviorChange = (behavior: EnterKeyBehavior) => {
+    setEnterKeyBehavior(behavior)
+    themeStore.setEnterKeyBehavior(behavior)
   }
 
   const externalDropAlwaysMention = externalFileDropMode === 'mention'
@@ -134,6 +145,19 @@ export function ChatSettings() {
         >
           <Toggle enabled={outlineCurrentHighlight} onChange={handleOutlineHighlightToggle} />
         </SettingRow>
+
+        <div>
+          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.enterKeyBehavior')}</p>
+          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.enterKeyBehaviorDesc')}</p>
+          <SegmentedControl
+            value={enterKeyBehavior}
+            options={[
+              { value: 'newline', label: t('chat.enterKeyNewline') },
+              { value: 'send', label: t('chat.enterKeySend') },
+            ]}
+            onChange={value => handleEnterKeyBehaviorChange(value as EnterKeyBehavior)}
+          />
+        </div>
 
         <div>
           <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.browserOpenMode')}</p>

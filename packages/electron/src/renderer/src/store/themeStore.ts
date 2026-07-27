@@ -81,6 +81,8 @@ export type ReasoningDisplayMode = 'capsule' | 'italic' | 'markdown'
 
 export type ExternalFileDropMode = 'upload-first' | 'mention'
 
+export type EnterKeyBehavior = 'newline' | 'send'
+
 /**
  * 字号偏移范围：-2 ~ +4（相对于基准值的 px 偏移）
  * 0 = 基准值（index.css 中定义的默认值）
@@ -129,6 +131,7 @@ const DEFAULT_MANUAL_TERMINAL_TITLES = false
 const DEFAULT_EXTERNAL_FILE_DROP_MODE: ExternalFileDropMode = 'upload-first'
 const DEFAULT_OUTLINE_CURRENT_HIGHLIGHT = true
 const DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS = false
+const DEFAULT_ENTER_KEY_BEHAVIOR: EnterKeyBehavior = 'newline'
 
 export interface ThemeState {
   /** 当前选中的主题风格 ID */
@@ -145,6 +148,8 @@ export interface ThemeState {
   collapseUserMessages: boolean
   /** 对话完成后是否自动折叠连续的执行过程 */
   autoCollapseExecutionProcess: boolean
+  /** 输入框按下普通回车键时的行为 */
+  enterKeyBehavior: EnterKeyBehavior
   /** 是否将用户消息渲染为 Markdown */
   renderUserMarkdown: boolean
   /** step-finish 信息栏显示开关 */
@@ -202,6 +207,7 @@ const STORAGE_KEY_CUSTOM_CSS_SNIPPETS = 'theme-custom-css-snippets'
 const STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID = 'theme-active-custom-css-snippet-id'
 const STORAGE_KEY_COLLAPSE_USER_MESSAGES = 'collapse-user-messages'
 const STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS = 'auto-collapse-execution-process'
+const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_RENDER_USER_MARKDOWN = 'render-user-markdown'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_COMPLETED_AT_FORMAT = 'completed-at-format'
@@ -278,6 +284,8 @@ class ThemeStore {
       savedAutoCollapseExecutionProcess === null
         ? DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS
         : savedAutoCollapseExecutionProcess === 'true'
+    const enterKeyBehavior: EnterKeyBehavior =
+      localStorage.getItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR) === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR
     const savedRenderUserMarkdown = localStorage.getItem(STORAGE_KEY_RENDER_USER_MARKDOWN)
     const renderUserMarkdown =
       savedRenderUserMarkdown === null ? DEFAULT_RENDER_USER_MARKDOWN : savedRenderUserMarkdown === 'true'
@@ -374,6 +382,7 @@ class ThemeStore {
       activeCustomCSSSnippetId,
       collapseUserMessages,
       autoCollapseExecutionProcess,
+      enterKeyBehavior,
       renderUserMarkdown,
       stepFinishDisplay,
       completedAtFormat,
@@ -424,6 +433,9 @@ class ThemeStore {
   }
   get autoCollapseExecutionProcess() {
     return this.state.autoCollapseExecutionProcess
+  }
+  get enterKeyBehavior() {
+    return this.state.enterKeyBehavior
   }
   get renderUserMarkdown() {
     return this.state.renderUserMarkdown
@@ -619,6 +631,13 @@ class ThemeStore {
     if (this.state.autoCollapseExecutionProcess === enabled) return
     this.state = { ...this.state, autoCollapseExecutionProcess: enabled }
     localStorage.setItem(STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS, String(enabled))
+    this.emit()
+  }
+
+  setEnterKeyBehavior(behavior: EnterKeyBehavior) {
+    if (this.state.enterKeyBehavior === behavior) return
+    this.state = { ...this.state, enterKeyBehavior: behavior }
+    localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, behavior)
     this.emit()
   }
 
@@ -999,6 +1018,7 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       typeof parsed?.autoCollapseExecutionProcess === 'boolean'
         ? parsed.autoCollapseExecutionProcess
         : DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS,
+    enterKeyBehavior: parsed?.enterKeyBehavior === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR,
     renderUserMarkdown:
       typeof parsed?.renderUserMarkdown === 'boolean' ? parsed.renderUserMarkdown : DEFAULT_RENDER_USER_MARKDOWN,
     stepFinishDisplay:
@@ -1079,6 +1099,7 @@ export function importThemeBackup(raw: unknown): void {
   }
   localStorage.setItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES, String(backup.collapseUserMessages))
   localStorage.setItem(STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS, String(backup.autoCollapseExecutionProcess))
+  localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, backup.enterKeyBehavior)
   localStorage.setItem(STORAGE_KEY_RENDER_USER_MARKDOWN, String(backup.renderUserMarkdown))
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, backup.completedAtFormat)

@@ -844,7 +844,7 @@ function InputBoxComponent({
       },
     [fileCapabilitiesProp, supportsImages],
   )
-  const { externalFileDropMode, queueFollowupMessages } = useSyncExternalStore(
+  const { enterKeyBehavior, externalFileDropMode, queueFollowupMessages } = useSyncExternalStore(
     themeStore.subscribe,
     themeStore.getSnapshot,
   )
@@ -1490,6 +1490,16 @@ function InputBoxComponent({
         return
       }
 
+      const isPlainEnter =
+        e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey
+      if (isPlainEnter) {
+        if (enterKeyBehavior === 'send') {
+          e.preventDefault()
+          handleSend()
+        }
+        return
+      }
+
       const sendKey = keybindingStore.getKey('sendMessage')
       if (sendKey && !isImeComposing && matchesKeybinding(nativeEvent, sendKey)) {
         e.preventDefault()
@@ -1507,6 +1517,7 @@ function InputBoxComponent({
       handleHistoryKeyDown,
       isStreaming,
       queueFollowupMessages,
+      enterKeyBehavior,
     ],
   )
 
