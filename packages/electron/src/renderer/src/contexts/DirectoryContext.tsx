@@ -5,49 +5,15 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { getCurrentProject, getPath, type ApiPath } from '../api'
 import { useRouter } from '../hooks/useRouter'
-import { handleError, normalizeToForwardSlash, getDirectoryName, isMissingDirectoryError, isSameDirectory, serverStorage } from '../utils'
+import { handleError, normalizeToForwardSlash, getDirectoryName, isMissingDirectoryError, isSameDirectory } from '../utils'
 import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { serverStore } from '../store/serverStore'
 import { initialOpenDirectory, onOpenDirectory, platformKind } from '../platform'
 import { DirectoryContext, type DirectoryContextValue, type SavedDirectory } from './DirectoryContext.shared'
 import { reorderDirectoryGroup, updatePinnedDirectories } from './directoryOrdering'
 
-const STORAGE_KEY_SAVED = 'opencode-saved-directories'
-const STORAGE_KEY_RECENT = 'opencode-recent-projects'
-
 // 最近使用记录: { [path]: lastUsedAt }
 type RecentProjects = Record<string, number>
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
-function readSavedDirectories(): SavedDirectory[] {
-  const saved = serverStorage.getJSON<unknown>(STORAGE_KEY_SAVED)
-  if (!Array.isArray(saved)) return []
-
-  return saved.flatMap(item => {
-    if (!isRecord(item) || typeof item.path !== 'string') return []
-    const path = item.path
-    return [
-      {
-        path,
-        name: typeof item.name === 'string' && item.name.trim() ? item.name : getDirectoryName(path) || path,
-        addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
-        pinnedAt: typeof item.pinnedAt === 'number' ? item.pinnedAt : undefined,
-      },
-    ]
-  })
-}
-
-function readRecentProjects(): RecentProjects {
-  const recent = serverStorage.getJSON<unknown>(STORAGE_KEY_RECENT)
-  if (!isRecord(recent)) return {}
-
-  return Object.fromEntries(
-    Object.entries(recent).filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
-  )
-}
 
 export function DirectoryProvider({ children }: { children: ReactNode }) {
   // 从 URL 获取 directory（替代 localStorage）
@@ -56,23 +22,45 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
   // 从 layoutStore 获取 sidebarExpanded
   const { sidebarExpanded } = useLayoutStore()
 
-  const [savedDirectories, setSavedDirectories] = useState<SavedDirectory[]>(readSavedDirectories)
+  const [savedDirectories, setSavedDirectories] = useState<SavedDirectory[]>([])
 
-  const [recentProjects, setRecentProjects] = useState<RecentProjects>(readRecentProjects)
+  const [recentProjects, setRecentProjects] = useState<RecentProjects>({})
 
   const [pathInfo, setPathInfo] = useState<ApiPath | null>(null)
+  const loadedServerIdRef = useRef<string | undefined>(undefined)
 
-  // 服务器 ID 切换时切换 per-server 目录；local runtime URL 变化时只刷新 path info。
+  // 项目列表由 Electron 主进程统一保存到 ~/.opencodex/projects.json。
   useEffect(() => {
-    return serverStore.onServerChange((_, reason) => {
+    let loadSequence = 0
+    const load = (resetDirectory: boolean) => {
+      const sequence = ++loadSequence
+      const serverId = serverStore.getActiveServerId()
+      loadedServerIdRef.current = undefined
+      setSavedDirectories([])
+      setRecentProjects({})
+      if (resetDirectory) setUrlDirectory(undefined)
+
+      void window.customOpenCode.projectState(serverId).then(state => {
+        if (sequence !== loadSequence || serverStore.getActiveServerId() !== serverId) return
+        loadedServerIdRef.current = serverId
+        setSavedDirectories(state.directories)
+        setRecentProjects(state.recentProjects)
+      }).catch(handleError('load projects', 'file'))
+    }
+
+    load(false)
+    const unsubscribe = serverStore.onServerChange((_, reason) => {
       if (reason === 'server-switch') {
-        setSavedDirectories(readSavedDirectories())
-        setRecentProjects(readRecentProjects())
-        setUrlDirectory(undefined)
+        load(true)
       }
       setPathInfo(null)
       getPath().then(setPathInfo).catch(handleError('get path info', 'api'))
     })
+
+    return () => {
+      loadSequence += 1
+      unsubscribe()
+    }
   }, [setUrlDirectory])
 
   // 加载路径信息
@@ -80,14 +68,19 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     getPath().then(setPathInfo).catch(handleError('get path info', 'api'))
   }, [])
 
-  // 保存 savedDirectories 到 per-server storage
+  // 分开写入目录和最近使用记录，避免两个状态同时变化时互相覆盖。
   useEffect(() => {
-    serverStorage.setJSON(STORAGE_KEY_SAVED, savedDirectories)
+    const serverId = loadedServerIdRef.current
+    if (!serverId) return
+    void window.customOpenCode.updateProjectDirectories(serverId, savedDirectories)
+      .catch(handleError('save projects', 'file'))
   }, [savedDirectories])
 
-  // 保存 recentProjects 到 per-server storage
   useEffect(() => {
-    serverStorage.setJSON(STORAGE_KEY_RECENT, recentProjects)
+    const serverId = loadedServerIdRef.current
+    if (!serverId) return
+    void window.customOpenCode.updateRecentProjects(serverId, recentProjects)
+      .catch(handleError('save recent projects', 'file'))
   }, [recentProjects])
 
   // 设置当前目录（更新 URL + 记录最近使用）

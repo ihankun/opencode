@@ -9,6 +9,12 @@
   "stepsCount": "{{done}}/{{total}} 步",
   "tokens": "token",
   "tokensK": "{{count}}k token",
+  "executionProcess": {
+    "processed": "已处理",
+    "expand": "展开执行过程",
+    "collapse": "收起执行过程",
+    "changedFiles": "{{count}} 个文件已更改"
+  },
   "defaultRenderer": {
     "input": "输入",
     "error": "错误",

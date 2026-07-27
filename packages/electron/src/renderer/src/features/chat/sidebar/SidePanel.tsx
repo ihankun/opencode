@@ -462,9 +462,49 @@ export function SidePanel({
 
   const { sessions, isLoading, isLoadingMore, hasMore, search, setSearch, loadMore, deleteSession, refresh } =
     useSessionContext()
+  const [shouldLoadExternalSessions, setShouldLoadExternalSessions] = useState(() => !isElectron())
+
+  useEffect(() => {
+    if (!isElectron()) return
+    if (typeof window.customOpenCode?.imBridgeConfig !== 'function') {
+      setShouldLoadExternalSessions(true)
+      return
+    }
+
+    let disposed = false
+    const loadConfig = () => {
+      void window.customOpenCode.imBridgeConfig()
+        .then(config => {
+          if (disposed) return
+          setShouldLoadExternalSessions([
+            config.feishu,
+            config.qq,
+            config.telegram,
+            config.discord,
+            config.wechat,
+            config.dingtalk,
+          ].some(channel => channel.enabled))
+        })
+        .catch(() => {
+          if (!disposed) setShouldLoadExternalSessions(true)
+        })
+    }
+
+    loadConfig()
+    const unsubscribe = window.customOpenCode.onImBridgeStateChanged?.(state => {
+      if (state.status === 'starting' || state.status === 'running') setShouldLoadExternalSessions(true)
+    })
+    window.addEventListener('focus', loadConfig)
+    return () => {
+      disposed = true
+      unsubscribe?.()
+      window.removeEventListener('focus', loadConfig)
+    }
+  }, [])
+
   const {
     sessions: globalSessions,
-  } = useSessions({ global: true, pageSize: 30 })
+  } = useSessions({ global: true, pageSize: 30, enabled: shouldLoadExternalSessions })
   const externalChannelSessions = useMemo(
     () => globalSessions.filter(isExternalChannelSession),
     [globalSessions],

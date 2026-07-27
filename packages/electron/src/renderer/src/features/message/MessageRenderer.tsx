@@ -51,6 +51,8 @@ interface MessageRendererProps {
   forkMessageId?: string
   canUndo?: boolean
   onEnsureParts?: (messageId: string) => void
+  showActions?: boolean
+  showError?: boolean
 }
 
 export const MessageRenderer = memo(function MessageRenderer({
@@ -62,6 +64,8 @@ export const MessageRenderer = memo(function MessageRenderer({
   forkMessageId,
   canUndo,
   onEnsureParts,
+  showActions = true,
+  showError = true,
 }: MessageRendererProps) {
   const { info } = message
   const isUser = info.role === 'user'
@@ -89,6 +93,8 @@ export const MessageRenderer = memo(function MessageRenderer({
         onFork={onFork}
         forkMessageId={forkMessageId}
         onEnsureParts={onEnsureParts}
+        showActions={showActions}
+        showError={showError}
       />
     </article>
   )
@@ -379,6 +385,8 @@ const AssistantMessageView = memo(function AssistantMessageView({
   onFork,
   forkMessageId,
   onEnsureParts,
+  showActions = true,
+  showError = true,
 }: {
   message: Message
   allowStreamingLayoutAnimation?: boolean
@@ -386,6 +394,8 @@ const AssistantMessageView = memo(function AssistantMessageView({
   onFork?: (message: Message, forkMessageId?: string) => Promise<void> | void
   forkMessageId?: string
   onEnsureParts?: (messageId: string) => void
+  showActions?: boolean
+  showError?: boolean
 }) {
   const { t } = useTranslation('message')
   const { parts, isStreaming, info } = message
@@ -447,7 +457,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
 
   if (!isStreaming && parts.length === 0) {
     // 有错误时直接显示错误信息
-    if (messageError) {
+    if (messageError && showError) {
       return (
         <div className="flex flex-col gap-2 w-full">
           <MessageErrorView error={messageError} stateKey={`message:${message.info.id}:error`} />
@@ -522,7 +532,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
       </SmoothHeight>
 
       {/* Message-level error */}
-      {messageError && <MessageErrorView error={messageError} stateKey={`message:${info.id}:error`} />}
+      {showError && messageError && <MessageErrorView error={messageError} stateKey={`message:${info.id}:error`} />}
 
       {(showTurnDurationFooter || showCompletedAtFooter) && (
         <div className="flex items-center gap-3 py-0.5 text-[length:var(--fs-xxs)] text-text-500">
@@ -535,7 +545,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
         </div>
       )}
 
-      {hasCopyableText && (
+      {showActions && hasCopyableText && (
         <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 [@media(any-pointer:coarse)]:opacity-100 transition-opacity">
           <ForkActionButton message={message} onFork={onFork} forkMessageId={forkMessageId} />
           <CopyButton text={fullText} position="static" />

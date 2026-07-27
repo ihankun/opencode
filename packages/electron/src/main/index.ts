@@ -21,6 +21,7 @@ import { shouldUseMockKeychain } from "./keychain"
 import { ImBridgeService } from "./imBridge"
 import { DesktopPreferencesStore } from "./desktopPreferences"
 import { SpeechModelService } from "./speechModel"
+import { ProjectsStore } from "./projects"
 import {
   getOpenCodeGoQuotaConfig,
   queryProviderQuotas,
@@ -38,6 +39,7 @@ let openCodeGoLoginWindow: BrowserWindow | undefined
 let openCodeGoLoginWait: Promise<OpenCodeGoLoginResult> | undefined
 const internalBrowserPartition = "persist:opencodex-browser"
 let server: SidecarHandle | undefined
+let initialServerStartup: Promise<void> | undefined
 let serverError: string | undefined
 let tray: Tray | undefined
 let isQuitting = false
@@ -45,6 +47,13 @@ let isStoppingForQuit = false
 let desktopPreferencesStore: DesktopPreferencesStore
 let desktopPreferences: DesktopPreferences = { ...DEFAULT_DESKTOP_PREFERENCES }
 let speechModelService: SpeechModelService
+let projectsStore: ProjectsStore
+let speechModelReady: Promise<void> = Promise.resolve()
+let resolveFirstWindowReady: (() => void) | undefined
+const startupStartedAt = performance.now()
+const firstWindowReady = new Promise<void>((resolve) => {
+  resolveFirstWindowReady = resolve
+})
 const activeNotifications = new Set<Notification>()
 const consoleLoginWaits = new Map<string, Promise<ConsoleLoginResult>>()
 const pluginCompatibilityCache = new Map<string, "supported" | "unsupported">()
@@ -63,6 +72,7 @@ const taskScheduler = new TaskScheduler(async (task) => {
     ...(credential ? credential : {}),
   }
 }, notifyTasksChanged, notifyScheduledTaskFinished)
+let taskSchedulerReady: Promise<void> | undefined
 const spawnProcess = spawn as unknown as (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcess
 
 type SecurityConfig = {
@@ -121,6 +131,18 @@ ipcMain.handle("desktop-preferences:set", async (_event, value: unknown) => {
   applyDesktopPreferences()
   if (backgroundSubagents !== desktopPreferences.backgroundSubagents && server) void restartServer()
   return desktopPreferences
+})
+ipcMain.handle("projects:get", (_event, serverId: unknown) => {
+  assertMainWindow(_event)
+  return projectsStore.get(String(serverId ?? ""))
+})
+ipcMain.handle("projects:directories-set", (_event, serverId: unknown, directories: unknown) => {
+  assertMainWindow(_event)
+  return projectsStore.setDirectories(String(serverId ?? ""), directories)
+})
+ipcMain.handle("projects:recent-set", (_event, serverId: unknown, recentProjects: unknown) => {
+  assertMainWindow(_event)
+  return projectsStore.setRecentProjects(String(serverId ?? ""), recentProjects)
 })
 ipcMain.handle("quota:query", (_event, value: unknown) => {
   assertMainWindow(_event)
@@ -287,7 +309,7 @@ async function createWindow() {
   }
 
   const url = rendererUrl()
-  writeLog("main", "creating window", { url })
+  writeLog("startup", "creating window", { elapsedMs: Math.round(performance.now() - startupStartedAt), url })
 
   const isMac = process.platform === "darwin"
   const isWin = process.platform === "win32"
@@ -340,11 +362,16 @@ async function createWindow() {
     if (desktopPreferences.hideDockOnClose) app.dock?.hide()
   })
   mainWindow.once("ready-to-show", () => {
-    writeLog("main", "window ready-to-show")
+    writeLog("startup", "window ready-to-show", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
+    markFirstWindowReady()
     showWindow()
+  })
+  mainWindow.webContents.once("did-finish-load", () => {
+    writeLog("startup", "renderer did-finish-load", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
   })
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-load", { errorCode, errorDescription, validatedURL })
+    markFirstWindowReady()
     showWindow()
   })
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
@@ -364,17 +391,36 @@ async function createWindow() {
     writeLog("security", "blocked renderer navigation", { target })
   })
   setTimeout(() => {
-    if (!mainWindow || mainWindow.isVisible()) return
+    if (!mainWindow) return
+    markFirstWindowReady()
+    if (mainWindow.isVisible()) return
     writeLog("main", "forcing window show after timeout")
     showWindow()
   }, 2_000)
 
   void mainWindow.loadURL(url).catch((error: unknown) => {
     writeLog("main", "window loadURL failed", error)
+    markFirstWindowReady()
     showWindow()
   })
-  void imBridgeService.autoStart().catch((error) => writeLog("im-bridge", "automatic remote start failed", error))
-  void startServer(url)
+}
+
+function markFirstWindowReady() {
+  resolveFirstWindowReady?.()
+  resolveFirstWindowReady = undefined
+}
+
+function ensureTaskSchedulerStarted() {
+  if (taskSchedulerReady) return taskSchedulerReady
+  taskSchedulerReady = firstWindowReady.then(() => {
+    const startedAt = performance.now()
+    taskScheduler.start()
+    writeLog("startup", "task scheduler initialized", {
+      durationMs: Math.round(performance.now() - startedAt),
+      elapsedMs: Math.round(performance.now() - startupStartedAt),
+    })
+  })
+  return taskSchedulerReady
 }
 
 function showWindow() {
@@ -450,11 +496,16 @@ function applyDesktopPreferences() {
 }
 
 async function startServer(url: string) {
+  const startedAt = performance.now()
   try {
     serverError = undefined
     server = await spawnServer(app.getPath("userData"), allowedOrigins(url), {
       ...await secureEnvironment(),
       OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: desktopPreferences.backgroundSubagents ? "true" : "false",
+    })
+    writeLog("startup", "opencode server online", {
+      durationMs: Math.round(performance.now() - startedAt),
+      elapsedMs: Math.round(performance.now() - startupStartedAt),
     })
     mainWindow?.webContents.send("server:updated", currentServerState())
     void syncImBridgeServer(server.state.url).catch((error) => writeLog("im-bridge", "automatic start failed", error))
@@ -482,6 +533,7 @@ async function stopServer() {
 }
 
 async function restartServer() {
+  await initialServerStartup
   writeLog("main", "restarting opencode server")
   serverError = undefined
   await stopServer()
@@ -516,6 +568,7 @@ app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
 desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
 speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
+projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 
@@ -599,44 +652,61 @@ ipcMain.handle("plugin:install", (_event, spec: unknown) => {
   assertMainWindow(_event)
   return installPlugin(String(spec ?? ""))
 })
-ipcMain.handle("task:list", () => taskScheduler.list())
-ipcMain.handle("task:run-list", (_event, taskID: unknown) => taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined))
-ipcMain.handle("task:settings", () => taskScheduler.settings())
-ipcMain.handle("task:settings-update", (_event, input: Parameters<TaskScheduler["updateSettings"]>[0]) => {
+ipcMain.handle("task:list", async () => {
+  await ensureTaskSchedulerStarted()
+  return taskScheduler.list()
+})
+ipcMain.handle("task:run-list", async (_event, taskID: unknown) => {
+  await ensureTaskSchedulerStarted()
+  return taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined)
+})
+ipcMain.handle("task:settings", async () => {
+  await ensureTaskSchedulerStarted()
+  return taskScheduler.settings()
+})
+ipcMain.handle("task:settings-update", async (_event, input: Parameters<TaskScheduler["updateSettings"]>[0]) => {
+  await ensureTaskSchedulerStarted()
   const settings = taskScheduler.updateSettings(input)
   notifyTasksChanged()
   return settings
 })
-ipcMain.handle("task:run-archive", (_event, sessionID: unknown, archived: unknown) => {
+ipcMain.handle("task:run-archive", async (_event, sessionID: unknown, archived: unknown) => {
+  await ensureTaskSchedulerStarted()
   taskScheduler.setRunArchived(String(sessionID), Boolean(archived))
   notifyTasksChanged()
 })
-ipcMain.handle("task:create", (_event, input: Parameters<TaskScheduler["create"]>[0]) => {
+ipcMain.handle("task:create", async (_event, input: Parameters<TaskScheduler["create"]>[0]) => {
+  await ensureTaskSchedulerStarted()
   const task = taskScheduler.create(input)
   notifyTasksChanged()
   return task
 })
-ipcMain.handle("task:update", (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => {
+ipcMain.handle("task:update", async (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => {
+  await ensureTaskSchedulerStarted()
   const task = taskScheduler.update(String(id), input)
   notifyTasksChanged()
   return task
 })
-ipcMain.handle("task:remove", (_event, id: unknown) => {
+ipcMain.handle("task:remove", async (_event, id: unknown) => {
+  await ensureTaskSchedulerStarted()
   const removed = taskScheduler.remove(String(id))
   notifyTasksChanged()
   return removed
 })
 ipcMain.handle("task:run", async (_event, id: unknown) => {
+  await ensureTaskSchedulerStarted()
   const task = await taskScheduler.run(String(id))
   notifyTasksChanged()
   return task
 })
 ipcMain.handle("task:cancel", async (_event, id: unknown) => {
+  await ensureTaskSchedulerStarted()
   const task = await taskScheduler.cancelTask(String(id))
   notifyTasksChanged()
   return task
 })
 ipcMain.handle("task:run-cancel", async (_event, id: unknown) => {
+  await ensureTaskSchedulerStarted()
   const run = await taskScheduler.cancelRun(String(id))
   notifyTasksChanged()
   return run
@@ -669,20 +739,24 @@ ipcMain.handle("microphone:permission", (_event) => {
   assertMainWindow(_event)
   return microphonePermission()
 })
-ipcMain.handle("speech-model:config-get", (_event) => {
+ipcMain.handle("speech-model:config-get", async (_event) => {
   assertMainWindow(_event)
+  await speechModelReady
   return speechModelService.config()
 })
-ipcMain.handle("speech-model:config-set", (_event, value: unknown) => {
+ipcMain.handle("speech-model:config-set", async (_event, value: unknown) => {
   assertMainWindow(_event)
+  await speechModelReady
   return speechModelService.save(value)
 })
-ipcMain.handle("speech-model:models", (_event, value: unknown) => {
+ipcMain.handle("speech-model:models", async (_event, value: unknown) => {
   assertMainWindow(_event)
+  await speechModelReady
   return speechModelService.models(value)
 })
-ipcMain.handle("speech-model:transcribe", (_event, value: unknown) => {
+ipcMain.handle("speech-model:transcribe", async (_event, value: unknown) => {
   assertMainWindow(_event)
+  await speechModelReady
   return speechModelService.transcribe(value)
 })
 ipcMain.handle("logging:export", exportDebugLogs)
@@ -753,14 +827,35 @@ app.on("window-all-closed", () => {
 })
 
 void app.whenReady().then(async () => {
-  writeLog("main", "app ready")
+  writeLog("startup", "app ready", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
+  const speechStartedAt = performance.now()
+  speechModelReady = speechModelService.load().then(() => {
+    writeLog("startup", "speech model preferences loaded", {
+      durationMs: Math.round(performance.now() - speechStartedAt),
+      elapsedMs: Math.round(performance.now() - startupStartedAt),
+    })
+  })
+  const securityStartedAt = performance.now()
+  const securityReady = ensureSecurityIntegration()
+    .then(() => {
+      writeLog("startup", "security integration initialized", {
+        durationMs: Math.round(performance.now() - securityStartedAt),
+        elapsedMs: Math.round(performance.now() - startupStartedAt),
+      })
+    })
+    .catch((error) => writeLog("security", "failed to initialize security plugins", error))
+  const preferencesStartedAt = performance.now()
   desktopPreferences = await desktopPreferencesStore.load()
-  await speechModelService.load()
-  await ensureSecurityIntegration().catch((error) => writeLog("security", "failed to initialize security plugins", error))
+  writeLog("startup", "desktop preferences loaded", {
+    durationMs: Math.round(performance.now() - preferencesStartedAt),
+    elapsedMs: Math.round(performance.now() - startupStartedAt),
+  })
   configureAppPermissionHandlers()
   applyDesktopPreferences()
-  taskScheduler.start()
-  return createWindow()
+  await createWindow()
+  void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
+  initialServerStartup = securityReady.then(() => startServer(rendererUrl()))
+  void initialServerStartup
 }).catch((error: unknown) => {
   writeLog("main", "startup failed", error)
 })

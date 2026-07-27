@@ -26,14 +26,20 @@ import {
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
+import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
+import { ChevronRightIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
-import { isVisibleTextPart, type Message, type MessageError } from '../../types/message'
+import { hasRenderableParts, isVisibleTextPart, type Message, type MessageError } from '../../types/message'
 import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInline'
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
+import { useDelayedRender } from '../../hooks'
+import { useTheme } from '../../hooks/useTheme'
 import { useChatViewport } from './chatViewport'
 import { rankOutlineVisibleMessageIds } from '../../components/outlineIndexModel'
+import { formatDuration } from '../../utils/formatUtils'
+import { useUiDisclosureState } from '../../utils/uiDisclosureState'
 import {
   buildContentKeyedChatPages,
   buildExpandedPageSelection,
@@ -1079,24 +1085,33 @@ const PageBlock = memo(function PageBlock({
           >
             <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
               <div className={`min-w-0 group ${!isUser ? 'w-full' : ''} flex flex-col gap-2`}>
-                {row.messages.map(message => (
-                  <RenderedMessageItem
-                    key={message.info.id}
-                    messageId={message.info.id}
+                {isUser ? (
+                  row.messages.map(message => (
+                    <RenderedMessageItem
+                      key={message.info.id}
+                      messageId={message.info.id}
+                      registerMessage={registerMessage}
+                    >
+                      <MessageRenderer
+                        message={message}
+                        onUndo={onUndo}
+                        onFork={onFork}
+                        forkMessageId={forkTargetIdMap.get(message.info.id)}
+                        canUndo={canUndo}
+                        onEnsureParts={NOOP}
+                      />
+                    </RenderedMessageItem>
+                  ))
+                ) : (
+                  <AssistantTurnMessages
+                    messages={row.messages}
                     registerMessage={registerMessage}
-                  >
-                    <MessageRenderer
-                      message={message}
-                      allowStreamingLayoutAnimation={message.isStreaming ? allowStreamingLayoutAnimation : false}
-                      turnDuration={turnDurationMap.get(message.info.id)}
-                      onUndo={message.info.role === 'user' ? onUndo : undefined}
-                      onFork={onFork}
-                      forkMessageId={forkTargetIdMap.get(message.info.id)}
-                      canUndo={message.info.role === 'user' ? canUndo : undefined}
-                      onEnsureParts={NOOP}
-                    />
-                  </RenderedMessageItem>
-                ))}
+                    onFork={onFork}
+                    turnDurationMap={turnDurationMap}
+                    forkTargetIdMap={forkTargetIdMap}
+                    allowStreamingLayoutAnimation={allowStreamingLayoutAnimation}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1105,6 +1120,144 @@ const PageBlock = memo(function PageBlock({
     </div>
   )
 }, arePageBlockPropsEqual)
+
+const AssistantTurnMessages = memo(function AssistantTurnMessages({
+  messages,
+  registerMessage,
+  onFork,
+  turnDurationMap,
+  forkTargetIdMap,
+  allowStreamingLayoutAnimation,
+}: {
+  messages: Message[]
+  registerMessage?: (id: string, element: HTMLElement | null) => void
+  onFork?: (message: Message, forkMessageId?: string) => void | Promise<void>
+  turnDurationMap: Map<string, number>
+  forkTargetIdMap: Map<string, string | undefined>
+  allowStreamingLayoutAnimation: boolean
+}) {
+  const { t } = useTranslation('message')
+  const { autoCollapseExecutionProcess } = useTheme()
+  const plan = useMemo(
+    () => (autoCollapseExecutionProcess ? buildExecutionCollapsePlan(messages) : null),
+    [autoCollapseExecutionProcess, messages],
+  )
+  const disclosureKey = `assistant-turn:${messages.at(-1)?.info.id ?? 'empty'}:execution-process`
+  const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, false)
+  const shouldRenderProcess = useDelayedRender(expanded)
+
+  if (!plan) {
+    return messages.map(message => (
+      <RenderedMessageItem
+        key={message.info.id}
+        messageId={message.info.id}
+        registerMessage={registerMessage}
+      >
+        <MessageRenderer
+          message={message}
+          allowStreamingLayoutAnimation={message.isStreaming ? allowStreamingLayoutAnimation : false}
+          turnDuration={turnDurationMap.get(message.info.id)}
+          onFork={onFork}
+          forkMessageId={forkTargetIdMap.get(message.info.id)}
+          onEnsureParts={NOOP}
+        />
+      </RenderedMessageItem>
+    ))
+  }
+
+  const processMessages = messages
+    .slice(0, plan.conclusionMessageIndex + 1)
+    .map((message, index) =>
+      index === plan.conclusionMessageIndex
+        ? { ...message, parts: message.parts.slice(0, plan.conclusionPartIndex) }
+        : message,
+    )
+    .filter(hasRenderableParts)
+  const conclusionMessages = messages
+    .slice(plan.conclusionMessageIndex)
+    .map((message, index) =>
+      index === 0
+        ? { ...message, parts: message.parts.slice(plan.conclusionPartIndex) }
+        : message,
+    )
+    .filter(hasRenderableParts)
+  const duration = messages.reduce(
+    (value, message) => turnDurationMap.get(message.info.id) ?? value,
+    undefined as number | undefined,
+  )
+
+  return (
+    <>
+      <div className="border-b border-border-200/60 pb-2">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={t(expanded ? 'executionProcess.collapse' : 'executionProcess.expand')}
+          onClick={() => setExpanded(value => !value)}
+          className="flex items-center gap-1.5 rounded-md py-1 text-[length:var(--fs-base)] text-text-400 transition-colors hover:text-text-200"
+        >
+          <span className="font-medium">{t('executionProcess.processed')}</span>
+          {duration != null && duration > 0 && <span>{formatDuration(duration)}</span>}
+          <ChevronRightIcon
+            size={14}
+            className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          />
+        </button>
+
+        <div
+          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+            expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          }`}
+        >
+          <div className="min-h-0 overflow-hidden">
+            {shouldRenderProcess && (
+              <div className="flex flex-col gap-2 pt-2">
+                {processMessages.map((message, index) => {
+                  const isBoundaryMessage = index === processMessages.length - 1 &&
+                    message.info.id === messages[plan.conclusionMessageIndex]?.info.id
+                  const content = (
+                    <MessageRenderer
+                      message={message}
+                      showActions={false}
+                      showError={false}
+                      onEnsureParts={NOOP}
+                    />
+                  )
+                  if (isBoundaryMessage) return <div key={`${message.info.id}:process`}>{content}</div>
+                  return (
+                    <RenderedMessageItem
+                      key={`${message.info.id}:process`}
+                      messageId={message.info.id}
+                      registerMessage={registerMessage}
+                    >
+                      {content}
+                    </RenderedMessageItem>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {conclusionMessages.map(message => (
+        <RenderedMessageItem
+          key={`${message.info.id}:conclusion`}
+          messageId={message.info.id}
+          registerMessage={registerMessage}
+        >
+          <MessageRenderer
+            message={message}
+            turnDuration={turnDurationMap.get(message.info.id)}
+            onFork={onFork}
+            forkMessageId={forkTargetIdMap.get(message.info.id)}
+            onEnsureParts={NOOP}
+          />
+        </RenderedMessageItem>
+      ))}
+    </>
+  )
+})
 
 const CollapsedPagesBlock = memo(function CollapsedPagesBlock({ height }: { height: number }) {
   return <div className="shrink-0" style={{ height: `${height}px`, overflowAnchor: 'none' }} aria-hidden="true" />

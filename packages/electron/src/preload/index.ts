@@ -15,6 +15,7 @@ import type {
   SpeechModelUpdate,
   SpeechTranscriptionInput,
 } from "../shared/speechModel"
+import type { ProjectDirectory, ProjectState } from "../shared/projects"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 
@@ -331,6 +332,9 @@ export type CustomOpenCodeApi = {
   openLocation(input: { path: string; appId: string }): Promise<boolean>
   desktopPreferences(): Promise<DesktopPreferences>
   updateDesktopPreferences(preferences: DesktopPreferences): Promise<DesktopPreferences>
+  projectState(serverId: string): Promise<ProjectState>
+  updateProjectDirectories(serverId: string, directories: ProjectDirectory[]): Promise<ProjectState>
+  updateRecentProjects(serverId: string, recentProjects: Record<string, number>): Promise<ProjectState>
   queryQuota(input: QuotaQueryInput): Promise<QuotaProviderResult[]>
   openCodeGoQuotaConfig(): Promise<OpenCodeGoQuotaConfig>
   updateOpenCodeGoQuotaConfig(input: OpenCodeGoQuotaConfigUpdate): Promise<OpenCodeGoQuotaConfig>
@@ -428,6 +432,9 @@ const api: CustomOpenCodeApi = {
   openLocation: (input) => ipcRenderer.invoke("location:open", input),
   desktopPreferences: () => ipcRenderer.invoke("desktop-preferences:get"),
   updateDesktopPreferences: (preferences) => ipcRenderer.invoke("desktop-preferences:set", preferences),
+  projectState: (serverId) => ipcRenderer.invoke("projects:get", serverId),
+  updateProjectDirectories: (serverId, directories) => ipcRenderer.invoke("projects:directories-set", serverId, directories),
+  updateRecentProjects: (serverId, recentProjects) => ipcRenderer.invoke("projects:recent-set", serverId, recentProjects),
   queryQuota: (input) => ipcRenderer.invoke("quota:query", input),
   openCodeGoQuotaConfig: () => ipcRenderer.invoke("quota:opencode-go-config"),
   updateOpenCodeGoQuotaConfig: (input) => ipcRenderer.invoke("quota:opencode-go-config-set", input),

@@ -19,6 +19,9 @@ export function ChatSettings() {
     setRenderUserMarkdown,
   } = useTheme()
   const [collapseUserMessages, setCollapseUserMessages] = useState(themeStore.collapseUserMessages)
+  const [autoCollapseExecutionProcess, setAutoCollapseExecutionProcess] = useState(
+    themeStore.autoCollapseExecutionProcess,
+  )
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
   const [reasoningDisplayMode, setReasoningDisplayMode] = useState(themeStore.reasoningDisplayMode)
@@ -34,6 +37,12 @@ export function ChatSettings() {
 
   const handleRenderUserMarkdownToggle = () => {
     setRenderUserMarkdown(!renderUserMarkdown)
+  }
+
+  const handleAutoCollapseExecutionProcessToggle = () => {
+    const next = !autoCollapseExecutionProcess
+    setAutoCollapseExecutionProcess(next)
+    themeStore.setAutoCollapseExecutionProcess(next)
   }
 
   const handleReasoningDisplayModeChange = (mode: ReasoningDisplayMode) => {
@@ -97,6 +106,17 @@ export function ChatSettings() {
           onClick={handleCollapseToggle}
         >
           <Toggle enabled={collapseUserMessages} onChange={handleCollapseToggle} />
+        </SettingRow>
+
+        <SettingRow
+          label={t('chat.autoCollapseExecutionProcess')}
+          description={t('chat.autoCollapseExecutionProcessDesc')}
+          onClick={handleAutoCollapseExecutionProcessToggle}
+        >
+          <Toggle
+            enabled={autoCollapseExecutionProcess}
+            onChange={handleAutoCollapseExecutionProcessToggle}
+          />
         </SettingRow>
 
         <SettingRow

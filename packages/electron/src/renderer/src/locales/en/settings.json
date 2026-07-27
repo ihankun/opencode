@@ -375,6 +375,8 @@
     "conversationExperienceDesc": "Message density, reasoning style, and step summary fields",
     "collapseLongMessages": "Collapse Long Messages",
     "collapseLongMessagesDesc": "Auto-collapse lengthy user messages",
+    "autoCollapseExecutionProcess": "Collapse Execution After Completion",
+    "autoCollapseExecutionProcessDesc": "After a response finishes, place the contiguous reasoning and tool work before the final answer under Processed; streaming responses stay fully visible",
     "renderUserMarkdown": "Render User Markdown",
     "renderUserMarkdownDesc": "Render sent user messages as Markdown when enabled; keep plain text when disabled",
     "outlineCurrentHighlight": "Highlight Current Position",

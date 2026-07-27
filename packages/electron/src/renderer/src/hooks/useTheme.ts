@@ -187,6 +187,10 @@ export function useTheme() {
     themeStore.setCollapseUserMessages(enabled)
   }, [])
 
+  const setAutoCollapseExecutionProcess = useCallback((enabled: boolean) => {
+    themeStore.setAutoCollapseExecutionProcess(enabled)
+  }, [])
+
   const setRenderUserMarkdown = useCallback((enabled: boolean) => {
     themeStore.setRenderUserMarkdown(enabled)
   }, [])
@@ -303,6 +307,8 @@ export function useTheme() {
     // 折叠长用户消息
     collapseUserMessages: state.collapseUserMessages,
     setCollapseUserMessages,
+    autoCollapseExecutionProcess: state.autoCollapseExecutionProcess,
+    setAutoCollapseExecutionProcess,
     renderUserMarkdown: state.renderUserMarkdown,
     setRenderUserMarkdown,
 

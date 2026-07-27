@@ -9,6 +9,13 @@
   "stepsCount": "{{done}}/{{total}} steps",
   "tokens": "tokens",
   "tokensK": "{{count}}k tokens",
+  "executionProcess": {
+    "processed": "Processed",
+    "expand": "Expand execution process",
+    "collapse": "Collapse execution process",
+    "changedFiles": "{{count}} file changed",
+    "changedFiles_other": "{{count}} files changed"
+  },
   "defaultRenderer": {
     "input": "Input",
     "error": "Error",
