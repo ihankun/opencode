@@ -35,7 +35,7 @@ import {
 } from '../../../components/Icons'
 import { useDirectory, useKeybindingLabel, useGitWorkspaceCatalog, useReorderableList, useSessions } from '../../../hooks'
 import { useSessionContext } from '../../../contexts/useSessionContext'
-import { useLayoutStore, childSessionStore } from '../../../store'
+import { useLayoutStore, childSessionStore, serverStore } from '../../../store'
 import { useBusySessions } from '../../../store/activeSessionStore'
 import { notificationStore, useNotifications } from '../../../store/notificationStore'
 import { pinnedSessionsStore } from '../../../store/pinnedSessionsStore'
@@ -300,6 +300,8 @@ export function SidePanel({
     [currentDirectory],
   )
   const [connectionState, setConnectionState] = useState<ConnectionInfo | null>(null)
+  const [connectionRefreshVersion, setConnectionRefreshVersion] = useState(0)
+  const previousConnectionStateRef = useRef<ConnectionInfo['state']>('disconnected')
   const [enabledTaskCount, setEnabledTaskCount] = useState(0)
   const [projectDeleteConfirm, setProjectDeleteConfirm] = useState<{ isOpen: boolean; projectId: string | null }>({
     isOpen: false,
@@ -445,7 +447,13 @@ export function SidePanel({
   const notifications = useNotifications()
 
   useEffect(() => {
-    return subscribeToConnectionState(setConnectionState)
+    return subscribeToConnectionState(info => {
+      setConnectionState(prev => (prev?.state === info.state ? prev : info))
+      if (info.state === 'connected' && previousConnectionStateRef.current !== 'connected') {
+        setConnectionRefreshVersion(version => version + 1)
+      }
+      previousConnectionStateRef.current = info.state
+    })
   }, [])
 
   useEffect(() => {
@@ -867,40 +875,74 @@ export function SidePanel({
     if (currentProject.id === 'global' || !pathInfo?.directory) return
 
     let cancelled = false
+    let freshLoaded = false
+    let retryTimer: number | undefined
+    const serverId = serverStore.getActiveServerId()
+    const directory = normalizeToForwardSlash(pathInfo.directory) || pathInfo.directory
     setDefaultSessions(prev => {
       if (prev.isLoading) return prev
       return { ...prev, isLoading: true }
     })
 
-    getSessions({
-      roots: true,
-      limit: 30,
-      directory: normalizeToForwardSlash(pathInfo.directory) || pathInfo.directory,
-      search: search || undefined,
-    })
-      .then(data => {
-        if (cancelled) return
+    if (!search && typeof window.customOpenCode?.cachedSessions === 'function') {
+      void window.customOpenCode.cachedSessions(serverId, directory).then(cached => {
+        if (cancelled || freshLoaded || !cached) return
+        if (serverStore.getActiveServerId() !== serverId) return
         setDefaultSessions(prev => {
-          if (!prev.isLoading && areSessionListsSame(prev.sessions, data)) return prev
-          return { sessions: data, isLoading: false }
+          if (!prev.isLoading && areSessionListsSame(prev.sessions, cached.sessions)) return prev
+          return { sessions: cached.sessions, isLoading: false }
         })
-        setFetchedSessions(prev => ({
-          ...prev,
-          ...Object.fromEntries(data.map(session => [session.id, session])),
-        }))
-      })
-      .catch(() => {
-        if (cancelled) return
-        setDefaultSessions(prev => {
-          if (!prev.isLoading) return prev
-          return { ...prev, isLoading: false }
+      }).catch(() => undefined)
+    }
+
+    const fetchDefaultSessions = (attempt: number) => {
+      const run = () => {
+        void getSessions({
+          roots: true,
+          limit: 30,
+          directory,
+          search: search || undefined,
         })
-      })
+          .then(data => {
+            if (cancelled || serverStore.getActiveServerId() !== serverId) return
+            freshLoaded = true
+            setDefaultSessions(prev => {
+              if (!prev.isLoading && areSessionListsSame(prev.sessions, data)) return prev
+              return { sessions: data, isLoading: false }
+            })
+            setFetchedSessions(prev => ({
+              ...prev,
+              ...Object.fromEntries(data.map(session => [session.id, session])),
+            }))
+          })
+          .catch(() => {
+            if (cancelled) return
+            if (attempt < 3) {
+              fetchDefaultSessions(attempt + 1)
+              return
+            }
+            setDefaultSessions(prev => {
+              if (!prev.isLoading) return prev
+              return { ...prev, isLoading: false }
+            })
+          })
+      }
+
+      const delay = [0, 500, 1500, 3000][attempt]
+      if (!delay) {
+        run()
+        return
+      }
+      retryTimer = window.setTimeout(run, delay)
+    }
+
+    fetchDefaultSessions(0)
 
     return () => {
       cancelled = true
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer)
     }
-  }, [currentProject.id, pathInfo?.directory, search])
+  }, [connectionRefreshVersion, currentProject.id, pathInfo?.directory, search])
 
   useEffect(() => {
     if (expandedProjects.length === 0) return

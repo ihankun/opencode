@@ -572,7 +572,6 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
     'absolute bottom-full left-0 z-50 mb-2 max-h-64 min-w-60 overflow-y-auto rounded-xl border border-border-200/70 bg-bg-000 p-1 shadow-xl'
 
   return (
-    <>
     <div
       ref={menuRef}
       className="relative z-0 mx-3 -mb-px flex h-10 items-center gap-1 overflow-visible rounded-t-2xl bg-bg-200/45 px-4"
@@ -773,9 +772,23 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
           )}
         </div>
       )}
+      {preflightIssues.length > 0 ? (
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 pl-2 text-[length:var(--fs-xxs)] text-text-400">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              preflightIssues.some(issue => issue.level === 'error')
+                ? 'bg-danger-100'
+                : preflightIssues.some(issue => issue.level === 'warning')
+                  ? 'bg-warning-100'
+                  : 'bg-accent-main-100'
+            }`}
+          />
+          <span className="truncate" title={preflightIssues.map(issue => issue.message).join('\n')}>
+            {preflightIssues.map(issue => issue.message).join(' · ')}
+          </span>
+        </div>
+      ) : null}
     </div>
-    {preflightIssues.length > 0 ? <div className="mx-3 flex min-h-7 items-center gap-2 border-x border-border-200/45 bg-bg-100/90 px-4 text-[length:var(--fs-xxs)] text-text-400"><span className={`h-1.5 w-1.5 rounded-full ${preflightIssues.some(issue => issue.level === 'error') ? 'bg-danger-100' : preflightIssues.some(issue => issue.level === 'warning') ? 'bg-warning-100' : 'bg-accent-main-100'}`} /><span className="truncate" title={preflightIssues.map(issue => issue.message).join('\n')}>{preflightIssues.map(issue => issue.message).join(' · ')}</span></div> : null}
-    </>
   )
 }
 

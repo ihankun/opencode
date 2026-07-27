@@ -283,6 +283,7 @@ export function useGlobalEvents(directories?: string[]) {
     let disposed = false
     let healthRefreshVersion = 0
     let healthRetryTimer: number | undefined
+    let connectionIsConnected = false
     const latePendingRequests = new Map<
       string,
       {
@@ -440,7 +441,9 @@ export function useGlobalEvents(directories?: string[]) {
       refreshActiveServerHealth()
     })
     const unsubscribeConnectionState = subscribeToConnectionState(info => {
-      if (info.state === 'connected') refreshActiveServerHealth()
+      const connected = info.state === 'connected'
+      if (connected && !connectionIsConnected) refreshActiveServerHealth()
+      connectionIsConnected = connected
     })
 
     const unsubscribe = subscribeToEvents({
@@ -710,7 +713,7 @@ export function useGlobalEvents(directories?: string[]) {
     })
 
     fetchAndInitialize()
-    refreshActiveServerHealth()
+    if (!connectionIsConnected) refreshActiveServerHealth()
     approveGlobalPendingPermissions()
 
     return () => {
