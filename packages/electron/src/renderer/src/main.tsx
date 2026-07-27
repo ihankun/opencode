@@ -209,7 +209,21 @@ function bootstrap() {
 }
 
 function StartupFallback() {
-  return <div className="fixed inset-0 flex items-center justify-center bg-bg-000 text-[length:var(--fs-sm)] text-text-300">OpenCodex 正在启动…</div>
+  return (
+    <div className="startup-screen" role="status" aria-live="polite" aria-label="正在启动 OpenCodex">
+      <div className="startup-ambient-light" aria-hidden="true" />
+      <div className="startup-glass-panel">
+        <div className="startup-logo-wrap">
+          <span className="startup-logo-halo" aria-hidden="true" />
+          <img className="startup-logo" src="/opencode.svg" alt="" />
+        </div>
+        <div className="startup-title">正在启动 OpenCodex</div>
+        <div className="startup-progress" aria-hidden="true">
+          <span />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 async function startApp() {
