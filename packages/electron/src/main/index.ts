@@ -460,6 +460,20 @@ async function startServer(url: string) {
   const startedAt = performance.now()
   try {
     serverError = undefined
+    const testServerUrl = e2eServerUrl()
+    if (testServerUrl) {
+      server = {
+        state: {
+          url: testServerUrl,
+          username: "opencode",
+          password: "",
+        },
+        stop: () => Promise.resolve(),
+      }
+      writeLog("startup", "using e2e opencode server", { url: testServerUrl })
+      mainWindow?.webContents.send("server:updated", currentServerState())
+      return
+    }
     server = await spawnServer(app.getPath("userData"), allowedOrigins(url), {
       ...await secureEnvironment(),
       OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: desktopPreferences.backgroundSubagents ? "true" : "false",
@@ -2641,7 +2655,19 @@ function normalizeSkillRelativePath(value: string) {
 }
 
 function userDataRoot() {
+  const override = process.env.NODE_ENV === "test" ? process.env.OPENCODE_E2E_USER_DATA_DIR : undefined
+  if (override) return resolve(override)
   return join(homedir(), ".opencodex")
+}
+
+function e2eServerUrl() {
+  const value = process.env.NODE_ENV === "test" ? process.env.OPENCODE_E2E_SERVER_URL : undefined
+  if (!value) return
+  const url = new URL(value)
+  if (url.protocol !== "http:" || (url.hostname !== "127.0.0.1" && url.hostname !== "localhost")) {
+    throw new Error("OPENCODE_E2E_SERVER_URL must use a loopback HTTP URL")
+  }
+  return url.origin
 }
 
 function normalizeConsoleLogin(rawLogin: unknown) {
