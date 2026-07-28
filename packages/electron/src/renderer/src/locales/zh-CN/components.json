@@ -62,6 +62,7 @@
     "worktrees": "Worktrees",
     "preview": "预览",
     "projectInstructions": "项目规则",
+    "projectAgents": "项目 Agent",
     "workspaceMemory": "工作区记忆",
     "selectProject": "请先选择项目",
     "tab": "标签",

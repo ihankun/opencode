@@ -62,6 +62,7 @@
     "worktrees": "Worktrees",
     "preview": "Preview",
     "projectInstructions": "Project Instructions",
+    "projectAgents": "Project Agents",
     "workspaceMemory": "Workspace Memory",
     "selectProject": "Select a project first",
     "tab": "Tab",

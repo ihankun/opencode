@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { autoApproveStore } from '../../../store'
 import type { AlwaysAllowMode } from '../../../store/autoApproveStore'
@@ -6,7 +6,7 @@ import { themeStore, type ToolCardStyle } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
 import { notifyAgentsChanged } from '../../../api/agent'
-import { useDirectory, useModels } from '../../../hooks'
+import { useModels } from '../../../hooks'
 import type { AgentConfig, Config } from '../../../types/api/config'
 import { Button, Dialog } from '../../../components/ui'
 import { apiErrorHandler } from '../../../utils'
@@ -110,7 +110,7 @@ export function AgentSettings() {
 
   return (
     <div>
-      <AgentProfiles />
+      <AgentProfiles scope="global" />
       <SettingsSection title={t('agent.behavior')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('agent.behaviorDesc')}</p>
 
@@ -208,11 +208,15 @@ export function AgentSettings() {
   )
 }
 
-function AgentProfiles() {
+interface AgentProfilesProps {
+  scope: 'global' | 'project'
+  directory?: string
+  panel?: boolean
+}
+
+export function AgentProfiles({ scope, directory, panel = false }: AgentProfilesProps) {
   const { i18n } = useTranslation()
-  const { currentDirectory } = useDirectory()
   const { models, isLoading: modelsLoading, error: modelsError } = useModels()
-  const [scope, setScope] = useState<'global' | 'project'>(currentDirectory ? 'project' : 'global')
   const [config, setConfig] = useState<Config>()
   const [draft, setDraft] = useState<AgentDraft>()
   const [originalName, setOriginalName] = useState('')
@@ -221,9 +225,7 @@ function AgentProfiles() {
   const [error, setError] = useState('')
   const zh = i18n.language.startsWith('zh')
   const agents = useMemo(() => {
-    const value = (config as unknown as { agent?: unknown } | undefined)?.agent
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-    return Object.entries(value as Record<string, AgentConfig>).filter((entry): entry is [string, AgentConfig] => Boolean(entry[1]) && typeof entry[1] === 'object')
+    return Object.entries(configAgents(config)).filter((entry): entry is [string, AgentConfig] => Boolean(entry[1]) && typeof entry[1] === 'object')
   }, [config])
   const selectedModel = draft?.model
     ? models.find(model => `${model.providerId}/${model.id}` === draft.model)
@@ -253,11 +255,24 @@ function AgentProfiles() {
     setPermissions(JSON.stringify({ ...value, [name]: action }, null, 2))
   }
 
+  const loadProfiles = useCallback(async () => {
+    if (scope === 'global') return getGlobalConfig()
+    if (!directory) return undefined
+    const [effective, global] = await Promise.all([getConfig(directory), getGlobalConfig()])
+    const globalAgents = configAgents(global)
+    return {
+      agent: Object.fromEntries(
+        Object.entries(configAgents(effective)).filter(([name, value]) => JSON.stringify(value) !== JSON.stringify(globalAgents[name])),
+      ),
+    }
+  }, [directory, scope])
+
   useEffect(() => {
     let disposed = false
     setError('')
-    const request = scope === 'project' && currentDirectory ? getConfig(currentDirectory) : getGlobalConfig()
-    void request.then(value => {
+    setDraft(undefined)
+    setOriginalName('')
+    void loadProfiles().then(value => {
       if (!disposed) setConfig(value)
     }).catch(cause => {
       apiErrorHandler('load agent profiles', cause)
@@ -266,7 +281,7 @@ function AgentProfiles() {
     return () => {
       disposed = true
     }
-  }, [currentDirectory, scope])
+  }, [loadProfiles])
 
   const open = (name?: string, value?: AgentConfig) => {
     const next = { ...emptyAgent, ...value, name: name ?? '' }
@@ -290,7 +305,7 @@ function AgentProfiles() {
     setBusy(true)
     setError('')
     try {
-      const existing = (config as unknown as { agent?: Record<string, AgentConfig> }).agent ?? {}
+      const existing = configAgents(config)
       const name = draft.name.trim()
       const steps = draft.steps ?? draft.maxSteps
       const nextAgents = { ...existing }
@@ -307,9 +322,12 @@ function AgentProfiles() {
         permission,
         disable: false,
       }
-      const next = { ...(config as unknown as Record<string, unknown>), agent: nextAgents } as unknown as Config
-      const saved = scope === 'project' && currentDirectory ? await updateConfig(next, currentDirectory) : await updateGlobalConfig(next)
-      setConfig(saved)
+      if (scope === 'project') {
+        await updateConfig({ agent: nextAgents }, directory)
+        setConfig(await loadProfiles())
+      } else {
+        setConfig(await updateGlobalConfig({ ...config, agent: nextAgents }))
+      }
       notifyAgentsChanged()
       setDraft(undefined)
     } catch (cause) {
@@ -324,9 +342,13 @@ function AgentProfiles() {
     if (!config) return
     setBusy(true)
     try {
-      const existing = (config as unknown as { agent?: Record<string, AgentConfig> }).agent ?? {}
-      const next = { ...(config as unknown as Record<string, unknown>), agent: { ...existing, [name]: { ...value, disable: !value.disable } } } as unknown as Config
-      setConfig(scope === 'project' && currentDirectory ? await updateConfig(next, currentDirectory) : await updateGlobalConfig(next))
+      const nextAgents = { ...configAgents(config), [name]: { ...value, disable: !value.disable } }
+      if (scope === 'project') {
+        await updateConfig({ agent: nextAgents }, directory)
+        setConfig(await loadProfiles())
+      } else {
+        setConfig(await updateGlobalConfig({ ...config, agent: nextAgents }))
+      }
       notifyAgentsChanged()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -335,21 +357,24 @@ function AgentProfiles() {
     }
   }
 
-  return (
-    <SettingsSection title={zh ? 'Agent 配置' : 'Agent profiles'}>
+  const content = (
+    <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[length:var(--fs-sm)] text-text-400">{zh ? '管理 Primary Agent、Subagent、模型、提示词和工具权限。' : 'Manage primary agents, subagents, models, prompts, and tool permissions.'}</p>
-          <div className="mt-2 inline-flex rounded-lg bg-bg-200/50 p-0.5">
-            <button type="button" onClick={() => setScope('global')} className={`rounded-md px-2.5 py-1 text-[length:var(--fs-xs)] ${scope === 'global' ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{zh ? '全局' : 'Global'}</button>
-            <button type="button" disabled={!currentDirectory} onClick={() => setScope('project')} className={`rounded-md px-2.5 py-1 text-[length:var(--fs-xs)] disabled:opacity-40 ${scope === 'project' ? 'bg-bg-000 text-text-100 shadow-sm' : 'text-text-400'}`}>{zh ? '当前项目' : 'Project'}</button>
-          </div>
+          <p className="text-[length:var(--fs-sm)] text-text-400">
+            {scope === 'global'
+              ? (zh ? '管理适用于所有项目的 Primary Agent、Subagent、模型、提示词和工具权限。' : 'Manage primary agents, subagents, models, prompts, and tool permissions shared by every project.')
+              : (zh ? '管理仅适用于当前项目的 Agent 配置。' : 'Manage agent profiles scoped to the current project.')}
+          </p>
+          {scope === 'project' && directory ? (
+            <p className="mt-1 truncate font-mono text-[length:var(--fs-xxs)] text-text-500" title={directory}>{directory}</p>
+          ) : null}
         </div>
         <Button size="sm" onClick={() => open()}>{zh ? '新建 Agent' : 'New agent'}</Button>
       </div>
       {error && !draft ? <p className="mt-3 rounded-lg bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">{error}</p> : null}
       <div className="mt-3 space-y-2">
-        {agents.length === 0 ? <div className="rounded-lg border border-dashed border-border-200 px-3 py-6 text-center text-[length:var(--fs-sm)] text-text-400">{zh ? '当前作用域没有自定义 Agent。' : 'No custom agents in this scope.'}</div> : agents.map(([name, value]) => (
+        {agents.length === 0 ? <div className="rounded-lg border border-dashed border-border-200 px-3 py-6 text-center text-[length:var(--fs-sm)] text-text-400">{scope === 'global' ? (zh ? '没有全局自定义 Agent。' : 'No global custom agents.') : (zh ? '当前项目没有自定义 Agent。' : 'No custom agents in this project.')}</div> : agents.map(([name, value]) => (
           <div key={name} className="flex items-center gap-3 rounded-lg border border-border-200/60 bg-bg-000/40 px-3 py-2.5">
             <span className="h-3 w-3 rounded-full" style={{ background: agentColor(value.color) }} />
             <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{name}</span><span className="rounded bg-bg-200 px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400">{value.mode ?? 'all'}</span>{value.disable ? <span className="text-[length:var(--fs-xxs)] text-warning-100">{zh ? '已停用' : 'Disabled'}</span> : null}</div><p className="truncate text-[length:var(--fs-xs)] text-text-400">{value.description || value.model || (zh ? '未填写描述' : 'No description')}</p></div>
@@ -456,7 +481,30 @@ function AgentProfiles() {
           <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setDraft(undefined)}>{zh ? '取消' : 'Cancel'}</Button><Button disabled={!draft.name.trim()} isLoading={busy} onClick={() => void save()}>{zh ? '保存' : 'Save'}</Button></div>
         </div> : null}
       </Dialog>
-    </SettingsSection>
+    </>
+  )
+
+  if (scope === 'project' && !directory) {
+    return <div className="flex h-full items-center justify-center px-6 text-center text-[length:var(--fs-sm)] text-text-400">{zh ? '请先选择项目，再管理项目 Agent。' : 'Select a project before managing project agents.'}</div>
+  }
+
+  if (panel) {
+    return (
+      <div className="h-full overflow-y-auto p-4">
+        <section className="mx-auto max-w-3xl rounded-xl border border-border-200 bg-bg-100 p-4">
+          <h2 className="mb-3 text-[length:var(--fs-base)] font-medium text-text-100">{zh ? '项目 Agent' : 'Project agents'}</h2>
+          {content}
+        </section>
+      </div>
+    )
+  }
+
+  return <SettingsSection title={zh ? '全局 Agent 配置' : 'Global agent profiles'}>{content}</SettingsSection>
+}
+
+function configAgents(config?: Config) {
+  return Object.fromEntries(
+    Object.entries(config?.agent ?? {}).filter((entry): entry is [string, AgentConfig] => Boolean(entry[1])),
   )
 }
 

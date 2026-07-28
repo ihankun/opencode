@@ -50,6 +50,7 @@ const TAB_ICONS: Record<PanelTabType, React.ReactNode> = {
   worktree: <GitWorktreeIcon size={12} />,
   preview: <GlobeIcon size={12} />,
   'project-instructions': <FileIcon size={12} />,
+  'project-agents': <AgentIcon size={12} />,
   'workspace-memory': <AgentIcon size={12} />,
 }
 
@@ -81,6 +82,8 @@ function getTabLabel(tab: PanelTab, tabs: PanelTab[], t: (key: string) => string
       return t('panelContainer.preview')
     case 'project-instructions':
       return t('panelContainer.projectInstructions')
+    case 'project-agents':
+      return t('panelContainer.projectAgents')
     case 'workspace-memory':
       return t('panelContainer.workspaceMemory')
     default:
@@ -409,7 +412,9 @@ export const PanelContainer = memo(function PanelContainer({
                 {t('panelContainer.renameTerminal')}
               </button>
             )}
-            {contextTab?.type !== 'project-instructions' && contextTab?.type !== 'workspace-memory' ? (
+            {contextTab?.type !== 'project-instructions' &&
+            contextTab?.type !== 'project-agents' &&
+            contextTab?.type !== 'workspace-memory' ? (
               <button
                 onClick={handleMoveToOtherPanel}
                 className="w-full px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors"
@@ -510,6 +515,21 @@ export const PanelContainer = memo(function PanelContainer({
                     <FileIcon size={12} />
                   </span>
                   {t('panelContainer.projectInstructions')}
+                </button>
+                <button
+                  disabled={!directory}
+                  onClick={() => {
+                    if (!directory) return
+                    layoutStore.addProjectAgentsTab()
+                    setAddMenuPos(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-200"
+                  title={!directory ? t('panelContainer.selectProject') : undefined}
+                >
+                  <span className="opacity-60 shrink-0">
+                    <AgentIcon size={12} />
+                  </span>
+                  {t('panelContainer.projectAgents')}
                 </button>
                 <button
                   disabled={!directory}

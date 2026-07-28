@@ -24,7 +24,7 @@
     "speechModel": "Voice Model",
     "speechModelDesc": "Configure speech-to-text service, model, and API key",
     "agent": "Agent",
-    "agentDesc": "Permission approval, tool requests, and agent interaction behavior",
+    "agentDesc": "Global agent profiles, permission approval, and tool interaction behavior",
     "chat": "Chat",
     "chatDesc": "Message presentation, path formatting, and step metadata",
     "archived": "Archived Chats",

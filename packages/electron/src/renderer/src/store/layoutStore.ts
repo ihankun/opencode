@@ -15,6 +15,7 @@ export type PanelTabType =
   | 'worktree'
   | 'preview'
   | 'project-instructions'
+  | 'project-agents'
   | 'workspace-memory'
 type PersistedPanelTabType = Exclude<PanelTabType, 'terminal'>
 
@@ -182,6 +183,7 @@ const PERSISTED_PANEL_TAB_TYPES: PersistedPanelTabType[] = [
   'worktree',
   'preview',
   'project-instructions',
+  'project-agents',
   'workspace-memory',
 ]
 
@@ -673,6 +675,10 @@ export class LayoutStore {
 
   addProjectInstructionsTab() {
     return this.addSingletonTab('project-instructions', 'right', 'project-instructions')
+  }
+
+  addProjectAgentsTab() {
+    return this.addSingletonTab('project-agents', 'right', 'project-agents')
   }
 
   addWorkspaceMemoryTab() {

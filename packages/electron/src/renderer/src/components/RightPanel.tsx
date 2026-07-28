@@ -21,6 +21,9 @@ const PreviewPanel = lazy(() => import('./PreviewPanel').then(module => ({ defau
 const ContextFileEditor = lazy(() =>
   import('./ContextFileEditor').then(module => ({ default: module.ContextFileEditor })),
 )
+const AgentProfiles = lazy(() =>
+  import('../features/settings/components/AgentSettings').then(module => ({ default: module.AgentProfiles })),
+)
 
 function PanelFallback() {
   const { t } = useTranslation(['components', 'common'])
@@ -179,6 +182,12 @@ export const RightPanel = memo(function RightPanel({ directory, sessionId, inlin
               />
             </Suspense>
           </div>
+
+          <div className={activeTab.type === 'project-agents' ? 'h-full' : 'hidden'}>
+            <Suspense fallback={<PanelFallback />}>
+              <ProjectAgentsContent activeTab={activeTab} directory={normalizedDirectory} />
+            </Suspense>
+          </div>
         </>
       )
     },
@@ -335,6 +344,28 @@ const ContextContent = memo(function ContextContent({
         .map(tab => (
           <div key={tab.id} className={tab.id === activeTab.id ? 'h-full' : 'hidden'}>
             <ContextFileEditor source={source} directory={directory} sessionId={sessionId} />
+          </div>
+        ))}
+    </>
+  )
+})
+
+const ProjectAgentsContent = memo(function ProjectAgentsContent({
+  activeTab,
+  directory,
+}: {
+  activeTab: PanelTab
+  directory?: string
+}) {
+  const { panelTabs } = useLayoutStore()
+
+  return (
+    <>
+      {panelTabs
+        .filter(tab => tab.position === 'right' && tab.type === 'project-agents')
+        .map(tab => (
+          <div key={tab.id} className={tab.id === activeTab.id ? 'h-full' : 'hidden'}>
+            <AgentProfiles scope="project" directory={directory} panel />
           </div>
         ))}
     </>
