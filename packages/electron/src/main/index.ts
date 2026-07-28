@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, Notification, protocol, session, shell, systemPreferences } from "electron"
+import { app, BrowserWindow, Menu, Tray, dialog, nativeImage, Notification, protocol, session, shell, systemPreferences } from "electron"
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
@@ -16,8 +16,7 @@ import { sandboxRuntimeRoot, spawnServer } from "./server"
 import type { SidecarHandle } from "./server"
 import { TaskScheduler } from "./scheduler"
 import type { ScheduledTask, ScheduledTaskRun } from "./scheduler"
-import { getSecureCredential, getServerCredential, listServerCredentialIDs, setSecureCredential, setServerCredential } from "./credentials"
-import type { ServerCredential } from "./credentials"
+import { getSecureCredential, getServerCredential, listServerCredentialIDs, setSecureCredential } from "./credentials"
 import { shouldUseMockKeychain } from "./keychain"
 import { ImBridgeService } from "./imBridge"
 import { DesktopPreferencesStore } from "./desktopPreferences"
@@ -25,13 +24,27 @@ import { SpeechModelService } from "./speechModel"
 import { ProjectsStore } from "./projects"
 import { SessionListCacheStore } from "./sessionListCache"
 import { deepLinkUrlsFromArgv, parseDeepLink } from "./deepLinks"
-import {
-  getOpenCodeGoQuotaConfig,
-  queryProviderQuotas,
-  updateOpenCodeGoQuotaConfig,
-} from "./quota/index.ts"
+import { registerBrowserIpc } from "./ipc/browser"
+import { registerCredentialsIpc } from "./ipc/credentials"
+import { registerDeepLinkIpc } from "./ipc/deepLinks"
+import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
+import { registerDiagnosticsIpc } from "./ipc/diagnostics"
+import { registerDrivesIpc } from "./ipc/drives"
+import { registerImBridgeIpc } from "./ipc/imBridge"
+import { registerMarketplaceIpc } from "./ipc/marketplace"
+import { registerNotificationIpc } from "./ipc/notifications"
+import { registerDesktopPreferencesIpc } from "./ipc/preferences"
+import { registerProjectsIpc } from "./ipc/projects"
+import { registerQuotaIpc } from "./ipc/quota"
+import { registerSecurityIpc } from "./ipc/security"
+import { registerServerIpc } from "./ipc/server"
+import { registerSkillsIpc } from "./ipc/skills"
+import { registerSpeechModelIpc } from "./ipc/speechModel"
+import { registerTaskIpc } from "./ipc/tasks"
+import { registerWindowIpc } from "./ipc/window"
+import { updateOpenCodeGoQuotaConfig } from "./quota/index.ts"
 import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
-import type { OpenCodeGoLoginResult, OpenCodeGoQuotaConfigUpdate, QuotaQueryInput } from "../shared/quota.ts"
+import type { OpenCodeGoLoginResult } from "../shared/quota.ts"
 import {
   DEFAULT_DESKTOP_PREFERENCES,
   type DesktopPreferences,
@@ -105,158 +118,6 @@ type SecurityConfig = {
     directory: string
   }
 }
-
-// Window control IPC handlers
-ipcMain.handle("window:minimize", () => {
-  mainWindow?.minimize()
-})
-
-ipcMain.handle("window:maximize", () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize()
-  } else {
-    mainWindow?.maximize()
-  }
-})
-
-ipcMain.handle("window:close", () => {
-  mainWindow?.close()
-})
-
-ipcMain.handle("window:is-maximized", () => {
-  return mainWindow?.isMaximized() ?? false
-})
-
-ipcMain.handle("window:set-theme", (_event, value: unknown) => {
-  if (value !== "system" && value !== "light" && value !== "dark") return
-  if (nativeTheme.themeSource === value) return
-  nativeTheme.themeSource = value
-})
-
-ipcMain.handle("deep-link:consume-initial", (_event) => {
-  assertMainWindow(_event)
-  deepLinkRendererReady = true
-  return pendingDeepLinks.splice(0)
-})
-
-ipcMain.handle("desktop-preferences:get", () => desktopPreferencesStore.current())
-ipcMain.handle("desktop-preferences:set", async (_event, value: unknown) => {
-  const backgroundSubagents = desktopPreferences.backgroundSubagents
-  desktopPreferences = await desktopPreferencesStore.save(value)
-  applyDesktopPreferences()
-  if (backgroundSubagents !== desktopPreferences.backgroundSubagents && server) void restartServer()
-  return desktopPreferences
-})
-ipcMain.handle("projects:get", (_event, serverId: unknown) => {
-  assertMainWindow(_event)
-  return projectsStore.get(String(serverId ?? ""))
-})
-ipcMain.handle("projects:directories-set", (_event, serverId: unknown, directories: unknown) => {
-  assertMainWindow(_event)
-  return projectsStore.setDirectories(String(serverId ?? ""), directories)
-})
-ipcMain.handle("projects:recent-set", (_event, serverId: unknown, recentProjects: unknown) => {
-  assertMainWindow(_event)
-  return projectsStore.setRecentProjects(String(serverId ?? ""), recentProjects)
-})
-ipcMain.handle("session-list-cache:get", (_event, serverId: unknown, directory: unknown) => {
-  assertMainWindow(_event)
-  return sessionListCacheStore.get(
-    String(serverId ?? ""),
-    typeof directory === "string" && directory ? directory : undefined,
-  )
-})
-ipcMain.handle("session-list-cache:set", (_event, serverId: unknown, directory: unknown, sessions: unknown) => {
-  assertMainWindow(_event)
-  return sessionListCacheStore.set(String(serverId ?? ""), String(directory ?? ""), sessions)
-})
-ipcMain.handle("quota:query", (_event, value: unknown) => {
-  assertMainWindow(_event)
-  if (!isRecord(value) || !Array.isArray(value.providerIds) || typeof value.localServer !== "boolean") {
-    throw new Error("Invalid quota query")
-  }
-  if (!value.providerIds.every(id => typeof id === "string")) throw new Error("Invalid quota provider ids")
-  return queryProviderQuotas(app.getPath("userData"), {
-    providerIds: value.providerIds,
-    localServer: value.localServer,
-  } satisfies QuotaQueryInput)
-})
-ipcMain.handle("quota:opencode-go-config", (_event) => {
-  assertMainWindow(_event)
-  return getOpenCodeGoQuotaConfig(app.getPath("userData"))
-})
-ipcMain.handle("quota:opencode-go-config-set", async (_event, value: unknown) => {
-  assertMainWindow(_event)
-  if (!isRecord(value) || typeof value.workspaceId !== "string") throw new Error("Invalid OpenCode Go quota config")
-  if (value.authCookie !== undefined && typeof value.authCookie !== "string") throw new Error("Invalid OpenCode Go auth cookie")
-  if (value.clearAuthCookie !== undefined && typeof value.clearAuthCookie !== "boolean") throw new Error("Invalid OpenCode Go auth cookie action")
-  if (value.clearAuthCookie === true) await clearOpenCodeGoBrowserAuth()
-  return updateOpenCodeGoQuotaConfig(app.getPath("userData"), {
-    workspaceId: value.workspaceId,
-    ...(typeof value.authCookie === "string" ? { authCookie: value.authCookie } : {}),
-    ...(value.clearAuthCookie === true ? { clearAuthCookie: true } : {}),
-  } satisfies OpenCodeGoQuotaConfigUpdate)
-})
-ipcMain.handle("quota:opencode-go-login", (_event, value: unknown) => {
-  assertMainWindow(_event)
-  if (value !== undefined && !isRecord(value)) throw new Error("Invalid OpenCode Go login options")
-  if (isRecord(value) && value.force !== undefined && typeof value.force !== "boolean") {
-    throw new Error("Invalid OpenCode Go login mode")
-  }
-  return loginOpenCodeGoQuota(isRecord(value) && value.force === true)
-})
-
-ipcMain.handle("im-bridge:config-get", () => imBridgeService.config())
-ipcMain.handle("im-bridge:config-set", (_event, config: unknown) => imBridgeService.save(config))
-ipcMain.handle("im-bridge:state", () => imBridgeService.state())
-ipcMain.handle("im-bridge:start", () => imBridgeService.start(server?.state.url))
-ipcMain.handle("im-bridge:stop", () => imBridgeService.stop())
-ipcMain.handle("im-bridge:restart", () => imBridgeService.restart(server?.state.url))
-
-ipcMain.handle("credential:get", (_event, id: unknown) => {
-  assertMainWindow(_event)
-  if (typeof id !== "string") throw new Error("Invalid server credential id")
-  return getServerCredential(id)
-})
-ipcMain.handle("credential:set", (_event, id: unknown, rawCredential: unknown) => {
-  assertMainWindow(_event)
-  if (typeof id !== "string") throw new Error("Invalid server credential id")
-  if (rawCredential === null) return setServerCredential(id, null)
-  if (!rawCredential || typeof rawCredential !== "object") throw new Error("Invalid server credential")
-  const credential = rawCredential as Partial<ServerCredential>
-  if (typeof credential.username !== "string" || typeof credential.password !== "string") {
-    throw new Error("Invalid server credential")
-  }
-  return setServerCredential(id, { username: credential.username, password: credential.password })
-})
-ipcMain.handle("secure-environment:set", (_event, scope: unknown, rawValues: unknown) => {
-  assertMainWindow(_event)
-  if (typeof scope !== "string" || !scope.trim() || scope.length > 500) throw new Error("Invalid secure environment scope")
-  const id = `environment.${createHash("sha256").update(scope).digest("hex").slice(0, 24)}`
-  if (rawValues === null) return setSecureCredential(id, null)
-  if (!isRecord(rawValues)) throw new Error("Invalid secure environment values")
-  const values = Object.entries(rawValues).reduce<Record<string, string>>((result, [key, value]) => {
-    if (!/^[A-Z_][A-Z0-9_]{0,127}$/.test(key) || typeof value !== "string") throw new Error("Invalid secure environment entry")
-    result[key] = value
-    return result
-  }, {})
-  return setSecureCredential(id, Object.keys(values).length ? values : null)
-})
-ipcMain.handle("hosting:credentials", async () => {
-  const ids = new Set(await listServerCredentialIDs())
-  return Object.fromEntries(["github", "gitlab", "bitbucket"].map(provider => [provider, ids.has(`hosting.${provider}`)]))
-})
-ipcMain.handle("hosting:credential-set", (_event, provider: unknown, rawCredential: unknown) => {
-  assertMainWindow(_event)
-  const name = normalizeHostingProvider(provider)
-  if (rawCredential === null) return setServerCredential(`hosting.${name}`, null)
-  if (!isRecord(rawCredential) || typeof rawCredential.username !== "string" || typeof rawCredential.password !== "string") throw new Error("Invalid hosting credential")
-  return setServerCredential(`hosting.${name}`, { username: rawCredential.username, password: rawCredential.password })
-})
-ipcMain.handle("hosting:pr-create", (_event, input: unknown) => {
-  assertMainWindow(_event)
-  return createHostedPullRequest(input)
-})
 
 type PluginInstallTarget = {
   kind: "server" | "tui"
@@ -670,6 +531,108 @@ projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json")
 sessionListCacheStore = new SessionListCacheStore(join(app.getPath("userData"), "session-list-cache.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
+registerWindowIpc({ getWindow: () => mainWindow })
+registerCredentialsIpc({
+  assertSender: assertMainWindow,
+  createPullRequest: createHostedPullRequest,
+})
+registerDesktopPreferencesIpc({
+  current: () => desktopPreferencesStore.current(),
+  save: async (value) => {
+    const backgroundSubagents = desktopPreferences.backgroundSubagents
+    desktopPreferences = await desktopPreferencesStore.save(value)
+    applyDesktopPreferences()
+    if (backgroundSubagents !== desktopPreferences.backgroundSubagents && server) void restartServer()
+    return desktopPreferences
+  },
+})
+registerDeepLinkIpc({
+  assertSender: assertMainWindow,
+  consumeInitial: () => {
+    deepLinkRendererReady = true
+    return pendingDeepLinks.splice(0)
+  },
+})
+registerProjectsIpc({
+  assertSender: assertMainWindow,
+  projects: projectsStore,
+  sessionListCache: sessionListCacheStore,
+})
+registerQuotaIpc({
+  assertSender: assertMainWindow,
+  clearBrowserAuth: clearOpenCodeGoBrowserAuth,
+  login: loginOpenCodeGoQuota,
+  userDataPath: app.getPath("userData"),
+})
+registerImBridgeIpc({
+  getServerUrl: () => server?.state.url,
+  service: imBridgeService,
+})
+registerServerIpc({
+  assertSender: assertMainWindow,
+  current: currentServerState,
+  restart: restartServer,
+})
+registerSecurityIpc({
+  assertSender: assertMainWindow,
+  audit: readSecurityAudit,
+  get: readSecurityConfig,
+  installWindowsSandbox,
+  set: updateSecurityConfig,
+  windowsSandboxStatus,
+})
+registerMarketplaceIpc({
+  assertSender: assertMainWindow,
+  expertKitSkillSources,
+  inspectPlugins,
+  installExpertKit,
+  installPlugin,
+  mcpSources,
+  removeExpertKit,
+  searchExpertKits,
+  searchMcpServers,
+  searchPlugins,
+  setMcpMarketplaceSource,
+})
+registerSkillsIpc({
+  assertSender: assertMainWindow,
+  deleteSkill,
+  ensureRoot: ensureSkillRootConfig,
+  writeFiles: writeSkillFiles,
+})
+registerBrowserIpc({
+  assertSender: assertMainWindow,
+  openExternal: openExternalUrl,
+  openInternal: openInternalUrl,
+})
+registerDesktopIntegrationIpc({
+  capturePreview,
+  discoverPreviewPorts,
+  listLocationApps: locationApps,
+  openLocation,
+  waitConsoleLogin,
+})
+registerNotificationIpc({
+  assertSender: assertMainWindow,
+  microphonePermission,
+  notificationPermission,
+  sendNotification: sendNativeNotification,
+})
+registerDiagnosticsIpc({
+  exportLogs: exportDebugLogs,
+  getDiagnostics: readDiagnostics,
+})
+registerTaskIpc({
+  scheduler: taskScheduler,
+  ensureReady: ensureTaskSchedulerStarted,
+  notifyChanged: notifyTasksChanged,
+})
+registerSpeechModelIpc({
+  assertSender: assertMainWindow,
+  ready: () => speechModelReady,
+  service: speechModelService,
+})
+registerDrivesIpc()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
@@ -715,205 +678,6 @@ function notifyScheduledTaskFinished(run: ScheduledTaskRun, task: ScheduledTask)
     directory: run.executionDirectory,
   })
 }
-
-ipcMain.handle("server:get", currentServerState)
-ipcMain.handle("server:restart", (_event) => {
-  assertMainWindow(_event)
-  return restartServer()
-})
-ipcMain.handle("security:get", readSecurityConfig)
-ipcMain.handle("security:audit", readSecurityAudit)
-ipcMain.handle("security:set", async (_event, value: unknown) => {
-  assertMainWindow(_event)
-  const config = normalizeSecurityConfig(value)
-  await writeSecurityConfig(config)
-  await restartServer()
-  return config
-})
-ipcMain.handle("security:windows-sandbox-status", windowsSandboxStatus)
-ipcMain.handle("security:windows-sandbox-install", async (_event) => {
-  assertMainWindow(_event)
-  if (process.platform !== "win32") throw new Error("Windows sandbox installation is only available on Windows")
-  const result = await runWindowsSandbox(["install", "--force"])
-  if (result.code === 10) return { ...(await windowsSandboxStatus()), cancelled: true }
-  if (result.code !== 0) throw new Error(result.stderr || result.stdout || `srt-win install exited ${result.code}`)
-  await restartServer()
-  return windowsSandboxStatus()
-})
-ipcMain.handle("plugin:search", (_event, query: unknown) => searchPlugins(String(query ?? "")))
-ipcMain.handle("plugin:inspect", (_event, specs: unknown) => inspectPlugins(specs))
-ipcMain.handle("mcp:search", (_event, input: unknown) => searchMcpServers(input))
-ipcMain.handle("mcp:source-set", (_event, input: unknown) => setMcpMarketplaceSource(input))
-ipcMain.handle("mcp:source-list", (_event, input: unknown) => mcpSources(input))
-ipcMain.handle("expert-kit:search", (_event, query: unknown) => searchExpertKits(String(query ?? "")))
-ipcMain.handle("expert-kit:skill-sources", expertKitSkillSources)
-ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) => installExpertKit(String(id ?? ""), Boolean(force)))
-ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) => removeExpertKit(String(id ?? ""), Boolean(force)))
-ipcMain.handle("plugin:install", (_event, spec: unknown) => {
-  assertMainWindow(_event)
-  return installPlugin(String(spec ?? ""))
-})
-ipcMain.handle("task:list", async () => {
-  await ensureTaskSchedulerStarted()
-  return taskScheduler.list()
-})
-ipcMain.handle("task:run-list", async (_event, taskID: unknown) => {
-  await ensureTaskSchedulerStarted()
-  return taskScheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined)
-})
-ipcMain.handle("task:settings", async () => {
-  await ensureTaskSchedulerStarted()
-  return taskScheduler.settings()
-})
-ipcMain.handle("task:settings-update", async (_event, input: Parameters<TaskScheduler["updateSettings"]>[0]) => {
-  await ensureTaskSchedulerStarted()
-  const settings = taskScheduler.updateSettings(input)
-  notifyTasksChanged()
-  return settings
-})
-ipcMain.handle("task:run-archive", async (_event, sessionID: unknown, archived: unknown) => {
-  await ensureTaskSchedulerStarted()
-  taskScheduler.setRunArchived(String(sessionID), Boolean(archived))
-  notifyTasksChanged()
-})
-ipcMain.handle("task:create", async (_event, input: Parameters<TaskScheduler["create"]>[0]) => {
-  await ensureTaskSchedulerStarted()
-  const task = taskScheduler.create(input)
-  notifyTasksChanged()
-  return task
-})
-ipcMain.handle("task:update", async (_event, id: unknown, input: Parameters<TaskScheduler["update"]>[1]) => {
-  await ensureTaskSchedulerStarted()
-  const task = taskScheduler.update(String(id), input)
-  notifyTasksChanged()
-  return task
-})
-ipcMain.handle("task:remove", async (_event, id: unknown) => {
-  await ensureTaskSchedulerStarted()
-  const removed = taskScheduler.remove(String(id))
-  notifyTasksChanged()
-  return removed
-})
-ipcMain.handle("task:run", async (_event, id: unknown) => {
-  await ensureTaskSchedulerStarted()
-  const task = await taskScheduler.run(String(id))
-  notifyTasksChanged()
-  return task
-})
-ipcMain.handle("task:cancel", async (_event, id: unknown) => {
-  await ensureTaskSchedulerStarted()
-  const task = await taskScheduler.cancelTask(String(id))
-  notifyTasksChanged()
-  return task
-})
-ipcMain.handle("task:run-cancel", async (_event, id: unknown) => {
-  await ensureTaskSchedulerStarted()
-  const run = await taskScheduler.cancelRun(String(id))
-  notifyTasksChanged()
-  return run
-})
-ipcMain.handle("skill:write-files", (_event, root: unknown, files: unknown) => {
-  assertMainWindow(_event)
-  return writeSkillFiles(String(root ?? ""), files)
-})
-ipcMain.handle("skill:ensure-root", ensureSkillRootConfig)
-ipcMain.handle("skill:delete", (_event, location: unknown) => {
-  assertMainWindow(_event)
-  return deleteSkill(String(location ?? ""))
-})
-ipcMain.handle("browser:open-external", (_event, url: unknown) => {
-  assertMainWindow(_event)
-  return openExternalUrl(String(url ?? ""))
-})
-ipcMain.handle("browser:open-internal", (_event, url: unknown) => {
-  assertMainWindow(_event)
-  return openInternalUrl(String(url ?? ""))
-})
-ipcMain.handle("preview:discover", (_event, host: unknown) => discoverPreviewPorts(String(host ?? "")))
-ipcMain.handle("preview:capture", (_event, rect: unknown) => capturePreview(rect))
-ipcMain.handle("location:apps", locationApps)
-ipcMain.handle("location:open", (_event, input: unknown) => openLocation(input))
-ipcMain.handle("console:login-wait", (_event, login: unknown) => waitConsoleLogin(login))
-ipcMain.handle("notification:permission", notificationPermission)
-ipcMain.handle("notification:send", (_event, input: unknown) => sendNativeNotification(input))
-ipcMain.handle("microphone:permission", (_event) => {
-  assertMainWindow(_event)
-  return microphonePermission()
-})
-ipcMain.handle("speech-model:config-get", async (_event) => {
-  assertMainWindow(_event)
-  await speechModelReady
-  return speechModelService.config()
-})
-ipcMain.handle("speech-model:config-set", async (_event, value: unknown) => {
-  assertMainWindow(_event)
-  await speechModelReady
-  return speechModelService.save(value)
-})
-ipcMain.handle("speech-model:models", async (_event, value: unknown) => {
-  assertMainWindow(_event)
-  await speechModelReady
-  return speechModelService.models(value)
-})
-ipcMain.handle("speech-model:transcribe", async (_event, value: unknown) => {
-  assertMainWindow(_event)
-  await speechModelReady
-  return speechModelService.transcribe(value)
-})
-ipcMain.handle("logging:export", exportDebugLogs)
-ipcMain.handle("diagnostics:get", async () => {
-  const security = await readSecurityConfig()
-  return {
-    generatedAt: new Date().toISOString(),
-    application: {
-      name: app.getName(),
-      version: app.getVersion(),
-      packaged: app.isPackaged,
-      platform: process.platform,
-      arch: process.arch,
-      locale: app.getLocale(),
-      electron: process.versions.electron,
-      chrome: process.versions.chrome,
-      node: process.versions.node,
-      uptimeSeconds: Math.round(process.uptime()),
-    },
-    localRunner: {
-      status: server ? "online" : "starting",
-      error: serverError,
-    },
-    imBridge: {
-      status: imBridgeService.state().status,
-    },
-    security: {
-      sandboxEnabled: security.sandbox.enabled,
-      blockPrivateNetworks: security.sandbox.blockPrivateNetworks,
-      allowedDomainRules: security.sandbox.allowedDomains.length,
-      deniedDomainRules: security.sandbox.deniedDomains.length,
-      allowedIPRules: security.sandbox.allowedIPs.length,
-      deniedIPRules: security.sandbox.deniedIPs.length,
-      auditEnabled: security.audit.enabled,
-      windowsSandbox: await windowsSandboxStatus(),
-    },
-    recentLogs: diagnosticLogTail(),
-  }
-})
-
-// Windows 盘符列表
-ipcMain.handle("drives:list", async () => {
-  if (process.platform !== "win32") return []
-  const { execSync } = await import("node:child_process")
-  try {
-    const output = execSync("wmic logicaldisk get name", { encoding: "utf-8", timeout: 5000 })
-    const drives: string[] = []
-    for (const line of output.split("\n")) {
-      const match = line.trim().match(/^([A-Z]:)$/)
-      if (match) drives.push(match[1])
-    }
-    return drives
-  } catch {
-    return []
-  }
-})
 
 app.on("before-quit", (event) => {
   if (isStoppingForQuit) return
@@ -1791,6 +1555,61 @@ async function readSecurityAudit() {
   return contents.flatMap(item => item.text.split(/\r?\n/).filter(Boolean).slice(-200).map(line => ({ file: item.file, line }))).slice(-500).reverse()
 }
 
+async function updateSecurityConfig(value: unknown) {
+  const config = normalizeSecurityConfig(value)
+  await writeSecurityConfig(config)
+  await restartServer()
+  return config
+}
+
+async function installWindowsSandbox() {
+  if (process.platform !== "win32") throw new Error("Windows sandbox installation is only available on Windows")
+  const result = await runWindowsSandbox(["install", "--force"])
+  if (result.code === 10) return { ...(await windowsSandboxStatus()), cancelled: true }
+  if (result.code !== 0) {
+    throw new Error(result.stderr || result.stdout || `srt-win install exited ${result.code}`)
+  }
+  await restartServer()
+  return windowsSandboxStatus()
+}
+
+async function readDiagnostics() {
+  const security = await readSecurityConfig()
+  return {
+    generatedAt: new Date().toISOString(),
+    application: {
+      name: app.getName(),
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      platform: process.platform,
+      arch: process.arch,
+      locale: app.getLocale(),
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      node: process.versions.node,
+      uptimeSeconds: Math.round(process.uptime()),
+    },
+    localRunner: {
+      status: server ? "online" : "starting",
+      error: serverError,
+    },
+    imBridge: {
+      status: imBridgeService.state().status,
+    },
+    security: {
+      sandboxEnabled: security.sandbox.enabled,
+      blockPrivateNetworks: security.sandbox.blockPrivateNetworks,
+      allowedDomainRules: security.sandbox.allowedDomains.length,
+      deniedDomainRules: security.sandbox.deniedDomains.length,
+      allowedIPRules: security.sandbox.allowedIPs.length,
+      deniedIPRules: security.sandbox.deniedIPs.length,
+      auditEnabled: security.audit.enabled,
+      windowsSandbox: await windowsSandboxStatus(),
+    },
+    recentLogs: diagnosticLogTail(),
+  }
+}
+
 function normalizeSecurityConfig(value: unknown): SecurityConfig {
   const defaults = defaultSecurityConfig()
   if (!isRecord(value)) return defaults
@@ -2125,13 +1944,6 @@ async function openExternalUrl(rawUrl: string) {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
   await shell.openExternal(url.toString())
   return true
-}
-
-type HostingProvider = "github" | "gitlab" | "bitbucket"
-
-function normalizeHostingProvider(value: unknown): HostingProvider {
-  if (value === "github" || value === "gitlab" || value === "bitbucket") return value
-  throw new Error("Unsupported Git hosting provider")
 }
 
 async function createHostedPullRequest(rawInput: unknown) {
