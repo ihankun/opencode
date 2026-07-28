@@ -3,7 +3,7 @@ import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import path from "path"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Effect, Layer, Context } from "effect"
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest } from "effect/unstable/http"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -11,8 +11,8 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 import { Global } from "@opencode-ai/core/global"
-import type { MessageV2 } from "./message-v2"
 import type { MessageID } from "./schema"
+import { memorySourceDefinitions } from "./memory-source"
 
 function extract(messages: SessionV1.WithParts[]) {
   const paths = new Set<string>()
@@ -112,8 +112,13 @@ const layer: Layer.Layer<
       const ctx = yield* InstanceState.context
       const paths = new Set<string>()
 
-      const globalMemory = path.join(global.config, "memory.md")
-      if (yield* fs.existsSafe(globalMemory)) paths.add(path.resolve(globalMemory))
+      const memorySources = memorySourceDefinitions({
+        globalConfig: global.config,
+        directory: ctx.directory,
+        worktree: ctx.worktree,
+      })
+      const globalMemory = memorySources.find((item) => item.id === "global")
+      if (globalMemory && (yield* fs.existsSafe(globalMemory.path))) paths.add(path.resolve(globalMemory.path))
 
       for (const file of globalFiles) {
         if (yield* fs.existsSafe(file)) {
@@ -124,6 +129,11 @@ const layer: Layer.Layer<
 
       // The first project-level match wins so we don't stack AGENTS.md/CLAUDE.md from every ancestor.
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
+        const projectInstructions = memorySources.find((item) => item.id === "project")
+        if (projectInstructions && (yield* fs.existsSafe(projectInstructions.path))) {
+          paths.add(path.resolve(projectInstructions.path))
+        }
+
         for (const file of instructionFiles) {
           const matches = yield* fs
             .findUp(file, ctx.directory, ctx.worktree)
@@ -134,8 +144,10 @@ const layer: Layer.Layer<
           }
         }
 
-        const workspaceMemory = path.join(ctx.directory, ".opencode", "memory.md")
-        if (yield* fs.existsSafe(workspaceMemory)) paths.add(path.resolve(workspaceMemory))
+        const workspaceMemory = memorySources.find((item) => item.id === "workspace")
+        if (workspaceMemory && (yield* fs.existsSafe(workspaceMemory.path))) {
+          paths.add(path.resolve(workspaceMemory.path))
+        }
       }
 
       if (config.instructions) {

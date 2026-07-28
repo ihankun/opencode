@@ -1,4 +1,5 @@
 import { afterEach, describe, expect } from "bun:test"
+import path from "path"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/unstable/http"
@@ -210,6 +211,35 @@ describe("experimental HttpApi", () => {
       expect(yield* json(response)).toEqual({
         name: "WorktreeNotGitError",
         data: { message: "Worktrees are only supported for git projects" },
+      })
+    }),
+  )
+
+  it.instance("reads and updates one workspace memory source", () =>
+    Effect.gen(function* () {
+      const tmp = yield* TestInstance
+      const memoryPath = ExperimentalPaths.memoryItem.replace(":sourceID", "workspace")
+      const updated = yield* request(memoryPath, tmp.directory, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: "# Workspace memory\n\n- Use Bun.\n" }),
+      })
+
+      expect(updated.status).toBe(200)
+      expect(yield* json(updated)).toMatchObject({
+        id: "workspace",
+        path: path.join(tmp.directory, ".opencode", "memory.md"),
+        exists: true,
+        content: "# Workspace memory\n\n- Use Bun.\n",
+      })
+
+      const loaded = yield* request(memoryPath, tmp.directory)
+      expect(loaded.status).toBe(200)
+      expect(yield* json(loaded)).toMatchObject({
+        id: "workspace",
+        path: path.join(tmp.directory, ".opencode", "memory.md"),
+        exists: true,
+        content: "# Workspace memory\n\n- Use Bun.\n",
       })
     }),
   )

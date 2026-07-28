@@ -37,6 +37,20 @@
     "loadingPanel": "Loading panel...",
     "noActiveSession": "No active session"
   },
+  "contextFile": {
+    "selectProject": "Select a project before viewing or editing context files",
+    "projectTitle": "Project instructions",
+    "projectDescription": "AGENTS.md at the project root, shared by the project and its isolated worktrees.",
+    "workspaceTitle": "Workspace memory",
+    "workspaceDescription": ".opencode/memory.md in the active execution directory, scoped to this workspace or isolated worktree.",
+    "exists": "File exists",
+    "willCreate": "Created on save",
+    "nextMessage": "No restart is needed. Saved changes take effect with the next message.",
+    "previousProjectDraft": "Unsaved content from the previous project is being preserved. Saving it will then load the active project.",
+    "discardTitle": "Discard unsaved changes?",
+    "discardDescription": "This file has unsaved content. Discard it to load the context file for the new project.",
+    "discardAndSwitch": "Discard and switch"
+  },
   "bottomPanel": {
     "loadingPanel": "Loading panel..."
   },
@@ -47,6 +61,9 @@
     "skills": "Skills",
     "worktrees": "Worktrees",
     "preview": "Preview",
+    "projectInstructions": "Project Instructions",
+    "workspaceMemory": "Workspace Memory",
+    "selectProject": "Select a project first",
     "tab": "Tab",
     "addTab": "Add Tab",
     "renameTerminal": "Rename Terminal",

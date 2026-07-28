@@ -7,7 +7,6 @@ export interface MemorySource {
   name: string
   path: string
   scope: MemorySourceID
-  priority: number
   exists: boolean
   content: string
 }
@@ -17,8 +16,8 @@ function memoryPath(path: string, directory?: string) {
   return formatted ? `${path}?${new URLSearchParams({ directory: formatted }).toString()}` : path
 }
 
-export function listMemorySources(directory?: string) {
-  return apiFetchJson<MemorySource[]>(memoryPath('/experimental/memory', directory))
+export function getMemorySource(id: MemorySourceID, directory?: string) {
+  return apiFetchJson<MemorySource>(memoryPath(`/experimental/memory/${id}`, directory))
 }
 
 export function updateMemorySource(id: MemorySourceID, content: string, directory?: string) {

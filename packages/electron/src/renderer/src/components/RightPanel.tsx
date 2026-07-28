@@ -18,6 +18,9 @@ const McpPanel = lazy(() => import('./McpPanel').then(module => ({ default: modu
 const SkillPanel = lazy(() => import('./SkillPanel').then(module => ({ default: module.SkillPanel })))
 const WorktreePanel = lazy(() => import('./WorktreePanel').then(module => ({ default: module.WorktreePanel })))
 const PreviewPanel = lazy(() => import('./PreviewPanel').then(module => ({ default: module.PreviewPanel })))
+const ContextFileEditor = lazy(() =>
+  import('./ContextFileEditor').then(module => ({ default: module.ContextFileEditor })),
+)
 
 function PanelFallback() {
   const { t } = useTranslation(['components', 'common'])
@@ -154,6 +157,28 @@ export const RightPanel = memo(function RightPanel({ directory, sessionId, inlin
               <PreviewPanel tabId={activeTab.id} url={activeTab.previewUrl} />
             </Suspense>
           ) : null}
+
+          <div className={activeTab.type === 'project-instructions' ? 'h-full' : 'hidden'}>
+            <Suspense fallback={<PanelFallback />}>
+              <ContextContent
+                activeTab={activeTab}
+                source="project"
+                directory={normalizedDirectory}
+                sessionId={sessionId}
+              />
+            </Suspense>
+          </div>
+
+          <div className={activeTab.type === 'workspace-memory' ? 'h-full' : 'hidden'}>
+            <Suspense fallback={<PanelFallback />}>
+              <ContextContent
+                activeTab={activeTab}
+                source="workspace"
+                directory={normalizedDirectory}
+                sessionId={sessionId}
+              />
+            </Suspense>
+          </div>
         </>
       )
     },
@@ -283,6 +308,35 @@ const ChangesContent = memo(function ChangesContent({
           <SessionChangesPanel sessionId={sessionId} directory={directory} isResizing={isPanelResizing} />
         </div>
       ))}
+    </>
+  )
+})
+
+interface ContextContentProps {
+  activeTab: PanelTab
+  source: 'project' | 'workspace'
+  directory?: string
+  sessionId?: string | null
+}
+
+const ContextContent = memo(function ContextContent({
+  activeTab,
+  source,
+  directory,
+  sessionId,
+}: ContextContentProps) {
+  const { panelTabs } = useLayoutStore()
+  const type = source === 'project' ? 'project-instructions' : 'workspace-memory'
+
+  return (
+    <>
+      {panelTabs
+        .filter(tab => tab.position === 'right' && tab.type === type)
+        .map(tab => (
+          <div key={tab.id} className={tab.id === activeTab.id ? 'h-full' : 'hidden'}>
+            <ContextFileEditor source={source} directory={directory} sessionId={sessionId} />
+          </div>
+        ))}
     </>
   )
 })

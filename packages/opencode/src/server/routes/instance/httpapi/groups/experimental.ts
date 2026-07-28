@@ -71,7 +71,6 @@ const MemorySource = Schema.Struct({
   name: Schema.String,
   path: Schema.String,
   scope: Schema.Literals(["global", "project", "workspace"]),
-  priority: Schema.Number,
   exists: Schema.Boolean,
   content: Schema.String,
 })
@@ -472,6 +471,12 @@ export const ExperimentalApi = HttpApi.make("experimental")
           query: WorkspaceRoutingQuery,
           success: described(Schema.Array(MemorySource), "Memory sources"),
           error: HttpApiError.InternalServerError,
+        }),
+        HttpApiEndpoint.get("memoryGet", ExperimentalPaths.memoryItem, {
+          params: { sourceID: Schema.Literals(["global", "project", "workspace"]) },
+          query: WorkspaceRoutingQuery,
+          success: described(MemorySource, "Memory source"),
+          error: HttpApiError.BadRequest,
         }),
         HttpApiEndpoint.put("memoryUpdate", ExperimentalPaths.memoryItem, {
           params: { sourceID: Schema.Literals(["global", "project", "workspace"]) },

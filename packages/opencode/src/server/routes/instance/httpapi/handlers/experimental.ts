@@ -8,6 +8,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { clearGoal, getGoal, setGoalStatus } from "@/goal/state"
 import { MCP } from "@/mcp"
 import { HookManager } from "@/hooks"
+import { memorySourceDefinition, memorySourceDefinitions, type MemorySourceID } from "@/session/memory-source"
 import { Project } from "@/project/project"
 import { Session } from "@/session/session"
 import { Snapshot } from "@/snapshot"
@@ -81,18 +82,16 @@ async function updateCheckpointRegistry<R>(file: string, change: (entries: Check
   })
 }
 
-type MemorySourceID = "global" | "project" | "workspace"
-
-function memorySourceDefinitions(ctx: { directory: string; worktree: string }) {
-  return [
-    { id: "global" as const, name: "Global memory", path: path.join(Global.Path.config, "memory.md"), scope: "global" as const, priority: 10 },
-    { id: "project" as const, name: "Project instructions", path: path.join(ctx.worktree, "AGENTS.md"), scope: "project" as const, priority: 50 },
-    { id: "workspace" as const, name: "Workspace memory", path: path.join(ctx.directory, ".opencode", "memory.md"), scope: "workspace" as const, priority: 100 },
-  ]
+function memoryContext(ctx: { directory: string; worktree: string }) {
+  return {
+    globalConfig: Global.Path.config,
+    directory: ctx.directory,
+    worktree: ctx.worktree,
+  }
 }
 
 async function readMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID) {
-  const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
+  const source = memorySourceDefinition(memoryContext(ctx), id)
   if (!source) throw new Error("Memory source not found")
   const content = await readFile(source.path, "utf8").catch((error: unknown) => {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined
@@ -103,7 +102,7 @@ async function readMemorySource(ctx: { directory: string; worktree: string }, id
 
 async function writeMemorySource(ctx: { directory: string; worktree: string }, id: MemorySourceID, content: string) {
   if (Buffer.byteLength(content) > 1_000_000) throw new Error("Memory content exceeds 1 MB")
-  const source = memorySourceDefinitions(ctx).find((item) => item.id === id)
+  const source = memorySourceDefinition(memoryContext(ctx), id)
   if (!source) throw new Error("Memory source not found")
   await mkdir(path.dirname(source.path), { recursive: true })
   await writeFile(source.path, content)
@@ -489,7 +488,14 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
 
     const memoryList = Effect.fn("ExperimentalHttpApi.memoryList")(function* () {
       const ctx = yield* InstanceState.context
-      return yield* Effect.promise(() => Promise.all(memorySourceDefinitions(ctx).map((source) => readMemorySource(ctx, source.id))))
+      return yield* Effect.promise(() => Promise.all(memorySourceDefinitions(memoryContext(ctx)).map((source) => readMemorySource(ctx, source.id))))
+    })
+
+    const memoryGet = Effect.fn("ExperimentalHttpApi.memoryGet")(function* (input: {
+      params: { sourceID: MemorySourceID }
+    }) {
+      const ctx = yield* InstanceState.context
+      return yield* Effect.promise(() => readMemorySource(ctx, input.params.sourceID))
     })
 
     const memoryUpdate = Effect.fn("ExperimentalHttpApi.memoryUpdate")(function* (input: {
@@ -627,6 +633,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("checkpointDiff", checkpointDiff)
       .handle("checkpointRestore", checkpointRestore)
       .handle("memoryList", memoryList)
+      .handle("memoryGet", memoryGet)
       .handle("memoryUpdate", memoryUpdate)
       .handle("memoryCapture", memoryCapture)
       .handle("hooksGet", hooksGet)

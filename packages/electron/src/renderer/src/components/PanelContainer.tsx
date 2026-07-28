@@ -17,6 +17,8 @@ import {
   TeachIcon,
   GitWorktreeIcon,
   GlobeIcon,
+  AgentIcon,
+  FileIcon,
 } from './Icons'
 import { layoutStore, useLayoutStore, type PanelTab, type PanelPosition, type PanelTabType } from '../store/layoutStore'
 import { updatePtySession } from '../api/pty'
@@ -47,6 +49,8 @@ const TAB_ICONS: Record<PanelTabType, React.ReactNode> = {
   skill: <TeachIcon size={12} />,
   worktree: <GitWorktreeIcon size={12} />,
   preview: <GlobeIcon size={12} />,
+  'project-instructions': <FileIcon size={12} />,
+  'workspace-memory': <AgentIcon size={12} />,
 }
 
 // Tab 显示名称
@@ -75,6 +79,10 @@ function getTabLabel(tab: PanelTab, tabs: PanelTab[], t: (key: string) => string
       return t('panelContainer.worktrees')
     case 'preview':
       return t('panelContainer.preview')
+    case 'project-instructions':
+      return t('panelContainer.projectInstructions')
+    case 'workspace-memory':
+      return t('panelContainer.workspaceMemory')
     default:
       return t('panelContainer.tab')
   }
@@ -401,12 +409,14 @@ export const PanelContainer = memo(function PanelContainer({
                 {t('panelContainer.renameTerminal')}
               </button>
             )}
-            <button
-              onClick={handleMoveToOtherPanel}
-              className="w-full px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors"
-            >
-              {otherPanelLabel}
-            </button>
+            {contextTab?.type !== 'project-instructions' && contextTab?.type !== 'workspace-memory' ? (
+              <button
+                onClick={handleMoveToOtherPanel}
+                className="w-full px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors"
+              >
+                {otherPanelLabel}
+              </button>
+            ) : null}
           </div>,
           document.body,
         )}
@@ -483,6 +493,41 @@ export const PanelContainer = memo(function PanelContainer({
               </span>
               {t('panelContainer.worktrees')}
             </button>
+            {position === 'right' ? (
+              <>
+                <div className="my-1 border-t border-border-200/60" />
+                <button
+                  disabled={!directory}
+                  onClick={() => {
+                    if (!directory) return
+                    layoutStore.addProjectInstructionsTab()
+                    setAddMenuPos(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-200"
+                  title={!directory ? t('panelContainer.selectProject') : undefined}
+                >
+                  <span className="opacity-60 shrink-0">
+                    <FileIcon size={12} />
+                  </span>
+                  {t('panelContainer.projectInstructions')}
+                </button>
+                <button
+                  disabled={!directory}
+                  onClick={() => {
+                    if (!directory) return
+                    layoutStore.addWorkspaceMemoryTab()
+                    setAddMenuPos(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-200"
+                  title={!directory ? t('panelContainer.selectProject') : undefined}
+                >
+                  <span className="opacity-60 shrink-0">
+                    <AgentIcon size={12} />
+                  </span>
+                  {t('panelContainer.workspaceMemory')}
+                </button>
+              </>
+            ) : null}
           </div>,
           document.body,
         )}

@@ -37,6 +37,20 @@
     "loadingPanel": "加载面板中...",
     "noActiveSession": "没有活跃会话"
   },
+  "contextFile": {
+    "selectProject": "请先选择项目，再查看或修改上下文文件",
+    "projectTitle": "项目规则",
+    "projectDescription": "项目根目录的 AGENTS.md，适用于当前项目及其隔离 Worktree。",
+    "workspaceTitle": "工作区记忆",
+    "workspaceDescription": "当前执行目录的 .opencode/memory.md，仅适用于这个工作区或隔离 Worktree。",
+    "exists": "文件已存在",
+    "willCreate": "保存时创建",
+    "nextMessage": "保存后无需重启，将从下一次发送消息开始生效。",
+    "previousProjectDraft": "当前保留着上一个项目尚未保存的内容；保存后会自动切换到当前项目。",
+    "discardTitle": "丢弃未保存的更改？",
+    "discardDescription": "当前文件还有未保存的内容。丢弃后将加载新项目对应的上下文文件。",
+    "discardAndSwitch": "丢弃并切换"
+  },
   "bottomPanel": {
     "loadingPanel": "加载面板中..."
   },
@@ -47,6 +61,9 @@
     "skills": "Skills",
     "worktrees": "Worktrees",
     "preview": "预览",
+    "projectInstructions": "项目规则",
+    "workspaceMemory": "工作区记忆",
+    "selectProject": "请先选择项目",
     "tab": "标签",
     "addTab": "添加标签",
     "renameTerminal": "重命名终端",

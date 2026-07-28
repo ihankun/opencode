@@ -5,7 +5,6 @@ import { Effect, FileSystem, Layer } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 
 import { Instruction } from "../../src/session/instruction"
-import type { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Global } from "@opencode-ai/core/global"
 import { RuntimeFlags } from "../../src/effect/runtime-flags"
@@ -210,6 +209,25 @@ describe("Instruction.resolve", () => {
 })
 
 describe("Instruction.system", () => {
+  it.live("loads managed context files from global to project to workspace", () =>
+    Effect.gen(function* () {
+      const globalTmp = yield* tmpWithFiles({ "memory.md": "# Global Memory" })
+      const projectTmp = yield* tmpWithFiles({
+        "AGENTS.md": "# Project Instructions",
+        ".opencode/memory.md": "# Workspace Memory",
+      })
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        expect(yield* svc.system()).toEqual([
+          `Instructions from: ${path.join(globalTmp, "memory.md")}\n# Global Memory`,
+          `Instructions from: ${path.join(projectTmp, "AGENTS.md")}\n# Project Instructions`,
+          `Instructions from: ${path.join(projectTmp, ".opencode", "memory.md")}\n# Workspace Memory`,
+        ])
+      }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp }))
+    }),
+  )
+
   it.live("loads both project and global AGENTS.md when both exist", () =>
     Effect.gen(function* () {
       const globalTmp = yield* tmpWithFiles({ "AGENTS.md": "# Global Instructions" })

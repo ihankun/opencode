@@ -6,7 +6,16 @@
 export type PanelPosition = 'bottom' | 'right'
 
 // 面板内容类型
-export type PanelTabType = 'terminal' | 'files' | 'changes' | 'mcp' | 'skill' | 'worktree' | 'preview'
+export type PanelTabType =
+  | 'terminal'
+  | 'files'
+  | 'changes'
+  | 'mcp'
+  | 'skill'
+  | 'worktree'
+  | 'preview'
+  | 'project-instructions'
+  | 'workspace-memory'
 type PersistedPanelTabType = Exclude<PanelTabType, 'terminal'>
 
 // 统一的面板标签
@@ -165,7 +174,16 @@ export interface PersistedTerminalLayoutMap {
 }
 
 const PANEL_POSITIONS: PanelPosition[] = ['bottom', 'right']
-const PERSISTED_PANEL_TAB_TYPES: PersistedPanelTabType[] = ['files', 'changes', 'mcp', 'skill', 'worktree', 'preview']
+const PERSISTED_PANEL_TAB_TYPES: PersistedPanelTabType[] = [
+  'files',
+  'changes',
+  'mcp',
+  'skill',
+  'worktree',
+  'preview',
+  'project-instructions',
+  'workspace-memory',
+]
 
 function isPanelPosition(value: unknown): value is PanelPosition {
   return typeof value === 'string' && PANEL_POSITIONS.includes(value as PanelPosition)
@@ -651,6 +669,14 @@ export class LayoutStore {
   // 添加 Worktree 标签
   addWorktreeTab(position: PanelPosition) {
     return this.addSingletonTab('worktree', position, 'worktree')
+  }
+
+  addProjectInstructionsTab() {
+    return this.addSingletonTab('project-instructions', 'right', 'project-instructions')
+  }
+
+  addWorkspaceMemoryTab() {
+    return this.addSingletonTab('workspace-memory', 'right', 'workspace-memory')
   }
 
   // 添加应用内网页预览；外部链接始终复用同一个预览标签。
