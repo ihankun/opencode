@@ -1,23 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
-import { DownloadIcon, ExternalLinkIcon, RetryIcon, UploadIcon } from '../../../components/Icons'
+import { ExternalLinkIcon, RetryIcon } from '../../../components/Icons'
 import { hasUpdateAvailable, RELEASES_PAGE_URL, updateStore, useUpdateStore } from '../../../store/updateStore'
-import { saveData } from '../../../utils/downloadUtils'
-import { exportSettingsBackup, importSettingsBackup, previewBackupMeta } from '../../../utils/settingsBackup'
 import { openUrl } from '../../../utils/browserOpen'
 import { SettingsCard, SettingsSection } from './SettingsUI'
-import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 
 export function AboutSettings() {
   const { i18n, t } = useTranslation(['settings'])
   const updateState = useUpdateStore()
   const latestRelease = updateState.latestRelease
   const updateAvailable = hasUpdateAvailable(updateState)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null)
-  const [backupError, setBackupError] = useState<string | null>(null)
-  const [pendingBackup, setPendingBackup] = useState<{ file: File; createdAt?: string } | null>(null)
 
   useEffect(() => {
     void updateStore.checkForUpdates()
@@ -30,60 +23,6 @@ export function AboutSettings() {
   const handleOpenRelease = useCallback((url: string) => {
     void openUrl(url, 'system')
   }, [])
-
-  const handleExportBackup = useCallback(async () => {
-    setBackupError(null)
-    setBackupBusy('export')
-    try {
-      const { fileName, data } = await exportSettingsBackup()
-      saveData(data, fileName, 'application/json;charset=utf-8')
-    } catch (error) {
-      setBackupError(error instanceof Error ? error.message : t('about.backupExportFailed'))
-    } finally {
-      setBackupBusy(null)
-    }
-  }, [t])
-
-  const handleImportClick = useCallback(() => {
-    setBackupError(null)
-    fileInputRef.current?.click()
-  }, [])
-
-  const handleImportBackup = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      event.target.value = ''
-      if (!file) return
-
-      setBackupError(null)
-      setBackupBusy('import')
-
-      try {
-        const { createdAt } = await previewBackupMeta(file)
-        setPendingBackup({ file, createdAt: createdAt ?? undefined })
-      } catch (error) {
-        setBackupError(error instanceof Error ? error.message : t('about.backupImportFailed'))
-      } finally {
-        setBackupBusy(null)
-      }
-    },
-    [t],
-  )
-
-  const confirmImportBackup = useCallback(async () => {
-    if (!pendingBackup) return
-    setBackupBusy('import')
-    setBackupError(null)
-    try {
-      await importSettingsBackup(pendingBackup.file)
-      window.location.reload()
-    } catch (error) {
-      setBackupError(error instanceof Error ? error.message : t('about.backupImportFailed'))
-      setPendingBackup(null)
-    } finally {
-      setBackupBusy(null)
-    }
-  }, [pendingBackup, t])
 
   return (
     <div className="space-y-7">
@@ -147,45 +86,7 @@ export function AboutSettings() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title={t('about.backupCardTitle')} description={t('about.backupCardDesc')}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleImportBackup}
-            className="hidden"
-          />
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border-200/50 bg-bg-100/35 px-3 py-3 text-[length:var(--fs-sm)] text-text-300 leading-relaxed">
-              {t('about.backupWarning')}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-success-100/25 bg-success-100/5 px-3 py-3"><div className="mb-2 text-[length:var(--fs-xs)] font-semibold text-success-100">{i18n.language.startsWith('zh') ? '包含' : 'Included'}</div><ul className="space-y-1 text-[length:var(--fs-xs)] text-text-300"><li>• {i18n.language.startsWith('zh') ? '主题、布局、快捷键和通知' : 'Theme, layout, keybindings, notifications'}</li><li>• {i18n.language.startsWith('zh') ? '服务器地址与默认项（不含凭据）' : 'Server profiles without credentials'}</li><li>• {i18n.language.startsWith('zh') ? '每服务器 UI、声音和更新偏好' : 'Per-server UI, sound, and update preferences'}</li></ul></div>
-              <div className="rounded-lg border border-warning-100/25 bg-warning-100/5 px-3 py-3"><div className="mb-2 text-[length:var(--fs-xs)] font-semibold text-warning-100">{i18n.language.startsWith('zh') ? '不包含，需要重新配置' : 'Excluded; reconfiguration required'}</div><ul className="space-y-1 text-[length:var(--fs-xs)] text-text-300"><li>• {i18n.language.startsWith('zh') ? '密码、API Key、Token 和 IM Secret' : 'Passwords, API keys, tokens, IM secrets'}</li><li>• {i18n.language.startsWith('zh') ? '自动化、Hooks、Memory 和安全策略' : 'Automations, hooks, memory, security policy'}</li><li>• {i18n.language.startsWith('zh') ? 'OpenCode 全局/项目配置' : 'OpenCode global/project configuration'}</li></ul></div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" isLoading={backupBusy === 'export'} onClick={handleExportBackup}>
-                {backupBusy !== 'export' && <DownloadIcon size={12} />}
-                {t('about.exportBackup')}
-              </Button>
-              <Button size="sm" variant="ghost" isLoading={backupBusy === 'import'} onClick={handleImportClick}>
-                {backupBusy !== 'import' && <UploadIcon size={12} />}
-                {t('about.importBackup')}
-              </Button>
-            </div>
-
-            {backupError && (
-              <div className="rounded-lg border border-danger-100/20 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-sm)] text-danger-100 leading-relaxed">
-                {backupError}
-              </div>
-            )}
-          </div>
-        </SettingsCard>
-
       </SettingsSection>
-      <ConfirmDialog isOpen={pendingBackup !== null} onClose={() => setPendingBackup(null)} onConfirm={() => void confirmImportBackup()} title={t('about.importBackup')} description={pendingBackup?.createdAt ? t('about.backupImportConfirmWithDate', { date: new Date(pendingBackup.createdAt).toLocaleString() }) : t('about.backupImportConfirm')} confirmText={t('about.importBackup')} variant="warning" isLoading={backupBusy === 'import'} />
     </div>
   )
 }

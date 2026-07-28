@@ -45,9 +45,10 @@ export const SETTINGS_SEARCH_DEFINITIONS: SettingsSearchDefinition[] = [
   ...definitions('hooks', ['tabs.hooks']),
   ...definitions('security', ['tabs.security']),
   ...definitions('logs', ['logs.debugLogsCardTitle', 'logs.diagnosticsCardTitle']),
+  ...definitions('backup', ['backup.cardTitle']),
   ...definitions('config', ['config.sourceTitle']),
   ...definitions('keybindings', ['keybindings.title']),
-  ...definitions('about', ['about.versionCardTitle', 'about.backupCardTitle']),
+  ...definitions('about', ['about.versionCardTitle', 'about.updateCardTitle']),
 ]
 
 function normalizeSearchText(value: string) {

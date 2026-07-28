@@ -204,7 +204,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
               onChange={event => setQuery(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t('sessionSearch.placeholder')}
-              className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--fs-base)] text-text-100 placeholder:text-text-500 outline-none"
+              className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--fs-base)] text-text-100 placeholder:text-text-500 outline-none focus-visible:outline-none"
             />
             {(loading || indexing) && <SpinnerIcon size={15} className="shrink-0 animate-spin text-text-400" />}
           </div>

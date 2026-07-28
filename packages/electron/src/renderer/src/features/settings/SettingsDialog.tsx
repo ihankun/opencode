@@ -20,6 +20,7 @@ import {
   GitBranchIcon,
   MicrophoneIcon,
   FileIcon,
+  DownloadIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { isTauri } from '../../utils/tauri'
@@ -30,6 +31,7 @@ const AgentSettings = lazy(() => import('./components/AgentSettings').then(modul
 const AppearanceSettings = lazy(() => import('./components/AppearanceSettings').then(module => ({ default: module.AppearanceSettings })))
 const AboutSettings = lazy(() => import('./components/AboutSettings').then(module => ({ default: module.AboutSettings })))
 const LogsSettings = lazy(() => import('./components/LogsSettings').then(module => ({ default: module.LogsSettings })))
+const BackupSettings = lazy(() => import('./components/BackupSettings').then(module => ({ default: module.BackupSettings })))
 const ChatSettings = lazy(() => import('./components/ChatSettings').then(module => ({ default: module.ChatSettings })))
 const ModelsSettings = lazy(() => import('./components/ModelsSettings').then(module => ({ default: module.ModelsSettings })))
 const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(module => ({ default: module.NotificationSettings })))
@@ -72,6 +74,7 @@ export type SettingsTab =
   | 'hooks'
   | 'imBot'
   | 'logs'
+  | 'backup'
   | 'about'
 
 interface SettingsDialogProps {
@@ -106,6 +109,7 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   hooks: <PlugIcon size={15} />,
   imBot: <MessageSquareIcon size={15} />,
   logs: <FileIcon size={15} />,
+  backup: <DownloadIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
@@ -127,6 +131,7 @@ const TAB_IDS: SettingsTab[] = [
   'archived',
   'security',
   'logs',
+  'backup',
   'config',
   'about',
 ]
@@ -153,6 +158,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   hooks: 'tabs.hooks',
   imBot: 'tabs.imBot',
   logs: 'tabs.logs',
+  backup: 'tabs.backup',
 }
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
@@ -177,6 +183,7 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   hooks: 'tabs.hooksDesc',
   imBot: 'tabs.imBotDesc',
   logs: 'tabs.logsDesc',
+  backup: 'tabs.backupDesc',
 }
 
 const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
@@ -185,7 +192,7 @@ const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
   { labelKey: 'groups.advanced', tabs: ['hosting', 'imBot', 'hooks'] },
   { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
-  { labelKey: 'groups.security', tabs: ['security', 'logs', 'config', 'about'] },
+  { labelKey: 'groups.security', tabs: ['security', 'logs', 'backup', 'config', 'about'] },
 ]
 
 // ============================================
@@ -236,6 +243,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ImBotSettings />
     case 'logs':
       return <LogsSettings />
+    case 'backup':
+      return <BackupSettings />
     case 'about':
       return <AboutSettings />
     default:
