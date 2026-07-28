@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore, useLayoutEffect, memo } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { DragDropEvent } from '@tauri-apps/api/webview'
 import { AttachmentPreview, type Attachment } from '../attachment'
 import {
   MentionMenu,
@@ -23,10 +22,8 @@ import { normalizeVoiceRecording } from './input/voiceAudio'
 import { projectOptionsInSidebarOrder } from './projectOptions'
 import {
   TEXT_STYLE,
-  bytesToDataUrl,
   detectSlashTrigger,
   ensureFileMime,
-  getMimeFromPath,
   isFileSupported,
   readFileAsDataUrl,
 } from './input/inputUtils'
@@ -68,7 +65,6 @@ import type { ProjectProfile } from '../../store/projectProfileStore'
 import { projectEnvironmentStore } from '../../store/projectEnvironmentStore'
 import { getDirectoryName, isSameDirectory } from '../../utils'
 import { getModelKey } from '../../utils/modelUtils'
-import { getDesktopPlatform, isTauri } from '../../utils/tauri'
 import {
   getInternalDragSnapshot,
   isPointInsideElement as isInternalPointInsideElement,
@@ -97,14 +93,6 @@ interface DraggedFileInfo {
   absolute: string
   name: string
 }
-
-interface DroppedPathInfo {
-  type: 'file' | 'folder'
-  path: string
-  name: string
-}
-
-type TauriDropPosition = Extract<DragDropEvent, { type: 'drop' }>['position']
 
 const TEXTAREA_MIN_HEIGHT = 24
 const TEXTAREA_VERTICAL_CHROME = 24
@@ -138,49 +126,6 @@ function isLoopbackServer(url: string) {
   } catch {
     return false
   }
-}
-
-function getDropClientPoints(position: TauriDropPosition): Array<{ x: number; y: number }> {
-  const directPoint = { x: position.x, y: position.y }
-  const scale = window.devicePixelRatio || 1
-
-  if (scale === 1) return [directPoint]
-
-  return [
-    directPoint,
-    {
-      x: position.x / scale,
-      y: position.y / scale,
-    },
-  ]
-}
-
-function isPointInsideElement(position: TauriDropPosition, element: HTMLElement | null): boolean {
-  if (!element) return false
-  const rect = element.getBoundingClientRect()
-  return getDropClientPoints(position).some(
-    ({ x, y }) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom,
-  )
-}
-
-function getMentionPathForDroppedPath(absolutePath: string, rootPath: string): string {
-  const normalizedPath = normalizePath(absolutePath)
-  const normalizedRoot = normalizePath(rootPath).replace(/\/+$/, '')
-  if (!normalizedRoot) return normalizedPath
-
-  const caseInsensitive = /^[a-zA-Z]:/.test(normalizedPath) || /^[a-zA-Z]:/.test(normalizedRoot)
-  const comparablePath = caseInsensitive ? normalizedPath.toLowerCase() : normalizedPath
-  const comparableRoot = caseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot
-
-  if (comparablePath === comparableRoot) {
-    return getFileName(normalizedPath)
-  }
-
-  if (comparablePath.startsWith(`${comparableRoot}/`)) {
-    return normalizedPath.slice(normalizedRoot.length + 1)
-  }
-
-  return normalizedPath
 }
 
 export interface CollapsedDialogInfo {
@@ -861,7 +806,7 @@ function InputBoxComponent({
       },
     [fileCapabilitiesProp, supportsImages],
   )
-  const { enterKeyBehavior, externalFileDropMode, queueFollowupMessages } = useSyncExternalStore(
+  const { enterKeyBehavior, queueFollowupMessages } = useSyncExternalStore(
     themeStore.subscribe,
     themeStore.getSnapshot,
   )
@@ -1046,8 +991,6 @@ function InputBoxComponent({
   const [isDragging, setIsDragging] = useState(false)
   const [isInternalFileDragging, setIsInternalFileDragging] = useState(false)
   const dragCounterRef = useRef(0)
-  const lastTauriDropAtRef = useRef(0)
-
   const { presentation, interaction } = useChatViewport()
   const isCompact = presentation.isCompact
 
@@ -1961,183 +1904,6 @@ function InputBoxComponent({
     })
   }, [insertDraggedFile])
 
-  const buildDraggedFileInfo = useCallback(
-    (fileInfo: DroppedPathInfo): DraggedFileInfo => ({
-      type: fileInfo.type,
-      path: getMentionPathForDroppedPath(fileInfo.path, rootPath),
-      absolute: fileInfo.path,
-      name: fileInfo.name || getFileName(fileInfo.path),
-    }),
-    [rootPath],
-  )
-
-  const createUploadAttachmentFromDroppedPath = useCallback(
-    async (fileInfo: DroppedPathInfo): Promise<Attachment | null> => {
-      if (fileInfo.type !== 'file') return null
-
-      const mime = getMimeFromPath(fileInfo.path)
-      if (!isFileSupported(mime, fileCaps)) return null
-
-      try {
-        const { readFile } = await import('@tauri-apps/plugin-fs')
-        const bytes = await readFile(fileInfo.path)
-        return {
-          id: crypto.randomUUID(),
-          type: 'file',
-          displayName: fileInfo.name || getFileName(fileInfo.path),
-          url: bytesToDataUrl(bytes, mime),
-          mime,
-        }
-      } catch (err) {
-        console.warn('[InputBox] Failed to read dropped file for upload:', err)
-        notificationStore.push(
-          'error',
-          t('inputBox.fileReadFailedTitle'),
-          t('inputBox.fileReadFailedDescription', { files: fileInfo.name || getFileName(fileInfo.path) }),
-          sessionId ?? '',
-          currentDirectory,
-        )
-        return null
-      }
-    },
-    [currentDirectory, fileCaps, sessionId, t],
-  )
-
-  const handleTauriExternalDrop = useCallback(
-    async (paths: string[]) => {
-      if (paths.length === 0 || isSubmitting) return
-
-      try {
-        const { invoke } = await import('@tauri-apps/api/core')
-        const droppedPaths = await invoke<DroppedPathInfo[]>('get_dropped_paths_info', { paths })
-        const uploadAttachments: Attachment[] = []
-        const mentionFiles: DraggedFileInfo[] = []
-
-        for (const droppedPath of droppedPaths) {
-          if (externalFileDropMode === 'mention') {
-            mentionFiles.push(buildDraggedFileInfo(droppedPath))
-            continue
-          }
-
-          const uploadAttachment = await createUploadAttachmentFromDroppedPath(droppedPath)
-          if (uploadAttachment) {
-            uploadAttachments.push(uploadAttachment)
-          } else {
-            mentionFiles.push(buildDraggedFileInfo(droppedPath))
-          }
-        }
-
-        if (uploadAttachments.length > 0) {
-          setAttachments(prev => [...prev, ...uploadAttachments])
-        }
-
-        insertDraggedFiles(mentionFiles)
-      } catch (err) {
-        console.warn('[InputBox] Failed to process Tauri dropped paths:', err)
-      }
-    },
-    [buildDraggedFileInfo, createUploadAttachmentFromDroppedPath, externalFileDropMode, insertDraggedFiles, isSubmitting],
-  )
-
-  const handleTauriDragDropEvent = useCallback(
-    (event: DragDropEvent) => {
-      if (event.type === 'leave') {
-        dragCounterRef.current = 0
-        setIsDragging(false)
-        return
-      }
-
-      const insideInput = isPointInsideElement(event.position, inputContainerRef.current)
-
-      if (event.type === 'enter' || event.type === 'over') {
-        setIsDragging(insideInput)
-        return
-      }
-
-      dragCounterRef.current = 0
-      setIsDragging(false)
-      if (insideInput) {
-        lastTauriDropAtRef.current = Date.now()
-        void handleTauriExternalDrop(event.paths)
-      }
-    },
-    [handleTauriExternalDrop],
-  )
-
-  // macOS 上用 Rust WindowEvent::DragDrop 转发的 file-drop-* 事件（保底路径）
-  // 其他平台用 Tauri 标准 onDragDropEvent API
-  // 两条路径互斥，避免同一 drop 被处理两次
-  useEffect(() => {
-    if (!isTauri() || getDesktopPlatform() === 'macos') return
-
-    let disposed = false
-    let unlisten: (() => void) | null = null
-
-    void import('@tauri-apps/api/webview')
-      .then(async ({ getCurrentWebview }) => {
-        const cleanup = await getCurrentWebview().onDragDropEvent(event => {
-          handleTauriDragDropEvent(event.payload)
-        })
-
-        if (disposed) {
-          cleanup()
-        } else {
-          unlisten = cleanup
-        }
-      })
-      .catch(err => {
-        console.warn('[InputBox] Failed to listen for Tauri drag-drop events:', err)
-      })
-
-    return () => {
-      disposed = true
-      unlisten?.()
-    }
-  }, [handleTauriDragDropEvent])
-
-  // Rust 端 WindowEvent::DragDrop 转发的 file-drop-* 事件（仅 macOS，其他平台不用）
-  useEffect(() => {
-    if (!isTauri() || getDesktopPlatform() !== 'macos') return
-
-    let disposed = false
-    const cleanupFns: (() => void)[] = []
-
-    void import('@tauri-apps/api/event').then(async ({ listen }) => {
-      if (disposed) return
-
-      const { PhysicalPosition } = await import('@tauri-apps/api/dpi')
-
-      const onEnter = await listen<[string[], number, number]>('file-drop-enter', e => {
-        if (disposed) return
-        handleTauriDragDropEvent({ type: 'enter', paths: e.payload[0], position: new PhysicalPosition(e.payload[1], e.payload[2]) })
-      })
-      cleanupFns.push(onEnter)
-
-      const onOver = await listen<[number, number]>('file-drop-over', e => {
-        if (disposed) return
-        handleTauriDragDropEvent({ type: 'over', position: new PhysicalPosition(e.payload[0], e.payload[1]) })
-      })
-      cleanupFns.push(onOver)
-
-      const onDrop = await listen<[string[], number, number]>('file-drop-drop', e => {
-        if (disposed) return
-        handleTauriDragDropEvent({ type: 'drop', paths: e.payload[0], position: new PhysicalPosition(e.payload[1], e.payload[2]) })
-      })
-      cleanupFns.push(onDrop)
-
-      const onLeave = await listen<void>('file-drop-leave', () => {
-        if (disposed) return
-        handleTauriDragDropEvent({ type: 'leave' })
-      })
-      cleanupFns.push(onLeave)
-    })
-
-    return () => {
-      disposed = true
-      cleanupFns.forEach(fn => fn())
-    }
-  }, [handleTauriDragDropEvent])
-
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -2147,7 +1913,6 @@ function InputBoxComponent({
 
       // 原生文件拖拽（从操作系统拖入）
       if (e.dataTransfer.files.length > 0) {
-        if (Date.now() - lastTauriDropAtRef.current < 750) return
         void handleFilesSelected(Array.from(e.dataTransfer.files))
       }
     },

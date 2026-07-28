@@ -4,10 +4,10 @@ import {
   DESKTOP_TITLEBAR_Z_INDEX,
 } from '../constants'
 import { useTheme } from '../hooks/useTheme'
-import { getDesktopPlatform, usesCustomDesktopTitlebar } from '../utils/tauri'
+import { getDesktopPlatform, usesCustomDesktopTitlebar } from '../utils/platform'
 
 export function DesktopTitlebar() {
-  const { mode, resolvedTheme } = useTheme()
+  const { mode } = useTheme()
   const platform = useMemo(() => getDesktopPlatform(), [])
   const isDesktopChrome = useMemo(() => usesCustomDesktopTitlebar(), [])
 
@@ -24,27 +24,9 @@ export function DesktopTitlebar() {
   useEffect(() => {
     if (!isDesktopChrome) return
 
-    if (typeof window.customOpenCode?.windowSetTheme === 'function') {
-      void window.customOpenCode.windowSetTheme(mode)
-      return
-    }
-
-    let cancelled = false
-    const theme = mode === 'system' ? null : resolvedTheme
-
-    void import('@tauri-apps/api/window').then(async ({ getCurrentWindow }) => {
-      if (cancelled) return
-      try {
-        await getCurrentWindow().setTheme(theme)
-      } catch {
-        // best effort
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isDesktopChrome, mode, resolvedTheme])
+    if (typeof window.customOpenCode?.windowSetTheme !== 'function') return
+    void window.customOpenCode.windowSetTheme(mode)
+  }, [isDesktopChrome, mode])
 
   if (!isDesktopChrome) return null
 

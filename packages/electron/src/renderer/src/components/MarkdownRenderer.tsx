@@ -25,7 +25,6 @@ import { CopyButton } from './ui'
 import { useTheme } from '../hooks/useTheme'
 import { useInputCapabilities } from '../hooks/useInputCapabilities'
 import { detectLanguage } from '../utils/languageUtils'
-import { isTauri } from '../utils/tauri'
 import { splitMarkdownStream } from './markdownStream'
 
 interface MarkdownRendererProps {
@@ -959,8 +958,8 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
               className={className}
               onClick={event => {
                 event.preventDefault()
-                if (!isTauri()) return
-                import('@tauri-apps/plugin-opener').then(mod => mod.openPath(localFilePath)).catch(() => {})
+                if (typeof window.customOpenCode?.openLocation !== 'function') return
+                void window.customOpenCode.openLocation({ path: localFilePath, appId: 'default' })
               }}
             >
               {children}

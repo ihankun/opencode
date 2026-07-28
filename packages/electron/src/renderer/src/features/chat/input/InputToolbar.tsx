@@ -25,7 +25,6 @@ import { ContextDetailsDialog } from '../sidebar/ContextDetailsDialog'
 import { useChatViewport } from '../chatViewport'
 import { selectableAgentsInDisplayOrder } from '../agentOrder'
 import { formatTokens, formatCost } from '../../../hooks'
-import { isTauri, isTauriMobile, extToMime } from '../../../utils/tauri'
 import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
 import type { SessionStats } from '../../../hooks'
@@ -322,7 +321,6 @@ export function InputToolbar({
   const { t } = useTranslation(['chat', 'common'])
   const { presentation } = useChatViewport()
   const isCompact = presentation.isCompact
-  const useBrowserFileInput = !isTauri() || isTauriMobile()
 
   // 根据模型能力计算支持的文件类型
   const caps = fileCapabilities ?? { image: false, pdf: false, audio: false, video: false }
@@ -330,36 +328,22 @@ export function InputToolbar({
   const controlsDisabled = isSending
   const selectedVariantLabel = getVariantLabel(selectedVariant, t)
 
-  // 动态构建 HTML accept 和 Tauri filter
-  const { acceptString, tauriFilters } = useMemo(() => {
+  const acceptString = useMemo(() => {
     const accept: string[] = []
-    const extensions: string[] = []
-    const filterNames: string[] = []
 
     accept.push(...DOCUMENT_FILE_MIMES, ...DOCUMENT_FILE_EXTENSIONS.map(extension => `.${extension}`))
-    extensions.push(...DOCUMENT_FILE_EXTENSIONS)
-    filterNames.push('Documents')
 
     if (caps.image) {
       accept.push('image/*')
-      extensions.push('png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg')
-      filterNames.push('Images')
     }
     if (caps.audio) {
       accept.push('audio/*')
-      extensions.push('mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a')
-      filterNames.push('Audio')
     }
     if (caps.video) {
       accept.push('video/*')
-      extensions.push('mp4', 'webm', 'mov', 'avi', 'mkv')
-      filterNames.push('Video')
     }
 
-    return {
-      acceptString: accept.join(','),
-      tauriFilters: extensions.length > 0 ? [{ name: filterNames.join(' / '), extensions }] : [],
-    }
+    return accept.join(',')
   }, [caps.image, caps.audio, caps.video])
   // State for menus
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
@@ -479,48 +463,9 @@ export function InputToolbar({
     [focusRelativeToTrigger],
   )
 
-  // 文件选择器（Tauri 原生 / 浏览器 fallback）
-  const handleFileClick = useCallback(async () => {
-    if (useBrowserFileInput) {
-      fileInputRef.current?.click()
-      return
-    }
-
-    try {
-      const [{ open }, { readFile }] = await Promise.all([
-        import('@tauri-apps/plugin-dialog'),
-        import('@tauri-apps/plugin-fs'),
-      ])
-
-      const selected = await open({
-        multiple: true,
-        filters: tauriFilters,
-        fileAccessMode: 'copy',
-      })
-
-      if (!selected) return
-
-      const paths = Array.isArray(selected) ? selected : [selected]
-      if (paths.length === 0) return
-
-      const files: File[] = []
-      for (const path of paths) {
-        const fileName = path.split(/[\\/]/).pop() || 'file'
-        const ext = fileName.split('.').pop()?.toLowerCase() || ''
-        const mime = extToMime(ext)
-
-        const data = await readFile(path)
-        const file = new File([data], fileName, { type: mime })
-        files.push(file)
-      }
-
-      if (files.length > 0) {
-        onFilesSelected(files)
-      }
-    } catch (err) {
-      console.warn('[InputToolbar] File picker error:', err)
-    }
-  }, [onFilesSelected, tauriFilters, useBrowserFileInput])
+  const handleFileClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
 
   // Click outside logic
   useEffect(() => {
@@ -581,8 +526,7 @@ export function InputToolbar({
     <div className="flex items-center justify-between px-3 pt-2 pb-1.5 relative">
       {/* Left side: Agent selector */}
       <div className={`flex items-center min-w-0 ${isCompact ? 'gap-1' : 'gap-2'}`}>
-        {/* 浏览器模式下的隐藏文件输入 */}
-        {useBrowserFileInput && supportsAnyFile && (
+        {supportsAnyFile && (
           <input
             ref={fileInputRef}
             type="file"

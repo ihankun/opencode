@@ -1,4 +1,4 @@
-import { extToMime } from '../../../utils/tauri'
+import { extToMime } from '../../../utils/platform'
 import type { FileCapabilities } from '../../../api'
 
 // ============================================

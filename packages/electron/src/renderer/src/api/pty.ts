@@ -16,11 +16,6 @@ export interface ShellInfo {
 }
 
 interface PtyConnectUrlOptions {
-  /**
-   * false = 不在 URL 里放认证（Tauri bridge 通过 header 传）
-   * true  = 在 URL 里放认证（浏览器原生 WebSocket 无法设 header）
-   */
-  includeAuthInUrl?: boolean
   cursor?: number
 }
 
@@ -91,12 +86,10 @@ export async function removePtySession(ptyId: string, directory?: string): Promi
  * 浏览器 WebSocket 不支持自定义 header，认证方式：
  * - 跨域：auth_token query parameter（与官方 opencode app 一致）
  * - 同源：浏览器会复用页面的 Basic auth 凭据
- * - Tauri bridge：不走这里，通过 Rust 的 HTTP header 传认证
  */
 export function getPtyConnectUrl(ptyId: string, directory?: string, options?: PtyConnectUrlOptions): string {
   const httpBase = getApiBaseUrl()
   const wsBase = httpBase.replace(/^http/, 'ws')
-  const includeAuthInUrl = options?.includeAuthInUrl ?? true
   const cursor =
     typeof options?.cursor === 'number' && Number.isSafeInteger(options.cursor) && options.cursor >= 0
       ? options.cursor
@@ -104,11 +97,6 @@ export function getPtyConnectUrl(ptyId: string, directory?: string, options?: Pt
 
   const auth = serverStore.getActiveAuth()
   const formatted = formatPathForApi(directory)
-
-  // Tauri bridge 不需要在 URL 里放认证
-  if (!includeAuthInUrl) {
-    return `${wsBase}/pty/${ptyId}/connect${buildQueryString({ directory: formatted, cursor })}`
-  }
 
   // 浏览器原生 WebSocket：
   // 跨域时用 auth_token query parameter + userinfo fallback

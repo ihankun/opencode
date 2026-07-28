@@ -1,17 +1,5 @@
 @import 'tailwindcss';
 
-/* ============================================
- * Tauri WebView backdrop-filter 修复
- * ============================================
- * WebView2 (Windows) 和 WebKitGTK (Linux) 的部分版本
- * 不渲染 backdrop-filter blur。
- * will-change:auto 强制 GPU 合成层，使 blur 生效。
- * .tauri-app class 由 main.tsx 在 Tauri 环境下添加到 <html>。
- */
-.tauri-app * {
-  will-change: auto;
-}
-
 .mobile-chat-pager {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -42,10 +30,7 @@
 :root {
   --app-height: 100vh;
   color-scheme: light;
-  /* Safe area insets：
-   * - Android: 由 MainActivity.kt 通过 evaluateJavascript 注入真实值
-   *   (Android WebView 的 env(safe-area-inset-*) 返回 0px)
-   * - iOS/浏览器: 使用 env() fallback */
+  /* Safe area insets for browsers and installed PWAs. */
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
@@ -80,9 +65,8 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   background: transparent;
 }
 
-/* Safe-area padding 应用在 #root 上：浏览器、PWA、Tauri 共用同一份 env()。
- * 非 PWA 浏览器场景下 env() 自然返回 0，不会产生副作用；Tauri 走原生 setPadding，
- * 由下方 .tauri-app #root 显式重置为 0，避免与原生层叠加产生双倍 padding。
+/* Safe-area padding 应用在 #root 上。
+ * 非 PWA 浏览器场景下 env() 自然返回 0，不会产生副作用。
  * 不在这里加 padding-bottom——贴底组件 (InputBox / BottomPanel / SidebarFooter)
  * 自己读取 var(--safe-area-inset-bottom) 处理底边距，避免和键盘 inset 冲突。 */
 #root {
@@ -96,20 +80,9 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
  * 但 Safari standalone 仍会在底部叠加系统 UI 横条，遮住贴底内容。
  * 用 max() 取 safe-area 和最小保底值的较大者，确保 InputFooter 不被遮挡。 */
 @media (display-mode: standalone) {
-  :root:not(.tauri-app) {
+  :root {
     --safe-area-inset-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   }
-}
-
-/* Tauri 原生 app：MainActivity.kt 只处理底部键盘/导航栏，顶部由 Web surface 自己绘制。
- * 用更高优先级 (.tauri-app + #root) 显式 padding:0 覆盖上面的 #root 规则，
- * 防止 CSS env() 与原生 setPadding 双重叠加。 */
-.tauri-app #root {
-  padding: 0;
-}
-
-.tauri-app {
-  --app-safe-top: var(--safe-area-inset-top);
 }
 
 .mobile-safe-topbar-14 {
@@ -231,7 +204,7 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 }
 
 /* ============================================
- * Desktop Titlebar (Tauri desktop)
+ * Desktop Titlebar
  * ============================================ */
 
 .desktop-titlebar {
@@ -252,53 +225,6 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 .window-no-drag {
   app-region: no-drag;
   -webkit-app-region: no-drag;
-}
-
-.desktop-titlebar [data-tauri-drag-region] {
-  app-region: drag;
-  -webkit-app-region: drag;
-}
-
-.desktop-titlebar [data-tauri-decorum-tb] {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-  pointer-events: auto;
-}
-
-.desktop-titlebar button.decorum-tb-btn,
-.desktop-titlebar button#decorum-tb-minimize,
-.desktop-titlebar button#decorum-tb-maximize,
-.desktop-titlebar button#decorum-tb-close {
-  position: relative;
-  z-index: 240;
-  width: 46px;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  outline: none;
-  box-shadow: none;
-  background: transparent;
-  color: hsl(var(--text-300));
-  pointer-events: auto;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-.desktop-titlebar button.decorum-tb-btn:hover,
-.desktop-titlebar button#decorum-tb-minimize:hover,
-.desktop-titlebar button#decorum-tb-maximize:hover {
-  background: hsl(var(--bg-200) / 0.92);
-  color: hsl(var(--text-100));
-}
-
-.desktop-titlebar button#decorum-tb-close:hover {
-  background: hsl(var(--danger-100));
-  color: hsl(var(--always-white, 0 0% 100%));
 }
 
 .electron-sidebar-toggle {
@@ -453,7 +379,7 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transform: scale(0.98);
 }
 
-:root:not(.tauri-app):not([data-platform='windows']) [data-sidebar-expanded='false'] [data-chat-header='true'] {
+:root:not([data-platform='windows']) [data-sidebar-expanded='false'] [data-chat-header='true'] {
   padding-left: 172px;
 }
 
@@ -569,9 +495,9 @@ html[data-platform='macos'] [data-chat-header='true'] .rounded-lg > input {
   padding-bottom: 0.125rem;
 }
 
-/* Browser/PWA: keyboard inset via visualViewport (Tauri uses native insets) */
+/* Browser/PWA: keyboard inset via visualViewport. */
 @media (display-mode: browser), (display-mode: standalone) {
-  :root:not(.tauri-app) #root {
+  :root #root {
     padding-bottom: var(--keyboard-inset-bottom, 0px);
   }
 }
@@ -1717,7 +1643,7 @@ textarea[data-composer-input]:focus-visible {
  * 调参改这里，全局生效。组件里只写 class 名，不写具体数值。
  *
  * 注意：
- *  - backdrop-filter 里不能用 var()，webkit2gtk (Linux Tauri) 不支持
+ *  - backdrop-filter 里不能用 var()，部分旧 WebView 不支持
  *  - -webkit- 前缀必须写在非前缀前面，否则构建工具会删掉非前缀版本
  *  - 毛玻璃开关由 <html data-glass> 属性驱动
  *    有 data-glass → 半透明 + blur
@@ -1828,7 +1754,7 @@ textarea[data-composer-input]:focus-visible {
     transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Floating actions contain backdrop-blur chips; avoid transform layers here so blur survives in WebView/Tauri. */
+/* Floating actions contain backdrop-blur chips; avoid transform layers here so blur survives in embedded WebViews. */
 [data-floating-actions] {
   transition: opacity 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }

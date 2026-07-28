@@ -1,5 +1,4 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
-import { isTauri } from '../../../utils/tauri'
 
 const CONFIG_SCHEMA_URL = 'https://opencode.ai/config.json'
 const MODEL_SCHEMA_ID = 'https://models.dev/model-schema.json'
@@ -16,8 +15,6 @@ export type OfficialConfigValidationResult = {
 }
 
 let validatorPromise: Promise<ValidateFunction> | undefined
-let schemaFetch: typeof globalThis.fetch | undefined
-let schemaFetchPromise: Promise<typeof globalThis.fetch> | undefined
 
 export async function validateAgainstOfficialConfigSchema(config: unknown): Promise<OfficialConfigValidationResult> {
   try {
@@ -54,28 +51,12 @@ async function fetchOfficialConfigSchema() {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 5000)
   try {
-    const fetchSchema = await getSchemaFetch()
-    const response = await fetchSchema(CONFIG_SCHEMA_URL, { signal: controller.signal })
+    const response = await globalThis.fetch(CONFIG_SCHEMA_URL, { signal: controller.signal })
     if (!response.ok) throw new Error(`Failed to load official config schema: ${response.status}`)
     return await response.json()
   } finally {
     window.clearTimeout(timeout)
   }
-}
-
-async function getSchemaFetch(): Promise<typeof globalThis.fetch> {
-  if (!isTauri()) return globalThis.fetch
-  if (schemaFetch) return schemaFetch
-  schemaFetchPromise ??= import('@tauri-apps/plugin-http')
-    .then(mod => {
-      schemaFetch = mod.fetch as unknown as typeof globalThis.fetch
-      return schemaFetch
-    })
-    .catch(error => {
-      schemaFetchPromise = undefined
-      throw error
-    })
-  return schemaFetchPromise
 }
 
 function normalizeAjvErrors(errors: ErrorObject[]): OfficialConfigValidationError[] {

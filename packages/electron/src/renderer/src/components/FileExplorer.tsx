@@ -319,7 +319,7 @@ const FileTreeItem = memo(function FileTreeItem({
     }
   }, [status])
 
-  // 拖拽到输入框实现 @mention。使用 pointer 拖拽，避免 Tauri 原生文件 drop 接管 HTML5 DnD。
+  // 拖拽到输入框实现 @mention。使用 pointer 拖拽，避免原生文件 drop 接管 HTML5 DnD。
   const handlePointerDragStart = useCallback(
     (e: PointerEvent<HTMLButtonElement>) => {
       const fileData = {

@@ -21,7 +21,6 @@ import {
 } from './components/Icons'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
-import { useCloseServiceDialog } from './hooks/useCloseServiceDialog'
 import { useWakeLock } from './hooks/useWakeLock'
 import type { KeybindingHandlers } from './hooks/useKeybindings'
 import { keybindingStore } from './store/keybindingStore'
@@ -44,7 +43,7 @@ import { initNotificationSound } from './utils/notificationSoundBridge'
 import { createPtySession } from './api/pty'
 import type { TerminalTab } from './store/layoutStore'
 import type { SettingsTab } from './features/settings/SettingsDialog'
-import { isTauri, isTauriMobile, isElectron, getDesktopPlatform } from './utils/tauri'
+import { isElectron, getDesktopPlatform } from './utils/platform'
 import { InternalDragLayer } from './components/InternalDragLayer'
 import { completeOnboarding, resetOnboarding, shouldShowOnboarding } from './store/onboardingStore'
 import { insertComposerDraft } from './utils/composerDraft'
@@ -55,9 +54,6 @@ const SettingsDialog = lazy(() =>
 )
 const CommandPalette = lazy(() =>
   import('./components/CommandPalette').then(module => ({ default: module.CommandPalette })),
-)
-const CloseServiceDialog = lazy(() =>
-  import('./components/CloseServiceDialog').then(module => ({ default: module.CloseServiceDialog })),
 )
 const SkillPanel = lazy(() =>
   import('./components/SkillPanel').then(module => ({ default: module.SkillPanel })),
@@ -171,7 +167,7 @@ function App() {
     requestedRightPanelWidth: rightPanelWidth,
   })
   const splitPaneEnabled = canUseSplitPane(chatViewport)
-  const showTitlebarSidebarButton = !isTauri() && chatViewport.interaction.sidebarBehavior !== 'overlay'
+  const showTitlebarSidebarButton = chatViewport.interaction.sidebarBehavior !== 'overlay'
   const paneLayout = usePaneLayout()
   const focusedController = usePaneController(paneLayout.focusedPaneId)
   const paneControllers = usePaneControllers()
@@ -195,14 +191,6 @@ function App() {
   useEffect(() => {
     const cleanup = initNotificationSound()
     return cleanup
-  }, [])
-
-  useEffect(() => {
-    if (!isTauri() || isTauriMobile()) return
-
-    void import('@tauri-apps/api/core')
-      .then(({ invoke }) => invoke('desktop_window_ready'))
-      .catch(() => undefined)
   }, [])
 
   useViewportHeight()
@@ -1061,7 +1049,6 @@ function App() {
     handleToggleFocusedPaneFullscreen,
   ])
 
-  const { showCloseDialog, handleCloseDialogConfirm, handleCloseDialogCancel } = useCloseServiceDialog()
   const appShellStyle = useMemo(
     () =>
       ({
@@ -1358,13 +1345,6 @@ function App() {
           onSelectSession={handleSelectSession}
         />
 
-        <Suspense fallback={null}>
-          <CloseServiceDialog
-            isOpen={showCloseDialog}
-            onConfirm={handleCloseDialogConfirm}
-            onCancel={handleCloseDialogCancel}
-          />
-        </Suspense>
       </ChatViewportProvider>
     </div>
   )

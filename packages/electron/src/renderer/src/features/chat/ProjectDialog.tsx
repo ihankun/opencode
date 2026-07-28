@@ -4,7 +4,7 @@ import { FolderIcon, ArrowUpIcon, SpinnerIcon, PlusIcon, ChevronDownIcon, ClockI
 import { listDirectory, getPath } from '../../api'
 import { fileErrorHandler, getDirectoryName } from '../../utils'
 import { Dialog } from '../../components/ui/Dialog'
-import { isElectron, getDesktopPlatform } from '../../utils/tauri'
+import { isElectron, getDesktopPlatform } from '../../utils/platform'
 import { useDirectory } from '../../contexts/useDirectory'
 
 // ============================================

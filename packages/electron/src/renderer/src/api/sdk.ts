@@ -3,18 +3,17 @@
 //
 // 职责：
 // 1. 根据当前活动服务器动态创建 SDK client
-// 2. 整合 baseUrl / auth / tauri fetch
+// 2. 整合 baseUrl / auth / fetch
 // 3. 为上层 API 模块提供统一的 client 获取方式
 // ============================================
 
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk/v2/client'
 import { serverStore, makeBasicAuthHeader } from '../store/serverStore'
-import { platformFetch, preparePlatformNetwork } from '../platform'
 const _apiRequestGenerations = new Map<string, number>()
 const _apiRequestControllers = new Map<AbortController, string>()
 
 function getFetchImpl(): typeof globalThis.fetch {
-  return platformFetch as typeof globalThis.fetch
+  return globalThis.fetch
 }
 
 function createAbortError(message: string) {
@@ -89,8 +88,7 @@ function buildHeaders(serverId: string): Record<string, string> {
 }
 
 /**
- * 同步获取 SDK client（浏览器环境 or tauri fetch 已加载）
- * 如果 tauri fetch 还没加载完，先用原生 fetch
+ * 同步获取 SDK client
  */
 export function getSDKClient(serverId = serverStore.getActiveServerId()): OpencodeClient {
   const key = buildCacheKey(serverId)
@@ -113,7 +111,6 @@ export function getSDKClient(serverId = serverStore.getActiveServerId()): Openco
 
 export async function apiFetchJson<T>(path: string, init?: RequestInit, serverId = serverStore.getActiveServerId()): Promise<T> {
   await serverStore.whenCredentialsReady(serverId)
-  await preparePlatformNetwork()
 
   const url = new URL(path, requireServer(serverId).url)
   const headers = new Headers(init?.headers)
@@ -145,12 +142,10 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit, serverId
 }
 
 /**
- * 异步获取 SDK client（确保 tauri fetch 已加载）
- * 在应用初始化时应该先调一次这个
+ * 异步获取 SDK client（等待凭据初始化后重建缓存）
  */
 export async function getSDKClientAsync(serverId = serverStore.getActiveServerId()): Promise<OpencodeClient> {
   await serverStore.whenCredentialsReady(serverId)
-  await preparePlatformNetwork()
   _cachedClients.delete(serverId)
   return getSDKClient(serverId)
 }

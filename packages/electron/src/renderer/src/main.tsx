@@ -13,12 +13,11 @@ import { messageStore } from './store/messageStore'
 import { childSessionStore } from './store/childSessionStore'
 import { todoStore } from './store/todoStore'
 import { autoApproveStore } from './store/autoApproveStore'
-import { serviceStore } from './store/serviceStore'
 import { reconnectSSE } from './api/events'
-import { abortInFlightApiRequests, getSDKClientAsync, invalidateSDKClient } from './api/sdk'
+import { abortInFlightApiRequests, invalidateSDKClient } from './api/sdk'
 import { resetPathModeCache } from './utils/directoryUtils'
-import { isTauri, isTauriMobile, getDesktopPlatform } from './utils/tauri'
-import { apiErrorHandler, globalErrorHandler } from './utils/errorHandling'
+import { getDesktopPlatform } from './utils/platform'
+import { globalErrorHandler } from './utils/errorHandling'
 import { applyLocalServiceUrl } from './utils/localServiceUrl'
 import { initializeModels } from './hooks/useModels'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -70,10 +69,6 @@ serverStore.onServerChange((serverId, reason) => {
   abortInFlightApiRequests('Server endpoint changed', invalidatedServerId)
   if (reason !== 'server-switch') invalidateSDKClient(serverId)
   previousActiveServerId = serverId
-  if (isTauri()) {
-    void getSDKClientAsync(serverId).catch(err => apiErrorHandler('reinitialize sdk client after server endpoint change', err))
-  }
-
   // 1. 清空内存中的 session/消息数据
   messageStore.clearAll()
   childSessionStore.clearAll()
@@ -89,76 +84,16 @@ serverStore.onServerChange((serverId, reason) => {
   reconnectSSE()
 })
 
-const isNativeTauri = isTauri()
-const isNativeTauriMobile = isNativeTauri && isTauriMobile()
-
-interface StartOpencodeServiceResult {
-  started: boolean
-  startedByUs: boolean
-  url?: string | null
-}
-
 function configureNativeShell() {
   if ('customOpenCode' in window) {
     document.documentElement.classList.add('electron-app')
     const platform = getDesktopPlatform()
     document.documentElement.setAttribute('data-platform', platform)
   }
-
-  if (!isNativeTauri) return
-
-  // 添加 CSS class 用于 safe-area 适配
-  document.documentElement.classList.add('tauri-app')
-
-  // 确保 viewport meta 包含 viewport-fit=cover（用于状态栏沉浸式）
-  const viewportMeta = document.querySelector('meta[name="viewport"]')
-  if (!viewportMeta) return
-
-  const content = viewportMeta.getAttribute('content') || ''
-  if (!content.includes('viewport-fit=cover')) {
-    viewportMeta.setAttribute('content', content + ', viewport-fit=cover')
-  }
-}
-
-async function initializeNativeDesktopService() {
-  if (!isNativeTauri || isNativeTauriMobile || !serviceStore.autoStart) return
-
-  const serverUrl = serverStore.getLocalServerUrl()
-  serviceStore.setStarting(true)
-
-  try {
-    const { invoke } = await import('@tauri-apps/api/core')
-
-    try {
-      const path = await invoke<string | null>('detect_opencode_binary', { envVars: serviceStore.envVarsRecord })
-      serviceStore.setDetectedBinaryPath(path)
-    } catch {
-      // Starting with PATH fallback is still useful if detection fails.
-    }
-
-    const result = await invoke<StartOpencodeServiceResult>('start_opencode_service', {
-      url: serverUrl,
-      binaryPath: serviceStore.effectiveBinaryPath,
-      envVars: serviceStore.envVarsRecord,
-    })
-
-    applyLocalServiceUrl(result.url)
-    serviceStore.setStartedByUs(result.startedByUs)
-    serviceStore.setRunning(true)
-    if (result.started) {
-      console.info('[Service] opencode serve started by app')
-    } else {
-      console.info('[Service] opencode serve already running')
-    }
-  } catch (err) {
-    apiErrorHandler('auto-start opencode serve', err)
-  } finally {
-    serviceStore.setStarting(false)
-  }
 }
 
 async function initializeElectronService() {
-  if (isNativeTauri || !window.customOpenCode) return
+  if (!window.customOpenCode) return
 
   const applyServer = (state: Awaited<ReturnType<typeof window.customOpenCode.server>>) => {
     if (state.status !== 'online') return
@@ -235,11 +170,6 @@ async function startApp() {
   await electronService
   void initializeModels()
 
-  void initializeNativeDesktopService()
-
-  if (isNativeTauri) {
-    void getSDKClientAsync().catch(err => apiErrorHandler('initialize sdk client', err))
-  }
 }
 
 void startApp()

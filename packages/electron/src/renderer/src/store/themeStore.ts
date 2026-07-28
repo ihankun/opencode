@@ -79,8 +79,6 @@ export type CompletedAtFormat = 'time' | 'dateTime'
 
 export type ReasoningDisplayMode = 'capsule' | 'italic' | 'markdown'
 
-export type ExternalFileDropMode = 'upload-first' | 'mention'
-
 export type EnterKeyBehavior = 'newline' | 'send'
 
 /**
@@ -128,7 +126,6 @@ const DEFAULT_COMPACT_INLINE_PERMISSION = true
 const DEFAULT_GLASS_EFFECT = true
 const DEFAULT_QUEUE_FOLLOWUP_MESSAGES = true
 const DEFAULT_MANUAL_TERMINAL_TITLES = false
-const DEFAULT_EXTERNAL_FILE_DROP_MODE: ExternalFileDropMode = 'upload-first'
 const DEFAULT_OUTLINE_CURRENT_HIGHLIGHT = true
 const DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS = false
 const DEFAULT_COLLAPSE_TOOL_OUTPUT = false
@@ -187,8 +184,6 @@ export interface ThemeState {
   queueFollowupMessages: boolean
   /** 终端标签是否改为手动命名模式 */
   manualTerminalTitles: boolean
-  /** 外部文件拖入输入框时的处理方式 */
-  externalFileDropMode: ExternalFileDropMode
   /** 是否在对话历史导航中高亮当前对话位置 */
   outlineCurrentHighlight: boolean
   /** 亮色模式代码块 Shiki 主题 */
@@ -229,7 +224,6 @@ const STORAGE_KEY_COMPACT_INLINE_PERMISSION = 'compact-inline-permission'
 const STORAGE_KEY_GLASS_EFFECT = 'glass-effect'
 const STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES = 'queue-followup-messages'
 const STORAGE_KEY_MANUAL_TERMINAL_TITLES = 'manual-terminal-titles'
-const STORAGE_KEY_EXTERNAL_FILE_DROP_MODE = 'external-file-drop-mode'
 const STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT = 'outline-current-highlight'
 const STORAGE_KEY_CODE_BLOCK_THEME_LIGHT = 'code-block-theme-light'
 const STORAGE_KEY_CODE_BLOCK_THEME_DARK = 'code-block-theme-dark'
@@ -362,10 +356,6 @@ class ThemeStore {
     const manualTerminalTitles =
       savedManualTerminalTitles === null ? DEFAULT_MANUAL_TERMINAL_TITLES : savedManualTerminalTitles === 'true'
 
-    const savedExternalFileDropMode = localStorage.getItem(STORAGE_KEY_EXTERNAL_FILE_DROP_MODE)
-    const externalFileDropMode: ExternalFileDropMode =
-      savedExternalFileDropMode === 'mention' ? 'mention' : DEFAULT_EXTERNAL_FILE_DROP_MODE
-
     const savedOutlineCurrentHighlight = localStorage.getItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT)
     const outlineCurrentHighlight =
       savedOutlineCurrentHighlight === null
@@ -408,7 +398,6 @@ class ThemeStore {
       glassEffect,
       queueFollowupMessages,
       manualTerminalTitles,
-      externalFileDropMode,
       outlineCurrentHighlight,
       codeBlockThemeLight,
       codeBlockThemeDark,
@@ -498,9 +487,6 @@ class ThemeStore {
   }
   get manualTerminalTitles() {
     return this.state.manualTerminalTitles
-  }
-  get externalFileDropMode() {
-    return this.state.externalFileDropMode
   }
   get outlineCurrentHighlight() {
     return this.state.outlineCurrentHighlight
@@ -799,13 +785,6 @@ class ThemeStore {
     this.emit()
   }
 
-  setExternalFileDropMode(mode: ExternalFileDropMode) {
-    if (this.state.externalFileDropMode === mode) return
-    this.state = { ...this.state, externalFileDropMode: mode }
-    localStorage.setItem(STORAGE_KEY_EXTERNAL_FILE_DROP_MODE, mode)
-    this.emit()
-  }
-
   setOutlineCurrentHighlight(enabled: boolean) {
     if (this.state.outlineCurrentHighlight === enabled) return
     this.state = { ...this.state, outlineCurrentHighlight: enabled }
@@ -1081,7 +1060,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       typeof parsed?.manualTerminalTitles === 'boolean'
         ? parsed.manualTerminalTitles
         : DEFAULT_MANUAL_TERMINAL_TITLES,
-    externalFileDropMode: parsed?.externalFileDropMode === 'mention' ? 'mention' : DEFAULT_EXTERNAL_FILE_DROP_MODE,
     outlineCurrentHighlight:
       typeof parsed?.outlineCurrentHighlight === 'boolean'
         ? parsed.outlineCurrentHighlight
@@ -1138,7 +1116,6 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_GLASS_EFFECT, String(backup.glassEffect))
   localStorage.setItem(STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES, String(backup.queueFollowupMessages))
   localStorage.setItem(STORAGE_KEY_MANUAL_TERMINAL_TITLES, String(backup.manualTerminalTitles))
-  localStorage.setItem(STORAGE_KEY_EXTERNAL_FILE_DROP_MODE, backup.externalFileDropMode)
   localStorage.setItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT, String(backup.outlineCurrentHighlight))
   localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT, backup.codeBlockThemeLight)
   localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_DARK, backup.codeBlockThemeDark)

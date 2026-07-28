@@ -23,7 +23,6 @@ import {
   DownloadIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
-import { isTauri } from '../../utils/tauri'
 import { SettingsSearch } from './SettingsSearch'
 import { SETTINGS_SEARCH_DEFINITIONS, type SettingsSearchItem } from './settingsSearchCatalog'
 const KeybindingsSection = lazy(() => import('./KeybindingsSection').then(module => ({ default: module.KeybindingsSection })))
@@ -36,7 +35,6 @@ const ChatSettings = lazy(() => import('./components/ChatSettings').then(module 
 const ModelsSettings = lazy(() => import('./components/ModelsSettings').then(module => ({ default: module.ModelsSettings })))
 const NotificationSettings = lazy(() => import('./components/NotificationSettings').then(module => ({ default: module.NotificationSettings })))
 const ProviderSettings = lazy(() => import('./components/ProviderSettings').then(module => ({ default: module.ProviderSettings })))
-const ServiceSettings = lazy(() => import('./components/ServiceSettings').then(module => ({ default: module.ServiceSettings })))
 const ServersSettings = lazy(() => import('./components/ServersSettings').then(module => ({ default: module.ServersSettings })))
 const HostingSettings = lazy(() => import('./components/HostingSettings').then(module => ({ default: module.HostingSettings })))
 const WorkspaceSettings = lazy(() => import('./components/WorkspaceSettings').then(module => ({ default: module.WorkspaceSettings })))
@@ -62,7 +60,6 @@ export type SettingsTab =
   | 'speechModel'
   | 'providers'
   | 'notifications'
-  | 'service'
   | 'config'
   | 'servers'
   | 'hosting'
@@ -99,7 +96,6 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   appearance: <SunIcon size={15} />,
   workspace: <LayersIcon size={15} />,
   notifications: <BellIcon size={15} />,
-  service: <PlugIcon size={15} />,
   config: <CogIcon size={15} />,
   keybindings: <KeyboardIcon size={15} />,
   about: <QuestionIcon size={15} />,
@@ -148,7 +144,6 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   appearance: 'tabs.appearance',
   workspace: 'tabs.workspace',
   notifications: 'tabs.notifications',
-  service: 'tabs.service',
   config: 'tabs.config',
   keybindings: 'tabs.shortcuts',
   about: 'tabs.about',
@@ -173,7 +168,6 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   appearance: 'tabs.appearanceDesc',
   workspace: 'tabs.workspaceDesc',
   notifications: 'tabs.notificationsDesc',
-  service: 'tabs.serviceDesc',
   config: 'tabs.configDesc',
   keybindings: 'tabs.shortcutsDesc',
   about: 'tabs.aboutDesc',
@@ -219,8 +213,6 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <ProviderSettings />
     case 'notifications':
       return <NotificationSettings />
-    case 'service':
-      return <ServiceSettings />
     case 'config':
       return <ConfigSettings />
     case 'servers':
@@ -261,7 +253,6 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: SettingsDialogProps) {
   const { t } = useTranslation(['settings'])
   const isMobile = useIsMobile()
-  const isTauriDesktop = isTauri() && !isMobile
   const scrollRef = useRef<HTMLDivElement>(null)
   const highlightFrameRef = useRef<number | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -273,20 +264,15 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     onClose()
   }, [onClose])
 
-  const visibleTabIds = useMemo(
-    () => (isTauriDesktop ? TAB_IDS : TAB_IDS.filter(id => id !== 'service')),
-    [isTauriDesktop],
-  )
-
   const visibleTabs = useMemo(
     () =>
-      visibleTabIds.map(id => ({
+      TAB_IDS.map(id => ({
         id,
         label: t(TAB_LABEL_KEYS[id]),
         description: t(TAB_DESC_KEYS[id]),
         icon: TAB_ICONS[id],
       })),
-    [visibleTabIds, t],
+    [t],
   )
 
   const groupedTabs = useMemo(

@@ -8,7 +8,6 @@ import { useRouter } from '../hooks/useRouter'
 import { handleError, normalizeToForwardSlash, getDirectoryName, isMissingDirectoryError, isSameDirectory } from '../utils'
 import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { serverStore } from '../store/serverStore'
-import { initialOpenDirectory, onOpenDirectory, platformKind } from '../platform'
 import { DirectoryContext, type DirectoryContextValue, type SavedDirectory } from './DirectoryContext.shared'
 import { reorderDirectoryGroup, updatePinnedDirectories } from './directoryOrdering'
 
@@ -194,29 +193,6 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 
   const setDirectoriesPinned = useCallback((paths: string[], pinned: boolean) => {
     setSavedDirectories(prev => updatePinnedDirectories(prev, paths, pinned ? Date.now() : undefined))
-  }, [])
-
-  // Tauri: 启动时获取 CLI 传入的目录 + 监听后续 open-directory 事件
-  // 用 ref 持有最新的 addDirectory 避免 stale closure
-  const addDirectoryRef = useRef(addDirectory)
-  addDirectoryRef.current = addDirectory
-
-  useEffect(() => {
-    if (!platformKind().startsWith('tauri')) return
-
-    let unlisten: (() => void) | undefined
-
-    void initialOpenDirectory().then(directory => {
-      if (directory) addDirectoryRef.current(directory)
-    }).catch(() => undefined)
-
-    void onOpenDirectory(directory => addDirectoryRef.current(directory)).then(dispose => {
-      unlisten = dispose
-    })
-
-    return () => {
-      unlisten?.()
-    }
   }, [])
 
   // 设置侧边栏展开 - 委托给 layoutStore

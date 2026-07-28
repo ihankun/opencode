@@ -55,7 +55,7 @@ import {
 import { areSessionListsSame, getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
 import { clearSessionRuntimeState } from '../../../utils/sessionLifecycle'
 import { uiErrorHandler } from '../../../utils'
-import { isElectron, getDesktopPlatform } from '../../../utils/tauri'
+import { isElectron, getDesktopPlatform } from '../../../utils/platform'
 
 // 侧边栏设计模式：
 // - 按钮结构统一，不因 expanded/collapsed 改变 DOM

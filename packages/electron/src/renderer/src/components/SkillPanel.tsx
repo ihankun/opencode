@@ -915,20 +915,10 @@ function normalizeSkillName(value: string) {
 }
 
 async function writeSkillFiles(root: string, files: { path: string; content: string }[]) {
-  if (typeof window.customOpenCode?.writeSkillFiles === 'function') {
-    await window.customOpenCode.writeSkillFiles(root, files)
-    return
+  if (typeof window.customOpenCode?.writeSkillFiles !== 'function') {
+    throw new Error('Writing skill files requires the desktop app.')
   }
-
-  const { mkdir, writeTextFile } = await import('@tauri-apps/plugin-fs')
-  await mkdir(root, { recursive: true })
-  for (const file of files) {
-    const normalized = normalizeRelativeFile(file.path)
-    const destination = joinPath(root, normalized)
-    const parent = dirname(destination)
-    if (parent !== root) await mkdir(parent, { recursive: true })
-    await writeTextFile(destination, file.content)
-  }
+  await window.customOpenCode.writeSkillFiles(root, files)
 }
 
 function normalizeRelativeFile(value: string) {

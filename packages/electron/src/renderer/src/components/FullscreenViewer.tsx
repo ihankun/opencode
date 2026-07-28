@@ -17,7 +17,7 @@
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DESKTOP_FULLSCREEN_LAYER_Z_INDEX, DESKTOP_TITLEBAR_HEIGHT } from '../constants'
-import { usesCustomDesktopTitlebar } from '../utils/tauri'
+import { usesCustomDesktopTitlebar } from '../utils/platform'
 import { CloseIcon } from './Icons'
 import { ModalShell } from './ui/ModalShell'
 import type { ViewMode } from './DiffViewer'

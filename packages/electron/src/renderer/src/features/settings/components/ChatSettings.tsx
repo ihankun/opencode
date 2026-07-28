@@ -16,8 +16,6 @@ export function ChatSettings() {
   const { t } = useTranslation(['settings'])
   const { pathMode, setPathMode, effectiveStyle, detectedStyle, isAutoMode } = usePathMode()
   const {
-    externalFileDropMode,
-    setExternalFileDropMode,
     outlineCurrentHighlight,
     setOutlineCurrentHighlight,
     renderUserMarkdown,
@@ -68,11 +66,6 @@ export function ChatSettings() {
     themeStore.setEnterKeyBehavior(behavior)
   }
 
-  const externalDropAlwaysMention = externalFileDropMode === 'mention'
-  const handleExternalDropModeToggle = () => {
-    setExternalFileDropMode(externalDropAlwaysMention ? 'upload-first' : 'mention')
-  }
-
   const handleOutlineHighlightToggle = () => {
     setOutlineCurrentHighlight(!outlineCurrentHighlight)
   }
@@ -106,13 +99,6 @@ export function ChatSettings() {
           </p>
         )}
 
-        <SettingRow
-          label={t('chat.externalDropMentionMode')}
-          description={t('chat.externalDropMentionModeDesc')}
-          onClick={handleExternalDropModeToggle}
-        >
-          <Toggle enabled={externalDropAlwaysMention} onChange={handleExternalDropModeToggle} />
-        </SettingRow>
       </SettingsSection>
 
       <SettingsSection title={t('chat.conversationExperience')}>

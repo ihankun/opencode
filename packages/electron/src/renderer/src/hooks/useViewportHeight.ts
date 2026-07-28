@@ -27,24 +27,12 @@ function isKeyboardEditableElement(element: Element | null): boolean {
 /**
  * 跟踪视口高度，处理移动端键盘弹出时的布局适配。
  *
- * - Tauri Android: 原生 setPadding 让 WebView 自动 resize，直接用 window.innerHeight
- * - Browser/PWA: 通过 visualViewport 计算键盘遮挡区域
+ * Browser/PWA 通过 visualViewport 计算键盘遮挡区域。
  */
 export function useViewportHeight() {
   useEffect(() => {
     const root = document.documentElement
-    const isTauriApp = root.classList.contains('tauri-app')
-
-    if (isTauriApp) {
-      // Tauri: 原生层已处理键盘 resize，只需跟踪 innerHeight
-      const updateAppHeight = () => {
-        root.style.setProperty('--app-height', `${window.innerHeight}px`)
-      }
-      updateAppHeight()
-      window.addEventListener('resize', updateAppHeight)
-      return () => window.removeEventListener('resize', updateAppHeight)
-    }
-    // Browser/PWA: 用 visualViewport 检测键盘。
+    // 用 visualViewport 检测键盘。
     //
     // 陷阱：iOS PWA standalone 下 window.innerHeight 包含 home indicator 区域，
     // 而 visualViewport.height 不包含。没键盘时两者差值 ≈ safe-area-inset-bottom（~34px），

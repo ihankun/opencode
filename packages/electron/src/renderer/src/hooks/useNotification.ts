@@ -3,7 +3,7 @@
 // ============================================
 //
 // 当 AI 完成回复、请求权限、提问或出错时，发送通知
-// Tauri 环境下使用原生通知（@tauri-apps/plugin-notification）
+// Electron 环境下使用主进程通知
 // 浏览器环境下使用 Service Worker / Notification API
 //
 // Android Chrome 不支持 new Notification()，必须通过
@@ -14,7 +14,6 @@ import {
   STORAGE_KEY_NOTIFICATIONS_ENABLED,
   STORAGE_KEY_NOTIFICATIONS_ONLY_WHEN_UNFOCUSED,
 } from '../constants/storage'
-import { isTauri } from '../utils/tauri'
 import { notificationPolicyStore } from '../store/notificationPolicyStore'
 
 // ============================================
@@ -38,7 +37,6 @@ let swRegistration: ServiceWorkerRegistration | null = null
 let swRegistering = false
 
 async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (isTauri()) return null // Tauri 不需要 SW
   if (swRegistration) return swRegistration
   if (swRegistering) return null
   if (!('serviceWorker' in navigator)) return null
@@ -51,50 +49,6 @@ async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> 
     return null
   } finally {
     swRegistering = false
-  }
-}
-
-// ============================================
-// Tauri 通知工具
-// ============================================
-
-async function sendTauriNotification(title: string, body: string): Promise<void> {
-  try {
-    const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification')
-
-    let permitted = await isPermissionGranted()
-    if (!permitted) {
-      const result = await requestPermission()
-      permitted = result === 'granted'
-    }
-
-    if (permitted) {
-      sendNotification({ title, body })
-    }
-  } catch (e) {
-    if (import.meta.env.DEV) {
-      console.warn('[Notification/Tauri] Failed:', e)
-    }
-  }
-}
-
-async function checkTauriPermission(): Promise<NotificationPermission> {
-  try {
-    const { isPermissionGranted } = await import('@tauri-apps/plugin-notification')
-    const granted = await isPermissionGranted()
-    return granted ? 'granted' : 'default'
-  } catch {
-    return 'denied'
-  }
-}
-
-async function requestTauriPermission(): Promise<NotificationPermission> {
-  try {
-    const { requestPermission } = await import('@tauri-apps/plugin-notification')
-    const result = await requestPermission()
-    return result === 'granted' ? 'granted' : 'denied'
-  } catch {
-    return 'denied'
   }
 }
 
@@ -155,7 +109,6 @@ export function useNotification() {
 
   const [permission, setPermission] = useState<NotificationPermission>(() => {
     if (hasElectronNotificationBridge()) return 'default'
-    if (isTauri()) return 'default' // Tauri 异步检查
     if (typeof Notification === 'undefined') return 'denied'
     return Notification.permission
   })
@@ -177,14 +130,11 @@ export function useNotification() {
       checkElectronPermission().then(setPermission)
       return
     }
-    if (isTauri()) {
-      checkTauriPermission().then(setPermission)
-    }
   }, [])
 
   // 启用时预注册 SW（浏览器环境）
   useEffect(() => {
-    if (enabled && !isTauri() && !hasElectronNotificationBridge()) {
+    if (enabled && !hasElectronNotificationBridge()) {
       ensureServiceWorker()
     }
   }, [enabled])
@@ -200,7 +150,6 @@ export function useNotification() {
         }
       })
     }
-    if (isTauri()) return
     if (!('serviceWorker' in navigator)) return
 
     const handler = (event: MessageEvent) => {
@@ -225,10 +174,6 @@ export function useNotification() {
         const result = await requestElectronPermission()
         setPermission(result)
         if (result !== 'granted') return
-      } else if (isTauri()) {
-        const result = await requestTauriPermission()
-        setPermission(result)
-        if (result !== 'granted') return
       } else if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
         const result = await Notification.requestPermission()
         setPermission(result)
@@ -248,7 +193,7 @@ export function useNotification() {
     }
 
     // 启用时注册 SW（浏览器环境）
-    if (value && !isTauri() && !hasElectronNotificationBridge()) {
+    if (value && !hasElectronNotificationBridge()) {
       ensureServiceWorker()
     }
   }, [])
@@ -278,12 +223,6 @@ export function useNotification() {
         const result = await sendElectronNotification(title, body, data)
         setPermission(result.permission)
         return result.ok
-      }
-
-      // Tauri 原生通知
-      if (isTauri()) {
-        await sendTauriNotification(title, body)
-        return true
       }
 
       // 浏览器通知
@@ -329,7 +268,7 @@ export function useNotification() {
     [],
   )
 
-  const supported = hasElectronNotificationBridge() || isTauri() || typeof Notification !== 'undefined'
+  const supported = hasElectronNotificationBridge() || typeof Notification !== 'undefined'
 
   return {
     enabled,

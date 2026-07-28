@@ -3,10 +3,9 @@
 // ============================================
 
 import { API_BASE_URL } from '../constants'
-import { platformFetch } from '../platform'
 
 async function getUnifiedFetch(): Promise<typeof globalThis.fetch> {
-  return platformFetch as typeof globalThis.fetch
+  return globalThis.fetch
 }
 
 /**

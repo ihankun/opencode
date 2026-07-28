@@ -73,9 +73,6 @@ export type { NotificationEntry, NotificationPreferencesBackup, NotificationType
 export { activeSessionStore, useActiveSessionStore, useBusySessions, useBusyCount } from './activeSessionStore'
 export type { ActiveSessionEntry } from './activeSessionStore'
 
-export { serviceStore, useServiceStore, exportServiceSettingsBackup, importServiceSettingsBackup } from './serviceStore'
-export type { ServiceSettingsBackup } from './serviceStore'
-
 export { modelVisibilityStore, useHiddenModelKeys } from './modelVisibilityStore'
 export { defaultModelStore, useDefaultModelKey } from './defaultModelStore'
 

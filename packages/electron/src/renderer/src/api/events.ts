@@ -5,7 +5,6 @@
 import { getApiBaseUrl, getAuthHeader } from './http'
 import { createSseTextParser } from './sse'
 import { normalizeTodoItems } from './todo'
-import { isTauri } from '../utils/tauri'
 import type {
   ApiMessage,
   EventCallbacks,
@@ -85,8 +84,6 @@ let connectionGeneration = 0
 let isInBackground = false
 /** 是否因为切换服务器而触发的重连 */
 let isServerSwitch = false
-/** 上一次 bridge_disconnect 的 Promise，用于串行化 Tauri 侧的 disconnect → connect */
-let pendingDisconnect: Promise<void> = Promise.resolve()
 /** Cooldown: 上一次 onReconnected 广播的时间戳 */
 let lastReconnectedBroadcast = 0
 const RECONNECTED_COOLDOWN = 2000
@@ -114,23 +111,6 @@ function broadcastReconnected(reason: 'network' | 'server-switch') {
   allSubscribers.forEach(cb => {
     cb.onReconnected?.(reason)
   })
-}
-
-/**
- * 请求 Tauri 侧断开 SSE 连接
- * 返回 Promise，调用方可以 await 确保断开完成后再发起新连接
- * 多次并发调用会自动串行化
- */
-function disconnectTauri(): Promise<void> {
-  if (!isTauri()) return Promise.resolve()
-
-  const p = pendingDisconnect.then(() =>
-    import('@tauri-apps/api/core')
-      .then(({ invoke }) => invoke('bridge_disconnect', { args: { bridgeId: 'sse' } }).then(() => undefined))
-      .catch(() => {}),
-  )
-  pendingDisconnect = p
-  return p
 }
 
 function resetHeartbeat() {
@@ -183,7 +163,6 @@ function connectSingleton() {
         )
       }
       connectionGeneration++
-      disconnectTauri()
       if (singletonController) {
         singletonController.abort()
         singletonController = null
@@ -204,139 +183,11 @@ function connectSingleton() {
   // 注册生命周期监听器（首次连接时）
   registerLifecycleListeners()
 
-  if (isTauri()) {
-    connectViaTauri()
-  } else {
-    connectViaBrowser()
-  }
+  connectViaBrowser()
 }
 
 // ============================================
-// Tauri SSE Bridge (via Rust reqwest + Channel)
-// ============================================
-
-/** Unified bridge event from Rust (transparent proxy) */
-interface BridgeEvent {
-  event: 'connected' | 'data' | 'disconnected' | 'error'
-  data?: {
-    data?: string
-    code?: number
-    reason?: string
-    message?: string
-  }
-}
-
-async function connectViaTauri() {
-  const myGeneration = connectionGeneration
-
-  try {
-    // 等待上一次 disconnect 完成，避免 Rust 侧 connect/disconnect 竞争
-    await pendingDisconnect
-
-    const { invoke, Channel } = await import('@tauri-apps/api/core')
-
-    const url = `${getApiBaseUrl()}/global/event`
-    const authHeaders = getAuthHeader()
-    const authHeader = authHeaders['Authorization'] || null
-
-    const sseParser = createSseTextParser()
-
-    const onEvent = new Channel<BridgeEvent>()
-
-    onEvent.onmessage = (msg: BridgeEvent) => {
-      // 代次不匹配，说明已经 reconnect 过了，忽略旧连接的事件
-      if (myGeneration !== connectionGeneration) return
-
-      switch (msg.event) {
-        case 'connected': {
-          isConnecting = false
-
-          updateConnectionState({
-            state: 'connected',
-            reconnectAttempt: 0,
-            error: undefined,
-          })
-          resetHeartbeat()
-          if (import.meta.env.DEV) {
-            console.log('[SSE/Tauri] Connected')
-          }
-          // 每次连接成功都通知订阅者刷新数据
-          // 覆盖场景：首次连接（先开 UI 后开 server）、网络重连、服务器切换
-          const reason = isServerSwitch ? ('server-switch' as const) : ('network' as const)
-          isServerSwitch = false
-          broadcastReconnected(reason)
-          break
-        }
-        case 'data': {
-          resetHeartbeat()
-          if (!msg.data?.data) break
-
-          for (const eventData of sseParser.push(msg.data.data)) {
-            const globalEvent = parseGlobalEvent(eventData)
-            if (globalEvent) {
-              broadcastEvent(globalEvent)
-            }
-          }
-          break
-        }
-        case 'disconnected': {
-          isConnecting = false
-          if (import.meta.env.DEV) {
-            console.log('[SSE/Tauri] Disconnected:', msg.data?.reason)
-          }
-          updateConnectionState({ state: 'disconnected' })
-          scheduleReconnect()
-          break
-        }
-        case 'error': {
-          isConnecting = false
-          const errorMsg = msg.data?.message || 'Unknown error'
-          if (import.meta.env.DEV) {
-            console.warn('[SSE/Tauri] Error:', errorMsg)
-          }
-          updateConnectionState({
-            state: 'error',
-            error: errorMsg,
-          })
-          allSubscribers.forEach(cb => {
-            cb.onError?.(new Error(errorMsg))
-          })
-          scheduleReconnect()
-          break
-        }
-      }
-    }
-
-    // 调用统一桥接命令
-    invoke('bridge_connect', {
-      args: { bridgeId: 'sse', url, authHeader },
-      onEvent,
-    }).catch((error: unknown) => {
-      if (!finalizeConnectionAttempt(myGeneration)) return
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      if (import.meta.env.DEV) {
-        console.warn('[SSE/Tauri] invoke error:', errorMsg)
-      }
-      updateConnectionState({
-        state: 'error',
-        error: errorMsg,
-      })
-      allSubscribers.forEach(cb => {
-        cb.onError?.(new Error(errorMsg))
-      })
-      scheduleReconnect()
-    })
-  } catch (error) {
-    if (!finalizeConnectionAttempt(myGeneration)) return
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    console.warn('[SSE/Tauri] Failed to initialize:', errorMsg)
-    updateConnectionState({ state: 'error', error: errorMsg })
-    scheduleReconnect()
-  }
-}
-
-// ============================================
-// Browser SSE (via fetch + ReadableStream)
+// SSE (via fetch + ReadableStream)
 // ============================================
 
 function connectViaBrowser() {
@@ -502,7 +353,6 @@ function startBackgroundKeepalive() {
       console.warn('[SSE] Background keepalive: connection appears dead, forcing reconnect')
 
       // 断开旧连接
-      disconnectTauri()
       if (singletonController) {
         singletonController.abort()
         singletonController = null
@@ -535,10 +385,6 @@ function disconnectSingleton() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
   stopBackgroundKeepalive()
 
-  // Tauri: 调用 Rust 侧断开命令
-  disconnectTauri()
-
-  // Browser: abort fetch
   if (singletonController) {
     singletonController.abort()
     singletonController = null
@@ -616,7 +462,6 @@ function forceReconnectNow() {
 
   // 断开旧连接
   connectionGeneration++
-  disconnectTauri()
   if (singletonController) {
     singletonController.abort()
     singletonController = null
@@ -642,7 +487,6 @@ function handleOffline() {
   // 标记为断连，但不尝试重连（没网重连也没用）
   if (connectionInfo.state === 'connected' || connectionInfo.state === 'connecting') {
     connectionGeneration++
-    disconnectTauri()
     if (singletonController) {
       singletonController.abort()
       singletonController = null
@@ -829,7 +673,6 @@ export function reconnectSSE() {
   // 递增连接代次，使旧连接的事件回调自动失效
   connectionGeneration++
 
-  disconnectTauri()
   if (singletonController) {
     singletonController.abort()
     singletonController = null

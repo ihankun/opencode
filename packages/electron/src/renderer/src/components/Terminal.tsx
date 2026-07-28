@@ -16,7 +16,6 @@ import { layoutStore, useLayoutStore } from '../store/layoutStore'
 import { useInputCapabilities } from '../hooks/useInputCapabilities'
 import { logger } from '../utils/logger'
 import { parsePtyFrame } from '../utils/ptyProtocol'
-import { isTauri } from '../utils/tauri'
 import { copyTextToClipboard, readTextFromClipboard } from '../utils/clipboard'
 import { keybindingStore } from '../store/keybindingStore'
 import { openUrl } from '../utils/browserOpen'
@@ -561,15 +560,13 @@ export const Terminal = memo(function Terminal({ ptyId, directory, isActive }: T
     const MAX_RECONNECT_DELAY = 30000 // 最大 30s
     const BASE_RECONNECT_DELAY = 1000 // 起始 1s
     let intentionalClose = false // 标记主动关闭
-    const useNativePtyBridge = isTauri()
-
     const resetTransport = () => {
       transportSendRef.current = null
       transportDisconnectRef.current = null
     }
 
     const handleConnected = () => {
-      logger.log(useNativePtyBridge ? '[Terminal/Tauri] Connected:' : '[Terminal] WebSocket connected:', ptyId)
+      logger.log('[Terminal] WebSocket connected:', ptyId)
       if (!mountedRef.current) return
       reconnectAttempt = 0
       layoutStore.updateTerminalTab(ptyId, { status: 'connected' })
@@ -579,12 +576,7 @@ export const Terminal = memo(function Terminal({ ptyId, directory, isActive }: T
     }
 
     const handleDisconnected = ({ code, reason }: { code?: number; reason?: string }) => {
-      logger.log(
-        useNativePtyBridge ? '[Terminal/Tauri] Disconnected:' : '[Terminal] WebSocket closed:',
-        ptyId,
-        code,
-        reason,
-      )
+      logger.log('[Terminal] WebSocket closed:', ptyId, code, reason)
       resetTransport()
       if (!mountedRef.current) return
       layoutStore.updateTerminalTab(ptyId, { status: 'disconnected' })
@@ -611,84 +603,38 @@ export const Terminal = memo(function Terminal({ ptyId, directory, isActive }: T
       fitAddon.fit()
       const cursor = cursorRef.current
 
-      if (useNativePtyBridge) {
-        logger.log(
-          '[Terminal/Tauri] Connecting PTY bridge:',
-          ptyId,
-          reconnectAttempt > 0 ? `(reconnect #${reconnectAttempt})` : '',
-        )
-        void import('../api/ptyBridge')
-          .then(({ connectTauriPty }) =>
-            connectTauriPty({
-              ptyId,
-              directory: terminalDirectory,
-              cursor,
-              onConnected: handleConnected,
-              onMessage: chunk => {
-                if (!mountedRef.current) return
-                const frame = parsePtyFrame(chunk)
-                if (!frame) return
-                if (frame.kind === 'control') {
-                  cursorRef.current = frame.cursor
-                  return
-                }
-                terminal.write(frame.data)
-                cursorRef.current += frame.data.length
-              },
-              onDisconnected: handleDisconnected,
-              onError: message => {
-                logger.log('[Terminal/Tauri] PTY bridge error:', ptyId, message)
-              },
-            }),
-          )
-          .then(connection => {
-            if (!connection) return
-            if (!mountedRef.current) {
-              connection.close()
-              return
-            }
-            transportSendRef.current = data => connection.send(data)
-            transportDisconnectRef.current = () => connection.close()
-          })
-          .catch(error => {
-            const message = error instanceof Error ? error.message : String(error)
-            logger.log('[Terminal/Tauri] Failed to initialize PTY bridge:', ptyId, message)
-            handleDisconnected({ reason: message })
-          })
-      } else {
-        const wsUrl = getPtyConnectUrl(ptyId, terminalDirectory, { cursor })
-        logger.log('[Terminal] Connecting to:', wsUrl, reconnectAttempt > 0 ? `(reconnect #${reconnectAttempt})` : '')
-        ws = new WebSocket(wsUrl)
-        ws.binaryType = 'arraybuffer'
-        transportSendRef.current = data => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(data)
-          }
+      const wsUrl = getPtyConnectUrl(ptyId, terminalDirectory, { cursor })
+      logger.log('[Terminal] Connecting to:', wsUrl, reconnectAttempt > 0 ? `(reconnect #${reconnectAttempt})` : '')
+      ws = new WebSocket(wsUrl)
+      ws.binaryType = 'arraybuffer'
+      transportSendRef.current = data => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(data)
         }
-        transportDisconnectRef.current = () => ws?.close()
+      }
+      transportDisconnectRef.current = () => ws?.close()
 
-        ws.onopen = handleConnected
+      ws.onopen = handleConnected
 
-        ws.onmessage = event => {
-          if (!mountedRef.current) return
-          const frame = parsePtyFrame(event.data as string | ArrayBuffer)
-          if (!frame) return
-          if (frame.kind === 'control') {
-            cursorRef.current = frame.cursor
-            return
-          }
-          terminal.write(frame.data)
-          cursorRef.current += frame.data.length
+      ws.onmessage = event => {
+        if (!mountedRef.current) return
+        const frame = parsePtyFrame(event.data as string | ArrayBuffer)
+        if (!frame) return
+        if (frame.kind === 'control') {
+          cursorRef.current = frame.cursor
+          return
         }
+        terminal.write(frame.data)
+        cursorRef.current += frame.data.length
+      }
 
-        ws.onclose = e => {
-          handleDisconnected({ code: e.code, reason: e.reason })
-        }
+      ws.onclose = e => {
+        handleDisconnected({ code: e.code, reason: e.reason })
+      }
 
-        ws.onerror = e => {
-          logger.log('[Terminal] WebSocket error:', ptyId, e)
-          // onclose 会在 onerror 之后触发，重连逻辑交给 onclose
-        }
+      ws.onerror = e => {
+        logger.log('[Terminal] WebSocket error:', ptyId, e)
+        // onclose 会在 onerror 之后触发，重连逻辑交给 onclose
       }
 
       disposeData?.dispose()
