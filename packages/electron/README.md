@@ -26,6 +26,17 @@ The Electron renderer dev server starts from port `46237` instead of Vite's comm
 
 macOS native notifications require a signed app bundle. The `electron:dev` runtime is not a normal signed `OpenCodex.app`, so test system notifications from a packaged build.
 
+## Deep links
+
+Packaged builds register the `opencodex://` protocol with two supported actions:
+
+```text
+opencodex://open-project?directory=%2Fpath%2Fto%2Fproject
+opencodex://new-session?directory=%2Fpath%2Fto%2Fproject&prompt=Review%20this%20project
+```
+
+The directory must be an existing local folder. A `new-session` prompt is only placed in the composer and is never submitted automatically. Unknown actions, relative paths, duplicate parameters, and oversized inputs are rejected.
+
 ## Build
 
 ```bash
@@ -40,7 +51,7 @@ Run Electron checks from this package rather than the repository root:
 ```bash
 cd packages/electron
 bun typecheck
-bun test
+bun run test
 bun run build
 ```
 

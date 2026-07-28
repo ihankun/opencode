@@ -47,6 +47,8 @@ import type { SettingsTab } from './features/settings/SettingsDialog'
 import { isTauri, isTauriMobile, isElectron, getDesktopPlatform } from './utils/tauri'
 import { InternalDragLayer } from './components/InternalDragLayer'
 import { completeOnboarding, resetOnboarding, shouldShowOnboarding } from './store/onboardingStore'
+import { insertComposerDraft } from './utils/composerDraft'
+import type { CustomOpenCodeDeepLink } from '../../shared/deepLinks'
 
 const SettingsDialog = lazy(() =>
   import('./features/settings/SettingsDialog').then(module => ({ default: module.SettingsDialog })),
@@ -161,7 +163,7 @@ function App() {
     navigateHome: navigateRouteHome,
     replaceSession,
   } = router
-  const { currentDirectory, savedDirectories, sidebarExpanded, setSidebarExpanded, pathInfo } = useDirectory()
+  const { currentDirectory, savedDirectories, sidebarExpanded, setSidebarExpanded, pathInfo, addDirectory } = useDirectory()
   const { rightPanelOpen, rightPanelWidth, wakeLock } = useLayoutStore()
   const { surfaceRef, value: chatViewport } = useChatViewportController({
     sidebarExpanded,
@@ -713,6 +715,46 @@ function App() {
   }, [])
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const handleDeepLink = useCallback((deepLink: CustomOpenCodeDeepLink) => {
+    const paneId = paneLayoutStore.getFocusedPaneId()
+    if (!paneId) return
+
+    setUtilityPage(null)
+    setSettingsDialogOpen(false)
+    setProjectDialogOpen(false)
+    setCommandPaletteOpen(false)
+    addDirectory(deepLink.directory)
+    paneLayoutStore.setPaneSession(paneId, null)
+    navigateRouteHome(deepLink.directory)
+
+    const prompt = deepLink.action === 'new-session' ? deepLink.prompt : undefined
+    if (!prompt) return
+    requestAnimationFrame(() => {
+      insertComposerDraft({
+        paneId,
+        text: prompt,
+        mode: 'replace',
+      })
+    })
+  }, [addDirectory, navigateRouteHome])
+  const handleDeepLinkRef = useRef(handleDeepLink)
+  handleDeepLinkRef.current = handleDeepLink
+
+  useEffect(() => {
+    let disposed = false
+    const receive = (deepLink: CustomOpenCodeDeepLink) => handleDeepLinkRef.current(deepLink)
+    const unsubscribe = window.customOpenCode.onDeepLink(receive)
+    void window.customOpenCode.consumeInitialDeepLinks()
+      .then(deepLinks => {
+        if (disposed) return
+        deepLinks.forEach(receive)
+      })
+      .catch(error => uiErrorHandler('consume deep links', error))
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
+  }, [])
 
   const handleNewTerminal = useCallback(async () => {
     try {

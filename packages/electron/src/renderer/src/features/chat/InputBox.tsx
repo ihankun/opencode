@@ -57,7 +57,11 @@ import type { Command } from '../../api/command'
 import { useServerStore } from '../../hooks'
 import type { SessionStats } from '../../hooks'
 import { notificationStore } from '../../store'
-import { onComposerDraftInsertion } from '../../utils/composerDraft'
+import {
+  applyComposerDraftInsertion,
+  matchesComposerDraftInsertion,
+  onComposerDraftInsertion,
+} from '../../utils/composerDraft'
 import { executionTargetStore } from '../../store/executionTargetStore'
 import { projectProfileStore } from '../../store/projectProfileStore'
 import type { ProjectProfile } from '../../store/projectProfileStore'
@@ -1021,11 +1025,11 @@ function InputBoxComponent({
   useEffect(
     () =>
       onComposerDraftInsertion(insertion => {
-        if (!sessionId || insertion.sessionId !== sessionId) return
-        setText(current => (current.trim() ? `${current.trimEnd()}\n\n${insertion.text}` : insertion.text))
+        if (!matchesComposerDraftInsertion(insertion, { sessionId, paneId })) return
+        setText(current => applyComposerDraftInsertion(current, insertion))
         requestAnimationFrame(() => textareaRef.current?.focus())
       }),
-    [sessionId],
+    [paneId, sessionId],
   )
 
   // @ Mention 状态

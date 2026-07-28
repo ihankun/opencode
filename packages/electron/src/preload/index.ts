@@ -17,9 +17,11 @@ import type {
 } from "../shared/speechModel"
 import type { ProjectDirectory, ProjectState } from "../shared/projects"
 import type { CachedSessionList } from "../shared/sessionListCache"
+import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
+export type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 
 export type CustomOpenCodeServerState = {
     status: "online"
@@ -282,6 +284,8 @@ export type CustomOpenCodeDiagnostics = {
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
+  consumeInitialDeepLinks(): Promise<CustomOpenCodeDeepLink[]>
+  onDeepLink(callback: (deepLink: CustomOpenCodeDeepLink) => void): () => void
   imBridgeConfig(): Promise<ImBridgeConfig>
   updateImBridgeConfig(config: ImBridgeConfig): Promise<ImBridgeConfig>
   imBridgeState(): Promise<ImBridgeState>
@@ -372,6 +376,12 @@ export type CustomOpenCodeApi = {
 const api: CustomOpenCodeApi = {
   server: () => ipcRenderer.invoke("server:get"),
   restartServer: () => ipcRenderer.invoke("server:restart"),
+  consumeInitialDeepLinks: () => ipcRenderer.invoke("deep-link:consume-initial"),
+  onDeepLink(callback) {
+    const listener = (_event: unknown, deepLink: CustomOpenCodeDeepLink) => callback(deepLink)
+    ipcRenderer.on("deep-link:received", listener)
+    return () => ipcRenderer.removeListener("deep-link:received", listener)
+  },
   imBridgeConfig: () => ipcRenderer.invoke("im-bridge:config-get"),
   updateImBridgeConfig: (config) => ipcRenderer.invoke("im-bridge:config-set", config),
   imBridgeState: () => ipcRenderer.invoke("im-bridge:state"),

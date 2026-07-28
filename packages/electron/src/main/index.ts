@@ -24,11 +24,13 @@ import { DesktopPreferencesStore } from "./desktopPreferences"
 import { SpeechModelService } from "./speechModel"
 import { ProjectsStore } from "./projects"
 import { SessionListCacheStore } from "./sessionListCache"
+import { deepLinkUrlsFromArgv, parseDeepLink } from "./deepLinks"
 import {
   getOpenCodeGoQuotaConfig,
   queryProviderQuotas,
   updateOpenCodeGoQuotaConfig,
 } from "./quota/index.ts"
+import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 import type { OpenCodeGoLoginResult, OpenCodeGoQuotaConfigUpdate, QuotaQueryInput } from "../shared/quota.ts"
 import {
   DEFAULT_DESKTOP_PREFERENCES,
@@ -76,6 +78,10 @@ const taskScheduler = new TaskScheduler(async (task) => {
   }
 }, notifyTasksChanged, notifyScheduledTaskFinished)
 let taskSchedulerReady: Promise<void> | undefined
+let deepLinkRendererReady = false
+let deepLinkWork = Promise.resolve()
+const pendingDeepLinks: CustomOpenCodeDeepLink[] = []
+const pendingDeepLinkUrls = deepLinkUrlsFromArgv(process.argv)
 const spawnProcess = spawn as unknown as (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcess
 
 type SecurityConfig = {
@@ -125,6 +131,12 @@ ipcMain.handle("window:set-theme", (_event, value: unknown) => {
   if (value !== "system" && value !== "light" && value !== "dark") return
   if (nativeTheme.themeSource === value) return
   nativeTheme.themeSource = value
+})
+
+ipcMain.handle("deep-link:consume-initial", (_event) => {
+  assertMainWindow(_event)
+  deepLinkRendererReady = true
+  return pendingDeepLinks.splice(0)
 })
 
 ipcMain.handle("desktop-preferences:get", () => desktopPreferencesStore.current())
@@ -434,6 +446,9 @@ async function createWindow() {
   createdWindow.webContents.once("did-finish-load", () => {
     writeLog("startup", "renderer did-finish-load", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
   })
+  createdWindow.webContents.on("did-start-loading", () => {
+    deepLinkRendererReady = false
+  })
   createdWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     writeLog("main", "window did-fail-load", { errorCode, errorDescription, validatedURL })
     markFirstWindowReady()
@@ -655,6 +670,8 @@ projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json")
 sessionListCacheStore = new SessionListCacheStore(join(app.getPath("userData"), "session-list-cache.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) app.quit()
 
 process.on("uncaughtException", (error) => {
   writeLog("main", "uncaughtException", error)
@@ -910,8 +927,23 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") return
 })
 
-void app.whenReady().then(async () => {
+if (hasSingleInstanceLock) {
+  app.on("second-instance", (_event, argv) => {
+    acceptDeepLinkUrls(deepLinkUrlsFromArgv(argv))
+    if (app.isReady() && mainWindow) showWindow()
+  })
+
+  app.on("open-url", (event, url) => {
+    event.preventDefault()
+    acceptDeepLinkUrls([url])
+    if (app.isReady() && mainWindow) showWindow()
+  })
+}
+
+if (hasSingleInstanceLock) void app.whenReady().then(async () => {
   writeLog("startup", "app ready", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
+  if (app.isPackaged) app.setAsDefaultProtocolClient("opencodex")
+  await receiveDeepLinkUrls(pendingDeepLinkUrls.splice(0))
   const speechStartedAt = performance.now()
   speechModelReady = speechModelService.load().then(() => {
     writeLog("startup", "speech model preferences loaded", {
@@ -947,6 +979,69 @@ void app.whenReady().then(async () => {
 app.on("activate", () => {
   showWindow()
 })
+
+function acceptDeepLinkUrls(urls: string[]) {
+  if (!urls.length) return
+  if (!app.isReady()) {
+    pendingDeepLinkUrls.push(...urls)
+    return
+  }
+  void receiveDeepLinkUrls(urls)
+}
+
+function receiveDeepLinkUrls(urls: string[]) {
+  deepLinkWork = deepLinkWork.then(() =>
+    urls.reduce(
+      (previous, url) =>
+        previous.then(() =>
+          receiveDeepLinkUrl(url).catch(() => {
+            writeLog("deep-link", "failed to handle deep link")
+          }),
+        ),
+      Promise.resolve(),
+    ),
+  )
+  return deepLinkWork
+}
+
+async function receiveDeepLinkUrl(rawUrl: string) {
+  const deepLink = parseDeepLink(rawUrl)
+  if (!deepLink) {
+    writeLog("deep-link", "rejected invalid deep link")
+    return
+  }
+
+  const directoryExists = await stat(deepLink.directory).then(
+    (entry) => entry.isDirectory(),
+    () => false,
+  )
+  if (!directoryExists) {
+    writeLog("deep-link", "rejected unavailable directory", { action: deepLink.action })
+    const options = {
+      type: "warning" as const,
+      message: "OpenCodex could not open this project",
+      detail: `The directory does not exist or is not a folder:\n${deepLink.directory}`,
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await dialog.showMessageBox(mainWindow, options)
+      return
+    }
+    await dialog.showMessageBox(options)
+    return
+  }
+
+  writeLog("deep-link", "accepted", {
+    action: deepLink.action,
+    hasPrompt: deepLink.action === "new-session" && Boolean(deepLink.prompt),
+  })
+  if (!deepLinkRendererReady || !mainWindow || mainWindow.isDestroyed()) {
+    pendingDeepLinks.push(deepLink)
+    return
+  }
+
+  mainWindow.webContents.send("deep-link:received", deepLink)
+  showWindow()
+}
 
 async function searchPlugins(raw: string) {
   const query = raw.trim()

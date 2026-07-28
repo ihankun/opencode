@@ -14,6 +14,10 @@ const config: Configuration = {
       filter: ["LICENSE", "UPSTREAM.md", "vendor/seccomp/**/*", "vendor/srt-win/**/*"],
     },
   ],
+  protocols: {
+    name: "OpenCodex",
+    schemes: ["opencodex"],
+  },
   asarUnpack: ["out/main/chunks/*.wasm", "node_modules/@lydell/node-pty-*/**/*"],
   mac: {
     icon: "assets/icon.icns",
