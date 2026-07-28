@@ -10,7 +10,7 @@ import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredVal
 import { useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
-import { AlertCircleIcon, CheckIcon, CloseIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
+import { AlertCircleIcon, CheckIcon, CircleIcon, CloseIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex, type OutlineIndexHandle } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
@@ -21,7 +21,11 @@ import { useCancelHint } from '../../hooks/useCancelHint'
 import { InlineToolRequestContext, type InlineToolRequestContextValue } from './InlineToolRequestContext'
 import { ChatViewportProvider, canUseSplitPane, useChatViewportMaybe, type ChatViewportValue } from './chatViewport'
 import { useChatPageViewModel } from './useChatPageViewModel'
-import { summarizeTurnChanges, summarizeTurnTodoProgress } from '../message/autoCollapseExecution'
+import {
+  summarizeTurnChanges,
+  summarizeTurnTodoProgress,
+} from '../message/autoCollapseExecution'
+import type { TurnTodoProgress } from '../message/todoProgress'
 import { SessionNavigationContext } from '../../contexts/SessionNavigationContext'
 import { paneLayoutStore } from '../../store/paneLayoutStore'
 import { autoApproveStore } from '../../store/autoApproveStore'
@@ -944,7 +948,13 @@ export const ChatPane = memo(function ChatPane({
         )}
         {latestTurnOverview && (
           <div className="mx-auto mb-2 flex max-w-[95%] justify-center px-4 xl:max-w-7xl">
-            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md">
+            <div
+              className="group relative pointer-events-auto inline-flex cursor-default items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md transition-colors hover:border-accent-main-100/35 hover:bg-bg-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main-100/35"
+              tabIndex={latestTurnOverview.todoProgress ? 0 : undefined}
+            >
+              {latestTurnOverview.todoProgress && (
+                <TurnTodoProgressPopover progress={latestTurnOverview.todoProgress} isStreaming={isStreaming} />
+              )}
               {isStreaming
                 ? <SpinnerIcon size={15} className="shrink-0 animate-spin text-accent-main-100" />
                 : latestTurnOverview.changes
@@ -1124,3 +1134,51 @@ export const ChatPane = memo(function ChatPane({
 
   return <ChatViewportProvider value={viewportValue}>{content}</ChatViewportProvider>
 })
+
+function TurnTodoProgressPopover({ progress, isStreaming }: { progress: TurnTodoProgress; isStreaming: boolean }) {
+  const { t } = useTranslation('message')
+  return (
+    <div className="invisible pointer-events-none absolute bottom-full left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 pb-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      <div className="overflow-hidden rounded-xl border border-border-200/70 bg-bg-000/98 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-border-200/50 px-3.5 py-2.5">
+          <span className="font-medium text-text-100">{t('executionProcess.taskProgress')}</span>
+          <span className="text-[length:var(--fs-xs)] tabular-nums text-text-400">
+            {t('executionProcess.currentStep', { current: progress.current, total: progress.total })}
+          </span>
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1.5">
+          {progress.items.map((item, index) => {
+            const active = item.status === 'in_progress' || (
+              isStreaming &&
+              item.status === 'pending' &&
+              index + 1 === progress.current
+            )
+            return (
+              <div
+                key={`${index}:${item.content}`}
+                className={`flex items-start gap-2.5 px-3.5 py-2 ${
+                  active ? 'bg-accent-main-100/10 text-text-100' : 'text-text-300'
+                }`}
+              >
+                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                  {active
+                    ? <SpinnerIcon size={14} className="animate-spin text-accent-main-100" />
+                    : item.status === 'completed'
+                      ? <CheckIcon size={14} className="text-success-100" />
+                      : item.status === 'cancelled'
+                        ? <CloseIcon size={14} className="text-text-500" />
+                        : <CircleIcon size={13} className="text-text-500" />}
+                </span>
+                <span className={`min-w-0 whitespace-pre-wrap break-words leading-relaxed ${
+                  item.status === 'completed' ? 'text-text-400' : ''
+                }`}>
+                  {item.content}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -13,6 +13,7 @@
     "processed": "已处理",
     "expand": "展开执行过程",
     "collapse": "收起执行过程",
+    "taskProgress": "任务进度",
     "currentStep": "第 {{current}} / {{total}} 步",
     "changedFiles": "{{count}} 个文件已更改"
   },
