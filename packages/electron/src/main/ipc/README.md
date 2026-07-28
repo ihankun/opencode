@@ -18,6 +18,8 @@ sidecars, schedulers, or other application services.
 - Pass lifecycle actions such as restarting the server or opening a managed
   window into the registrar instead of importing the main entrypoint.
 - Group related channels together. Do not create one file per channel.
+- Persist renderer local-storage settings through the main-process
+  `RendererSettingsStore`; renderer origins are caches, not the durable source.
 
 ## Migration order
 

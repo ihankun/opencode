@@ -36,6 +36,7 @@ import { registerNotificationIpc } from "./ipc/notifications"
 import { registerDesktopPreferencesIpc } from "./ipc/preferences"
 import { registerProjectsIpc } from "./ipc/projects"
 import { registerQuotaIpc } from "./ipc/quota"
+import { registerRendererSettingsIpc } from "./ipc/rendererSettings"
 import { registerSecurityIpc } from "./ipc/security"
 import { registerServerIpc } from "./ipc/server"
 import { registerSkillsIpc } from "./ipc/skills"
@@ -43,6 +44,7 @@ import { registerSpeechModelIpc } from "./ipc/speechModel"
 import { registerTaskIpc } from "./ipc/tasks"
 import { registerWindowIpc } from "./ipc/window"
 import { updateOpenCodeGoQuotaConfig } from "./quota/index.ts"
+import { RendererSettingsStore } from "./rendererSettings"
 import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 import type { OpenCodeGoLoginResult } from "../shared/quota.ts"
 import {
@@ -529,6 +531,7 @@ desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData
 speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
 projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
 sessionListCacheStore = new SessionListCacheStore(join(app.getPath("userData"), "session-list-cache.json"))
+const rendererSettingsStore = new RendererSettingsStore(join(app.getPath("userData"), "renderer-settings.json"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 registerWindowIpc({ getWindow: () => mainWindow })
@@ -563,6 +566,10 @@ registerQuotaIpc({
   clearBrowserAuth: clearOpenCodeGoBrowserAuth,
   login: loginOpenCodeGoQuota,
   userDataPath: app.getPath("userData"),
+})
+registerRendererSettingsIpc({
+  assertSender: assertMainWindow,
+  store: rendererSettingsStore,
 })
 registerImBridgeIpc({
   getServerUrl: () => server?.state.url,

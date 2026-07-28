@@ -284,6 +284,8 @@ export type CustomOpenCodeDiagnostics = {
 export type CustomOpenCodeApi = {
   server(): Promise<CustomOpenCodeServerState>
   restartServer(): Promise<CustomOpenCodeServerState>
+  rendererSettings(): Promise<Record<string, string>>
+  updateRendererSettings(settings: Record<string, string>): Promise<Record<string, string>>
   consumeInitialDeepLinks(): Promise<CustomOpenCodeDeepLink[]>
   onDeepLink(callback: (deepLink: CustomOpenCodeDeepLink) => void): () => void
   imBridgeConfig(): Promise<ImBridgeConfig>
@@ -376,6 +378,8 @@ export type CustomOpenCodeApi = {
 const api: CustomOpenCodeApi = {
   server: () => ipcRenderer.invoke("server:get"),
   restartServer: () => ipcRenderer.invoke("server:restart"),
+  rendererSettings: () => ipcRenderer.invoke("renderer-settings:get"),
+  updateRendererSettings: (settings) => ipcRenderer.invoke("renderer-settings:set", settings),
   consumeInitialDeepLinks: () => ipcRenderer.invoke("deep-link:consume-initial"),
   onDeepLink(callback) {
     const listener = (_event: unknown, deepLink: CustomOpenCodeDeepLink) => callback(deepLink)
