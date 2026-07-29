@@ -499,7 +499,10 @@ function MarketplaceDetailDialog(props: {
         setDetail(nextDetail)
         setSelectedFile(nextDetail.files.find(file => file.path === 'SKILL.md')?.path ?? nextDetail.files[0]?.path ?? '')
       })
-      .catch(err => setError(err instanceof Error ? err.message : t('skillPanel.marketplaceFailed')))
+      .catch(err => {
+        if (isElectronServerRestartAbort(err)) return
+        setError(err instanceof Error ? err.message : t('skillPanel.marketplaceFailed'))
+      })
       .finally(() => setLoading(false))
   }, [props.directory, props.summary.id, props.summary.provider, t])
 
@@ -511,9 +514,23 @@ function MarketplaceDetailDialog(props: {
       if (action === 'install') await installMarketplaceSkill(props.summary.id, props.summary.provider, scope, props.directory, force)
       else await removeMarketplaceSkill(props.summary.id, props.summary.provider, scope, props.directory, force)
       await restartElectronServer()
+      notificationStore.push(
+        'completed',
+        t(action === 'remove'
+          ? 'skillPanel.uninstalledToast'
+          : installed?.updateAvailable
+            ? 'skillPanel.updatedToast'
+            : installed
+              ? 'skillPanel.reinstalledToast'
+              : 'skillPanel.installedToast', { name: props.summary.name || props.summary.slug }),
+        t('skillPanel.serverRestartedToast'),
+        '',
+        props.directory,
+      )
       await props.onChanged()
       if (action === 'remove') props.onClose()
     } catch (err) {
+      if (isElectronServerRestartAbort(err)) return
       const message = err instanceof Error ? err.message : String(err)
       if (!force && /conflict|local skill files have changes/i.test(message)) {
         setForceAction(action)
@@ -582,12 +599,18 @@ function formatMarketplaceCount(value: number) {
   return Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
+const ELECTRON_SERVER_RESTART_REASON = 'Electron server restarted'
+
 async function restartElectronServer() {
   if (typeof window.customOpenCode?.restartServer !== 'function') return
   await window.customOpenCode.restartServer()
-  abortInFlightApiRequests('Electron server restarted')
+  abortInFlightApiRequests(ELECTRON_SERVER_RESTART_REASON)
   invalidateSDKClient()
   reconnectSSE()
+}
+
+function isElectronServerRestartAbort(cause: unknown) {
+  return cause instanceof Error && cause.name === 'AbortError' && cause.message === ELECTRON_SERVER_RESTART_REASON
 }
 
 function SkillCreateDialog(props: { homeDirectory?: string; onClose: () => void; onDone: (name: string) => void | Promise<void> }) {

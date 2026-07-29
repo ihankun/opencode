@@ -460,7 +460,12 @@
     "install": "Install",
     "update": "Update",
     "reinstall": "Reinstall",
-    "uninstall": "Uninstall"
+    "uninstall": "Uninstall",
+    "installedToast": "Skill “{{name}}” installed",
+    "updatedToast": "Skill “{{name}}” updated",
+    "reinstalledToast": "Skill “{{name}}” reinstalled",
+    "uninstalledToast": "Skill “{{name}}” uninstalled",
+    "serverRestartedToast": "The built-in service restarted and the skill changes are now active."
   },
   "expertKit": {
     "nav": "Expert Kits",

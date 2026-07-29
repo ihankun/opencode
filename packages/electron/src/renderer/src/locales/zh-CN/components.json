@@ -348,7 +348,12 @@
     "install": "安装",
     "update": "更新",
     "reinstall": "重新安装",
-    "uninstall": "卸载"
+    "uninstall": "卸载",
+    "installedToast": "技能“{{name}}”已安装",
+    "updatedToast": "技能“{{name}}”已更新",
+    "reinstalledToast": "技能“{{name}}”已重新安装",
+    "uninstalledToast": "技能“{{name}}”已卸载",
+    "serverRestartedToast": "内置服务已重启，技能变更现已生效。"
   },
   "expertKit": {
     "nav": "专家套件",
