@@ -1155,15 +1155,20 @@ function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) 
           </span>
         </div>
         <div className="max-h-64 overflow-y-auto py-1.5">
-          {fileDetails.map((file) => (
-            <div
-              key={file.filePath}
-              className="flex items-center gap-2.5 px-3.5 py-2"
-            >
-              <FileIcon size={14} className="mt-0.5 shrink-0 text-text-500" />
-              <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-xs)] text-text-300">
-                {file.filePath}
-              </span>
+          {fileDetails.map((file) => {
+            const fileName = file.filePath.split('/').pop() || file.filePath
+            return (
+              <div
+                key={file.filePath}
+                className="flex items-center gap-2.5 px-3.5 py-2"
+              >
+                <FileIcon size={14} className="mt-0.5 shrink-0 text-text-500" />
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-xs)] text-text-300"
+                  title={file.filePath}
+                >
+                  {fileName}
+                </span>
               <span className="flex shrink-0 gap-2 text-[length:var(--fs-xs)] tabular-nums">
                 {file.additions > 0 && (
                   <span className="font-mono font-medium text-success-100">+{file.additions}</span>
@@ -1173,7 +1178,8 @@ function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) 
                 )}
               </span>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
