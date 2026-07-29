@@ -11,6 +11,7 @@ import {
   type MentionItem,
 } from '../mention'
 import { SlashCommandMenu, type SlashCommandMenuHandle } from '../slash-command'
+import { SessionReferenceMenu, type SessionReferenceMenuHandle } from '../session-reference'
 import { InputToolbar } from './input/InputToolbar'
 import { GoalStatusBar } from './input/GoalStatusBar'
 import type { ModelSelectorHandle } from './ModelSelector'
@@ -47,11 +48,11 @@ import {
   SpinnerIcon,
   TrashIcon,
 } from '../../components/Icons'
-import type { ApiAgent } from '../../api/client'
+import type { ApiAgent, ApiSession } from '../../api/client'
 import { getVcsDiff, getVcsInfo, listVcsBranches, switchVcsBranch } from '../../api'
 import type { VcsBranch, ModelInfo, FileCapabilities } from '../../api'
 import type { Command } from '../../api/command'
-import { useServerStore } from '../../hooks'
+import { useServerStore, useSessionContext } from '../../hooks'
 import type { SessionStats } from '../../hooks'
 import { notificationStore } from '../../store'
 import {
@@ -793,6 +794,7 @@ function InputBoxComponent({
 }: InputBoxProps) {
   const { t } = useTranslation('chat')
   const { currentDirectory, savedDirectories } = useDirectory()
+  const { sessions } = useSessionContext()
   const taskProjectProfile = projectProfileStore.get(currentDirectory)
   const taskExecutionTarget = executionTargetStore.getDraft(paneId)
   // 合并文件能力：优先用 fileCapabilities，回退到 supportsImages
@@ -987,6 +989,11 @@ function InputBoxComponent({
   const [slashQuery, setSlashQuery] = useState('')
   const [slashStartIndex, setSlashStartIndex] = useState(-1)
 
+  // # Session Reference 状态
+  const [sessionReferenceOpen, setSessionReferenceOpen] = useState(false)
+  const [sessionReferenceQuery, setSessionReferenceQuery] = useState('')
+  const [sessionReferenceStartIndex, setSessionReferenceStartIndex] = useState(-1)
+
   // 拖拽状态
   const [isDragging, setIsDragging] = useState(false)
   const [isInternalFileDragging, setIsInternalFileDragging] = useState(false)
@@ -1002,6 +1009,7 @@ function InputBoxComponent({
   const toolbarRef = useRef<HTMLDivElement>(null)
   const mentionMenuRef = useRef<MentionMenuHandle>(null)
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null)
+  const sessionReferenceMenuRef = useRef<SessionReferenceMenuHandle>(null)
   const prevRevertedTextRef = useRef<string | undefined>(undefined)
   const latestDraftRef = useRef<HistoryEntry>({ text: '', attachments: [] })
   const contentWrapRef = useRef<HTMLDivElement>(null)
@@ -1373,6 +1381,28 @@ function InputBoxComponent({
         }
       }
 
+      if (sessionReferenceOpen && sessionReferenceMenuRef.current) {
+        switch (e.key) {
+          case 'ArrowUp':
+            e.preventDefault()
+            sessionReferenceMenuRef.current.moveUp()
+            return
+          case 'ArrowDown':
+            e.preventDefault()
+            sessionReferenceMenuRef.current.moveDown()
+            return
+          case 'Enter':
+          case 'Tab':
+            e.preventDefault()
+            sessionReferenceMenuRef.current.selectCurrent()
+            return
+          case 'Escape':
+            e.preventDefault()
+            setSessionReferenceOpen(false)
+            return
+        }
+      }
+
       // Mention 菜单打开时，拦截导航键
       if (mentionOpen && mentionMenuRef.current) {
         switch (e.key) {
@@ -1469,6 +1499,7 @@ function InputBoxComponent({
     [
       mentionOpen,
       slashOpen,
+      sessionReferenceOpen,
       mentionQuery,
       updateMentionQuery,
       handleSend,
@@ -1511,17 +1542,28 @@ function InputBoxComponent({
         setMentionStartIndex(trigger.startIndex)
         setMentionOpen(true)
         setSlashOpen(false) // 关闭斜杠菜单
+        setSessionReferenceOpen(false)
       } else {
         setMentionOpen(false)
 
-        // 检测 / 触发（只在行首或空白后）
-        const slashTrigger = detectSlashTrigger(newText, cursorPos)
-        if (slashTrigger) {
-          setSlashQuery(slashTrigger.query)
-          setSlashStartIndex(slashTrigger.startIndex)
-          setSlashOpen(true)
-        } else {
+        const sessionTrigger = detectMentionTrigger(newText, cursorPos, '#')
+        if (sessionTrigger) {
+          setSessionReferenceQuery(sessionTrigger.query)
+          setSessionReferenceStartIndex(sessionTrigger.startIndex)
+          setSessionReferenceOpen(true)
           setSlashOpen(false)
+        } else {
+          setSessionReferenceOpen(false)
+
+          // 检测 / 触发（只在行首或空白后）
+          const slashTrigger = detectSlashTrigger(newText, cursorPos)
+          if (slashTrigger) {
+            setSlashQuery(slashTrigger.query)
+            setSlashStartIndex(slashTrigger.startIndex)
+            setSlashOpen(true)
+          } else {
+            setSlashOpen(false)
+          }
         }
       }
     },
@@ -1529,7 +1571,7 @@ function InputBoxComponent({
   )
 
   const insertComposerTrigger = useCallback(
-    (trigger: '@' | '/') => {
+    (trigger: '@' | '/' | '#') => {
       const textarea = textareaRef.current
       const start = textarea?.selectionStart ?? text.length
       const end = textarea?.selectionEnd ?? start
@@ -1544,11 +1586,19 @@ function InputBoxComponent({
         setMentionStartIndex(triggerIndex)
         setMentionOpen(true)
         setSlashOpen(false)
-      } else {
+        setSessionReferenceOpen(false)
+      } else if (trigger === '/') {
         setSlashQuery('')
         setSlashStartIndex(triggerIndex)
         setSlashOpen(true)
         setMentionOpen(false)
+        setSessionReferenceOpen(false)
+      } else {
+        setSessionReferenceQuery('')
+        setSessionReferenceStartIndex(triggerIndex)
+        setSessionReferenceOpen(true)
+        setMentionOpen(false)
+        setSlashOpen(false)
       }
 
       requestAnimationFrame(() => {
@@ -1687,6 +1737,46 @@ function InputBoxComponent({
 
   const handleSlashClose = useCallback(() => {
     setSlashOpen(false)
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSessionReferenceSelect = useCallback(
+    (session: ApiSession) => {
+      if (!textareaRef.current) return
+      const referenceText = `#${session.title || t('sessionSearch.untitled')}`
+      const beforeTrigger = text.slice(0, sessionReferenceStartIndex)
+      const afterQuery = text.slice(sessionReferenceStartIndex + 1 + sessionReferenceQuery.length)
+      const newText = beforeTrigger + referenceText + ' ' + afterQuery
+
+      setText(newText)
+      setAttachments(current => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          type: 'session',
+          displayName: session.title || t('sessionSearch.untitled'),
+          sessionId: session.id,
+          sessionDirectory: session.directory,
+          textRange: {
+            value: referenceText,
+            start: sessionReferenceStartIndex,
+            end: sessionReferenceStartIndex + referenceText.length,
+          },
+        },
+      ])
+      setSessionReferenceOpen(false)
+
+      requestAnimationFrame(() => {
+        const cursor = sessionReferenceStartIndex + referenceText.length + 1
+        textareaRef.current?.setSelectionRange(cursor, cursor)
+        textareaRef.current?.focus()
+      })
+    },
+    [sessionReferenceQuery, sessionReferenceStartIndex, t, text],
+  )
+
+  const handleSessionReferenceClose = useCallback(() => {
+    setSessionReferenceOpen(false)
     textareaRef.current?.focus()
   }, [])
 
@@ -1930,10 +2020,13 @@ function InputBoxComponent({
 
   // 计算已选择的 items (用于过滤菜单)
   const excludeValues = new Set<string>()
+  const excludedSessionIds = new Set<string>()
   attachments.forEach(a => {
     if (a.url) excludeValues.add(a.url)
     if (a.agentName) excludeValues.add(a.agentName)
+    if (a.sessionId) excludedSessionIds.add(a.sessionId)
   })
+  if (sessionId) excludedSessionIds.add(sessionId)
 
   // 底部 padding 计算：
   // - isCollapsed (收起态 / 移动端「回复胶囊」)：
@@ -2037,6 +2130,16 @@ function InputBoxComponent({
               rootPath={rootPath}
               onSelect={handleSlashSelect}
               onClose={handleSlashClose}
+            />
+
+            <SessionReferenceMenu
+              ref={sessionReferenceMenuRef}
+              isOpen={sessionReferenceOpen}
+              query={sessionReferenceQuery}
+              sessions={sessions}
+              excludeIds={excludedSessionIds}
+              onSelect={handleSessionReferenceSelect}
+              onClose={handleSessionReferenceClose}
             />
 
             <GoalStatusBar sessionId={sessionId} rootPath={rootPath} isStreaming={isStreaming} />

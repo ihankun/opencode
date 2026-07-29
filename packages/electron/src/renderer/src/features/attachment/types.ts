@@ -1,4 +1,4 @@
-export type AttachmentType = 'file' | 'folder' | 'agent' | 'text' | 'command'
+export type AttachmentType = 'file' | 'folder' | 'agent' | 'text' | 'command' | 'session'
 
 export interface AttachmentOriginalSource {
   type?: 'file' | 'symbol' | 'resource'
@@ -44,6 +44,10 @@ export interface Attachment {
 
   // command 用
   commandName?: string // 命令名（不含 /）
+
+  // session 用
+  sessionId?: string
+  sessionDirectory?: string
 
   // 在文本中的位置信息（发送时用于构建 source）
   // 图片没有这个，因为不在文本中

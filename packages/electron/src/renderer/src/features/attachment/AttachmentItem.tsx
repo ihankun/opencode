@@ -212,6 +212,7 @@ function ExpandedContent({ attachment, imageError, onImageError, onOpenDetail }:
         className={`p-2 text-[length:var(--fs-sm)] space-y-1 text-text-300 bg-bg-100/50 ${contentNode || hasContent || hasDownloadable ? 'border-t border-border-300' : ''}`}
       >
         {type === 'text' && <MetaRow label={t('attachment.category')} value={t('attachment.context')} />}
+        {type === 'session' && <MetaRow label={t('attachment.category')} value={t('attachment.session')} />}
 
         {/* Full Path / URL */}
         <MetaRow
@@ -228,6 +229,7 @@ function ExpandedContent({ attachment, imageError, onImageError, onOpenDetail }:
         />
 
         <MetaRow label={t('attachment.refPath')} value={relativePath} />
+        <MetaRow label={t('attachment.sessionId')} value={attachment.sessionId} copyable />
         <MetaRow label={t('attachment.type')} value={type === 'folder' ? t('attachment.directory') : mime} />
 
         {attachment.originalSource && typeof attachment.originalSource === 'object' && (

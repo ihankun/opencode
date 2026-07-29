@@ -448,6 +448,12 @@
     "titleMatch": "Title",
     "contentMatch": "Content"
   },
+  "sessionReference": {
+    "title": "Link a chat",
+    "description": "Choose a chat from the sidebar to use as context for this message",
+    "empty": "No other chats available",
+    "noResults": "No matching chats"
+  },
   "activeSession": {
     "awaitingPermission": "Awaiting Permission",
     "awaitingAnswer": "Awaiting Answer",

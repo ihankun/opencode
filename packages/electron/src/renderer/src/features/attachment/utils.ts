@@ -1,4 +1,4 @@
-import { FileIcon, FolderIcon, AgentIcon, ImageIcon, TerminalIcon } from '../../components/Icons'
+import { FileIcon, FolderIcon, AgentIcon, ImageIcon, MessageSquareIcon, TerminalIcon } from '../../components/Icons'
 import type { Attachment } from './types'
 
 /**
@@ -72,8 +72,49 @@ export function fromAgentPart(part: {
 /**
  * 从 API synthetic text part 创建 Attachment
  */
-export function fromTextPart(part: { id?: string; text: string }): Attachment {
+export function fromTextPart(part: { id?: string; text: string; metadata?: Record<string, unknown> }): Attachment {
   const text = part.text.trim()
+  const rawReference = part.metadata?.['opencodex.sessionReference']
+  const reference =
+    rawReference && typeof rawReference === 'object' && !Array.isArray(rawReference) && 'id' in rawReference &&
+    typeof rawReference.id === 'string'
+      ? {
+          id: rawReference.id,
+          title:
+            'title' in rawReference && typeof rawReference.title === 'string'
+              ? rawReference.title
+              : rawReference.id,
+          directory:
+            'directory' in rawReference && typeof rawReference.directory === 'string'
+              ? rawReference.directory
+              : undefined,
+          textRange:
+            'text' in rawReference && rawReference.text && typeof rawReference.text === 'object' &&
+            !Array.isArray(rawReference.text) &&
+            'value' in rawReference.text && typeof rawReference.text.value === 'string' &&
+            'start' in rawReference.text && typeof rawReference.text.start === 'number' &&
+            'end' in rawReference.text && typeof rawReference.text.end === 'number'
+              ? {
+                  value: rawReference.text.value,
+                  start: rawReference.text.start,
+                  end: rawReference.text.end,
+                }
+              : undefined,
+        }
+      : undefined
+
+  if (reference) {
+    return {
+      id: part.id || crypto.randomUUID(),
+      type: 'session',
+      displayName: reference.title,
+      sessionId: reference.id,
+      sessionDirectory: reference.directory,
+      content: part.text,
+      textRange: reference.textRange,
+      category: 'system',
+    }
+  }
 
   // 简化命名逻辑，直接使用内容摘要
   const displayName =
@@ -116,6 +157,8 @@ export function hasExpandableContent(attachment: Attachment): boolean {
       return !!attachment.agentName
     case 'text':
       return !!attachment.content
+    case 'session':
+      return !!attachment.sessionId
     default:
       return false
   }
@@ -139,6 +182,8 @@ export function getAttachmentIcon(attachment: Attachment): { Icon: React.FC; col
       return { Icon: TerminalIcon, colorClass: 'text-text-400' }
     case 'command':
       return { Icon: TerminalIcon, colorClass: 'text-accent-secondary-100' }
+    case 'session':
+      return { Icon: MessageSquareIcon, colorClass: 'text-accent-main-100' }
     default:
       return { Icon: FileIcon, colorClass: 'text-text-400' }
   }

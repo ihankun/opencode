@@ -446,6 +446,12 @@
     "titleMatch": "标题",
     "contentMatch": "内容"
   },
+  "sessionReference": {
+    "title": "关联会话",
+    "description": "选择左侧列表中的会话作为本次消息的上下文",
+    "empty": "暂无可关联的其他会话",
+    "noResults": "没有匹配的会话"
+  },
   "activeSession": {
     "awaitingPermission": "等待权限",
     "awaitingAnswer": "等待回答",

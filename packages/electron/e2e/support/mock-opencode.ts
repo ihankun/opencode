@@ -13,7 +13,7 @@ type Session = {
   }
 }
 
-type MessageWithParts = {
+export type MessageWithParts = {
   info: Record<string, unknown>
   parts: Array<Record<string, unknown>>
 }
@@ -320,7 +320,7 @@ function streamPrompt(
   const text = Array.isArray(body.parts)
     ? body.parts
         .filter(isRecord)
-        .filter(part => part.type === 'text' && typeof part.text === 'string')
+        .filter(part => part.type === 'text' && part.synthetic !== true && typeof part.text === 'string')
         .map(part => String(part.text))
         .join('\n')
     : ''

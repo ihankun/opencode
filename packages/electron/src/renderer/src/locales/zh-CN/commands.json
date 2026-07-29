@@ -105,6 +105,8 @@
     "removeAttachment": "移除附件",
     "category": "类别",
     "context": "上下文",
+    "session": "关联会话",
+    "sessionId": "会话 ID",
     "source": "来源",
     "refPath": "引用路径",
     "type": "类型",

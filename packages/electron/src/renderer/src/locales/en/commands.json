@@ -105,6 +105,8 @@
     "removeAttachment": "Remove attachment",
     "category": "Category",
     "context": "Context",
+    "session": "Linked chat",
+    "sessionId": "Chat ID",
     "source": "Source",
     "refPath": "Ref Path",
     "type": "Type",
