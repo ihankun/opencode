@@ -39,12 +39,21 @@ export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollap
   if (lastExecutionIndex === -1) return null
 
   const conclusion = parts.slice(lastExecutionIndex + 1).find(({ part }) => isVisibleTextPart(part))
-  if (!conclusion) return null
-  if (conclusion.messageIndex === 0 && conclusion.partIndex === 0) return null
+  if (conclusion) {
+    if (conclusion.messageIndex === 0 && conclusion.partIndex === 0) return null
+    return {
+      conclusionMessageIndex: conclusion.messageIndex,
+      conclusionPartIndex: conclusion.partIndex,
+    }
+  }
 
+  // 没有后续文本（turn 以工具调用结尾），折叠到最后一条消息的末尾
+  const lastMsgIndex = messages.length - 1
+  const lastPartIndex = messages[lastMsgIndex].parts.length - 1
+  if (lastMsgIndex === 0 && lastPartIndex === 0) return null
   return {
-    conclusionMessageIndex: conclusion.messageIndex,
-    conclusionPartIndex: conclusion.partIndex,
+    conclusionMessageIndex: lastMsgIndex,
+    conclusionPartIndex: lastPartIndex + 1,
   }
 }
 

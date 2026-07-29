@@ -51,19 +51,31 @@ export async function getSessionStatus(directory?: string): Promise<SessionStatu
 
 /**
  * 获取 session 的 diff
- * 返回可在 UI 中渲染的 SnapshotFileDiff（过滤缺少 file 的异常项）
+ * - 传 messageId：返回该消息的 diff
+ * - 不传 messageId：聚合所有用户消息的 diff（session 级别）
  */
 export async function getSessionDiff(sessionId: string, directory?: string, messageId?: string): Promise<FileDiff[]> {
   const sdk = getSDKClient()
-  return normalizeFileDiffs(
-    unwrap(
-      await sdk.session.diff({
-        sessionID: sessionId,
-        directory: formatPathForApi(directory),
-        messageID: messageId,
-      }),
-    ),
-  )
+  if (messageId) {
+    return normalizeFileDiffs(
+      unwrap(
+        await sdk.session.diff({
+          sessionID: sessionId,
+          directory: formatPathForApi(directory),
+          messageID: messageId,
+        }),
+      ),
+    )
+  }
+  // 无 messageId 时聚合所有用户消息的 diff
+  const messages = await getSessionMessages(sessionId, undefined, directory)
+  const userMessages = messages.filter(isUserMessage)
+  const allDiffs: FileDiff[] = []
+  for (const msg of userMessages) {
+    const diffs = normalizeFileDiffs(msg.info.summary?.diffs)
+    allDiffs.push(...diffs)
+  }
+  return allDiffs
 }
 
 function isUserMessage(message: ApiMessageWithParts): message is ApiMessageWithParts & { info: ApiUserMessage } {
