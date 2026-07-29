@@ -10,7 +10,7 @@ import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredVal
 import { useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
-import { AlertCircleIcon, CheckIcon, CircleIcon, CloseIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
+import { AlertCircleIcon, CheckIcon, CircleIcon, CloseIcon, FileIcon, PatchIcon, PlugIcon, SpinnerIcon } from '../../components/Icons'
 import { type ModelSelectorHandle } from './ModelSelector'
 import { OutlineIndex, type OutlineIndexHandle } from '../../components/OutlineIndex'
 import { PaneHeader } from './PaneHeader'
@@ -24,6 +24,7 @@ import { useChatPageViewModel } from './useChatPageViewModel'
 import {
   summarizeTurnChanges,
   summarizeTurnTodoProgress,
+  type TurnChangeFile,
 } from '../message/autoCollapseExecution'
 import type { TurnTodoProgress } from '../message/todoProgress'
 import { SessionNavigationContext } from '../../contexts/SessionNavigationContext'
@@ -949,19 +950,17 @@ export const ChatPane = memo(function ChatPane({
         {latestTurnOverview && (
           <div className="mx-auto mb-2 flex max-w-[95%] justify-center px-4 xl:max-w-7xl">
             <div
-              className="group relative pointer-events-auto inline-flex cursor-default items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md transition-colors hover:border-accent-main-100/35 hover:bg-bg-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main-100/35"
+              className="pointer-events-auto inline-flex cursor-default items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md transition-colors hover:border-accent-main-100/35 hover:bg-bg-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main-100/35"
               tabIndex={latestTurnOverview.todoProgress ? 0 : undefined}
             >
-              {latestTurnOverview.todoProgress && (
-                <TurnTodoProgressPopover progress={latestTurnOverview.todoProgress} isStreaming={isStreaming} />
-              )}
-              {isStreaming
-                ? <SpinnerIcon size={15} className="shrink-0 animate-spin text-accent-main-100" />
-                : latestTurnOverview.changes
-                  ? <PatchIcon size={15} className="shrink-0 text-text-400" />
-                  : <CheckIcon size={15} className="shrink-0 text-success-100" />}
-              {latestTurnOverview.todoProgress && (
-                <>
+              {latestTurnOverview.todoProgress ? (
+                <span className="group/todo relative flex items-center gap-2">
+                  <TurnTodoProgressPopover progress={latestTurnOverview.todoProgress} isStreaming={isStreaming} />
+                  {isStreaming
+                    ? <SpinnerIcon size={15} className="shrink-0 animate-spin text-accent-main-100" />
+                    : latestTurnOverview.changes
+                      ? <PatchIcon size={15} className="shrink-0 text-text-400" />
+                      : <CheckIcon size={15} className="shrink-0 text-success-100" />}
                   <span>
                     {t('message:executionProcess.currentStep', {
                       current: latestTurnOverview.todoProgress.current,
@@ -969,14 +968,23 @@ export const ChatPane = memo(function ChatPane({
                     })}
                   </span>
                   {latestTurnOverview.changes && <span aria-hidden="true">·</span>}
+                </span>
+              ) : (
+                <>
+                  {isStreaming
+                    ? <SpinnerIcon size={15} className="shrink-0 animate-spin text-accent-main-100" />
+                    : latestTurnOverview.changes
+                      ? <PatchIcon size={15} className="shrink-0 text-text-400" />
+                      : <CheckIcon size={15} className="shrink-0 text-success-100" />}
                 </>
               )}
               {latestTurnOverview.changes && (
-                <>
+                <span className="group/changes relative flex items-center gap-2">
+                  <TurnChangesPopover fileDetails={latestTurnOverview.changes.fileDetails} />
                   <span>{t('message:executionProcess.changedFiles', { count: latestTurnOverview.changes.files })}</span>
                   <span className="font-mono font-medium text-success-100">+{latestTurnOverview.changes.additions}</span>
                   <span className="font-mono font-medium text-danger-100">-{latestTurnOverview.changes.deletions}</span>
-                </>
+                </span>
               )}
             </div>
           </div>
@@ -1135,10 +1143,47 @@ export const ChatPane = memo(function ChatPane({
   return <ChatViewportProvider value={viewportValue}>{content}</ChatViewportProvider>
 })
 
+function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) {
+  const { t } = useTranslation('message')
+  return (
+    <div className="invisible pointer-events-none absolute bottom-full left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 pb-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover/changes:visible group-hover/changes:pointer-events-auto group-hover/changes:opacity-100 group-focus-within/changes:visible group-focus-within/changes:pointer-events-auto group-focus-within/changes:opacity-100">
+      <div className="overflow-hidden rounded-xl border border-border-200/70 bg-bg-000/98 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-border-200/50 px-3.5 py-2.5">
+          <span className="font-medium text-text-100">{t('executionProcess.changedFilesTitle')}</span>
+          <span className="text-[length:var(--fs-xs)] tabular-nums text-text-400">
+            {fileDetails.length}
+          </span>
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1.5">
+          {fileDetails.map((file) => (
+            <div
+              key={file.filePath}
+              className="flex items-center gap-2.5 px-3.5 py-2"
+            >
+              <FileIcon size={14} className="mt-0.5 shrink-0 text-text-500" />
+              <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-xs)] text-text-300">
+                {file.filePath}
+              </span>
+              <span className="flex shrink-0 gap-2 text-[length:var(--fs-xs)] tabular-nums">
+                {file.additions > 0 && (
+                  <span className="font-mono font-medium text-success-100">+{file.additions}</span>
+                )}
+                {file.deletions > 0 && (
+                  <span className="font-mono font-medium text-danger-100">-{file.deletions}</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TurnTodoProgressPopover({ progress, isStreaming }: { progress: TurnTodoProgress; isStreaming: boolean }) {
   const { t } = useTranslation('message')
   return (
-    <div className="invisible pointer-events-none absolute bottom-full left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 pb-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+    <div className="invisible pointer-events-none absolute bottom-full left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 pb-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover/todo:visible group-hover/todo:pointer-events-auto group-hover/todo:opacity-100 group-focus-within/todo:visible group-focus-within/todo:pointer-events-auto group-focus-within/todo:opacity-100">
       <div className="overflow-hidden rounded-xl border border-border-200/70 bg-bg-000/98 shadow-xl backdrop-blur-xl">
         <div className="flex items-center justify-between border-b border-border-200/50 px-3.5 py-2.5">
           <span className="font-medium text-text-100">{t('executionProcess.taskProgress')}</span>

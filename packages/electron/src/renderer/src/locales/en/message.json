@@ -16,7 +16,8 @@
     "taskProgress": "Task progress",
     "currentStep": "Step {{current}} / {{total}}",
     "changedFiles": "{{count}} file changed",
-    "changedFiles_other": "{{count}} files changed"
+    "changedFiles_other": "{{count}} files changed",
+    "changedFilesTitle": "Changed files"
   },
   "defaultRenderer": {
     "input": "Input",

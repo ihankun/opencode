@@ -8,10 +8,17 @@ export type ExecutionCollapsePlan = {
   conclusionPartIndex: number
 }
 
+export type TurnChangeFile = {
+  filePath: string
+  additions: number
+  deletions: number
+}
+
 export type TurnChangeSummary = {
   files: number
   additions: number
   deletions: number
+  fileDetails: TurnChangeFile[]
 }
 
 export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollapsePlan | null {
@@ -123,14 +130,18 @@ function addFileChanges(
 }
 
 function totalChanges(files: Map<string, { additions: number; deletions: number }>): TurnChangeSummary {
-  const totals = Array.from(files.values()).reduce(
-    (summary, diff) => ({
+  const filtered = Array.from(files.entries()).filter(([filePath]) => Boolean(filePath))
+  const totals = filtered.reduce(
+    (summary, [, diff]) => ({
       additions: summary.additions + diff.additions,
       deletions: summary.deletions + diff.deletions,
     }),
     { additions: 0, deletions: 0 },
   )
-  return { files: files.size, ...totals }
+  const fileDetails: TurnChangeFile[] = filtered
+    .map(([filePath, stats]) => ({ filePath, ...stats }))
+    .sort((a, b) => b.additions - a.additions)
+  return { files: fileDetails.length, ...totals, fileDetails }
 }
 
 function changedLines(before: string, after: string) {

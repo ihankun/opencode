@@ -28,7 +28,7 @@ import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
 import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
-import { ChevronRightIcon } from '../../components/Icons'
+import { ChevronRightIcon, SpinnerIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
 import { hasRenderableParts, type Message, type MessageError } from '../../types/message'
 import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInline'
@@ -917,10 +917,10 @@ export const ChatArea = memo(
                   <div
                     role="status"
                     aria-live="polite"
-                    className="inline-flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/70 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-sm"
+                    className="flex items-center gap-1.5 rounded-md py-1 text-[length:var(--fs-base)] text-text-400"
                   >
-                    <span className="size-3.5 rounded-full border-2 border-text-400/30 border-t-accent-main-100 animate-spin" />
-                    <span>{t('chatArea.agentProcessing')}</span>
+                    <SpinnerIcon size={14} className="animate-spin text-accent-main-100" />
+                    <span className="font-medium">{t('chatArea.agentProcessing')}</span>
                   </div>
                 </div>
               </div>
