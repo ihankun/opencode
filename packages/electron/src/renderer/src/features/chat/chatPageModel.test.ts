@@ -20,8 +20,8 @@ function page(key: string, height = 100): ChatPage {
 
 describe('chat page virtualization', () => {
   test('uses smaller pages and keeps one neighboring page mounted', () => {
-    expect(PAGE_MESSAGE_COUNT).toBe(12)
-    expect(EXPANDED_PAGE_RADIUS).toBe(1)
+    expect(PAGE_MESSAGE_COUNT).toBe(16)
+    expect(EXPANDED_PAGE_RADIUS).toBe(2)
 
     expect(
       computeExpandedPageRange({
@@ -30,7 +30,7 @@ describe('chat page virtualization', () => {
         scrollOffsetFromBottom: 110,
         viewportHeight: 40,
       }),
-    ).toEqual({ startIndex: 0, endIndex: 2 })
+    ).toEqual({ startIndex: 0, endIndex: 3 })
   })
 
   test('does not reattach to the bottom after a layout-only scroll clamp', () => {

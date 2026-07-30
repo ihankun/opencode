@@ -21,7 +21,7 @@ import {
 } from '../api'
 import { sessionErrorHandler } from '../utils'
 import { isSessionNotFoundError } from '../utils/sessionErrors'
-import { INITIAL_MESSAGE_LIMIT, HISTORY_LOAD_BATCH_SIZE } from '../constants'
+import { HISTORY_LOAD_BATCH_SIZE } from '../constants'
 import type { MessageError } from '../types/message'
 
 function toLoadMessageError(error: unknown): MessageError {
@@ -103,7 +103,7 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
         const dir = directoryRef.current
         Promise.all([
           getSession(sid, dir).catch(() => null),
-          getSessionMessages(sid, INITIAL_MESSAGE_LIMIT, dir)
+          getSessionMessages(sid, undefined, dir)
             .then(messages => ({ ok: true as const, messages }))
             .catch(() => ({ ok: false as const, messages: [] as ApiMessageWithParts[] })),
         ])
@@ -111,11 +111,11 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
             if (isStale()) return
 
             if (messagesResult.ok) {
-              cursorRef.current.set(sid, Math.max(INITIAL_MESSAGE_LIMIT, messagesResult.messages.length))
+              cursorRef.current.set(sid, messagesResult.messages.length)
             }
 
             messageStore.updateSessionMetadata(sid, {
-              ...(messagesResult.ok ? { hasMoreHistory: messagesResult.messages.length >= INITIAL_MESSAGE_LIMIT } : {}),
+              ...(messagesResult.ok ? { hasMoreHistory: false } : {}),
               directory: sessionInfo?.directory ?? dir ?? '',
               title: sessionInfo?.title,
             })
@@ -133,9 +133,10 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
 
       try {
         // 并行加载 session 信息和消息（传递 directory）
+        // 加载全部消息，使右侧 outline 导航条能显示所有条目
         const [sessionInfo, apiMessages] = await Promise.all([
           getSession(sid, dir).catch(() => null),
-          getSessionMessages(sid, INITIAL_MESSAGE_LIMIT, dir),
+          getSessionMessages(sid, undefined, dir),
         ])
 
         if (isStale()) return
@@ -154,13 +155,13 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
           // SSE 推送的消息比 API 返回的多，说明有新消息，跳过覆盖
           // 但仍需更新元数据，否则 hasMoreHistory 等状态可能停留在默认值
           messageStore.updateSessionMetadata(sid, {
-            hasMoreHistory: apiMessages.length >= INITIAL_MESSAGE_LIMIT,
+            hasMoreHistory: false,
             directory: sessionInfo?.directory ?? dir ?? '',
             title: sessionInfo?.title,
             loadState: 'loaded',
           })
           onLoadComplete?.()
-          cursorRef.current.set(sid, Math.max(INITIAL_MESSAGE_LIMIT, apiMessages.length))
+          cursorRef.current.set(sid, apiMessages.length)
           return
         }
 
@@ -170,11 +171,11 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
         messageStore.setMessages(sid, mergedMessages, {
           directory: sessionInfo?.directory ?? dir ?? '',
           title: sessionInfo?.title,
-          hasMoreHistory: apiMessages.length >= INITIAL_MESSAGE_LIMIT,
+          hasMoreHistory: false,
           revertState: sessionInfo?.revert ?? null,
         })
 
-        cursorRef.current.set(sid, Math.max(INITIAL_MESSAGE_LIMIT, apiMessages.length))
+        cursorRef.current.set(sid, apiMessages.length)
 
         // force 模式（如 SSE 重连）只静默刷新数据，不触发滚动
         if (!force) {
@@ -209,7 +210,7 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
     if (!state) return
 
     const dir = state.directory || directoryRef.current
-    const currentCursor = cursorRef.current.get(sessionId) ?? Math.max(INITIAL_MESSAGE_LIMIT, state.messages.length)
+    const currentCursor = cursorRef.current.get(sessionId) ?? state.messages.length
     const targetCursor = currentCursor + HISTORY_LOAD_BATCH_SIZE
 
     try {
@@ -361,7 +362,7 @@ export function useSessionManager({ sessionId, directory, onLoadComplete, onErro
       const canUseCached = !!cached && cached.loadState === 'loaded' && !cached.isStale && cached.messages.length > 0
 
       if (canUseCached) {
-        const cachedCursor = Math.max(INITIAL_MESSAGE_LIMIT, cached.messages.length)
+        const cachedCursor = cached.messages.length
         const prevCursor = cursorRef.current.get(sessionId) ?? 0
         if (cachedCursor > prevCursor) {
           cursorRef.current.set(sessionId, cachedCursor)

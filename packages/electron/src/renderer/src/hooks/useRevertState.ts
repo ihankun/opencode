@@ -14,7 +14,6 @@ import {
   type RevertedMessage,
 } from '../api'
 import { revertErrorHandler } from '../utils'
-import { INITIAL_MESSAGE_LIMIT } from '../constants'
 
 export interface RevertHistoryItem {
   messageId: string
@@ -97,7 +96,7 @@ export function useRevertState({
         await animateUndo(messageIdsToRemove)
 
         // 3. 获取 API 消息
-        const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
+        const apiMessages = await getSessionMessages(routeSessionId, undefined)
         const targetIndex = apiMessages.findIndex(m => m.info.id === userMessageId)
 
         if (targetIndex === -1) {
@@ -166,7 +165,7 @@ export function useRevertState({
       setRevertHistory(newHistory)
 
       // 3. 重新加载消息
-      const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
+      const apiMessages = await getSessionMessages(routeSessionId, undefined)
 
       // 如果还有 revert 状态，需要过滤消息
       if (updatedSession.revert?.messageID) {
@@ -195,7 +194,7 @@ export function useRevertState({
       setRevertedMessage(undefined)
 
       // 重新加载所有消息
-      const apiMessages = await getSessionMessages(routeSessionId, Math.max(INITIAL_MESSAGE_LIMIT, 200))
+      const apiMessages = await getSessionMessages(routeSessionId, undefined)
       setMessages(apiMessages.map(toUIMessage))
     } catch (error) {
       revertErrorHandler('redo all', error)
