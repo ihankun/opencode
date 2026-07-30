@@ -180,7 +180,7 @@ function ExpandedContent({ attachment, imageError, onImageError, onOpenDetail }:
           alt={attachment.displayName}
           onError={onImageError}
           loading="lazy"
-          className="max-h-64 w-full rounded object-contain bg-bg-300/50"
+          className="min-h-16 max-h-64 w-full rounded object-contain bg-bg-300/50"
         />
       </div>
     )

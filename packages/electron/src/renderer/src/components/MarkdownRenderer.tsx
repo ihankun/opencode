@@ -144,7 +144,7 @@ const MarkdownImage = memo(function MarkdownImage({ src, alt, title }: { src?: s
       className="inline-block max-w-full align-top"
       title={title || alt || undefined}
     >
-      <img src={src} alt={alt || ''} title={title} loading="lazy" className="block max-w-full rounded-md" />
+      <img src={src} alt={alt || ''} title={title} loading="lazy" className="block min-h-6 max-w-full rounded-md" />
     </a>
   )
 })

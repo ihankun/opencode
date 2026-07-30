@@ -41,7 +41,7 @@ export const FilePartView = memo(function FilePartView({ part }: FilePartViewPro
             loading="lazy"
             decoding="async"
             onError={() => setImageError(true)}
-            className="block max-h-48 max-w-full object-contain"
+            className="block min-h-16 max-h-48 max-w-full object-contain"
           />
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-[background-color,opacity] duration-150 group-hover/image:bg-black/20 group-hover/image:opacity-100">
             <span className="flex size-8 items-center justify-center rounded-full bg-black/55 shadow-sm backdrop-blur-sm">

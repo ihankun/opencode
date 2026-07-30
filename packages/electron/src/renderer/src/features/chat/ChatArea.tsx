@@ -861,6 +861,7 @@ export const ChatArea = memo(
             const root = scrollRef.current
             if (!root) return
             if (Math.abs(root.scrollTop) > 2) return
+            if (!isAtBottomRef.current) return
             root.scrollTop = 0
           },
           scrollToLastMessage: () => {

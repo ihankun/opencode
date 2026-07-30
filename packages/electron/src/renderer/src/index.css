@@ -1527,8 +1527,6 @@ html[data-theme-switch-mask='leaving']::after {
 }
 
 .message-render-boundary {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
 }
 
 :where(button, input, textarea, select, [role='button'], [role='menuitem']):focus-visible {

@@ -194,6 +194,7 @@ export function buildChatPageViewModel(messages: Message[], previous?: ChatPageV
   const pageRecords = reusePageRecords(previous?.pageRecords, buildContentKeyedChatPages(visibleMessages))
   const forkTargetIdMap = reuseMap(previous?.forkTargetIdMap, buildForkTargetIdMap(visibleMessageEntries))
   const outlineModel = getStableOutlineModel(visibleMessages)
+  const outlineOwnerByMessageId = buildOutlineOwnerByMessageId(messages)
   const turnDurationMap = reuseMap(previous?.turnDurationMap, buildTurnDurationMap(messages, visibleMessages))
 
   return {
@@ -201,7 +202,7 @@ export function buildChatPageViewModel(messages: Message[], previous?: ChatPageV
     visibleMessages,
     pageRecords,
     outlineSourceEntries: outlineModel.entries,
-    outlineOwnerByMessageId: outlineModel.ownerByMessageId,
+    outlineOwnerByMessageId,
     forkTargetIdMap,
     turnDurationMap,
   }
