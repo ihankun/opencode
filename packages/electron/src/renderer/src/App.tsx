@@ -1340,7 +1340,6 @@ function App() {
 
         <SessionSearchDialog
           isOpen={sessionSearchOpen}
-          directory={currentDirectory}
           onClose={() => setSessionSearchOpen(false)}
           onSelectSession={handleSelectSession}
         />

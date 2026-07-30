@@ -2,9 +2,8 @@ import { startTransition, useCallback, useEffect, useRef, useState, type Keyboar
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '../../../components/ui/Dialog'
 import { SearchIcon, SpinnerIcon } from '../../../components/Icons'
-import { createSession, forkSession, getSessionMessages, getSessions, sendMessageAsyncToServer, type ApiSession, type ApiMessageWithParts } from '../../../api'
+import { createSession, forkSession, getGlobalSessions, getSessionMessages, sendMessageAsyncToServer, type ApiSession, type ApiMessageWithParts } from '../../../api'
 import { formatRelativeTime } from '../../../utils/dateUtils'
-import { normalizeToForwardSlash } from '../../../utils'
 import { saveData } from '../../../utils/downloadUtils'
 import { serverStore } from '../../../store/serverStore'
 
@@ -14,7 +13,6 @@ const METADATA_KEY = 'opencodex:conversation-metadata'
 
 interface SessionSearchDialogProps {
   isOpen: boolean
-  directory?: string
   onClose: () => void
   onSelectSession: (session: ApiSession) => void
 }
@@ -25,7 +23,7 @@ interface SessionSearchResult {
   matchKind: 'title' | 'content' | 'recent'
 }
 
-export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSession }: SessionSearchDialogProps) {
+export function SessionSearchDialog({ isOpen, onClose, onSelectSession }: SessionSearchDialogProps) {
   const { t } = useTranslation(['chat', 'common'])
   const [query, setQuery] = useState('')
   const [sessions, setSessions] = useState<ApiSession[]>([])
@@ -37,7 +35,6 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
   const [selectedIndex, setSelectedIndex] = useState(0)
   const messageCacheRef = useRef(new Map<string, string>())
   const inputRef = useRef<HTMLInputElement>(null)
-  const normalizedDirectory = directory ? normalizeToForwardSlash(directory) || directory : undefined
 
   useEffect(() => {
     if (!isOpen) return
@@ -47,17 +44,16 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     setLoading(true)
     let cancelled = false
 
-    getSessions({
+    getGlobalSessions({
       roots: true,
       limit: SESSION_LIMIT,
-      directory: normalizedDirectory,
     })
       .then(data => {
         if (cancelled) return
         setSessions(data)
         setResults(data.slice(0, 12).map(session => ({ session, snippet: '', matchKind: 'recent' })))
         setIndexing(true)
-        void buildSearchIndex(data, normalizedDirectory, messageCacheRef.current).finally(() => {
+        void buildSearchIndex(data, messageCacheRef.current).finally(() => {
           if (!cancelled) setIndexing(false)
         })
       })
@@ -73,7 +69,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     return () => {
       cancelled = true
     }
-  }, [isOpen, normalizedDirectory])
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -94,7 +90,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
 
     let cancelled = false
     const timerId = window.setTimeout(() => {
-      void searchSessions(eligible, term, normalizedDirectory, messageCacheRef.current).then(nextResults => {
+      void searchSessions(eligible, term, messageCacheRef.current).then(nextResults => {
         if (cancelled) return
         startTransition(() => {
           setResults(nextResults)
@@ -107,7 +103,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
       cancelled = true
       window.clearTimeout(timerId)
     }
-  }, [isOpen, metadata, normalizedDirectory, query, sessions, tagFilter])
+  }, [isOpen, metadata, query, sessions, tagFilter])
 
   const tags = [...new Set(Object.values(metadata).flatMap(item => item.tags))].sort()
   const setSessionTags = (sessionID: string, nextTags: string[]) => {
@@ -121,14 +117,14 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     setSessionTags(session.id, value.split(','))
   }
   const exportSession = async (session: ApiSession, format: 'markdown' | 'json') => {
-    const messages = await getSessionMessages(session.id, undefined, session.directory || normalizedDirectory)
+    const messages = await getSessionMessages(session.id, undefined, session.directory)
     const content = format === 'json'
       ? JSON.stringify({ session, tags: metadata[session.id]?.tags ?? [], messages }, null, 2)
       : [`# ${session.title || t('sessionSearch.untitled')}`, '', `Project: ${session.directory || '—'}`, `Tags: ${(metadata[session.id]?.tags ?? []).join(', ') || '—'}`, '', ...messages.flatMap(message => [`## ${message.info.role}`, '', getApiMessageText(message), ''])].join('\n')
     saveData(new TextEncoder().encode(content), `${safeFileName(session.title || session.id)}.${format === 'json' ? 'json' : 'md'}`, format === 'json' ? 'application/json' : 'text/markdown')
   }
   const fork = async (session: ApiSession) => {
-    const next = await forkSession(session.id, undefined, session.directory || normalizedDirectory)
+    const next = await forkSession(session.id, undefined, session.directory)
     onSelectSession(next)
     onClose()
   }
@@ -141,11 +137,11 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     const requested = window.prompt(t('sessionSearch.handoffPrompt', { servers: candidates.map(server => server.name).join(', ') }), candidates[0].name)
     const target = candidates.find(server => server.name === requested || server.id === requested)
     if (!target) return
-    const messages = await getSessionMessages(session.id, 80, session.directory || normalizedDirectory)
+    const messages = await getSessionMessages(session.id, 80, session.directory)
     const modelMessage = [...messages].reverse().find(message => message.info.role === 'assistant')
     if (!modelMessage || modelMessage.info.role !== 'assistant') throw new Error(t('sessionSearch.noHandoffModel'))
     const transcript = messages.slice(-30).map(message => `${message.info.role.toUpperCase()}: ${getApiMessageText(message)}`).join('\n\n').slice(-30_000)
-    const next = await createSession({ directory: session.directory || normalizedDirectory, title: `${session.title || t('sessionSearch.untitled')} · handoff`, serverId: target.id })
+    const next = await createSession({ directory: session.directory, title: `${session.title || t('sessionSearch.untitled')} · handoff`, serverId: target.id })
     await sendMessageAsyncToServer(target.id, { sessionId: next.id, directory: next.directory, text: `${t('sessionSearch.handoffInstruction')}\n\n${transcript}`, attachments: [], model: { providerID: modelMessage.info.providerID, modelID: modelMessage.info.modelID } })
     serverStore.setActiveServer(target.id)
     onSelectSession(next)
@@ -310,10 +306,10 @@ function SearchResultRow(props: {
   )
 }
 
-async function buildSearchIndex(sessions: ApiSession[], directory: string | undefined, cache: Map<string, string>) {
-  const pending = sessions.filter(session => !cache.has(`${directory ?? ''}:${session.id}`))
+async function buildSearchIndex(sessions: ApiSession[], cache: Map<string, string>) {
+  const pending = sessions.filter(session => !cache.has(session.id))
   for (let index = 0; index < pending.length; index += 6) {
-    await Promise.all(pending.slice(index, index + 6).map(session => getCachedSessionText(session.id, session.directory || directory, cache)))
+    await Promise.all(pending.slice(index, index + 6).map(session => getCachedSessionText(session.id, session.directory, cache)))
     await yieldToBrowser()
   }
 }
@@ -348,7 +344,6 @@ function safeFileName(value: string) {
 async function searchSessions(
   sessions: ApiSession[],
   term: string,
-  directory: string | undefined,
   messageCache: Map<string, string>,
 ) {
   const titleMatches: SessionSearchResult[] = sessions
@@ -357,7 +352,7 @@ async function searchSessions(
 
   const unmatched = sessions.filter(session => !titleMatches.some(result => result.session.id === session.id))
   const contentMatchesRaw: Array<Promise<SessionSearchResult | undefined>> = unmatched.map(async session => {
-    const content = await getCachedSessionText(session.id, directory, messageCache)
+    const content = await getCachedSessionText(session.id, session.directory, messageCache)
     const index = normalizeSearch(content).indexOf(term)
     if (index === -1) return undefined
     return {
@@ -374,16 +369,15 @@ async function searchSessions(
 }
 
 async function getCachedSessionText(sessionId: string, directory: string | undefined, cache: Map<string, string>) {
-  const key = `${directory ?? ''}:${sessionId}`
-  const cached = cache.get(key)
+  const cached = cache.get(sessionId)
   if (cached !== undefined) return cached
   try {
     const messages = await getSessionMessages(sessionId, MESSAGE_SEARCH_LIMIT, directory)
     const text = messages.map(getApiMessageText).filter(Boolean).join('\n')
-    cache.set(key, text)
+    cache.set(sessionId, text)
     return text
   } catch {
-    cache.set(key, '')
+    cache.set(sessionId, '')
     return ''
   }
 }
