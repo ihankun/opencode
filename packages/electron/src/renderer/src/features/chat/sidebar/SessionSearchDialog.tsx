@@ -191,8 +191,8 @@ export function SessionSearchDialog({ isOpen, onClose, onSelectSession }: Sessio
       ariaLabel={t('sessionSearch.title')}
     >
       <div className="flex min-h-0 flex-col bg-bg-000/95">
-        <div className="border-b border-border-200/50 p-3">
-          <div className="relative flex h-11 items-center rounded-lg border border-border-200 bg-bg-100/80 px-3 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
+        <div className="border-b border-border-200/50 px-3 py-2">
+          <div className="relative flex h-9 items-center rounded-lg border border-border-200 bg-bg-100/80 px-2.5 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
             <SearchIcon size={17} className="mr-2 shrink-0 text-text-400" />
             <input
               ref={inputRef}
@@ -205,20 +205,20 @@ export function SessionSearchDialog({ isOpen, onClose, onSelectSession }: Sessio
             />
             {(loading || indexing) && <SpinnerIcon size={15} className="shrink-0 animate-spin text-text-400" />}
           </div>
-          {tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setTagFilter('')} className={`rounded-full px-2 py-1 text-[length:var(--fs-xs)] ${!tagFilter ? 'bg-accent-main-100/15 text-accent-main-100' : 'bg-bg-100 text-text-400'}`}>{t('sessionSearch.allTags')}</button>
-            {tags.map(tag => <button key={tag} type="button" onClick={() => setTagFilter(tag)} className={`rounded-full px-2 py-1 text-[length:var(--fs-xs)] ${tagFilter === tag ? 'bg-accent-main-100/15 text-accent-main-100' : 'bg-bg-100 text-text-400'}`}>#{tag}</button>)}
+          {tags.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">
+            <button type="button" onClick={() => setTagFilter('')} className={`rounded-full px-1.5 py-0.5 text-[length:var(--fs-xxs)] ${!tagFilter ? 'bg-accent-main-100/15 text-accent-main-100' : 'bg-bg-100 text-text-400'}`}>{t('sessionSearch.allTags')}</button>
+            {tags.map(tag => <button key={tag} type="button" onClick={() => setTagFilter(tag)} className={`rounded-full px-1.5 py-0.5 text-[length:var(--fs-xxs)] ${tagFilter === tag ? 'bg-accent-main-100/15 text-accent-main-100' : 'bg-bg-100 text-text-400'}`}>#{tag}</button>)}
           </div>}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <div className="px-2 py-1.5 text-[length:var(--fs-xs)] font-medium text-text-400">{title}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          <div className="px-2 py-1 text-[length:var(--fs-xxs)] font-medium text-text-400">{title}</div>
           {results.length === 0 ? (
             <div className="flex h-40 items-center justify-center text-[length:var(--fs-sm)] text-text-400">
               {loading ? t('sessionSearch.loading') : t('sessionSearch.noResults')}
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {results.map((result, index) => (
                 <SearchResultRow
                   key={result.session.id}
@@ -272,36 +272,35 @@ function SearchResultRow(props: {
       onMouseEnter={props.onMouseEnter}
       role="button"
       tabIndex={0}
-      className={`group flex w-full min-w-0 flex-col rounded-lg px-3 py-2 text-left transition-colors ${
+      className={`group flex w-full min-w-0 flex-col rounded-lg px-2.5 py-1.5 text-left transition-colors ${
         props.selected ? 'bg-bg-200 text-text-100' : 'text-text-200 hover:bg-bg-200/60'
       }`}
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="min-w-0 flex-1 truncate text-[length:var(--fs-base)] font-medium">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)] font-medium leading-snug">
           {highlight(title, props.query)}
         </span>
-        {label && <span className="shrink-0 text-[length:var(--fs-xs)] text-text-500">{label}</span>}
+        {label && <span className="shrink-0 text-[length:var(--fs-xxs)] text-text-500">{label}</span>}
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-        {props.tags.map(tag => <span key={tag} className="rounded-full bg-accent-main-100/10 px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-accent-main-100">#{tag}</span>)}
-        <span className="ml-auto flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          <button type="button" onClick={event => { event.stopPropagation(); props.onTag() }} className="rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.tags')}</button>
-          <button type="button" onClick={event => { event.stopPropagation(); props.onFork() }} className="rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.fork')}</button>
-          <button type="button" onClick={event => { event.stopPropagation(); props.onHandoff() }} className="rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.handoff')}</button>
-          <button type="button" onClick={event => { event.stopPropagation(); props.onExport('markdown') }} className="rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">MD</button>
-          <button type="button" onClick={event => { event.stopPropagation(); props.onExport('json') }} className="rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">JSON</button>
+      <div className="mt-1 flex min-w-0 items-center gap-1 text-[length:var(--fs-xs)] text-text-400">
+        {props.tags.length > 0 && (
+          <span className="flex shrink-0 gap-1">
+            {props.tags.map(tag => <span key={tag} className="rounded-full bg-accent-main-100/10 px-1 py-0.5 text-[length:var(--fs-xxs)] text-accent-main-100">#{tag}</span>)}
+          </span>
+        )}
+        {props.result.snippet ? (
+          <span className="min-w-0 flex-1 truncate">{highlight(props.result.snippet, props.query)}</span>
+        ) : meta ? (
+          <span className="min-w-0 flex-1 truncate">{meta}</span>
+        ) : null}
+        <span className="ml-auto flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <button type="button" onClick={event => { event.stopPropagation(); props.onTag() }} className="rounded px-1 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.tags')}</button>
+          <button type="button" onClick={event => { event.stopPropagation(); props.onFork() }} className="rounded px-1 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.fork')}</button>
+          <button type="button" onClick={event => { event.stopPropagation(); props.onHandoff() }} className="rounded px-1 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">{t('sessionSearch.handoff')}</button>
+          <button type="button" onClick={event => { event.stopPropagation(); props.onExport('markdown') }} className="rounded px-1 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">MD</button>
+          <button type="button" onClick={event => { event.stopPropagation(); props.onExport('json') }} className="rounded px-1 py-0.5 text-[length:var(--fs-xxs)] text-text-400 hover:bg-bg-300">JSON</button>
         </span>
       </div>
-      {(props.result.snippet || meta) && (
-        <div className="mt-1 flex min-w-0 items-center gap-2 text-[length:var(--fs-sm)] text-text-400">
-          {props.result.snippet ? (
-            <span className="min-w-0 flex-1 truncate">{highlight(props.result.snippet, props.query)}</span>
-          ) : (
-            <span className="min-w-0 flex-1 truncate">{meta}</span>
-          )}
-          {props.result.snippet && meta && <span className="shrink-0 truncate">{meta}</span>}
-        </div>
-      )}
     </div>
   )
 }
