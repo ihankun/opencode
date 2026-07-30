@@ -374,13 +374,18 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
-.electron-history-navigation button:hover {
+.electron-history-navigation button:hover:not(:disabled) {
   background: hsl(var(--bg-200) / 0.7);
   color: hsl(var(--text-100));
 }
 
-.electron-history-navigation button:active {
+.electron-history-navigation button:active:not(:disabled) {
   transform: scale(0.98);
+}
+
+.electron-history-navigation button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 :root:not([data-platform='windows']) [data-sidebar-expanded='false'] [data-chat-header='true'] {
@@ -426,9 +431,14 @@ html.electron-app[data-theme-preset='codex'][data-glass] .electron-windows-title
     transform 160ms ease;
 }
 
-.electron-windows-titlebar-btn:hover {
+.electron-windows-titlebar-btn:hover:not(:disabled) {
   background: hsl(var(--bg-200) / 0.7);
   color: hsl(var(--text-100));
+}
+
+.electron-windows-titlebar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .electron-windows-titlebar-btn:focus-visible {

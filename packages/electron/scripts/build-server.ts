@@ -10,17 +10,29 @@ const cacheFile = join(cacheDir, "api.json")
 const opencodeDir = join(__dirname, "..", "..", "opencode")
 const testFixture = join(opencodeDir, "test", "tool", "fixtures", "models-api.json")
 
-async function resolveModelsJson(): Promise<string | undefined> {
-  if (existsSync(cacheFile)) return cacheFile
+const isBuild = process.env.npm_lifecycle_event?.includes("build") ?? false
 
-  try {
-    const res = await fetch("https://models.dev/api.json")
-    if (res.ok) {
-      mkdirSync(cacheDir, { recursive: true })
-      writeFileSync(cacheFile, await res.text())
-      return cacheFile
-    }
-  } catch {}
+async function resolveModelsJson(): Promise<string | undefined> {
+  if (isBuild) {
+    try {
+      const res = await fetch("https://models.dev/api.json")
+      if (res.ok) {
+        mkdirSync(cacheDir, { recursive: true })
+        writeFileSync(cacheFile, await res.text())
+        return cacheFile
+      }
+    } catch {}
+  } else {
+    if (existsSync(cacheFile)) return cacheFile
+    try {
+      const res = await fetch("https://models.dev/api.json")
+      if (res.ok) {
+        mkdirSync(cacheDir, { recursive: true })
+        writeFileSync(cacheFile, await res.text())
+        return cacheFile
+      }
+    } catch {}
+  }
 
   if (existsSync(testFixture)) return testFixture
   return undefined

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, SidebarIcon } from './Icons'
 import { DESKTOP_TITLEBAR_HEIGHT, DESKTOP_TITLEBAR_Z_INDEX } from '../constants/desktopWindow'
 import { useTranslation } from 'react-i18next'
+import { canGoBack, canGoForward, subscribe } from '../store/navigationHistoryStore'
 
 interface ElectronWindowsTitlebarProps {
   sidebarExpanded: boolean
@@ -13,6 +14,8 @@ interface ElectronWindowsTitlebarProps {
   searchTitle: string
   backTitle: string
   forwardTitle: string
+  onGoBack: () => void
+  onGoForward: () => void
 }
 
 export function ElectronWindowsTitlebar({
@@ -25,9 +28,13 @@ export function ElectronWindowsTitlebar({
   searchTitle,
   backTitle,
   forwardTitle,
+  onGoBack,
+  onGoForward,
 }: ElectronWindowsTitlebarProps) {
   const { t } = useTranslation('common')
   const [isMaximized, setIsMaximized] = useState(false)
+  const [navState, setNavState] = useState(() => ({ back: canGoBack(), forward: canGoForward() }))
+  useEffect(() => subscribe(() => setNavState({ back: canGoBack(), forward: canGoForward() })), [])
 
   useEffect(() => {
     const checkMaximized = async () => {
@@ -96,7 +103,8 @@ export function ElectronWindowsTitlebar({
         <div className="flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => window.history.back()}
+            disabled={!navState.back}
+            onClick={onGoBack}
             aria-label={backTitle}
             title={backTitle}
             className="electron-windows-titlebar-btn window-no-drag"
@@ -105,7 +113,8 @@ export function ElectronWindowsTitlebar({
           </button>
           <button
             type="button"
-            onClick={() => window.history.forward()}
+            disabled={!navState.forward}
+            onClick={onGoForward}
             aria-label={forwardTitle}
             title={forwardTitle}
             className="electron-windows-titlebar-btn window-no-drag"

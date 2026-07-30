@@ -32,6 +32,7 @@ import {
   usePaneControllers,
   usePaneLayout,
 } from './store'
+import { initNavigation, pushNavigation, goBack as navGoBack, goForward as navGoForward, canGoBack, canGoForward, subscribe } from './store/navigationHistoryStore'
 import {
   ChatViewportProvider,
   CHAT_SURFACE_MIN_WIDTH,
@@ -135,13 +136,34 @@ function ElectronSidebarSearch({ title, onOpen }: { title: string; onOpen: () =>
   )
 }
 
-function ElectronHistoryNavigation({ backTitle, forwardTitle }: { backTitle: string; forwardTitle: string }) {
+interface ElectronHistoryNavigationProps {
+  backTitle: string
+  forwardTitle: string
+  onGoBack: () => void
+  onGoForward: () => void
+}
+
+function ElectronHistoryNavigation({ backTitle, forwardTitle, onGoBack, onGoForward }: ElectronHistoryNavigationProps) {
+  const [navState, setNavState] = useState(() => ({ back: canGoBack(), forward: canGoForward() }))
+  useEffect(() => subscribe(() => setNavState({ back: canGoBack(), forward: canGoForward() })), [])
   return createPortal(
     <div className="electron-history-navigation window-no-drag">
-      <button type="button" onClick={() => window.history.back()} aria-label={backTitle} title={backTitle}>
+      <button
+        type="button"
+        disabled={!navState.back}
+        onClick={onGoBack}
+        aria-label={backTitle}
+        title={backTitle}
+      >
         <ChevronLeftIcon size={18} />
       </button>
-      <button type="button" onClick={() => window.history.forward()} aria-label={forwardTitle} title={forwardTitle}>
+      <button
+        type="button"
+        disabled={!navState.forward}
+        onClick={onGoForward}
+        aria-label={forwardTitle}
+        title={forwardTitle}
+      >
         <ChevronRightIcon size={18} />
       </button>
     </div>,
@@ -187,6 +209,8 @@ function App() {
   const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
   const [extensionPageTab, setExtensionPageTab] = useState<ExtensionPageTab>('skills')
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false)
+  const navRestoringRef = useRef(false)
+  const prevUtilityPageRef = useRef<MainUtilityPage | null>(null)
 
   useEffect(() => {
     const cleanup = initNotificationSound()
@@ -208,6 +232,26 @@ function App() {
       }),
     [routeDirectory, currentDirectory, paneControllers, savedDirectories],
   )
+
+  // 初始化导航历史
+  useEffect(() => {
+    initNavigation(window.location.hash)
+    prevUtilityPageRef.current = utilityPage
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 推送导航状态变更（navRestoringRef 在恢复导航期间阻止重复推送）
+  useEffect(() => {
+    if (navRestoringRef.current) {
+      navRestoringRef.current = false
+      return
+    }
+    if (prevUtilityPageRef.current !== utilityPage) {
+      prevUtilityPageRef.current = utilityPage
+      pushNavigation({ utilityPage, hash: window.location.hash })
+      return
+    }
+    pushNavigation({ utilityPage, hash: window.location.hash })
+  }, [routeSessionId, utilityPage])
 
   // 全局唯一 SSE 连接。所有 pane 通过 consumer 机制接收自己的 session 事件。
   useGlobalEvents(activeDirectories)
@@ -351,6 +395,7 @@ function App() {
 
   const openUtilityPage = useCallback((page: MainUtilityPage) => {
     setUtilityPage(page)
+    pushNavigation({ utilityPage: page, hash: window.location.hash })
     if (isMobilePanelLayout) {
       scrollMobilePagerTo('chat')
       setSidebarExpanded(false)
@@ -362,6 +407,42 @@ function App() {
     openUtilityPage('plugins')
   }, [openUtilityPage])
   const openTaskPage = useCallback(() => openUtilityPage('tasks'), [openUtilityPage])
+  const handleGoBack = useCallback(() => {
+    const entry = navGoBack()
+    if (!entry) return
+    navRestoringRef.current = true
+    setUtilityPage(entry.utilityPage as MainUtilityPage | null)
+    prevUtilityPageRef.current = entry.utilityPage as MainUtilityPage | null
+    const sessionMatch = entry.hash.match(/^#\/session\/(.+?)(?:\?|$)/)
+    if (sessionMatch) {
+      const sid = sessionMatch[1]
+      const dirMatch = entry.hash.match(/[?&]dir=([^&]*)/)
+      const dir = dirMatch ? decodeURIComponent(dirMatch[1]) : undefined
+      const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
+      if (paneId) navigatePaneToSession(paneId, sid, dir)
+      else window.location.hash = entry.hash
+    } else {
+      window.location.hash = entry.hash
+    }
+  }, [paneLayout.focusedPaneId, navigatePaneToSession])
+  const handleGoForward = useCallback(() => {
+    const entry = navGoForward()
+    if (!entry) return
+    navRestoringRef.current = true
+    setUtilityPage(entry.utilityPage as MainUtilityPage | null)
+    prevUtilityPageRef.current = entry.utilityPage as MainUtilityPage | null
+    const sessionMatch = entry.hash.match(/^#\/session\/(.+?)(?:\?|$)/)
+    if (sessionMatch) {
+      const sid = sessionMatch[1]
+      const dirMatch = entry.hash.match(/[?&]dir=([^&]*)/)
+      const dir = dirMatch ? decodeURIComponent(dirMatch[1]) : undefined
+      const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
+      if (paneId) navigatePaneToSession(paneId, sid, dir)
+      else window.location.hash = entry.hash
+    } else {
+      window.location.hash = entry.hash
+    }
+  }, [paneLayout.focusedPaneId, navigatePaneToSession])
   const getNearestMobilePage = useCallback(
     (scrollLeft: number): MobilePagerPage => {
       const leftDistance = Math.abs(scrollLeft)
@@ -1117,6 +1198,8 @@ function App() {
           searchTitle={t('chat:sidebar.search')}
           backTitle={t('components:desktopTitlebar.goBack')}
           forwardTitle={t('components:desktopTitlebar.goForward')}
+          onGoBack={handleGoBack}
+          onGoForward={handleGoForward}
         />
       ) : showTitlebarSidebarButton ? (
         <>
@@ -1128,7 +1211,7 @@ function App() {
             onPreviewClose={closeSidebarPreview}
           />
           <ElectronSidebarSearch title={t('chat:sidebar.search')} onOpen={() => setSessionSearchOpen(true)} />
-          <ElectronHistoryNavigation backTitle={t('components:desktopTitlebar.goBack')} forwardTitle={t('components:desktopTitlebar.goForward')} />
+          <ElectronHistoryNavigation backTitle={t('components:desktopTitlebar.goBack')} forwardTitle={t('components:desktopTitlebar.goForward')} onGoBack={handleGoBack} onGoForward={handleGoForward} />
         </>
       ) : null}
       <InternalDragLayer />
