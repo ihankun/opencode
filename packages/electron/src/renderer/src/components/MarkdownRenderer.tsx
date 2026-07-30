@@ -54,6 +54,7 @@ type StreamdownBridgeProps = {
   controls: boolean
   plugins: PluginConfig
   rehypePlugins: readonly unknown[]
+  mode?: 'static' | 'streaming'
 }
 
 // streamdown may be installed with another compatible React type package in
@@ -781,12 +782,14 @@ const MarkdownStreamBlock = memo(function MarkdownStreamBlock({
   isAnimating,
   isFirst,
   isLast,
+  mode,
 }: {
   src: string
   components: MarkdownComponents
   isAnimating: boolean
   isFirst: boolean
   isLast: boolean
+  mode: 'static' | 'streaming'
 }) {
   return (
     <div
@@ -795,6 +798,7 @@ const MarkdownStreamBlock = memo(function MarkdownStreamBlock({
       }`}
     >
       <StreamdownComponent
+        mode={mode}
         components={components}
         isAnimating={isAnimating}
         controls={false}
@@ -1072,6 +1076,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
         <MarkdownStreamBlock
           key={block.key}
           src={block.src}
+          mode={block.mode === 'live' ? 'streaming' : 'static'}
           components={block.mode === 'live' ? componentsByMode.live : componentsByMode.full}
           isAnimating={isStreaming && block.mode === 'live'}
           isFirst={index === 0}

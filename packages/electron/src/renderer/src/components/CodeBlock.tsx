@@ -82,7 +82,7 @@ export const CodeBlock = memo(function CodeBlock({
   const highlightCode = useDeferredValue(code)
 
   // Lazy load highlighting when close to viewport
-  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: '200px' })
+  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: '400px' })
 
   // Auto-detect tree structure if language is missing or text
   const effectiveLanguage = useMemo(() => {

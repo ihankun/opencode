@@ -101,6 +101,21 @@ class MessageStore {
     }
   }
 
+  /** 跳过 RAF，同步通知。用于关键路径（如初始加载）减少一帧延迟。 */
+  private notifyNow(sessionIds: Iterable<string>) {
+    if (this.pendingNotify) {
+      if (this.rafId !== null) {
+        cancelAnimationFrame(this.rafId)
+        this.rafId = null
+      }
+      this.pendingNotify = false
+    }
+    this.markPendingSessionNotifications(sessionIds)
+    this.flushDirtyMessages()
+    this.subscribers.forEach(fn => fn())
+    this.flushSessionSubscribers()
+  }
+
   private flushSessionSubscribers() {
     if (this.pendingNotifyAllSessions) {
       this.pendingNotifyAllSessions = false
@@ -419,7 +434,7 @@ class MessageStore {
       state.isStreaming = false
     }
 
-    this.notify([sessionId])
+    this.notifyNow([sessionId])
   }
 
   prependMessages(sessionId: string, apiMessages: ApiMessageWithParts[], hasMore: boolean) {

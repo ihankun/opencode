@@ -563,7 +563,6 @@ export const ChatArea = memo(
           if (!root) return
           root.scrollTop = 0
           updateScrollOffsetSnapshot()
-          animate(root, { opacity: [0, 1] }, { duration: 0.2, ease: 'easeOut' })
         })
       }, [
         clearPendingLoadMoreTimer,
@@ -883,10 +882,18 @@ export const ChatArea = memo(
       return (
         <div className="h-full overflow-hidden contain-strict relative">
           {loadState === 'loading' && visibleMessages.length === 0 && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3 text-text-400 session-loading-indicator">
-                <span className="w-5 h-5 border-2 border-text-400/30 border-t-text-400 rounded-full animate-spin" />
-                <span className="text-[length:var(--fs-base)]">{t('chatArea.loadingSession')}</span>
+            <div className="absolute inset-0 z-10 flex flex-col justify-end px-6 pb-4 gap-4 animate-pulse" style={{ animationDuration: '1.5s' }}>
+              <div className="flex justify-end">
+                <div className="h-10 w-3/5 rounded-2xl bg-bg-300/60" />
+              </div>
+              <div className="flex justify-start">
+                <div className="h-24 w-4/5 rounded-2xl bg-bg-300/60" />
+              </div>
+              <div className="flex justify-end">
+                <div className="h-12 w-2/5 rounded-2xl bg-bg-300/60" />
+              </div>
+              <div className="flex justify-start">
+                <div className="h-32 w-4/5 rounded-2xl bg-bg-300/60" />
               </div>
             </div>
           )}
