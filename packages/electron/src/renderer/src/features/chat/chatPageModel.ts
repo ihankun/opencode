@@ -1,8 +1,8 @@
 import type { Message } from '../../types/message'
 
-export const PAGE_MESSAGE_COUNT = 12
-export const EXPANDED_PAGE_RADIUS = 1
-export const PREMEASURE_PAGE_RADIUS = 1
+export const PAGE_MESSAGE_COUNT = 16
+export const EXPANDED_PAGE_RADIUS = 2
+export const PREMEASURE_PAGE_RADIUS = 2
 export const PREMEASURE_MIN_MESSAGE_BUDGET = 20
 export const PREMEASURE_MAX_MESSAGE_BUDGET = 60
 const PREMEASURE_TARGET_VIEWPORTS = 2

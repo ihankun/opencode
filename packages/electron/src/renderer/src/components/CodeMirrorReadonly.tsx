@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorState, type Extension } from '@codemirror/state'
 import { openSearchPanel } from '@codemirror/search'
 import { EditorView } from '@codemirror/view'
@@ -37,6 +37,27 @@ export function CodeMirrorReadonly({
   const viewRef = useRef<EditorView | null>(null)
   const constrainedHeight = maxHeight !== undefined
   const lineNumberWidth = useMemo(() => getLineNumberColumnWidth(getLineCount(code)), [code])
+  // 折叠时跳过 CodeMirror 创建，用 pre 占位；展开时延迟一帧再创建
+  const [deferredVisible, setDeferredVisible] = useState(isVisible)
+  const pendingFrameRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (isVisible) {
+      // 展开时延迟一帧创建，避免折叠→展开的 transition 期间闪烁
+      pendingFrameRef.current = requestAnimationFrame(() => {
+        pendingFrameRef.current = null
+        setDeferredVisible(true)
+      })
+      return () => {
+        if (pendingFrameRef.current !== null) {
+          cancelAnimationFrame(pendingFrameRef.current)
+          pendingFrameRef.current = null
+        }
+      }
+    }
+    // 折叠时立即销毁 CodeMirror，切换到 pre 占位
+    setDeferredVisible(false)
+  }, [isVisible])
 
   const extensions = useMemo(
     () =>
@@ -54,7 +75,7 @@ export function CodeMirrorReadonly({
 
   useEffect(() => {
     const host = hostRef.current
-    if (!host) return
+    if (!host || !deferredVisible) return
 
     const view = new EditorView({
       parent: host,
@@ -68,7 +89,7 @@ export function CodeMirrorReadonly({
       view.destroy()
       if (viewRef.current === view) viewRef.current = null
     }
-  }, [code, extensions, tokensRef])
+  }, [code, extensions, tokensRef, deferredVisible])
 
   useEffect(() => {
     const view = viewRef.current
@@ -92,7 +113,7 @@ export function CodeMirrorReadonly({
       if (secondFrameId !== null) cancelAnimationFrame(secondFrameId)
       clearTimeout(transitionTimerId)
     }
-  }, [isVisible])
+  }, [isVisible, deferredVisible])
 
   const handleKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
@@ -102,6 +123,25 @@ export function CodeMirrorReadonly({
       openSearchPanel(view)
     }
   }, [])
+
+  // 折叠时用 pre 占位，显示前几行代码作为视觉提示
+  if (!deferredVisible) {
+    const previewLines = code.split('\n').slice(0, 6).join('\n')
+    return (
+      <div
+        className={`${constrainedHeight ? 'w-full overflow-hidden' : 'h-full min-h-0 w-full overflow-hidden'} font-mono text-[length:var(--fs-code)] ${className}`}
+        data-resizing={isResizing ? 'true' : undefined}
+      >
+        <pre
+          className="m-0 p-3 whitespace-pre-wrap break-words text-text-400 opacity-60"
+          style={{ maxHeight: constrainedHeight ? maxHeight : 120, lineHeight: `${lineHeight}px` }}
+        >
+          {previewLines}
+          {code.split('\n').length > 6 && '\n…'}
+        </pre>
+      </div>
+    )
+  }
 
   return (
     <div

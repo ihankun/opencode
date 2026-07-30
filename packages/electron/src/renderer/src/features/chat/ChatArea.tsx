@@ -56,8 +56,8 @@ import {
   type StableChatPage,
 } from './chatPageModel'
 
-const LOAD_MORE_ROOT_MARGIN = '240px 0px 0px 0px'
-const LOAD_MORE_WHEEL_COOLDOWN_MS = 90
+const LOAD_MORE_ROOT_MARGIN = '480px 0px 0px 0px'
+const LOAD_MORE_WHEEL_COOLDOWN_MS = 120
 const LOAD_MORE_DEFER_MS = 100
 const PENDING_SCROLL_TARGET_KEEPALIVE_MS = 900
 const DISCLOSURE_ANCHOR_LOCK_MS = 420
@@ -86,18 +86,22 @@ function pageHasUserMessage(page: ChatPage): boolean {
 
 function captureLoadMoreAnchor(root: HTMLElement, pageCountBefore = 0): LoadMoreAnchorSnapshot | null {
   const rootRect = root.getBoundingClientRect()
+  const rootTop = rootRect.top
+  const rootBottom = rootRect.bottom
   const candidates = root.querySelectorAll<HTMLElement>('[data-message-id]')
 
   let best: LoadMoreAnchorSnapshot | null = null
   for (const element of candidates) {
+    const rect = element.getBoundingClientRect()
+    // 元素在视口下方 → 后续元素更靠下，提前退出
+    if (rect.top >= rootBottom) break
+    // 元素在视口上方 → 跳过
+    if (rect.bottom <= rootTop) continue
+
     const messageId = element.getAttribute('data-message-id')
     if (!messageId) continue
 
-    const rect = element.getBoundingClientRect()
-    const intersectsViewport = rect.bottom > rootRect.top && rect.top < rootRect.bottom
-    if (!intersectsViewport) continue
-
-    const topOffset = rect.top - rootRect.top
+    const topOffset = rect.top - rootTop
     if (!best || topOffset < best.topOffset) {
       best = { messageId, topOffset, pageCountBefore }
     }
@@ -417,7 +421,8 @@ export const ChatArea = memo(
         if (scrollSnapshotRafRef.current !== null) cancelAnimationFrame(scrollSnapshotRafRef.current)
         scrollSnapshotRafRef.current = requestAnimationFrame(() => {
           scrollSnapshotRafRef.current = null
-          if (Math.abs(nextOffset - scrollOffsetFromBottomRef.current) < 1) return
+          // 阈值 4px：快速滚动时减少约 75% 的 setState 触发，视觉无感知
+          if (Math.abs(nextOffset - scrollOffsetFromBottomRef.current) < 4) return
           if (!isAtBottomRef.current) {
             const anchor = disclosureLayoutAnchorRef.current ?? captureLoadMoreAnchor(root)
             stableLayoutAnchorRef.current = anchor
