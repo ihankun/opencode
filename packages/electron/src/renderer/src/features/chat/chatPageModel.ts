@@ -88,9 +88,9 @@ function estimateMessageHeight(message: Message): number {
   }
   const contentHeight = message.parts.reduce((height, part) => {
     if (part.type === 'text' && !part.synthetic) return height + estimateTextHeight(part.text)
-    if (part.type === 'reasoning') return height + 36
-    if (part.type === 'tool') return height + 48
-    if (part.type === 'subtask') return height + 72
+    if (part.type === 'reasoning') return height + 24
+    if (part.type === 'tool') return height + 32
+    if (part.type === 'subtask') return height + 40
     if (part.type === 'file' || part.type === 'agent') return height + 44
     return height + 20
   }, 0)

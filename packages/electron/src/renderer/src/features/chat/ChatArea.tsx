@@ -900,12 +900,7 @@ export const ChatArea = memo(
           >
             <div className="flex-1" />
 
-            <div
-              className="shrink-0"
-              style={{
-                height: bottomPadding > 0 ? `${bottomPadding + 48}px` : '256px',
-              }}
-            />
+            <div className="shrink-0" style={{ height: 24 }} />
 
             {retryStatus && (
               <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0`}>
@@ -1148,11 +1143,24 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
     () => (autoCollapseExecutionProcess ? buildExecutionCollapsePlan(messages) : null),
     [autoCollapseExecutionProcess, messages],
   )
+  const planKey = plan ? `${plan.conclusionMessageIndex}:${plan.conclusionPartIndex}` : null
+  const prevPlanKeyRef = useRef(planKey)
+  const [pendingCollapse, setPendingCollapse] = useState(false)
+  useEffect(() => {
+    if (planKey && planKey !== prevPlanKeyRef.current) {
+      prevPlanKeyRef.current = planKey
+      setPendingCollapse(true)
+      const id = window.setTimeout(() => setPendingCollapse(false), 400)
+      return () => window.clearTimeout(id)
+    }
+    prevPlanKeyRef.current = planKey
+  }, [planKey])
+  const effectivePlan = pendingCollapse ? null : plan
   const disclosureKey = `assistant-turn:${messages.at(-1)?.info.id ?? 'empty'}:execution-process`
   const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, false)
   const shouldRenderProcess = useDelayedRender(expanded)
 
-  if (!plan) {
+  if (!effectivePlan) {
     return messages.map(message => (
       <RenderedMessageItem
         key={message.info.id}
@@ -1172,18 +1180,18 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   }
 
   const processMessages = messages
-    .slice(0, plan.conclusionMessageIndex + 1)
+    .slice(0, effectivePlan.conclusionMessageIndex + 1)
     .map((message, index) =>
-      index === plan.conclusionMessageIndex
-        ? { ...message, parts: message.parts.slice(0, plan.conclusionPartIndex) }
+      index === effectivePlan.conclusionMessageIndex
+        ? { ...message, parts: message.parts.slice(0, effectivePlan.conclusionPartIndex) }
         : message,
     )
     .filter(hasRenderableParts)
   const conclusionMessages = messages
-    .slice(plan.conclusionMessageIndex)
+    .slice(effectivePlan.conclusionMessageIndex)
     .map((message, index) =>
       index === 0
-        ? { ...message, parts: message.parts.slice(plan.conclusionPartIndex) }
+        ? { ...message, parts: message.parts.slice(effectivePlan.conclusionPartIndex) }
         : message,
     )
     .filter(hasRenderableParts)
@@ -1220,7 +1228,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
               <div className="flex flex-col gap-2 pt-2">
                 {processMessages.map((message, index) => {
                   const isBoundaryMessage = index === processMessages.length - 1 &&
-                    message.info.id === messages[plan.conclusionMessageIndex]?.info.id
+                    message.info.id === messages[effectivePlan.conclusionMessageIndex]?.info.id
                   const content = (
                     <MessageRenderer
                       message={message}
