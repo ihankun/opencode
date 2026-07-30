@@ -35,6 +35,7 @@ import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInli
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
 import { useDelayedRender } from '../../hooks'
+import { useNow } from '../../hooks/useNow'
 import { useTheme } from '../../hooks/useTheme'
 import { useChatViewport } from './chatViewport'
 import { rankOutlineVisibleMessageIds } from '../../components/outlineIndexModel'
@@ -258,6 +259,32 @@ export const ChatArea = memo(
               hasRenderableParts(message),
           )
       }, [isStreaming, messages])
+
+      const agentStartRef = useRef(0)
+      const [finalElapsed, setFinalElapsed] = useState(0)
+      const now = useNow(100, isWaitingForAgentReply)
+
+      useEffect(() => {
+        if (isWaitingForAgentReply) {
+          agentStartRef.current = Date.now()
+          setFinalElapsed(0)
+        } else if (agentStartRef.current > 0) {
+          setFinalElapsed(Date.now() - agentStartRef.current)
+          agentStartRef.current = 0
+        }
+      }, [isWaitingForAgentReply])
+
+      useEffect(() => {
+        if (finalElapsed > 0) {
+          const timer = setTimeout(() => setFinalElapsed(0), 2000)
+          return () => clearTimeout(timer)
+        }
+      }, [finalElapsed])
+
+      const showProcessing = isWaitingForAgentReply || finalElapsed > 0
+      const agentElapsed = isWaitingForAgentReply
+        ? agentStartRef.current > 0 ? now - agentStartRef.current : 0
+        : finalElapsed
 
       const activePages = pageRecords ?? pages
 
@@ -919,7 +946,7 @@ export const ChatArea = memo(
               </div>
             )}
 
-            {isWaitingForAgentReply && !retryStatus && (
+            {showProcessing && !retryStatus && (
               <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0 py-3`}>
                 <div className="flex justify-start">
                   <div
@@ -927,8 +954,15 @@ export const ChatArea = memo(
                     aria-live="polite"
                     className="flex items-center gap-1.5 rounded-md py-1 text-[length:var(--fs-base)] text-text-400"
                   >
-                    <SpinnerIcon size={14} className="animate-spin text-accent-main-100" />
-                    <span className="font-medium">{t('chatArea.agentProcessing')}</span>
+                    {isWaitingForAgentReply ? (
+                      <SpinnerIcon size={14} className="animate-spin text-accent-main-100" />
+                    ) : (
+                      <span className="text-accent-main-100">✓</span>
+                    )}
+                    <span className="font-medium">
+                      {t('chatArea.agentProcessing')}
+                      {agentElapsed > 0 && <span className="ml-1 tabular-nums">{formatDuration(agentElapsed)}</span>}
+                    </span>
                   </div>
                 </div>
               </div>

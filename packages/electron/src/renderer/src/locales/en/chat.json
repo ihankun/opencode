@@ -25,7 +25,7 @@
     "openPanel": "Open panel"
   },
   "chatArea": {
-    "agentProcessing": "Agent is processing",
+    "agentProcessing": "Processing",
     "loadingSession": "Loading session...",
     "loadingHistory": "Loading history..."
   },

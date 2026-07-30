@@ -25,7 +25,7 @@
     "openPanel": "打开面板"
   },
   "chatArea": {
-    "agentProcessing": "Agent 正在处理",
+    "agentProcessing": "正在处理",
     "loadingSession": "加载会话中...",
     "loadingHistory": "加载历史记录..."
   },
