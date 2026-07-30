@@ -196,7 +196,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
     >
       <div className="flex min-h-0 flex-col bg-bg-000/95">
         <div className="border-b border-border-200/50 p-3">
-          <div className="relative flex h-11 items-center rounded-lg bg-bg-100/80 px-3 focus-within:ring-1 focus-within:ring-accent-main-100/50">
+          <div className="relative flex h-11 items-center rounded-lg border border-border-200 bg-bg-100/80 px-3 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
             <SearchIcon size={17} className="mr-2 shrink-0 text-text-400" />
             <input
               ref={inputRef}
@@ -204,6 +204,7 @@ export function SessionSearchDialog({ isOpen, directory, onClose, onSelectSessio
               onChange={event => setQuery(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t('sessionSearch.placeholder')}
+              data-session-search-input
               className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--fs-base)] text-text-100 placeholder:text-text-500 outline-none focus-visible:outline-none"
             />
             {(loading || indexing) && <SpinnerIcon size={15} className="shrink-0 animate-spin text-text-400" />}

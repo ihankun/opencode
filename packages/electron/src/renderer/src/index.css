@@ -145,6 +145,10 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   box-shadow: 0 0 0 2px hsl(var(--accent-main-100) / 0.16);
 }
 
+.settings-surface :focus-within > :is(input):focus-visible {
+  box-shadow: none;
+}
+
 .settings-surface button:focus-visible {
   outline: 2px solid hsl(var(--accent-main-100) / 0.72);
   outline-offset: 2px;
@@ -1537,6 +1541,10 @@ textarea[data-composer-input]:focus-visible {
   border-color: transparent;
   outline: none;
   box-shadow: none;
+}
+
+input[data-session-search-input]:focus-visible {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

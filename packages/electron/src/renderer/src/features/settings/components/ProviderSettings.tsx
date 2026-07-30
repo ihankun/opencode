@@ -240,7 +240,7 @@ export function ProviderSettings() {
                         <span className="mb-1 block text-[length:var(--fs-xs)] font-medium text-text-300">
                           {t('providers.apiKey')}
                         </span>
-                        <div className="flex items-center gap-2 rounded-lg border border-border-200 bg-bg-000 px-3">
+                        <div className="flex items-center gap-2 rounded-lg border border-border-200 bg-bg-000 px-3 transition-colors focus-within:border-accent-main-100/50">
                           <KeyIcon size={14} className="shrink-0 text-text-400" />
                           <input
                             type="password"
@@ -251,7 +251,7 @@ export function ProviderSettings() {
                               setSavedProvider(null)
                             }}
                             placeholder={isConnected ? t('providers.apiKeyConnectedPlaceholder') : t('providers.apiKeyPlaceholder')}
-                            className="h-9 min-w-0 flex-1 bg-transparent text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400"
+                            className="h-9 min-w-0 flex-1 bg-transparent text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400 focus-visible:outline-none"
                             autoComplete="off"
                           />
                         </div>
