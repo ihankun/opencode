@@ -26,7 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
-import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
+import { buildExecutionCollapsePlan, getExecutionStatusSummary } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
 import { ChevronRightIcon, SpinnerIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
@@ -1143,24 +1143,11 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
     () => (autoCollapseExecutionProcess ? buildExecutionCollapsePlan(messages) : null),
     [autoCollapseExecutionProcess, messages],
   )
-  const planKey = plan ? `${plan.conclusionMessageIndex}:${plan.conclusionPartIndex}` : null
-  const prevPlanKeyRef = useRef(planKey)
-  const [pendingCollapse, setPendingCollapse] = useState(false)
-  useEffect(() => {
-    if (planKey && planKey !== prevPlanKeyRef.current) {
-      prevPlanKeyRef.current = planKey
-      setPendingCollapse(true)
-      const id = window.setTimeout(() => setPendingCollapse(false), 400)
-      return () => window.clearTimeout(id)
-    }
-    prevPlanKeyRef.current = planKey
-  }, [planKey])
-  const effectivePlan = pendingCollapse ? null : plan
   const disclosureKey = `assistant-turn:${messages.at(-1)?.info.id ?? 'empty'}:execution-process`
   const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, false)
   const shouldRenderProcess = useDelayedRender(expanded)
 
-  if (!effectivePlan) {
+  if (!plan) {
     return messages.map(message => (
       <RenderedMessageItem
         key={message.info.id}
@@ -1180,18 +1167,18 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   }
 
   const processMessages = messages
-    .slice(0, effectivePlan.conclusionMessageIndex + 1)
+    .slice(0, plan.conclusionMessageIndex + 1)
     .map((message, index) =>
-      index === effectivePlan.conclusionMessageIndex
-        ? { ...message, parts: message.parts.slice(0, effectivePlan.conclusionPartIndex) }
+      index === plan.conclusionMessageIndex
+        ? { ...message, parts: message.parts.slice(0, plan.conclusionPartIndex) }
         : message,
     )
     .filter(hasRenderableParts)
   const conclusionMessages = messages
-    .slice(effectivePlan.conclusionMessageIndex)
+    .slice(plan.conclusionMessageIndex)
     .map((message, index) =>
       index === 0
-        ? { ...message, parts: message.parts.slice(effectivePlan.conclusionPartIndex) }
+        ? { ...message, parts: message.parts.slice(plan.conclusionPartIndex) }
         : message,
     )
     .filter(hasRenderableParts)
@@ -1199,6 +1186,8 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
     (value, message) => turnDurationMap.get(message.info.id) ?? value,
     undefined as number | undefined,
   )
+  const showStatus = conclusionMessages.length === 0 && messages.some(m => m.isStreaming)
+  const statusSummary = showStatus ? getExecutionStatusSummary(messages) : null
 
   return (
     <>
@@ -1218,6 +1207,10 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
           />
         </button>
 
+        {statusSummary && (
+          <div className="ml-1 text-[length:var(--fs-sm)] text-text-400">{statusSummary}</div>
+        )}
+
         <div
           className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
             expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -1228,7 +1221,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
               <div className="flex flex-col gap-2 pt-2">
                 {processMessages.map((message, index) => {
                   const isBoundaryMessage = index === processMessages.length - 1 &&
-                    message.info.id === messages[effectivePlan.conclusionMessageIndex]?.info.id
+                    message.info.id === messages[plan.conclusionMessageIndex]?.info.id
                   const content = (
                     <MessageRenderer
                       message={message}

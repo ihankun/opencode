@@ -344,7 +344,8 @@ export const ChatPane = memo(function ChatPane({
   const isRenderingDeferredMessages = renderedMessages !== messages
   const renderedLoadState = loadState === 'loaded' && isRenderingDeferredMessages ? 'loading' : loadState
   const inputDisabled = !!routeSessionId && loadState === 'error' && messages.length === 0
-  const chatPageViewModel = useChatPageViewModel(renderedMessages)
+  const { autoCollapseExecutionProcess } = useTheme()
+  const chatPageViewModel = useChatPageViewModel(renderedMessages, autoCollapseExecutionProcess)
 
   const connectionError = useMemo<MessageError | undefined>(() => {
     if (!activeServer) {

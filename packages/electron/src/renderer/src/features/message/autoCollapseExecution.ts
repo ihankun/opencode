@@ -23,8 +23,7 @@ export type TurnChangeSummary = {
 
 export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollapsePlan | null {
   if (messages.length === 0) return null
-  if (messages.some(message => message.info.role !== 'assistant' || message.isStreaming)) return null
-  if (messages.at(-1)?.info.time.completed == null) return null
+  if (messages.some(message => message.info.role !== 'assistant')) return null
 
   const parts = messages.flatMap((message, messageIndex) =>
     message.parts.map((part, partIndex) => ({ messageIndex, partIndex, part })),
@@ -55,6 +54,64 @@ export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollap
     conclusionMessageIndex: lastMsgIndex,
     conclusionPartIndex: lastPartIndex + 1,
   }
+}
+
+export function getExecutionStatusSummary(messages: Message[]): string | null {
+  const parts = messages.flatMap(message => message.parts)
+  if (parts.length === 0) return null
+
+  for (let index = parts.length - 1; index >= 0; index--) {
+    const part = parts[index]
+    if (part.type === 'tool') {
+      const toolName = part.tool.toLowerCase()
+      if (toolName === 'bash' || toolName === 'cmd' || toolName === 'terminal' || toolName === 'shell' || toolName === 'sh' || /^(exec|run|command)/.test(toolName)) return '正在执行命令'
+      if (/^(write|save)/.test(toolName)) return '正在写入文件'
+      if (/^(edit|replace|patch|apply)/.test(toolName)) return '正在编辑文件'
+      if (toolName === 'read' || toolName === 'cat' || /^head/.test(toolName)) return '正在读取文件'
+      if (toolName === 'grep' || /^search/.test(toolName)) return '正在搜索代码'
+      if (toolName === 'glob' || toolName === 'find' || toolName === 'ls') return '正在查找文件'
+      if (toolName === 'todo' || toolName === 'todowrite' || /^task_plan/.test(toolName)) return '正在更新计划'
+      if (/^(web_fetch|websearch|webfetch|web_search|fetch|curl|request|http|browse|network|exa)/.test(toolName)) return '正在获取网页'
+      if (toolName === 'task' || /^subtask/.test(toolName)) return '正在执行子任务'
+      if (toolName === 'skill') return '正在安装技能'
+      if (toolName === 'question' || toolName === 'ask') return '正在等待回答'
+      if (toolName === 'lsp') return '正在分析代码'
+      if (/^(think|reason|plan)/.test(toolName) || toolName === 'plan_exit') return '正在思考'
+      if (/^(get_goal|create_goal|update_goal|clear_goal)/.test(toolName)) return '正在管理目标'
+      return '正在执行操作'
+    }
+    if (part.type === 'reasoning') return '正在思考'
+    if (part.type === 'subtask') return '正在执行子任务'
+    if (part.type === 'retry') return '正在重试'
+    if (part.type === 'compaction') return '正在压缩上下文'
+  }
+  return null
+}
+
+export function estimateCollapsedRowHeight(messages: Message[]): number {
+  if (messages.length === 0) return 0
+  if (messages.some(m => m.info.role !== 'assistant')) return 0
+
+  const plan = buildExecutionCollapsePlan(messages)
+  if (!plan) return 0
+
+  let height = 36
+  const conclusionMessages = messages.slice(plan.conclusionMessageIndex)
+  for (let i = 0; i < conclusionMessages.length; i++) {
+    const parts = i === 0
+      ? conclusionMessages[i].parts.slice(plan.conclusionPartIndex)
+      : conclusionMessages[i].parts
+    for (const part of parts) {
+      if (part.type === 'text' && !part.synthetic && part.text.trim()) {
+        const estimatedLines = part.text
+          .split(/\r?\n/)
+          .reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 88)), 0)
+        height += Math.min(500, estimatedLines) * 24
+      }
+    }
+    if (i > 0) height += 8
+  }
+  return Math.max(56, height + 24)
 }
 
 export function summarizeTurnChanges(userMessage: Message, assistantMessages: Message[]): TurnChangeSummary {

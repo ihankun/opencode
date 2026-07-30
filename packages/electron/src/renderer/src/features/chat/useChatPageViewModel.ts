@@ -6,6 +6,7 @@ import {
   getVisibleMessageForkTargetId,
   type VisibleMessageEntry,
 } from './chatAreaVisibility'
+import { estimateCollapsedRowHeight } from '../message/autoCollapseExecution'
 import {
   buildContentKeyedChatPages,
   findMessageSequenceOffset,
@@ -185,13 +186,27 @@ function reuseMap<K, V>(previous: Map<K, V> | undefined, next: Map<K, V>) {
   return previous
 }
 
-export function buildChatPageViewModel(messages: Message[], previous?: ChatPageViewModel): ChatPageViewModel {
+export function buildChatPageViewModel(messages: Message[], collapseExecutionProcess = false, previous?: ChatPageViewModel): ChatPageViewModel {
   const visibleMessageEntries = reuseVisibleMessageEntries(
     previous?.visibleMessageEntries,
     buildVisibleMessageEntries(messages),
   )
   const visibleMessages = visibleMessagesFromEntries(previous?.visibleMessages, visibleMessageEntries)
-  const pageRecords = reusePageRecords(previous?.pageRecords, buildContentKeyedChatPages(visibleMessages))
+  let rawPages = buildContentKeyedChatPages(visibleMessages)
+  if (collapseExecutionProcess) {
+    rawPages = rawPages.map(page => {
+      const rows = page.rows.map(row => {
+        if (row.messages[0]?.info.role !== 'assistant') return row
+        const collapsedHeight = estimateCollapsedRowHeight(row.messages)
+        if (collapsedHeight === 0 || collapsedHeight === row.estimatedHeight) return row
+        return { ...row, estimatedHeight: collapsedHeight }
+      })
+      const totalHeight = rows.reduce((sum, row) => sum + row.estimatedHeight, 0)
+      if (totalHeight === page.estimatedHeight && rows.every((r, i) => r === page.rows[i])) return page
+      return { ...page, rows, estimatedHeight: totalHeight }
+    })
+  }
+  const pageRecords = reusePageRecords(previous?.pageRecords, rawPages)
   const forkTargetIdMap = reuseMap(previous?.forkTargetIdMap, buildForkTargetIdMap(visibleMessageEntries))
   const outlineModel = getStableOutlineModel(visibleMessages)
   const outlineOwnerByMessageId = buildOutlineOwnerByMessageId(messages)
@@ -208,11 +223,11 @@ export function buildChatPageViewModel(messages: Message[], previous?: ChatPageV
   }
 }
 
-export function useChatPageViewModel(messages: Message[]): ChatPageViewModel {
+export function useChatPageViewModel(messages: Message[], collapseExecutionProcess = false): ChatPageViewModel {
   const previousRef = useRef<ChatPageViewModel | undefined>(undefined)
   return useMemo(() => {
-    const viewModel = buildChatPageViewModel(messages, previousRef.current)
+    const viewModel = buildChatPageViewModel(messages, collapseExecutionProcess, previousRef.current)
     previousRef.current = viewModel
     return viewModel
-  }, [messages])
+  }, [messages, collapseExecutionProcess])
 }
