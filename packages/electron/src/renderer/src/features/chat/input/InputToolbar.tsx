@@ -777,6 +777,7 @@ export function InputToolbar({
             variant="solid"
             disabled={!canSend || isSending}
             onClick={() => onSend()}
+            data-codex-btn="send"
           >
             <SendIcon />
           </IconButton>

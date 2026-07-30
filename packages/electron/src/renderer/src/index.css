@@ -948,6 +948,43 @@ html.electron-app[data-theme-preset='codex'][data-platform="linux"][data-glass] 
   backdrop-filter: blur(40px) saturate(180%);
 }
 
+/* Codex theme: send button & new-task button — neutral black/white instead of accent blue */
+:root[data-theme-preset='codex'][data-mode='light'] button[data-codex-btn] {
+  background: hsl(var(--always-black));
+  color: hsl(var(--always-white));
+}
+:root[data-theme-preset='codex'][data-mode='light'] button[data-codex-btn]:hover:not(:disabled) {
+  background: hsl(0 0% 20%);
+}
+:root[data-theme-preset='codex'][data-mode='dark'] button[data-codex-btn] {
+  background: hsl(var(--always-white));
+  color: hsl(var(--always-black));
+}
+:root[data-theme-preset='codex'][data-mode='dark'] button[data-codex-btn]:hover:not(:disabled) {
+  background: hsl(0 0% 88%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme-preset='codex']:not([data-mode]) button[data-codex-btn] {
+    background: hsl(var(--always-black));
+    color: hsl(var(--always-white));
+  }
+  :root[data-theme-preset='codex']:not([data-mode]) button[data-codex-btn]:hover:not(:disabled) {
+    background: hsl(0 0% 20%);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode]) button[data-codex-btn] {
+    background: hsl(var(--always-white));
+    color: hsl(var(--always-black));
+  }
+  :root[data-theme-preset='codex']:not([data-mode]) button[data-codex-btn]:hover:not(:disabled) {
+    background: hsl(0 0% 88%);
+  }
+}
+:root[data-theme-preset='codex'] button[data-codex-btn]:disabled {
+  opacity: 1 !important;
+}
+
 .sidebar-selected-row {
   background-color: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.96);
 }
