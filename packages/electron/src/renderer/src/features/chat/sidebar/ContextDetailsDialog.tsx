@@ -7,6 +7,7 @@ import { projectProfileStore, useMessageStore, useProjectProfiles } from '../../
 import { useSessionStats, formatTokens, formatCost } from '../../../hooks'
 import type { Message, TokenUsage } from '../../../types/message'
 import { useDirectory } from '../../../hooks'
+import { computeContextSources } from '../contextSources'
 
 interface ContextDetailsDialogProps {
   isOpen: boolean
@@ -79,15 +80,7 @@ export function ContextDetailsDialog({ isOpen, onClose, contextLimit }: ContextD
     const id = msg.info.id
     setExpandedId(prev => (prev === id ? null : id))
   }, [])
-  const sources = useMemo(() => {
-    const parts = messages.flatMap(message => message.parts)
-    const totalSize = Math.max(1, parts.reduce((total, part) => total + JSON.stringify(part).length, 0))
-    return Object.entries(parts.reduce<Record<string, { count: number; size: number }>>((result, part) => {
-      const current = result[part.type] ?? { count: 0, size: 0 }
-      result[part.type] = { count: current.count + 1, size: current.size + JSON.stringify(part).length }
-      return result
-    }, {})).sort((left, right) => right[1].size - left[1].size).map(([type, value]) => ({ type, ...value, percent: Math.round(value.size / totalSize * 100) }))
-  }, [messages])
+  const sources = useMemo(() => computeContextSources(messages), [messages])
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={t('contextDetails.context')} width={900} className="w-full">

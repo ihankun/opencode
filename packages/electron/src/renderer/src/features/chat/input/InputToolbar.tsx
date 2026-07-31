@@ -22,12 +22,14 @@ import { DropdownMenu, MenuItem, IconButton, AnimatedPresence } from '../../../c
 import { CircularProgress } from '../../../components/CircularProgress'
 import { ModelSelector, type ModelSelectorHandle } from '../ModelSelector'
 import { ContextDetailsDialog } from '../sidebar/ContextDetailsDialog'
+import { computeContextSources } from '../contextSources'
 import { useChatViewport } from '../chatViewport'
 import { selectableAgentsInDisplayOrder } from '../agentOrder'
 import { formatTokens, formatCost } from '../../../hooks'
 import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
 import type { SessionStats } from '../../../hooks'
+import { useMessageStore } from '../../../store'
 import { autoApproveStore, type ApprovalMode } from '../../../store/autoApproveStore'
 import { DOCUMENT_FILE_EXTENSIONS, DOCUMENT_FILE_MIMES } from './inputUtils'
 
@@ -196,13 +198,17 @@ function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; h
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [tooltipOpen, setTooltipOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+  const { messages } = useMessageStore()
   const contextUsed = hasMessages ? (stats?.contextUsed ?? 0) : 0
   const contextLimit = stats?.contextLimit ?? 0
   const contextPercent = hasMessages ? (stats?.contextPercent ?? 0) : 0
-  const remainingPercent = Math.max(0, 100 - Math.round(contextPercent))
   const progressColor =
     contextPercent >= 90 ? 'text-danger-100' : contextPercent >= 70 ? 'text-warning-100' : 'text-text-400'
+  const progressFillClass =
+    contextPercent >= 90 ? 'bg-danger-100' : contextPercent >= 70 ? 'bg-warning-100' : 'bg-accent-main-100'
+  const sources = useMemo(() => computeContextSources(messages), [messages])
 
   const updateTooltipPosition = useCallback(() => {
     const rect = buttonRef.current?.getBoundingClientRect()
@@ -257,27 +263,53 @@ function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; h
       {tooltipOpen && typeof document !== 'undefined'
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[10000] w-52 rounded-lg border border-border-200/70 bg-bg-000/95 px-3 py-2 text-center shadow-xl backdrop-blur-md"
+              className="fixed z-[10000] w-60 rounded-lg border border-border-200/70 bg-bg-000/95 px-3 py-2 text-center shadow-xl backdrop-blur-md"
               style={{
                 top: tooltipPosition.top,
                 left: tooltipPosition.left,
                 transform: 'translate(-100%, -100%)',
               }}
+              onMouseEnter={showTooltip}
+              onMouseLeave={() => setTooltipOpen(false)}
             >
-              <div className="mb-1 text-[length:var(--fs-xs)] font-medium text-text-400">
-                {t('contextIndicator.title')}
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg-300">
+                <div className={`h-full rounded-full ${progressFillClass}`} style={{ width: `${contextPercent}%` }} />
               </div>
-              <div className="text-[length:var(--fs-sm)] font-semibold leading-5 text-text-100">
-                {Math.round(contextPercent)}% {t('contextIndicator.used')}（
-                {t('contextIndicator.remaining', { percent: remainingPercent })}）
+              <div className="mt-1 text-[length:var(--fs-sm)] font-semibold leading-5 tabular-nums text-text-100">
+                {formatTokens(contextUsed)}/{contextLimit > 0 ? formatTokens(contextLimit) : '—'}
               </div>
-              <div className="mt-0.5 text-[length:var(--fs-sm)] font-medium leading-5 text-text-200">
-                {t('contextIndicator.tokens', {
-                  used: formatTokens(contextUsed),
-                  total: contextLimit > 0 ? formatTokens(contextLimit) : '—',
-                })}
+              <div className="mt-1.5 border-t border-border-200/50 pt-1.5">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-1 rounded text-[length:var(--fs-xxs)] font-medium text-text-400 transition-colors hover:text-text-200"
+                  onClick={() => setSourcesOpen(value => !value)}
+                  aria-expanded={sourcesOpen}
+                >
+                  <ChevronDownIcon size={12} className={`transition-transform ${sourcesOpen ? 'rotate-180' : ''}`} />
+                  {t('contextDetails.sources')}
+                </button>
+                {sourcesOpen && (
+                  <div className="mt-1.5 space-y-1.5">
+                    {sources.map(source => (
+                      <div key={source.type}>
+                        <div className="mb-0.5 flex justify-between text-[length:var(--fs-xxs)] text-text-400">
+                          <span className="truncate">
+                            {source.type} · {source.count}
+                          </span>
+                          <span className="tabular-nums">{source.percent}%</span>
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-full bg-bg-300">
+                          <div
+                            className="h-full rounded-full bg-accent-main-100/70"
+                            style={{ width: `${source.percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="mt-0.5 text-[length:var(--fs-xxs)] text-text-500">{formatCost(stats?.totalCost ?? 0)}</div>
+              <div className="mt-1.5 text-[length:var(--fs-xxs)] text-text-500">{formatCost(stats?.totalCost ?? 0)}</div>
             </div>,
             document.body,
           )

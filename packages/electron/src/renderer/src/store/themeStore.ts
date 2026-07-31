@@ -77,6 +77,9 @@ export interface StepFinishDisplay {
 
 export type CompletedAtFormat = 'time' | 'dateTime'
 
+/** 文件变更指示器统计范围：latestTurn = 最新一轮，session = 当前会话累计 */
+export type FileChangeIndicatorScope = 'latestTurn' | 'session'
+
 export type ReasoningDisplayMode = 'capsule' | 'italic' | 'markdown'
 
 export type EnterKeyBehavior = 'newline' | 'send'
@@ -108,6 +111,8 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
 }
 
 const DEFAULT_COMPLETED_AT_FORMAT: CompletedAtFormat = 'time'
+
+const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTurn'
 
 const DEFAULT_REASONING_DISPLAY_MODE: ReasoningDisplayMode = 'markdown'
 const DEFAULT_RENDER_USER_MARKDOWN = false
@@ -156,6 +161,8 @@ export interface ThemeState {
   stepFinishDisplay: StepFinishDisplay
   /** 完成时刻显示格式 */
   completedAtFormat: CompletedAtFormat
+  /** 文件变更指示器统计范围 */
+  fileChangeIndicatorScope: FileChangeIndicatorScope
   /** 思考内容展示样式 */
   reasoningDisplayMode: ReasoningDisplayMode
   /** 宽模式 */
@@ -210,6 +217,7 @@ const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_RENDER_USER_MARKDOWN = 'render-user-markdown'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_COMPLETED_AT_FORMAT = 'completed-at-format'
+const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
 const STORAGE_KEY_REASONING_DISPLAY_MODE = 'reasoning-display-mode'
 const STORAGE_KEY_WIDE_MODE = 'chat-wide-mode'
 const STORAGE_KEY_DIFF_STYLE = 'diff-style'
@@ -308,6 +316,10 @@ class ThemeStore {
     const completedAtFormat: CompletedAtFormat =
       savedCompletedAtFormat === 'dateTime' ? 'dateTime' : DEFAULT_COMPLETED_AT_FORMAT
 
+    const savedFileChangeIndicatorScope = localStorage.getItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE)
+    const fileChangeIndicatorScope: FileChangeIndicatorScope =
+      savedFileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE
+
     const savedWideMode = localStorage.getItem(STORAGE_KEY_WIDE_MODE) === 'true'
     const savedDiffStyle = localStorage.getItem(STORAGE_KEY_DIFF_STYLE) as DiffStyle | null
     const diffStyle: DiffStyle = savedDiffStyle === 'changeBars' ? 'changeBars' : DEFAULT_DIFF_STYLE
@@ -384,6 +396,7 @@ class ThemeStore {
       renderUserMarkdown,
       stepFinishDisplay,
       completedAtFormat,
+      fileChangeIndicatorScope,
       reasoningDisplayMode,
       wideMode: savedWideMode,
       diffStyle,
@@ -445,6 +458,9 @@ class ThemeStore {
   }
   get completedAtFormat() {
     return this.state.completedAtFormat
+  }
+  get fileChangeIndicatorScope() {
+    return this.state.fileChangeIndicatorScope
   }
   get reasoningDisplayMode() {
     return this.state.reasoningDisplayMode
@@ -663,6 +679,13 @@ class ThemeStore {
     if (this.state.completedAtFormat === format) return
     this.state = { ...this.state, completedAtFormat: format }
     localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, format)
+    this.emit()
+  }
+
+  setFileChangeIndicatorScope(scope: FileChangeIndicatorScope) {
+    if (this.state.fileChangeIndicatorScope === scope) return
+    this.state = { ...this.state, fileChangeIndicatorScope: scope }
+    localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, scope)
     this.emit()
   }
 
@@ -1025,6 +1048,8 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
         ? { ...DEFAULT_STEP_FINISH_DISPLAY, ...(parsed.stepFinishDisplay as Partial<StepFinishDisplay>) }
         : DEFAULT_STEP_FINISH_DISPLAY,
     completedAtFormat: parsed?.completedAtFormat === 'dateTime' ? 'dateTime' : DEFAULT_COMPLETED_AT_FORMAT,
+    fileChangeIndicatorScope:
+      parsed?.fileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE,
     reasoningDisplayMode:
       parsed?.reasoningDisplayMode === 'capsule' ||
       parsed?.reasoningDisplayMode === 'italic' ||
@@ -1102,6 +1127,7 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_RENDER_USER_MARKDOWN, String(backup.renderUserMarkdown))
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, backup.completedAtFormat)
+  localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
   localStorage.setItem(STORAGE_KEY_REASONING_DISPLAY_MODE, backup.reasoningDisplayMode)
   localStorage.setItem(STORAGE_KEY_WIDE_MODE, String(backup.wideMode))
   localStorage.setItem(STORAGE_KEY_DIFF_STYLE, backup.diffStyle)

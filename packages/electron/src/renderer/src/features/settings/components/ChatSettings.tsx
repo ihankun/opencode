@@ -6,6 +6,7 @@ import {
   themeStore,
   type CompletedAtFormat,
   type EnterKeyBehavior,
+  type FileChangeIndicatorScope,
   type ReasoningDisplayMode,
 } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
@@ -29,6 +30,7 @@ export function ChatSettings() {
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
+  const [fileChangeIndicatorScope, setFileChangeIndicatorScope] = useState(themeStore.fileChangeIndicatorScope)
   const [reasoningDisplayMode, setReasoningDisplayMode] = useState(themeStore.reasoningDisplayMode)
   const [browserOpenMode, setBrowserOpenModeState] = useState<BrowserOpenMode>(() => getBrowserOpenMode())
   const isMobile = useIsMobile()
@@ -68,6 +70,11 @@ export function ChatSettings() {
 
   const handleOutlineHighlightToggle = () => {
     setOutlineCurrentHighlight(!outlineCurrentHighlight)
+  }
+
+  const handleFileChangeIndicatorScopeChange = (scope: FileChangeIndicatorScope) => {
+    setFileChangeIndicatorScope(scope)
+    themeStore.setFileChangeIndicatorScope(scope)
   }
 
   const handleBrowserOpenModeChange = (mode: BrowserOpenMode) => {
@@ -146,6 +153,19 @@ export function ChatSettings() {
         >
           <Toggle enabled={outlineCurrentHighlight} onChange={handleOutlineHighlightToggle} />
         </SettingRow>
+
+        <div>
+          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.fileChangeIndicatorScope')}</p>
+          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.fileChangeIndicatorScopeDesc')}</p>
+          <SegmentedControl
+            value={fileChangeIndicatorScope}
+            options={[
+              { value: 'latestTurn', label: t('chat.fileChangeIndicatorScopeLatestTurn') },
+              { value: 'session', label: t('chat.fileChangeIndicatorScopeSession') },
+            ]}
+            onChange={v => handleFileChangeIndicatorScopeChange(v as FileChangeIndicatorScope)}
+          />
+        </div>
 
         <div>
           <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.enterKeyBehavior')}</p>

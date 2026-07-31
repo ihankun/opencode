@@ -69,7 +69,7 @@
     "fileReadFailedTitle": "Could not read file",
     "fileReadFailedDescription": "Could not read: {{files}}",
     "replyToAgentMobile": "Reply to Agent...",
-    "replyToAgent": "Reply to Agent (type @ to mention, / for commands)"
+    "replyToAgent": "Reply to Agent (type @ to mention, / for commands, #history)"
   },
   "followupQueue": {
     "title": "{{count}} queued follow-up",
@@ -505,11 +505,7 @@
     "rawMessages": "Raw Messages"
   },
   "contextIndicator": {
-    "label": "Context usage",
-    "title": "Context window:",
-    "used": "used",
-    "remaining": "{{percent}}% remaining",
-    "tokens": "{{used}} tokens used, {{total}} total"
+    "label": "Context usage"
   },
   "hints": {
     "pressEscAgain": "Press <1>Esc</1> again to stop",

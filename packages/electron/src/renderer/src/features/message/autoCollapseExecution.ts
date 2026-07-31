@@ -119,16 +119,19 @@ export function summarizeTurnChanges(userMessage: Message, assistantMessages: Me
     assistantMessages.length > 0 &&
     assistantMessages.every(message => !message.isStreaming) &&
     assistantMessages.at(-1)?.info.time.completed != null
-  if (turnCompleted && userMessage.info.role === 'user' && userMessage.info.summary?.diffs) {
+  if (turnCompleted && userMessage.info.role === 'user' && userMessage.info.summary?.diffs?.length) {
     const files = new Map<string, { additions: number; deletions: number }>()
     userMessage.info.summary.diffs.forEach(diff => {
-      const current = files.get(diff.path) ?? { additions: 0, deletions: 0 }
-      files.set(diff.path, {
+      const filePath = diff.file
+      if (!filePath) return
+      const current = files.get(filePath) ?? { additions: 0, deletions: 0 }
+      files.set(filePath, {
         additions: current.additions + diff.additions,
         deletions: current.deletions + diff.deletions,
       })
     })
-    return totalChanges(files)
+    const summary = totalChanges(files)
+    if (summary.files > 0) return summary
   }
 
   const files = new Map<string, { additions: number; deletions: number }>()
@@ -165,6 +168,34 @@ export function summarizeTurnChanges(userMessage: Message, assistantMessages: Me
     if (filePath && stats) addFileChanges(files, filePath, stats)
   })
 
+  return totalChanges(files)
+}
+
+export function summarizeLatestTurnChanges(messages: Message[]): TurnChangeSummary {
+  const userMessageIndex = messages.findLastIndex(message => message.info.role === 'user')
+  if (userMessageIndex === -1) return { files: 0, additions: 0, deletions: 0, fileDetails: [] }
+  const assistantTurn = messages
+    .slice(userMessageIndex + 1)
+    .filter(message => message.info.role === 'assistant')
+  if (assistantTurn.length === 0) return { files: 0, additions: 0, deletions: 0, fileDetails: [] }
+  return summarizeTurnChanges(messages[userMessageIndex], assistantTurn)
+}
+
+export function summarizeSessionChanges(messages: Message[]): TurnChangeSummary {
+  const userIndices = messages.flatMap((message, index) => (message.info.role === 'user' ? [index] : []))
+  const files = new Map<string, { additions: number; deletions: number }>()
+  for (let i = 0; i < userIndices.length; i++) {
+    const userIndex = userIndices[i]
+    const turnEnd = userIndices[i + 1] ?? messages.length
+    const assistantTurn = messages
+      .slice(userIndex + 1, turnEnd)
+      .filter(message => message.info.role === 'assistant')
+    if (assistantTurn.length === 0) continue
+    const turnChanges = summarizeTurnChanges(messages[userIndex], assistantTurn)
+    turnChanges.fileDetails.forEach(file =>
+      addFileChanges(files, file.filePath, { additions: file.additions, deletions: file.deletions }),
+    )
+  }
   return totalChanges(files)
 }
 

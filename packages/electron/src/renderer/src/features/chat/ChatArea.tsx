@@ -35,7 +35,7 @@ import { RetryStatusInline, type RetryStatusInlineData } from './RetryStatusInli
 import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './chatAreaVisibility'
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
 import { useDelayedRender } from '../../hooks'
-import { useNow } from '../../hooks/useNow'
+
 import { useTheme } from '../../hooks/useTheme'
 import { useChatViewport } from './chatViewport'
 import { rankOutlineVisibleMessageIds } from '../../components/outlineIndexModel'
@@ -247,44 +247,19 @@ export const ChatArea = memo(
         () => turnDurationMapProp ?? buildTurnDurationMap(messages, visibleMessages),
         [messages, turnDurationMapProp, visibleMessages],
       )
-      const isWaitingForAgentReply = useMemo(() => {
-        if (!isStreaming) return false
-        const latestUserMessageIndex = messages.findLastIndex(message => message.info.role === 'user')
-        if (latestUserMessageIndex === -1) return false
-        return !messages
-          .slice(latestUserMessageIndex + 1)
-          .some(
-            message =>
-              message.info.role === 'assistant' &&
-              hasRenderableParts(message),
-          )
-      }, [isStreaming, messages])
-
-      const agentStartRef = useRef(0)
-      const [finalElapsed, setFinalElapsed] = useState(0)
-      const now = useNow(100, isWaitingForAgentReply)
-
-      useEffect(() => {
-        if (isWaitingForAgentReply) {
-          agentStartRef.current = Date.now()
-          setFinalElapsed(0)
-        } else if (agentStartRef.current > 0) {
-          setFinalElapsed(Date.now() - agentStartRef.current)
-          agentStartRef.current = 0
+      // 兜底：如果最后一条 assistant 消息已完成，忽略 store 的 isStreaming 状态
+      // 防止 session.idle SSE 事件延迟导致指示器持续显示
+      const lastAssistantCompleted = useMemo(() => {
+        if (!isStreaming) return true
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i]
+          if (msg.info.role === 'assistant') {
+            return msg.info.time.completed != null
+          }
         }
-      }, [isWaitingForAgentReply])
-
-      useEffect(() => {
-        if (finalElapsed > 0) {
-          const timer = setTimeout(() => setFinalElapsed(0), 2000)
-          return () => clearTimeout(timer)
-        }
-      }, [finalElapsed])
-
-      const showProcessing = isWaitingForAgentReply || finalElapsed > 0
-      const agentElapsed = isWaitingForAgentReply
-        ? agentStartRef.current > 0 ? now - agentStartRef.current : 0
-        : finalElapsed
+        return false
+      }, [messages, isStreaming])
+      const showProcessing = isStreaming && !lastAssistantCompleted
 
       const activePages = pageRecords ?? pages
 
@@ -954,14 +929,13 @@ export const ChatArea = memo(
                     aria-live="polite"
                     className="flex items-center gap-1.5 rounded-md py-1 text-[length:var(--fs-base)] text-text-400"
                   >
-                    {isWaitingForAgentReply ? (
+                    {isStreaming ? (
                       <SpinnerIcon size={14} className="animate-spin text-accent-main-100" />
                     ) : (
                       <span className="text-accent-main-100">✓</span>
                     )}
                     <span className="font-medium">
                       {t('chatArea.agentProcessing')}
-                      {agentElapsed > 0 && <span className="ml-1 tabular-nums">{formatDuration(agentElapsed)}</span>}
                     </span>
                   </div>
                 </div>

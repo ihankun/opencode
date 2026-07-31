@@ -32,14 +32,7 @@ export interface PathInfo {
 export interface MessageSummary {
   title?: string
   body?: string
-  diffs?: FileDiff[]
-}
-
-export interface FileDiff {
-  path: string
-  additions: number
-  deletions: number
-  diff?: string
+  diffs?: { file?: string; patch?: string; additions: number; deletions: number }[]
 }
 
 // ============================================

@@ -1727,6 +1727,21 @@ input[data-session-search-input]:focus-visible {
   backdrop-filter: blur(22px) saturate(200%);
 }
 
+/* Dialog 面板提高不透明度，避免背景内容透出干扰阅读 */
+:root[data-glass] .glass.dialog-panel {
+  background-color: hsl(var(--bg-000) / 0.94);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .glass.dialog-panel {
+  background-color: hsl(0 0% 14% / 0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .glass.dialog-panel {
+    background-color: hsl(0 0% 14% / 0.92);
+  }
+}
+
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .glass {
   background-color: hsl(0 0% 14% / 0.56);
   -webkit-backdrop-filter: blur(28px) saturate(170%);

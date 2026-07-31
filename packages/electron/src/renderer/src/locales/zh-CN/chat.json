@@ -69,7 +69,7 @@
     "fileReadFailedTitle": "文件读取失败",
     "fileReadFailedDescription": "无法读取：{{files}}",
     "replyToAgentMobile": "回复 Agent...",
-    "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令）"
+    "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令，#历史会话）"
   },
   "followupQueue": {
     "title": "已排队 {{count}} 条后续消息",
@@ -503,11 +503,7 @@
     "rawMessages": "原始消息"
   },
   "contextIndicator": {
-    "label": "上下文用量",
-    "title": "背景信息窗口：",
-    "used": "已用",
-    "remaining": "剩余 {{percent}}%",
-    "tokens": "已用 {{used}} token，共 {{total}}"
+    "label": "上下文用量"
   },
   "hints": {
     "pressEscAgain": "再按一次 <1>Esc</1> 停止",

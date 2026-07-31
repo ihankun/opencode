@@ -7,6 +7,7 @@
  */
 
 import { memo, useRef, useEffect, useState, useCallback, useMemo, useDeferredValue } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { ChatArea, Header, InputBox, PermissionDialog, QuestionDialog, type ChatAreaHandle } from '.'
@@ -22,7 +23,8 @@ import { InlineToolRequestContext, type InlineToolRequestContextValue } from './
 import { ChatViewportProvider, canUseSplitPane, useChatViewportMaybe, type ChatViewportValue } from './chatViewport'
 import { useChatPageViewModel } from './useChatPageViewModel'
 import {
-  summarizeTurnChanges,
+  summarizeLatestTurnChanges,
+  summarizeSessionChanges,
   summarizeTurnTodoProgress,
   type TurnChangeFile,
 } from '../message/autoCollapseExecution'
@@ -771,24 +773,28 @@ export const ChatPane = memo(function ChatPane({
     if (questionRequestId) setQuestionCollapsed(false)
   }, [questionRequestId])
 
-  const { inlineToolRequests, outlineCurrentHighlight } = useTheme()
+  const { inlineToolRequests, outlineCurrentHighlight, fileChangeIndicatorScope } = useTheme()
   const latestTurnOverview = useMemo(() => {
-    const userMessageIndex = renderedMessages.findLastIndex(message => message.info.role === 'user')
-    if (userMessageIndex === -1) return
+    if (renderedMessages.length === 0) return
 
-    const userMessage = renderedMessages[userMessageIndex]
-    const assistantTurn = renderedMessages
-      .slice(userMessageIndex + 1)
-      .filter(message => message.info.role === 'assistant')
-    if (assistantTurn.length === 0) return
-    const changes = summarizeTurnChanges(userMessage, assistantTurn)
-    const todoProgress = summarizeTurnTodoProgress(assistantTurn)
+    const changes =
+      fileChangeIndicatorScope === 'session'
+        ? summarizeSessionChanges(renderedMessages)
+        : summarizeLatestTurnChanges(renderedMessages)
+    const userMessageIndex = renderedMessages.findLastIndex(message => message.info.role === 'user')
+    let todoProgress: TurnTodoProgress | undefined
+    if (userMessageIndex !== -1) {
+      const assistantTurn = renderedMessages
+        .slice(userMessageIndex + 1)
+        .filter(message => message.info.role === 'assistant')
+      todoProgress = summarizeTurnTodoProgress(assistantTurn)
+    }
     if (changes.files === 0 && !todoProgress) return
     return {
       changes: changes.files > 0 ? changes : undefined,
       todoProgress,
     }
-  }, [renderedMessages])
+  }, [renderedMessages, fileChangeIndicatorScope])
 
   const inlineToolRequestCtx = useMemo<InlineToolRequestContextValue>(
     () => ({
@@ -1146,6 +1152,8 @@ export const ChatPane = memo(function ChatPane({
 
 function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) {
   const { t } = useTranslation('message')
+  const [pathTooltip, setPathTooltip] = useState<{ path: string; x: number; y: number } | null>(null)
+
   return (
     <div className="invisible pointer-events-none absolute bottom-full left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 pb-2 opacity-0 transition-[opacity,visibility] duration-150 group-hover/changes:visible group-hover/changes:pointer-events-auto group-hover/changes:opacity-100 group-focus-within/changes:visible group-focus-within/changes:pointer-events-auto group-focus-within/changes:opacity-100">
       <div className="overflow-hidden rounded-xl border border-border-200/70 bg-bg-000/98 shadow-xl backdrop-blur-xl">
@@ -1162,27 +1170,40 @@ function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) 
               <div
                 key={file.filePath}
                 className="flex items-center gap-2.5 px-3.5 py-2"
+                onMouseEnter={event => {
+                  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                  setPathTooltip({ path: file.filePath, x: rect.left, y: rect.top })
+                }}
+                onMouseLeave={() => setPathTooltip(null)}
               >
                 <FileIcon size={14} className="mt-0.5 shrink-0 text-text-500" />
-                <span
-                  className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-xs)] text-text-300"
-                  title={file.filePath}
-                >
+                <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--fs-xs)] text-text-300">
                   {fileName}
                 </span>
-              <span className="flex shrink-0 gap-2 text-[length:var(--fs-xs)] tabular-nums">
-                {file.additions > 0 && (
-                  <span className="font-mono font-medium text-success-100">+{file.additions}</span>
-                )}
-                {file.deletions > 0 && (
-                  <span className="font-mono font-medium text-danger-100">-{file.deletions}</span>
-                )}
-              </span>
-            </div>
+                <span className="flex shrink-0 gap-2 text-[length:var(--fs-xs)] tabular-nums">
+                  {file.additions > 0 && (
+                    <span className="font-mono font-medium text-success-100">+{file.additions}</span>
+                  )}
+                  {file.deletions > 0 && (
+                    <span className="font-mono font-medium text-danger-100">-{file.deletions}</span>
+                  )}
+                </span>
+              </div>
             )
           })}
         </div>
       </div>
+      {pathTooltip && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[200] max-w-[80vw] truncate rounded-md border border-border-200/70 bg-bg-100/98 px-2.5 py-1 font-mono text-[length:var(--fs-xs)] text-text-200 shadow-lg"
+              style={{ left: pathTooltip.x + 10, top: pathTooltip.y - 10, transform: 'translateY(-100%)' }}
+            >
+              {pathTooltip.path}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
