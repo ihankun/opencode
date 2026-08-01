@@ -116,7 +116,6 @@ const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTur
 
 const DEFAULT_REASONING_DISPLAY_MODE: ReasoningDisplayMode = 'markdown'
 const DEFAULT_RENDER_USER_MARKDOWN = false
-const DEFAULT_DIFF_STYLE: DiffStyle = 'markers'
 const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
 const DEFAULT_INLINE_TOOL_REQUESTS = true
 const DEFAULT_CODE_WORD_WRAP = false
@@ -124,8 +123,6 @@ const DEFAULT_UI_FONT_SCALE = 0
 const DEFAULT_CODE_FONT_SCALE = 0
 
 /** 工具输出渲染风格：classic = 经典（input+output 分离），compact = 精简（只展示 output，header 更矮） */
-export type ToolCardStyle = 'classic' | 'compact'
-const DEFAULT_TOOL_CARD_STYLE: ToolCardStyle = 'compact'
 const DEFAULT_IMMERSIVE_MODE = true
 const DEFAULT_COMPACT_INLINE_PERMISSION = true
 const DEFAULT_GLASS_EFFECT = true
@@ -165,10 +162,6 @@ export interface ThemeState {
   fileChangeIndicatorScope: FileChangeIndicatorScope
   /** 思考内容展示样式 */
   reasoningDisplayMode: ReasoningDisplayMode
-  /** 宽模式 */
-  wideMode: boolean
-  /** Diff 行标记风格 */
-  diffStyle: DiffStyle
   /** 是否启用带工具描述的 steps 摘要 */
   descriptiveToolSteps: boolean
   /** 是否在工具下方内嵌权限/提问请求 */
@@ -179,8 +172,6 @@ export interface ThemeState {
   uiFontScale: number
   /** 代码 / diff / 终端字号偏移 (px)，0 = 基准 */
   codeFontScale: number
-  /** 工具输出渲染风格 */
-  toolCardStyle: ToolCardStyle
   /** 沉浸模式 */
   immersiveMode: boolean
   /** 内嵌权限精简模式：ToolBody 有内容时只显示操作按钮 */
@@ -219,14 +210,11 @@ const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_COMPLETED_AT_FORMAT = 'completed-at-format'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
 const STORAGE_KEY_REASONING_DISPLAY_MODE = 'reasoning-display-mode'
-const STORAGE_KEY_WIDE_MODE = 'chat-wide-mode'
-const STORAGE_KEY_DIFF_STYLE = 'diff-style'
 const STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS = 'descriptive-tool-steps'
 const STORAGE_KEY_INLINE_TOOL_REQUESTS = 'inline-tool-requests'
 const STORAGE_KEY_CODE_WORD_WRAP = 'code-word-wrap'
 const STORAGE_KEY_FONT_SCALE = 'font-scale'
 const STORAGE_KEY_CODE_FONT_SCALE = 'code-font-scale'
-const STORAGE_KEY_TOOL_CARD_STYLE = 'tool-card-style'
 const STORAGE_KEY_IMMERSIVE_MODE = 'immersive-mode'
 const STORAGE_KEY_COMPACT_INLINE_PERMISSION = 'compact-inline-permission'
 const STORAGE_KEY_GLASS_EFFECT = 'glass-effect'
@@ -320,10 +308,6 @@ class ThemeStore {
     const fileChangeIndicatorScope: FileChangeIndicatorScope =
       savedFileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE
 
-    const savedWideMode = localStorage.getItem(STORAGE_KEY_WIDE_MODE) === 'true'
-    const savedDiffStyle = localStorage.getItem(STORAGE_KEY_DIFF_STYLE) as DiffStyle | null
-    const diffStyle: DiffStyle = savedDiffStyle === 'changeBars' ? 'changeBars' : DEFAULT_DIFF_STYLE
-
     const savedDescriptiveToolSteps = localStorage.getItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS)
     const descriptiveToolSteps =
       savedDescriptiveToolSteps === null ? DEFAULT_DESCRIPTIVE_TOOL_STEPS : savedDescriptiveToolSteps === 'true'
@@ -341,12 +325,6 @@ class ThemeStore {
     const savedCodeFontScale = localStorage.getItem(STORAGE_KEY_CODE_FONT_SCALE)
     const codeFontScale =
       savedCodeFontScale !== null ? clampFontScale(Number(savedCodeFontScale)) : DEFAULT_CODE_FONT_SCALE
-
-    const savedToolCardStyle = localStorage.getItem(STORAGE_KEY_TOOL_CARD_STYLE) as ToolCardStyle | null
-    const toolCardStyle: ToolCardStyle =
-      savedToolCardStyle === 'classic' || savedToolCardStyle === 'compact'
-        ? savedToolCardStyle
-        : DEFAULT_TOOL_CARD_STYLE
 
     const savedImmersiveMode = localStorage.getItem(STORAGE_KEY_IMMERSIVE_MODE)
     const immersiveMode = savedImmersiveMode === null ? DEFAULT_IMMERSIVE_MODE : savedImmersiveMode === 'true'
@@ -398,14 +376,11 @@ class ThemeStore {
       completedAtFormat,
       fileChangeIndicatorScope,
       reasoningDisplayMode,
-      wideMode: savedWideMode,
-      diffStyle,
       descriptiveToolSteps,
       inlineToolRequests,
       codeWordWrap,
       uiFontScale,
       codeFontScale,
-      toolCardStyle,
       immersiveMode,
       compactInlinePermission,
       glassEffect,
@@ -465,12 +440,6 @@ class ThemeStore {
   get reasoningDisplayMode() {
     return this.state.reasoningDisplayMode
   }
-  get wideMode() {
-    return this.state.wideMode
-  }
-  get diffStyle() {
-    return this.state.diffStyle
-  }
   get descriptiveToolSteps() {
     return this.state.descriptiveToolSteps
   }
@@ -485,9 +454,6 @@ class ThemeStore {
   }
   get codeFontScale() {
     return this.state.codeFontScale
-  }
-  get toolCardStyle() {
-    return this.state.toolCardStyle
   }
   get immersiveMode() {
     return this.state.immersiveMode
@@ -696,24 +662,6 @@ class ThemeStore {
     this.emit()
   }
 
-  setWideMode(enabled: boolean) {
-    if (this.state.wideMode === enabled) return
-    this.state = { ...this.state, wideMode: enabled }
-    localStorage.setItem(STORAGE_KEY_WIDE_MODE, String(enabled))
-    this.emit()
-  }
-
-  toggleWideMode() {
-    this.setWideMode(!this.state.wideMode)
-  }
-
-  setDiffStyle(style: DiffStyle) {
-    if (this.state.diffStyle === style) return
-    this.state = { ...this.state, diffStyle: style }
-    localStorage.setItem(STORAGE_KEY_DIFF_STYLE, style)
-    this.emit()
-  }
-
   setDescriptiveToolSteps(enabled: boolean) {
     if (this.state.descriptiveToolSteps === enabled) return
     this.state = { ...this.state, descriptiveToolSteps: enabled }
@@ -753,28 +701,19 @@ class ThemeStore {
     this.emit()
   }
 
-  setToolCardStyle(style: ToolCardStyle) {
-    if (this.state.toolCardStyle === style) return
-    this.state = { ...this.state, toolCardStyle: style }
-    localStorage.setItem(STORAGE_KEY_TOOL_CARD_STYLE, style)
-    this.emit()
-  }
-
   setImmersiveMode(enabled: boolean) {
     if (this.state.immersiveMode === enabled) return
     this.state = {
       ...this.state,
       immersiveMode: enabled,
-      // 联动四个子功能
+      // 联动三个子功能
       inlineToolRequests: enabled,
       descriptiveToolSteps: enabled,
-      toolCardStyle: enabled ? 'compact' : 'classic',
       compactInlinePermission: enabled,
     }
     localStorage.setItem(STORAGE_KEY_IMMERSIVE_MODE, String(enabled))
     localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(enabled))
     localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(enabled))
-    localStorage.setItem(STORAGE_KEY_TOOL_CARD_STYLE, enabled ? 'compact' : 'classic')
     localStorage.setItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION, String(enabled))
     this.emit()
   }
@@ -1056,8 +995,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       parsed?.reasoningDisplayMode === 'markdown'
         ? parsed.reasoningDisplayMode
         : DEFAULT_REASONING_DISPLAY_MODE,
-    wideMode: parsed?.wideMode === true,
-    diffStyle: parsed?.diffStyle === 'changeBars' ? 'changeBars' : DEFAULT_DIFF_STYLE,
     descriptiveToolSteps:
       typeof parsed?.descriptiveToolSteps === 'boolean' ? parsed.descriptiveToolSteps : DEFAULT_DESCRIPTIVE_TOOL_STEPS,
     inlineToolRequests:
@@ -1067,10 +1004,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
     codeFontScale: clampFontScale(
       typeof parsed?.codeFontScale === 'number' ? parsed.codeFontScale : DEFAULT_CODE_FONT_SCALE,
     ),
-    toolCardStyle:
-      parsed?.toolCardStyle === 'classic' || parsed?.toolCardStyle === 'compact'
-        ? parsed.toolCardStyle
-        : DEFAULT_TOOL_CARD_STYLE,
     immersiveMode: typeof parsed?.immersiveMode === 'boolean' ? parsed.immersiveMode : DEFAULT_IMMERSIVE_MODE,
     compactInlinePermission:
       typeof parsed?.compactInlinePermission === 'boolean'
@@ -1129,14 +1062,11 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, backup.completedAtFormat)
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
   localStorage.setItem(STORAGE_KEY_REASONING_DISPLAY_MODE, backup.reasoningDisplayMode)
-  localStorage.setItem(STORAGE_KEY_WIDE_MODE, String(backup.wideMode))
-  localStorage.setItem(STORAGE_KEY_DIFF_STYLE, backup.diffStyle)
   localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(backup.descriptiveToolSteps))
   localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(backup.inlineToolRequests))
   localStorage.setItem(STORAGE_KEY_CODE_WORD_WRAP, String(backup.codeWordWrap))
   localStorage.setItem(STORAGE_KEY_FONT_SCALE, String(backup.uiFontScale))
   localStorage.setItem(STORAGE_KEY_CODE_FONT_SCALE, String(backup.codeFontScale))
-  localStorage.setItem(STORAGE_KEY_TOOL_CARD_STYLE, backup.toolCardStyle)
   localStorage.setItem(STORAGE_KEY_IMMERSIVE_MODE, String(backup.immersiveMode))
   localStorage.setItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION, String(backup.compactInlinePermission))
   localStorage.setItem(STORAGE_KEY_GLASS_EFFECT, String(backup.glassEffect))

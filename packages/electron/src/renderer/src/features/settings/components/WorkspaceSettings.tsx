@@ -5,7 +5,7 @@ import { layoutStore, projectProfileStore, useLayoutStore, useProjectProfiles } 
 import { projectEnvironmentStore, useProjectEnvironmentSnapshots } from '../../../store/projectEnvironmentStore'
 import type { ProjectProfile } from '../../../store'
 import { Button } from '../../../components/ui'
-import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
+import { Toggle, SettingRow, SettingsSection } from './SettingsUI'
 import { getProjects } from '../../../api/client'
 import { getVcsDiff, getVcsInfo, listVcsBranches, switchVcsBranch, type VcsBranch } from '../../../api/vcs'
 import type { ApiProject } from '../../../api'
@@ -13,8 +13,6 @@ import type { ApiProject } from '../../../api'
 export function WorkspaceSettings() {
   const { t } = useTranslation(['settings'])
   const {
-    diffStyle,
-    setDiffStyle,
     codeWordWrap,
     setCodeWordWrap,
     manualTerminalTitles,
@@ -68,19 +66,6 @@ export function WorkspaceSettings() {
             }}
           />
         </SettingRow>
-
-        <div>
-          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('appearance.diffStyle')}</p>
-          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('appearance.diffStyleDesc')}</p>
-          <SegmentedControl
-            value={diffStyle}
-            options={[
-              { value: 'markers', label: t('appearance.diffStyleMarkers') },
-              { value: 'changeBars', label: t('appearance.diffStyleChangeBars') },
-            ]}
-            onChange={v => setDiffStyle(v as 'markers' | 'changeBars')}
-          />
-        </div>
       </SettingsSection>
 
       <SettingsSection title={t('workspace.terminal')}>

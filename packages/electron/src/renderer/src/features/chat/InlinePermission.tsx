@@ -6,12 +6,10 @@
  */
 
 import { memo } from 'react'
-import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ApiPermissionRequest, PermissionReply } from '../../api'
 import { ContentBlock } from '../../components'
 import { autoApproveStore } from '../../store'
-import { themeStore } from '../../store/themeStore'
 
 interface InlinePermissionProps {
   request: ApiPermissionRequest
@@ -31,8 +29,6 @@ export const InlinePermission = memo(function InlinePermission({
   contentHidden = false,
 }: InlinePermissionProps) {
   const { t } = useTranslation(['chat', 'common'])
-  const { toolCardStyle } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
-  const isCompact = toolCardStyle === 'compact'
 
   const metadata = request.metadata
   const diff = metadata?.diff as string | undefined
@@ -83,7 +79,7 @@ export const InlinePermission = memo(function InlinePermission({
             filePath={filepath}
             diff={diffData}
             collapsible={false}
-            compact={isCompact}
+            compact={false}
           />
         ) : patternsText ? (
           <ContentBlock
@@ -92,7 +88,7 @@ export const InlinePermission = memo(function InlinePermission({
             content={patternsText}
             language="bash"
             collapsible={false}
-            compact={isCompact}
+            compact={false}
           />
         ) : null)}
 
@@ -103,7 +99,7 @@ export const InlinePermission = memo(function InlinePermission({
           content={sandboxError}
           language="text"
           collapsible={false}
-          compact={isCompact}
+          compact={false}
         />
       )}
 

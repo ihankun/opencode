@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { autoApproveStore } from '../../../store'
 import type { AlwaysAllowMode } from '../../../store/autoApproveStore'
-import { themeStore, type ToolCardStyle } from '../../../store/themeStore'
+import { themeStore } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
 import { notifyAgentsChanged } from '../../../api/agent'
@@ -46,7 +46,6 @@ export function AgentSettings() {
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
   const [descriptiveToolSteps, setDescriptiveToolSteps] = useState(themeStore.descriptiveToolSteps)
   const [inlineToolRequests, setInlineToolRequests] = useState(themeStore.inlineToolRequests)
-  const [toolCardStyle, setToolCardStyle] = useState(themeStore.toolCardStyle)
   const [immersiveMode, setImmersiveMode] = useState(themeStore.immersiveMode)
   const [compactInlinePermission, setCompactInlinePermission] = useState(themeStore.compactInlinePermission)
   const desktopPreferences = useDesktopPreferences()
@@ -87,18 +86,12 @@ export function AgentSettings() {
     themeStore.setCompactInlinePermission(next)
   }
 
-  const handleToolCardStyleChange = (style: ToolCardStyle) => {
-    setToolCardStyle(style)
-    themeStore.setToolCardStyle(style)
-  }
-
   const handleImmersiveModeToggle = () => {
     const next = !immersiveMode
     setImmersiveMode(next)
     themeStore.setImmersiveMode(next)
     setInlineToolRequests(next)
     setDescriptiveToolSteps(next)
-    setToolCardStyle(next ? 'compact' : 'classic')
     setCompactInlinePermission(next)
   }
 
@@ -190,19 +183,6 @@ export function AgentSettings() {
         >
           <Toggle enabled={compactInlinePermission} onChange={handleCompactInlinePermissionToggle} />
         </SettingRow>
-
-        <div>
-          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.toolCardStyle')}</p>
-          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.toolCardStyleDesc')}</p>
-          <SegmentedControl
-            value={toolCardStyle}
-            options={[
-              { value: 'classic', label: t('chat.toolCardClassic') },
-              { value: 'compact', label: t('chat.toolCardCompact') },
-            ]}
-            onChange={v => handleToolCardStyleChange(v as ToolCardStyle)}
-          />
-        </div>
       </SettingsSection>
     </div>
   )

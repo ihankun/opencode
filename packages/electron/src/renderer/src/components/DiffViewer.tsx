@@ -29,6 +29,9 @@ function codeLineHeight(offset: number): number {
 }
 const OVERSCAN = 5
 
+/** diffStyle 配置已移除，固定使用 markers 行标记风格 */
+const FIXED_DIFF_STYLE: DiffStyle = 'markers'
+
 // ============================================
 // Types
 // ============================================
@@ -598,7 +601,7 @@ const DiffViewerContent = memo(function DiffViewerContent({
   data,
   stateKey,
 }: DiffViewerProps & { data: DiffViewerData }) {
-  const { diffStyle, codeWordWrap, codeFontScale } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
+  const { codeWordWrap, codeFontScale } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
   const resolvedWordWrap = wordWrap ?? codeWordWrap
   const lineHeight = codeLineHeight(codeFontScale)
   const resolvedData = data
@@ -618,7 +621,7 @@ const DiffViewerContent = memo(function DiffViewerContent({
           lineNumberWidth={resolvedData.lineNumberWidth}
           isResizing={isResizing}
           maxHeight={maxHeight}
-          diffStyle={diffStyle}
+          diffStyle={FIXED_DIFF_STYLE}
           lineHeight={lineHeight}
           stateKey={stateKey ? `${stateKey}:wrapped-split` : undefined}
         />
@@ -633,7 +636,7 @@ const DiffViewerContent = memo(function DiffViewerContent({
         lineNumberWidth={resolvedData.lineNumberWidth}
         isResizing={isResizing}
         maxHeight={maxHeight}
-        diffStyle={diffStyle}
+        diffStyle={FIXED_DIFF_STYLE}
         lineHeight={lineHeight}
         stateKey={stateKey ? `${stateKey}:split` : undefined}
       />
@@ -649,7 +652,7 @@ const DiffViewerContent = memo(function DiffViewerContent({
         lineNumberWidth={resolvedData.lineNumberWidth}
         isResizing={isResizing}
         maxHeight={maxHeight}
-        diffStyle={diffStyle}
+        diffStyle={FIXED_DIFF_STYLE}
         lineHeight={lineHeight}
         stateKey={stateKey ? `${stateKey}:wrapped-unified` : undefined}
       />
@@ -664,7 +667,7 @@ const DiffViewerContent = memo(function DiffViewerContent({
       lineNumberWidth={resolvedData.lineNumberWidth}
       isResizing={isResizing}
       maxHeight={maxHeight}
-      diffStyle={diffStyle}
+      diffStyle={FIXED_DIFF_STYLE}
       lineHeight={lineHeight}
       stateKey={stateKey ? `${stateKey}:unified` : undefined}
     />

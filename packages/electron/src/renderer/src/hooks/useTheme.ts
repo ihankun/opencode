@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { THEME_SWITCH_DISABLE_MS } from '../constants'
 import { themeStore, type ColorMode } from '../store/themeStore'
 import type { StepFinishDisplay, CustomCSSSnippet } from '../store/themeStore'
-import type { ReasoningDisplayMode, DiffStyle, ToolCardStyle, CompletedAtFormat, FileChangeIndicatorScope } from '../store/themeStore'
+import type { ReasoningDisplayMode, CompletedAtFormat, FileChangeIndicatorScope } from '../store/themeStore'
 
 // 保持向后兼容的类型别名
 export type ThemeMode = ColorMode
@@ -219,12 +219,6 @@ export function useTheme() {
     themeStore.setReasoningDisplayMode(mode)
   }, [])
 
-  // ---- Diff Style ----
-
-  const setDiffStyle = useCallback((style: DiffStyle) => {
-    themeStore.setDiffStyle(style)
-  }, [])
-
   // ---- Descriptive Tool Steps ----
 
   const setDescriptiveToolSteps = useCallback((enabled: boolean) => {
@@ -251,12 +245,6 @@ export function useTheme() {
 
   const setCodeFontScale = useCallback((scale: number) => {
     themeStore.setCodeFontScale(scale)
-  }, [])
-
-  // ---- Tool Card Style ----
-
-  const setToolCardStyle = useCallback((style: ToolCardStyle) => {
-    themeStore.setToolCardStyle(style)
   }, [])
 
   // ---- Immersive Mode ----
@@ -330,10 +318,6 @@ export function useTheme() {
     reasoningDisplayMode: state.reasoningDisplayMode,
     setReasoningDisplayMode,
 
-    // Diff 行标记风格
-    diffStyle: state.diffStyle,
-    setDiffStyle,
-
     // 带工具描述的 steps 摘要
     descriptiveToolSteps: state.descriptiveToolSteps,
     setDescriptiveToolSteps,
@@ -353,10 +337,6 @@ export function useTheme() {
     // 代码 / diff / 终端字号偏移
     codeFontScale: state.codeFontScale,
     setCodeFontScale,
-
-    // 工具输出渲染风格
-    toolCardStyle: state.toolCardStyle,
-    setToolCardStyle,
 
     // 沉浸模式
     immersiveMode: state.immersiveMode,

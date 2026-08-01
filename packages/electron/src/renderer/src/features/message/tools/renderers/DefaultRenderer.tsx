@@ -15,8 +15,7 @@ import type { ToolRendererProps, ExtractedToolData } from '../types'
 export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRendererProps) {
   const { t } = useTranslation('message')
   const { state, tool } = part
-  const { toolCardStyle, collapseToolOutput } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
-  const isCompact = toolCardStyle === 'compact'
+  const { collapseToolOutput } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
   const isActive = state.status === 'running' || state.status === 'pending'
 
   const hasInput = !!data.input?.trim()
@@ -26,15 +25,10 @@ export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRenderer
 
   const showOutput = hasOutput || hasError || (isActive && !hasOutput)
 
-  // compact 模式下，工具还在运行且没有任何输出时，不渲染任何东西
-  if (isCompact && isActive && !hasOutput && !hasError) {
-    return null
-  }
-
   return (
     <div className="flex flex-col gap-2">
-      {/* Input — compact 模式下不渲染 */}
-      {!isCompact && (hasInput || (isActive && !hasInput)) && (
+      {/* Input */}
+      {(hasInput || (isActive && !hasInput)) && (
         <ContentBlock
           stateKey={`message:${part.messageID}:tool:${part.id}:input`}
           label={t('defaultRenderer.input')}
@@ -56,7 +50,7 @@ export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRenderer
           isActive={isActive}
           hasError={hasError}
           hasOutput={hasOutput}
-          compact={isCompact}
+          compact={false}
           defaultCollapsed={collapseToolOutput}
           onFullscreenChange={onFullscreenChange}
           fullscreenBaseId={`tool:${part.sessionID}:${part.messageID}:${part.id}:output`}
