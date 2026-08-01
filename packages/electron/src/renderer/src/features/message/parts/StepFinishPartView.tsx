@@ -33,7 +33,7 @@ export const StepFinishPartView = memo(function StepFinishPartView({
   completedAt,
 }: StepFinishPartViewProps) {
   const { t } = useTranslation('message')
-  const { stepFinishDisplay: show, completedAtFormat } = useTheme()
+  const { stepFinishDisplay: show } = useTheme()
   const { tokens, cost } = part
   const totalTokens = tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
   const cacheHit = tokens.cache.read
@@ -75,7 +75,7 @@ export const StepFinishPartView = memo(function StepFinishPartView({
         <span>{t('stepFinish.totalDuration', { duration: formatDuration(turnDuration) })}</span>
       )}
       {show.completedAt && completedAt != null && (
-        <span title={formatDetailedDateTime(completedAt)}>{formatCompletedAt(completedAt, completedAtFormat)}</span>
+        <span title={formatDetailedDateTime(completedAt)}>{formatCompletedAt(completedAt)}</span>
       )}
     </div>
   )

@@ -3,8 +3,6 @@
  * Consolidated from duplicated functions across message parts, hooks, and renderers.
  */
 
-import type { CompletedAtFormat } from '../store/themeStore'
-
 /** Format a tool name for display: "my-tool_name" → "My Tool Name" */
 export function formatToolName(name: string): string {
   return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -66,9 +64,15 @@ export function formatDetailedDateTime(ms: number): string {
   return `${y}-${mon}-${d} ${h}:${m}:${s}`
 }
 
-/** Format completed time according to the selected display mode */
-export function formatCompletedAt(ms: number, format: CompletedAtFormat): string {
-  return format === 'dateTime' ? formatDateTime(ms) : formatTime(ms)
+/** Format completed time: same-day shows HH:MM, otherwise YYYY-MM-DD HH:MM */
+export function formatCompletedAt(ms: number): string {
+  const date = new Date(ms)
+  const now = new Date()
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  return sameDay ? formatTime(ms) : formatDateTime(ms)
 }
 
 /** Format a large number with k/M suffix */

@@ -4,10 +4,8 @@ import { PathAutoIcon, PathUnixIcon, PathWindowsIcon } from '../../../components
 import { usePathMode, useIsMobile, useTheme } from '../../../hooks'
 import {
   themeStore,
-  type CompletedAtFormat,
   type EnterKeyBehavior,
   type FileChangeIndicatorScope,
-  type ReasoningDisplayMode,
 } from '../../../store/themeStore'
 import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
 import { getBrowserOpenMode, setBrowserOpenMode, type BrowserOpenMode } from '../../../utils/browserOpen'
@@ -29,9 +27,7 @@ export function ChatSettings() {
   const [collapseToolOutput, setCollapseToolOutput] = useState(themeStore.collapseToolOutput)
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
-  const [completedAtFormat, setCompletedAtFormat] = useState(themeStore.completedAtFormat)
   const [fileChangeIndicatorScope, setFileChangeIndicatorScope] = useState(themeStore.fileChangeIndicatorScope)
-  const [reasoningDisplayMode, setReasoningDisplayMode] = useState(themeStore.reasoningDisplayMode)
   const [browserOpenMode, setBrowserOpenModeState] = useState<BrowserOpenMode>(() => getBrowserOpenMode())
   const isMobile = useIsMobile()
   void isMobile
@@ -56,11 +52,6 @@ export function ChatSettings() {
     const next = !collapseToolOutput
     setCollapseToolOutput(next)
     themeStore.setCollapseToolOutput(next)
-  }
-
-  const handleReasoningDisplayModeChange = (mode: ReasoningDisplayMode) => {
-    setReasoningDisplayMode(mode)
-    themeStore.setReasoningDisplayMode(mode)
   }
 
   const handleEnterKeyBehaviorChange = (behavior: EnterKeyBehavior) => {
@@ -189,21 +180,7 @@ export function ChatSettings() {
               { value: 'internal', label: t('chat.browserOpenInternal') },
               { value: 'system', label: t('chat.browserOpenSystem') },
             ]}
-            onChange={v => handleBrowserOpenModeChange(v as BrowserOpenMode)}
-          />
-        </div>
-
-        <div>
-          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.thinkingDisplay')}</p>
-          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.thinkingDisplayDesc')}</p>
-          <SegmentedControl
-            value={reasoningDisplayMode}
-            options={[
-              { value: 'capsule', label: t('chat.capsule') },
-              { value: 'italic', label: t('chat.italic') },
-              { value: 'markdown', label: t('chat.markdown') },
-            ]}
-            onChange={v => handleReasoningDisplayModeChange(v as ReasoningDisplayMode)}
+             onChange={v => handleBrowserOpenModeChange(v as BrowserOpenMode)}
           />
         </div>
       </SettingsSection>
@@ -242,25 +219,6 @@ export function ChatSettings() {
             />
           </SettingRow>
         ))}
-
-        {stepFinishDisplay.completedAt && (
-          <div>
-            <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.completedAtFormat')}</p>
-            <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.completedAtFormatDesc')}</p>
-            <SegmentedControl
-              value={completedAtFormat}
-              options={[
-                { value: 'time', label: t('chat.completedAtTimeOnly') },
-                { value: 'dateTime', label: t('chat.completedAtDateTime') },
-              ]}
-              onChange={v => {
-                const next = v as CompletedAtFormat
-                setCompletedAtFormat(next)
-                themeStore.setCompletedAtFormat(next)
-              }}
-            />
-          </div>
-        )}
       </SettingsSection>
     </div>
   )

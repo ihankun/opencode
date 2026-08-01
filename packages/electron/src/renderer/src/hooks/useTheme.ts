@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { THEME_SWITCH_DISABLE_MS } from '../constants'
 import { themeStore, type ColorMode } from '../store/themeStore'
 import type { StepFinishDisplay, CustomCSSSnippet } from '../store/themeStore'
-import type { ReasoningDisplayMode, CompletedAtFormat, FileChangeIndicatorScope } from '../store/themeStore'
+import type { FileChangeIndicatorScope } from '../store/themeStore'
 
 // 保持向后兼容的类型别名
 export type ThemeMode = ColorMode
@@ -205,18 +205,8 @@ export function useTheme() {
     themeStore.setStepFinishDisplay(display)
   }, [])
 
-  const setCompletedAtFormat = useCallback((format: CompletedAtFormat) => {
-    themeStore.setCompletedAtFormat(format)
-  }, [])
-
   const setFileChangeIndicatorScope = useCallback((scope: FileChangeIndicatorScope) => {
     themeStore.setFileChangeIndicatorScope(scope)
-  }, [])
-
-  // ---- Reasoning Display Mode ----
-
-  const setReasoningDisplayMode = useCallback((mode: ReasoningDisplayMode) => {
-    themeStore.setReasoningDisplayMode(mode)
   }, [])
 
   // ---- Descriptive Tool Steps ----
@@ -309,14 +299,8 @@ export function useTheme() {
     // step-finish 信息栏显示
     stepFinishDisplay: state.stepFinishDisplay,
     setStepFinishDisplay,
-    completedAtFormat: state.completedAtFormat,
-    setCompletedAtFormat,
     fileChangeIndicatorScope: state.fileChangeIndicatorScope,
     setFileChangeIndicatorScope,
-
-    // 思考内容显示样式
-    reasoningDisplayMode: state.reasoningDisplayMode,
-    setReasoningDisplayMode,
 
     // 带工具描述的 steps 摘要
     descriptiveToolSteps: state.descriptiveToolSteps,

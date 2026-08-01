@@ -400,11 +400,6 @@
     "compactInlinePermissionDesc": "工具已有内容时，内嵌权限只显示操作按钮，避免重复",
     "immersiveMode": "沉浸模式",
     "immersiveModeDesc": "一键开启内嵌请求、描述型步骤和精简输出，更沉浸的体验",
-    "thinkingDisplay": "思考过程显示",
-    "thinkingDisplayDesc": "选择 Capsule、低干扰 Italic 或 Markdown 推理样式",
-    "capsule": "Capsule",
-    "italic": "Italic",
-    "markdown": "Markdown",
     "stepFinishInfo": "Step 完成信息",
     "agent": "Agent",
     "showAgent": "显示 Agent 名称",
@@ -421,11 +416,7 @@
     "totalDuration": "总耗时",
     "showTurnElapsed": "显示完整轮次耗时",
     "completedAt": "完成时刻",
-    "showCompletedAt": "显示消息完成时间",
-    "completedAtFormat": "完成时刻格式",
-    "completedAtFormatDesc": "选择只显示时间，或显示完整日期和时间",
-    "completedAtTimeOnly": "仅时间",
-    "completedAtDateTime": "日期时间"
+    "showCompletedAt": "显示消息完成时间"
   },
   "agent": {
     "behavior": "Agent 行为",

@@ -405,7 +405,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
 }) {
   const { t } = useTranslation('message')
   const { parts, isStreaming, info } = message
-  const { stepFinishDisplay, completedAtFormat } = useTheme()
+  const { stepFinishDisplay } = useTheme()
 
   const wrapperRef = useEntryGrowAnimation(info.time.created)
 
@@ -547,7 +547,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
             <span>{t('stepFinish.totalDuration', { duration: formatDuration(turnDuration!) })}</span>
           )}
           {showCompletedAtFooter && (
-            <span title={formatDetailedDateTime(completed!)}>{formatCompletedAt(completed!, completedAtFormat)}</span>
+            <span title={formatDetailedDateTime(completed!)}>{formatCompletedAt(completed!)}</span>
           )}
         </div>
       )}

@@ -75,12 +75,8 @@ export interface StepFinishDisplay {
   completedAt: boolean
 }
 
-export type CompletedAtFormat = 'time' | 'dateTime'
-
 /** 文件变更指示器统计范围：latestTurn = 最新一轮，session = 当前会话累计 */
 export type FileChangeIndicatorScope = 'latestTurn' | 'session'
-
-export type ReasoningDisplayMode = 'capsule' | 'italic' | 'markdown'
 
 export type EnterKeyBehavior = 'newline' | 'send'
 
@@ -110,11 +106,8 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
   completedAt: false,
 }
 
-const DEFAULT_COMPLETED_AT_FORMAT: CompletedAtFormat = 'time'
-
 const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTurn'
 
-const DEFAULT_REASONING_DISPLAY_MODE: ReasoningDisplayMode = 'markdown'
 const DEFAULT_RENDER_USER_MARKDOWN = false
 const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
 const DEFAULT_INLINE_TOOL_REQUESTS = true
@@ -156,12 +149,8 @@ export interface ThemeState {
   renderUserMarkdown: boolean
   /** step-finish 信息栏显示开关 */
   stepFinishDisplay: StepFinishDisplay
-  /** 完成时刻显示格式 */
-  completedAtFormat: CompletedAtFormat
   /** 文件变更指示器统计范围 */
   fileChangeIndicatorScope: FileChangeIndicatorScope
-  /** 思考内容展示样式 */
-  reasoningDisplayMode: ReasoningDisplayMode
   /** 是否启用带工具描述的 steps 摘要 */
   descriptiveToolSteps: boolean
   /** 是否在工具下方内嵌权限/提问请求 */
@@ -207,9 +196,7 @@ const STORAGE_KEY_COLLAPSE_TOOL_OUTPUT = 'collapse-tool-output'
 const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_RENDER_USER_MARKDOWN = 'render-user-markdown'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
-const STORAGE_KEY_COMPLETED_AT_FORMAT = 'completed-at-format'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
-const STORAGE_KEY_REASONING_DISPLAY_MODE = 'reasoning-display-mode'
 const STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS = 'descriptive-tool-steps'
 const STORAGE_KEY_INLINE_TOOL_REQUESTS = 'inline-tool-requests'
 const STORAGE_KEY_CODE_WORD_WRAP = 'code-word-wrap'
@@ -286,11 +273,6 @@ class ThemeStore {
     const savedRenderUserMarkdown = localStorage.getItem(STORAGE_KEY_RENDER_USER_MARKDOWN)
     const renderUserMarkdown =
       savedRenderUserMarkdown === null ? DEFAULT_RENDER_USER_MARKDOWN : savedRenderUserMarkdown === 'true'
-    const savedReasoningDisplay = localStorage.getItem(STORAGE_KEY_REASONING_DISPLAY_MODE)
-    const reasoningDisplayMode: ReasoningDisplayMode =
-      savedReasoningDisplay === 'capsule' || savedReasoningDisplay === 'italic' || savedReasoningDisplay === 'markdown'
-        ? savedReasoningDisplay
-        : DEFAULT_REASONING_DISPLAY_MODE
 
     let stepFinishDisplay = DEFAULT_STEP_FINISH_DISPLAY
     try {
@@ -299,10 +281,6 @@ class ThemeStore {
     } catch {
       /* ignore */
     }
-
-    const savedCompletedAtFormat = localStorage.getItem(STORAGE_KEY_COMPLETED_AT_FORMAT)
-    const completedAtFormat: CompletedAtFormat =
-      savedCompletedAtFormat === 'dateTime' ? 'dateTime' : DEFAULT_COMPLETED_AT_FORMAT
 
     const savedFileChangeIndicatorScope = localStorage.getItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE)
     const fileChangeIndicatorScope: FileChangeIndicatorScope =
@@ -373,9 +351,7 @@ class ThemeStore {
       enterKeyBehavior,
       renderUserMarkdown,
       stepFinishDisplay,
-      completedAtFormat,
       fileChangeIndicatorScope,
-      reasoningDisplayMode,
       descriptiveToolSteps,
       inlineToolRequests,
       codeWordWrap,
@@ -431,14 +407,8 @@ class ThemeStore {
   get stepFinishDisplay() {
     return this.state.stepFinishDisplay
   }
-  get completedAtFormat() {
-    return this.state.completedAtFormat
-  }
   get fileChangeIndicatorScope() {
     return this.state.fileChangeIndicatorScope
-  }
-  get reasoningDisplayMode() {
-    return this.state.reasoningDisplayMode
   }
   get descriptiveToolSteps() {
     return this.state.descriptiveToolSteps
@@ -641,24 +611,10 @@ class ThemeStore {
     this.emit()
   }
 
-  setCompletedAtFormat(format: CompletedAtFormat) {
-    if (this.state.completedAtFormat === format) return
-    this.state = { ...this.state, completedAtFormat: format }
-    localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, format)
-    this.emit()
-  }
-
   setFileChangeIndicatorScope(scope: FileChangeIndicatorScope) {
     if (this.state.fileChangeIndicatorScope === scope) return
     this.state = { ...this.state, fileChangeIndicatorScope: scope }
     localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, scope)
-    this.emit()
-  }
-
-  setReasoningDisplayMode(mode: ReasoningDisplayMode) {
-    if (this.state.reasoningDisplayMode === mode) return
-    this.state = { ...this.state, reasoningDisplayMode: mode }
-    localStorage.setItem(STORAGE_KEY_REASONING_DISPLAY_MODE, mode)
     this.emit()
   }
 
@@ -986,15 +942,8 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       parsed?.stepFinishDisplay && typeof parsed.stepFinishDisplay === 'object'
         ? { ...DEFAULT_STEP_FINISH_DISPLAY, ...(parsed.stepFinishDisplay as Partial<StepFinishDisplay>) }
         : DEFAULT_STEP_FINISH_DISPLAY,
-    completedAtFormat: parsed?.completedAtFormat === 'dateTime' ? 'dateTime' : DEFAULT_COMPLETED_AT_FORMAT,
     fileChangeIndicatorScope:
       parsed?.fileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE,
-    reasoningDisplayMode:
-      parsed?.reasoningDisplayMode === 'capsule' ||
-      parsed?.reasoningDisplayMode === 'italic' ||
-      parsed?.reasoningDisplayMode === 'markdown'
-        ? parsed.reasoningDisplayMode
-        : DEFAULT_REASONING_DISPLAY_MODE,
     descriptiveToolSteps:
       typeof parsed?.descriptiveToolSteps === 'boolean' ? parsed.descriptiveToolSteps : DEFAULT_DESCRIPTIVE_TOOL_STEPS,
     inlineToolRequests:
@@ -1059,9 +1008,7 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, backup.enterKeyBehavior)
   localStorage.setItem(STORAGE_KEY_RENDER_USER_MARKDOWN, String(backup.renderUserMarkdown))
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
-  localStorage.setItem(STORAGE_KEY_COMPLETED_AT_FORMAT, backup.completedAtFormat)
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
-  localStorage.setItem(STORAGE_KEY_REASONING_DISPLAY_MODE, backup.reasoningDisplayMode)
   localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(backup.descriptiveToolSteps))
   localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(backup.inlineToolRequests))
   localStorage.setItem(STORAGE_KEY_CODE_WORD_WRAP, String(backup.codeWordWrap))
