@@ -1588,6 +1588,14 @@ textarea[data-composer-input]:focus-visible {
   box-shadow: none;
 }
 
+/* question 自定义输入框：聚焦时不显示全局 focus-visible outline，
+   聚焦反馈由外层容器 focus-within 边框提供，避免叠加成双层边框 */
+textarea.question-custom-input:focus,
+textarea.question-custom-input:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
 input[data-session-search-input]:focus-visible {
   outline: none;
 }

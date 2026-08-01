@@ -43,7 +43,6 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
     return `${Math.round(durationMs / 1000)}s`
   }, [part.time?.start, part.time?.end])
   const summaryText = collapsedPreview || (isPartStreaming ? t('reasoning.thinking') : '')
-  const hasLineBreak = /[\r\n]/.test(rawText)
 
   const measureSummaryOverflow = useCallback(() => {
     if (reasoningDisplayMode !== 'italic' && reasoningDisplayMode !== 'markdown') return
@@ -57,11 +56,8 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
   useEffect(() => {
     let frameId: number | null = null
 
-    if (isPartStreaming && hasContent) {
-      frameId = requestAnimationFrame(() => {
-        setExpanded(true, { touched: false, respectUser: true })
-      })
-    } else if (!isPartStreaming) {
+    // 思考内容默认不自动展开；未手动操作时完成后保持折叠，想看自己点开
+    if (!isPartStreaming) {
       frameId = requestAnimationFrame(() => {
         setExpanded(false, { touched: false, respectUser: true })
       })
@@ -105,30 +101,21 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
 
   if (reasoningDisplayMode === 'italic' || reasoningDisplayMode === 'markdown') {
     const isMarkdownMode = reasoningDisplayMode === 'markdown'
-    const shouldUseToggle = isPartStreaming || hasLineBreak || summaryOverflow
     const expandedMetaText = isPartStreaming
       ? t('reasoning.thinking')
       : thoughtDurationLabel
         ? t('reasoning.thoughtFor', { duration: thoughtDurationLabel })
         : t('reasoning.thoughtProcess')
+    const collapsedLabel = isPartStreaming ? t('reasoning.thinking') : t('reasoning.thoughtProcess')
     const summaryClassName = expanded
       ? isPartStreaming
         ? 'text-[length:var(--fs-sm)] leading-5 text-text-200'
         : 'text-[length:var(--fs-sm)] leading-5 text-text-500/80'
       : isPartStreaming
-        ? 'text-[length:var(--fs-sm)] leading-5 text-text-200 whitespace-nowrap overflow-hidden text-ellipsis'
-        : 'text-[length:var(--fs-sm)] leading-5 text-text-300 whitespace-nowrap overflow-hidden text-ellipsis'
-    const collapsedMarkdownClassName = [
-      'max-h-5 min-w-0 overflow-hidden text-[length:var(--fs-sm)] leading-5',
-      '[&_.markdown-stream-block]:!my-0 [&_.markdown-stream-block]:!leading-5',
-      '[&_p]:!my-0 [&_p]:inline [&_p]:!leading-5',
-      '[&_pre]:!my-0 [&_pre]:inline [&_pre]:whitespace-nowrap',
-      '[&_ul]:!my-0 [&_ul]:inline [&_ol]:!my-0 [&_ol]:inline',
-      '[&_li]:inline [&_li]:after:content-["_·_"] [&_li:last-child]:after:content-none',
-      isPartStreaming ? 'reasoning-shimmer-text' : '',
-    ].join(' ')
+        ? 'text-[length:var(--fs-sm)] leading-5 text-text-200'
+        : 'text-[length:var(--fs-sm)] leading-5 text-text-300'
 
-    const content = shouldUseToggle ? (
+    const content = (
       <>
         <button
           type="button"
@@ -142,13 +129,9 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
                 <span className={`block min-w-0 ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}>
                   {expandedMetaText}
                 </span>
-              ) : isMarkdownMode ? (
-                <div className={collapsedMarkdownClassName}>
-                  <LazyMarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
-                </div>
               ) : (
-                <span className={`block min-w-0 italic ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}>
-                  {summaryText}
+                <span className={`block min-w-0 ${summaryClassName} ${isPartStreaming ? 'reasoning-shimmer-text' : ''}`}>
+                  {collapsedLabel}
                 </span>
               )}
             </div>
@@ -188,25 +171,6 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
           </div>
         </div>
       </>
-    ) : (
-      <div ref={summaryContainerRef} className="relative min-w-0 overflow-hidden text-[length:var(--fs-sm)]">
-        {isMarkdownMode ? (
-          <LazyMarkdownRenderer content={displayText} variant="reasoning" isStreaming={isPartStreaming} />
-        ) : (
-          <span className="block min-w-0 text-[length:var(--fs-sm)] leading-5 italic whitespace-pre-wrap break-words text-text-300">
-            {displayText}
-          </span>
-        )}
-        <span
-          ref={summaryMeasureRef}
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 invisible whitespace-nowrap text-[length:var(--fs-sm)] leading-5 ${
-            isMarkdownMode ? '' : 'italic'
-          }`}
-        >
-          {summaryText}
-        </span>
-      </div>
     )
 
     return (

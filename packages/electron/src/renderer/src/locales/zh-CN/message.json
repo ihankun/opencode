@@ -31,7 +31,7 @@
     "nameResult": "{{name}} 结果"
   },
   "reasoning": {
-    "thinking": "思考中...",
+    "thinking": "正在思考",
     "thinkingLabel": "思考",
     "thoughtFor": "思考了 {{duration}}",
     "thoughtProcess": "思考过程"

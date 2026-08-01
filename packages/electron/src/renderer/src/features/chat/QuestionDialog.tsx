@@ -356,7 +356,7 @@ function QuestionItem({
             onClick={() => (isMultiple ? onToggleCustom() : onSelectCustom())}
             className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
               isCustomEnabled ? 'border-text-100 bg-bg-200' : 'border-border-200/50 hover:bg-bg-200'
-            }`}
+            } focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30`}
           >
             <div className="pt-0.5">
               <Indicator type={isMultiple ? 'checkbox' : 'radio'} checked={isCustomEnabled} />
@@ -378,7 +378,7 @@ function QuestionItem({
               }}
               placeholder={t('questionDialog.typeYourAnswer')}
               rows={1}
-              className="flex-1 bg-transparent text-[length:var(--fs-base)] text-text-100 placeholder:text-text-500 focus:outline-none resize-none min-h-[20px]"
+              className="question-custom-input flex-1 min-h-[20px] resize-none border-0 bg-transparent px-1 text-[length:var(--fs-base)] text-text-100 placeholder:text-text-500 outline-none"
             />
           </div>
         )}

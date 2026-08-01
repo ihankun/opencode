@@ -53,6 +53,8 @@ interface MessageRendererProps {
   onEnsureParts?: (messageId: string) => void
   showActions?: boolean
   showError?: boolean
+  /** 强制工具步骤使用描述型紧凑标题（"已处理"执行过程展开区使用） */
+  descriptiveTools?: boolean
 }
 
 export const MessageRenderer = memo(function MessageRenderer({
@@ -66,6 +68,7 @@ export const MessageRenderer = memo(function MessageRenderer({
   onEnsureParts,
   showActions = true,
   showError = true,
+  descriptiveTools = false,
 }: MessageRendererProps) {
   const { info } = message
   const isUser = info.role === 'user'
@@ -95,6 +98,7 @@ export const MessageRenderer = memo(function MessageRenderer({
         onEnsureParts={onEnsureParts}
         showActions={showActions}
         showError={showError}
+        descriptiveTools={descriptiveTools}
       />
     </article>
   )
@@ -387,6 +391,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
   onEnsureParts,
   showActions = true,
   showError = true,
+  descriptiveTools = false,
 }: {
   message: Message
   allowStreamingLayoutAnimation?: boolean
@@ -396,6 +401,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
   onEnsureParts?: (messageId: string) => void
   showActions?: boolean
   showError?: boolean
+  descriptiveTools?: boolean
 }) {
   const { t } = useTranslation('message')
   const { parts, isStreaming, info } = message
@@ -494,6 +500,7 @@ const AssistantMessageView = memo(function AssistantMessageView({
                   agent={agent}
                   modelLabel={modelLabel}
                   completedAt={isLastStepFinish ? completed : undefined}
+                  descriptiveTools={descriptiveTools}
                 />
               )
             }
@@ -568,6 +575,8 @@ interface ToolGroupProps {
   agent?: string
   modelLabel?: string
   completedAt?: number
+  /** 强制描述型紧凑标题模式，覆盖主题设置 */
+  descriptiveTools?: boolean
 }
 
 /** 用户需要阅读/交互的工具：沉浸模式下这些工具完成后保持展开 */
@@ -586,9 +595,11 @@ const ToolGroup = memo(function ToolGroup({
   agent,
   modelLabel,
   completedAt,
+  descriptiveTools = false,
 }: ToolGroupProps) {
   const { t } = useTranslation('message')
   const { descriptiveToolSteps, inlineToolRequests, immersiveMode } = useTheme()
+  const descriptive = descriptiveTools || descriptiveToolSteps
   const { pendingPermissions, pendingQuestions } = useInlineToolRequests()
   const hasPendingInteraction =
     inlineToolRequests &&
@@ -604,11 +615,11 @@ const ToolGroup = memo(function ToolGroup({
   const totalCount = parts.length
   const isAllDone = doneCount === totalCount
   const hasActiveTools = parts.some(isToolPartActive)
-  const stepsSummary = descriptiveToolSteps ? buildDescriptiveToolStepsSummary(parts, t) : undefined
+  const stepsSummary = descriptive ? buildDescriptiveToolStepsSummary(parts, t) : undefined
 
   // 汇总所有成功完成的工具的 diff stats（失败的不算）
   const totalDiffStats = useMemo(() => {
-    if (!descriptiveToolSteps) return undefined
+    if (!descriptive) return undefined
     let additions = 0,
       deletions = 0
     for (const part of parts) {
@@ -621,12 +632,12 @@ const ToolGroup = memo(function ToolGroup({
       }
     }
     return additions || deletions ? { additions, deletions } : undefined
-  }, [descriptiveToolSteps, parts])
+  }, [descriptive, parts])
 
   // 沉浸模式下：判断工具组是否包含需要用户阅读的工具
   const hasReadableTools = immersiveMode && parts.some(p => isReadableTool(p.tool))
   const shouldStartExpanded =
-    !descriptiveToolSteps ||
+    !descriptive ||
     hasActiveTools ||
     hasPendingInteraction ||
     (immersiveMode && !!isStreaming && hasReadableTools)
@@ -638,9 +649,14 @@ const ToolGroup = memo(function ToolGroup({
   const hasAutoExpandedReadableRef = useRef(shouldStartExpanded && immersiveMode && hasReadableTools)
 
   useEffect(() => {
-    if (!descriptiveToolSteps) return
+    if (!descriptive) return
     // 沉浸模式下没有可读工具：始终收起，不展开
     if (immersiveMode && !hasReadableTools) {
+      setExpanded(false, { touched: false, respectUser: true })
+      return
+    }
+    // "已处理"执行区：工具始终折叠为摘要行，运行中也不展开（避免先显示再隐藏）
+    if (descriptiveTools && !hasPendingInteraction) {
       setExpanded(false, { touched: false, respectUser: true })
       return
     }
@@ -657,7 +673,8 @@ const ToolGroup = memo(function ToolGroup({
       setExpanded(true, { touched: false, respectUser: true })
     }
   }, [
-    descriptiveToolSteps,
+    descriptive,
+    descriptiveTools,
     hasActiveTools,
     hasPendingInteraction,
     immersiveMode,
@@ -671,9 +688,9 @@ const ToolGroup = memo(function ToolGroup({
 
   // compact: 单工具时用紧凑布局（图标内联，无 timeline 连接线）
   // 不区分 streaming 状态 — 单工具始终 compact，第二个工具到来时再自然过渡到 timeline
-  const isSingleCompact = totalCount === 1 && !descriptiveToolSteps
+  const isSingleCompact = totalCount === 1 && !descriptive
   // steps header: 多工具始终显示；描述型 steps 模式下，单工具也显示
-  const showStepsHeader = totalCount > 1 || descriptiveToolSteps
+  const showStepsHeader = totalCount > 1 || descriptive
 
   // 统一容器结构 — ToolPartView 始终在同一 React 树位置，
   // streaming→idle / 1→N 工具切换时不 remount，expanded 状态不丢失
@@ -681,7 +698,7 @@ const ToolGroup = memo(function ToolGroup({
     <SmoothHeight isActive={!!isStreaming}>
       <div className="flex flex-col">
         {showStepsHeader &&
-          (descriptiveToolSteps ? (
+          (descriptive ? (
             <button
               type="button"
               onClick={() => setExpanded(!expanded)}
@@ -754,7 +771,7 @@ const ToolGroup = memo(function ToolGroup({
                   isFirst={idx === 0}
                   isLast={idx === parts.length - 1}
                   compact={isSingleCompact}
-                  descriptive={descriptiveToolSteps}
+                  descriptive={descriptive}
                   isStreaming={isStreaming}
                 />
               ))}

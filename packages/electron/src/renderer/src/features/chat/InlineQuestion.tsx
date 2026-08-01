@@ -273,7 +273,7 @@ function InlineQuestionItem({
           }}
           className={`flex items-center rounded-md border transition-colors ${
             isCustomEnabled ? 'border-text-100 bg-bg-300/20' : 'border-border-200/60 hover:border-text-400'
-          }`}
+          } focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30`}
         >
           {isMultiple && (
             <span
@@ -300,7 +300,7 @@ function InlineQuestionItem({
             }}
             placeholder={t('questionDialog.typeYourAnswer')}
             rows={1}
-            className="flex-1 bg-transparent text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-500 focus:outline-none resize-none min-h-[32px] px-2.5 py-1.5 leading-relaxed"
+            className="question-custom-input flex-1 min-h-[32px] resize-none border-0 bg-transparent px-2.5 py-1.5 leading-relaxed text-[length:var(--fs-sm)] text-text-100 placeholder:text-text-500 outline-none"
           />
         </div>
       )}

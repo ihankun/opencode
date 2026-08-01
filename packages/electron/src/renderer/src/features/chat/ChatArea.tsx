@@ -26,7 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
-import { buildExecutionCollapsePlan, getExecutionStatusSummary } from '../message/autoCollapseExecution'
+import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
 import { ChevronRightIcon, SpinnerIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
@@ -1128,6 +1128,13 @@ const PageBlock = memo(function PageBlock({
   )
 }, arePageBlockPropsEqual)
 
+/** "已处理"耗时：1 分钟以下显示整秒（1s、2s、3s...），以上走 formatDuration */
+function formatTurnElapsed(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  return formatDuration(totalSeconds * 1000)
+}
+
 const AssistantTurnMessages = memo(function AssistantTurnMessages({
   messages,
   registerMessage,
@@ -1150,8 +1157,18 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
     [autoCollapseExecutionProcess, messages],
   )
   const disclosureKey = `assistant-turn:${messages.at(-1)?.info.id ?? 'empty'}:execution-process`
-  const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, false)
+  const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, true)
   const shouldRenderProcess = useDelayedRender(expanded)
+
+  // 处理中：实时累加耗时（每秒刷新），完成后回落实际耗时
+  const isProcessing = messages.some(message => message.isStreaming)
+  const turnStart = messages[0]?.info.time.created
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isProcessing || turnStart == null) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [isProcessing, turnStart])
 
   if (!plan) {
     return messages.map(message => (
@@ -1188,12 +1205,12 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
         : message,
     )
     .filter(hasRenderableParts)
-  const duration = messages.reduce(
+  const completedDuration = messages.reduce(
     (value, message) => turnDurationMap.get(message.info.id) ?? value,
     undefined as number | undefined,
   )
-  const showStatus = conclusionMessages.length === 0 && messages.some(m => m.isStreaming)
-  const statusSummary = showStatus ? getExecutionStatusSummary(messages) : null
+  const duration =
+    isProcessing && turnStart != null ? now - turnStart : completedDuration
 
   return (
     <>
@@ -1206,16 +1223,12 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
           className="flex items-center gap-1.5 rounded-md py-1 text-[length:var(--fs-base)] text-text-400 transition-colors hover:text-text-200"
         >
           <span className="font-medium">{t('executionProcess.processed')}</span>
-          {duration != null && duration > 0 && <span>{formatDuration(duration)}</span>}
+          {duration != null && duration > 0 && <span>{formatTurnElapsed(duration)}</span>}
           <ChevronRightIcon
             size={14}
             className={`transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
           />
         </button>
-
-        {statusSummary && (
-          <div className="ml-1 text-[length:var(--fs-sm)] text-text-400">{statusSummary}</div>
-        )}
 
         <div
           className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
@@ -1234,6 +1247,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
                       showActions={false}
                       showError={false}
                       onEnsureParts={NOOP}
+                      descriptiveTools
                     />
                   )
                   if (isBoundaryMessage) return <div key={`${message.info.id}:process`}>{content}</div>
