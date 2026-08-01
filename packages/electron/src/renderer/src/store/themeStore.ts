@@ -120,9 +120,7 @@ const DEFAULT_COMPACT_INLINE_PERMISSION = true
 const DEFAULT_GLASS_EFFECT = true
 const DEFAULT_QUEUE_FOLLOWUP_MESSAGES = true
 const DEFAULT_MANUAL_TERMINAL_TITLES = false
-const DEFAULT_OUTLINE_CURRENT_HIGHLIGHT = true
 const DEFAULT_ENTER_KEY_BEHAVIOR: EnterKeyBehavior = 'newline'
-
 export interface ThemeState {
   /** 当前选中的主题风格 ID */
   presetId: string
@@ -162,8 +160,6 @@ export interface ThemeState {
   queueFollowupMessages: boolean
   /** 终端标签是否改为手动命名模式 */
   manualTerminalTitles: boolean
-  /** 是否在对话历史导航中高亮当前对话位置 */
-  outlineCurrentHighlight: boolean
   /** 亮色模式代码块 Shiki 主题 */
   codeBlockThemeLight: string
   /** 暗色模式代码块 Shiki 主题 */
@@ -195,7 +191,6 @@ const STORAGE_KEY_COMPACT_INLINE_PERMISSION = 'compact-inline-permission'
 const STORAGE_KEY_GLASS_EFFECT = 'glass-effect'
 const STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES = 'queue-followup-messages'
 const STORAGE_KEY_MANUAL_TERMINAL_TITLES = 'manual-terminal-titles'
-const STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT = 'outline-current-highlight'
 const STORAGE_KEY_CODE_BLOCK_THEME_LIGHT = 'code-block-theme-light'
 const STORAGE_KEY_CODE_BLOCK_THEME_DARK = 'code-block-theme-dark'
 
@@ -301,12 +296,6 @@ class ThemeStore {
     const manualTerminalTitles =
       savedManualTerminalTitles === null ? DEFAULT_MANUAL_TERMINAL_TITLES : savedManualTerminalTitles === 'true'
 
-    const savedOutlineCurrentHighlight = localStorage.getItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT)
-    const outlineCurrentHighlight =
-      savedOutlineCurrentHighlight === null
-        ? DEFAULT_OUTLINE_CURRENT_HIGHLIGHT
-        : savedOutlineCurrentHighlight === 'true'
-
     const codeBlockThemeLight = normalizeCodeBlockTheme(
       localStorage.getItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT) || DEFAULT_CODE_BLOCK_THEME_LIGHT,
       DEFAULT_CODE_BLOCK_THEME_LIGHT,
@@ -336,7 +325,6 @@ class ThemeStore {
       glassEffect,
       queueFollowupMessages,
       manualTerminalTitles,
-      outlineCurrentHighlight,
       codeBlockThemeLight,
       codeBlockThemeDark,
     }
@@ -404,9 +392,6 @@ class ThemeStore {
   }
   get manualTerminalTitles() {
     return this.state.manualTerminalTitles
-  }
-  get outlineCurrentHighlight() {
-    return this.state.outlineCurrentHighlight
   }
   get codeBlockThemeLight() {
     return this.state.codeBlockThemeLight
@@ -644,13 +629,6 @@ class ThemeStore {
     if (this.state.manualTerminalTitles === enabled) return
     this.state = { ...this.state, manualTerminalTitles: enabled }
     localStorage.setItem(STORAGE_KEY_MANUAL_TERMINAL_TITLES, String(enabled))
-    this.emit()
-  }
-
-  setOutlineCurrentHighlight(enabled: boolean) {
-    if (this.state.outlineCurrentHighlight === enabled) return
-    this.state = { ...this.state, outlineCurrentHighlight: enabled }
-    localStorage.setItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT, String(enabled))
     this.emit()
   }
 
@@ -903,10 +881,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       typeof parsed?.manualTerminalTitles === 'boolean'
         ? parsed.manualTerminalTitles
         : DEFAULT_MANUAL_TERMINAL_TITLES,
-    outlineCurrentHighlight:
-      typeof parsed?.outlineCurrentHighlight === 'boolean'
-        ? parsed.outlineCurrentHighlight
-        : DEFAULT_OUTLINE_CURRENT_HIGHLIGHT,
     codeBlockThemeLight: normalizeCodeBlockTheme(
       typeof parsed?.codeBlockThemeLight === 'string' ? parsed.codeBlockThemeLight : DEFAULT_CODE_BLOCK_THEME_LIGHT,
       DEFAULT_CODE_BLOCK_THEME_LIGHT,
@@ -952,7 +926,6 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_GLASS_EFFECT, String(backup.glassEffect))
   localStorage.setItem(STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES, String(backup.queueFollowupMessages))
   localStorage.setItem(STORAGE_KEY_MANUAL_TERMINAL_TITLES, String(backup.manualTerminalTitles))
-  localStorage.setItem(STORAGE_KEY_OUTLINE_CURRENT_HIGHLIGHT, String(backup.outlineCurrentHighlight))
   localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_LIGHT, backup.codeBlockThemeLight)
   localStorage.setItem(STORAGE_KEY_CODE_BLOCK_THEME_DARK, backup.codeBlockThemeDark)
 }

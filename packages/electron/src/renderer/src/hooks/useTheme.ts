@@ -235,10 +235,6 @@ export function useTheme() {
     themeStore.setManualTerminalTitles(enabled)
   }, [])
 
-  const setOutlineCurrentHighlight = useCallback((enabled: boolean) => {
-    themeStore.setOutlineCurrentHighlight(enabled)
-  }, [])
-
   const setCodeBlockThemeLight = useCallback((id: string) => {
     themeStore.setCodeBlockThemeLight(id)
   }, [])
@@ -323,10 +319,6 @@ export function useTheme() {
     // 终端标签标题模式
     manualTerminalTitles: state.manualTerminalTitles,
     setManualTerminalTitles,
-
-    // 对话历史导航当前位置高亮
-    outlineCurrentHighlight: state.outlineCurrentHighlight,
-    setOutlineCurrentHighlight,
 
     // 亮暗模式独立代码块主题
     codeBlockThemeLight: state.codeBlockThemeLight,

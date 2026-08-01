@@ -372,8 +372,6 @@
     "conversationExperienceDesc": "消息密度、推理风格和步骤摘要字段",
     "collapseLongMessages": "折叠长消息",
     "collapseLongMessagesDesc": "自动折叠较长的用户消息",
-    "outlineCurrentHighlight": "高亮当前对话位置",
-    "outlineCurrentHighlightDesc": "在右侧历史导航条中标出当前视口所属的用户提示词",
     "fileChangeIndicatorScope": "文件变更指示器显示范围",
     "fileChangeIndicatorScopeDesc": "选择顶部文件变更指示器的统计范围：仅最新一轮对话，或累计整个当前会话",
     "fileChangeIndicatorScopeLatestTurn": "最新一轮",

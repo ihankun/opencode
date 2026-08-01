@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PathAutoIcon, PathUnixIcon, PathWindowsIcon } from '../../../components/Icons'
-import { usePathMode, useIsMobile, useTheme } from '../../../hooks'
+import { usePathMode, useIsMobile } from '../../../hooks'
 import {
   themeStore,
   type EnterKeyBehavior,
@@ -14,7 +14,6 @@ import type { PathMode } from '../../../utils/directoryUtils'
 export function ChatSettings() {
   const { t } = useTranslation(['settings'])
   const { pathMode, setPathMode, effectiveStyle, detectedStyle, isAutoMode } = usePathMode()
-  const { outlineCurrentHighlight, setOutlineCurrentHighlight } = useTheme()
   const [collapseUserMessages, setCollapseUserMessages] = useState(themeStore.collapseUserMessages)
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
@@ -32,10 +31,6 @@ export function ChatSettings() {
   const handleEnterKeyBehaviorChange = (behavior: EnterKeyBehavior) => {
     setEnterKeyBehavior(behavior)
     themeStore.setEnterKeyBehavior(behavior)
-  }
-
-  const handleOutlineHighlightToggle = () => {
-    setOutlineCurrentHighlight(!outlineCurrentHighlight)
   }
 
   const handleFileChangeIndicatorScopeChange = (scope: FileChangeIndicatorScope) => {
@@ -83,14 +78,6 @@ export function ChatSettings() {
           onClick={handleCollapseToggle}
         >
           <Toggle enabled={collapseUserMessages} onChange={handleCollapseToggle} />
-        </SettingRow>
-
-        <SettingRow
-          label={t('chat.outlineCurrentHighlight')}
-          description={t('chat.outlineCurrentHighlightDesc')}
-          onClick={handleOutlineHighlightToggle}
-        >
-          <Toggle enabled={outlineCurrentHighlight} onChange={handleOutlineHighlightToggle} />
         </SettingRow>
 
         <div>

@@ -372,8 +372,6 @@
     "conversationExperienceDesc": "Message density, reasoning style, and step summary fields",
     "collapseLongMessages": "Collapse Long Messages",
     "collapseLongMessagesDesc": "Auto-collapse lengthy user messages",
-    "outlineCurrentHighlight": "Highlight Current Position",
-    "outlineCurrentHighlightDesc": "Mark the user prompt that owns the current viewport in the right-side history rail",
     "fileChangeIndicatorScope": "File Change Indicator Scope",
     "fileChangeIndicatorScopeDesc": "Choose whether the top file change indicator counts only the latest turn or accumulates across the current session",
     "fileChangeIndicatorScopeLatestTurn": "Latest Turn",
