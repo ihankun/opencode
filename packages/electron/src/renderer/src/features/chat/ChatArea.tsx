@@ -36,7 +36,6 @@ import { buildVisibleMessageEntries, getVisibleMessageForkTargetId } from './cha
 import { AT_BOTTOM_THRESHOLD_PX } from '../../constants'
 import { useDelayedRender } from '../../hooks'
 
-import { useTheme } from '../../hooks/useTheme'
 import { useChatViewport } from './chatViewport'
 import { rankOutlineVisibleMessageIds } from '../../components/outlineIndexModel'
 import { formatDuration } from '../../utils/formatUtils'
@@ -1151,11 +1150,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   allowStreamingLayoutAnimation: boolean
 }) {
   const { t } = useTranslation('message')
-  const { autoCollapseExecutionProcess } = useTheme()
-  const plan = useMemo(
-    () => (autoCollapseExecutionProcess ? buildExecutionCollapsePlan(messages) : null),
-    [autoCollapseExecutionProcess, messages],
-  )
+  const plan = useMemo(() => buildExecutionCollapsePlan(messages), [messages])
   const disclosureKey = `assistant-turn:${messages.at(-1)?.info.id ?? 'empty'}:execution-process`
   const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, true)
   const shouldRenderProcess = useDelayedRender(expanded)

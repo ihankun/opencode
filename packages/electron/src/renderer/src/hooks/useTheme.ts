@@ -187,18 +187,6 @@ export function useTheme() {
     themeStore.setCollapseUserMessages(enabled)
   }, [])
 
-  const setAutoCollapseExecutionProcess = useCallback((enabled: boolean) => {
-    themeStore.setAutoCollapseExecutionProcess(enabled)
-  }, [])
-
-  const setCollapseToolOutput = useCallback((enabled: boolean) => {
-    themeStore.setCollapseToolOutput(enabled)
-  }, [])
-
-  const setRenderUserMarkdown = useCallback((enabled: boolean) => {
-    themeStore.setRenderUserMarkdown(enabled)
-  }, [])
-
   // ---- Step Finish Display ----
 
   const setStepFinishDisplay = useCallback((display: Partial<StepFinishDisplay>) => {
@@ -289,12 +277,6 @@ export function useTheme() {
     // 折叠长用户消息
     collapseUserMessages: state.collapseUserMessages,
     setCollapseUserMessages,
-    autoCollapseExecutionProcess: state.autoCollapseExecutionProcess,
-    setAutoCollapseExecutionProcess,
-    collapseToolOutput: state.collapseToolOutput,
-    setCollapseToolOutput,
-    renderUserMarkdown: state.renderUserMarkdown,
-    setRenderUserMarkdown,
 
     // step-finish 信息栏显示
     stepFinishDisplay: state.stepFinishDisplay,

@@ -108,7 +108,6 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
 
 const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTurn'
 
-const DEFAULT_RENDER_USER_MARKDOWN = false
 const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
 const DEFAULT_INLINE_TOOL_REQUESTS = true
 const DEFAULT_CODE_WORD_WRAP = false
@@ -122,8 +121,6 @@ const DEFAULT_GLASS_EFFECT = true
 const DEFAULT_QUEUE_FOLLOWUP_MESSAGES = true
 const DEFAULT_MANUAL_TERMINAL_TITLES = false
 const DEFAULT_OUTLINE_CURRENT_HIGHLIGHT = true
-const DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS = false
-const DEFAULT_COLLAPSE_TOOL_OUTPUT = false
 const DEFAULT_ENTER_KEY_BEHAVIOR: EnterKeyBehavior = 'newline'
 
 export interface ThemeState {
@@ -139,14 +136,8 @@ export interface ThemeState {
   activeCustomCSSSnippetId: string | null
   /** 是否自动折叠长用户消息 */
   collapseUserMessages: boolean
-  /** 对话完成后是否自动折叠连续的执行过程 */
-  autoCollapseExecutionProcess: boolean
-  /** 工具输出和文件修改结果是否默认折叠 */
-  collapseToolOutput: boolean
   /** 输入框按下普通回车键时的行为 */
   enterKeyBehavior: EnterKeyBehavior
-  /** 是否将用户消息渲染为 Markdown */
-  renderUserMarkdown: boolean
   /** step-finish 信息栏显示开关 */
   stepFinishDisplay: StepFinishDisplay
   /** 文件变更指示器统计范围 */
@@ -191,10 +182,7 @@ const STORAGE_KEY_CUSTOM_CSS = 'theme-custom-css'
 const STORAGE_KEY_CUSTOM_CSS_SNIPPETS = 'theme-custom-css-snippets'
 const STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID = 'theme-active-custom-css-snippet-id'
 const STORAGE_KEY_COLLAPSE_USER_MESSAGES = 'collapse-user-messages'
-const STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS = 'auto-collapse-execution-process'
-const STORAGE_KEY_COLLAPSE_TOOL_OUTPUT = 'collapse-tool-output'
 const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
-const STORAGE_KEY_RENDER_USER_MARKDOWN = 'render-user-markdown'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
 const STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS = 'descriptive-tool-steps'
@@ -260,19 +248,8 @@ class ThemeStore {
       : null
     const savedCollapse = localStorage.getItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES)
     const collapseUserMessages = savedCollapse === null ? true : savedCollapse === 'true'
-    const savedAutoCollapseExecutionProcess = localStorage.getItem(STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS)
-    const autoCollapseExecutionProcess =
-      savedAutoCollapseExecutionProcess === null
-        ? DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS
-        : savedAutoCollapseExecutionProcess === 'true'
-    const savedCollapseToolOutput = localStorage.getItem(STORAGE_KEY_COLLAPSE_TOOL_OUTPUT)
-    const collapseToolOutput =
-      savedCollapseToolOutput === null ? DEFAULT_COLLAPSE_TOOL_OUTPUT : savedCollapseToolOutput === 'true'
     const enterKeyBehavior: EnterKeyBehavior =
       localStorage.getItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR) === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR
-    const savedRenderUserMarkdown = localStorage.getItem(STORAGE_KEY_RENDER_USER_MARKDOWN)
-    const renderUserMarkdown =
-      savedRenderUserMarkdown === null ? DEFAULT_RENDER_USER_MARKDOWN : savedRenderUserMarkdown === 'true'
 
     let stepFinishDisplay = DEFAULT_STEP_FINISH_DISPLAY
     try {
@@ -346,10 +323,7 @@ class ThemeStore {
       customCSSSnippets,
       activeCustomCSSSnippetId,
       collapseUserMessages,
-      autoCollapseExecutionProcess,
-      collapseToolOutput,
       enterKeyBehavior,
-      renderUserMarkdown,
       stepFinishDisplay,
       fileChangeIndicatorScope,
       descriptiveToolSteps,
@@ -392,17 +366,8 @@ class ThemeStore {
   get collapseUserMessages() {
     return this.state.collapseUserMessages
   }
-  get autoCollapseExecutionProcess() {
-    return this.state.autoCollapseExecutionProcess
-  }
-  get collapseToolOutput() {
-    return this.state.collapseToolOutput
-  }
   get enterKeyBehavior() {
     return this.state.enterKeyBehavior
-  }
-  get renderUserMarkdown() {
-    return this.state.renderUserMarkdown
   }
   get stepFinishDisplay() {
     return this.state.stepFinishDisplay
@@ -576,31 +541,10 @@ class ThemeStore {
     this.emit()
   }
 
-  setAutoCollapseExecutionProcess(enabled: boolean) {
-    if (this.state.autoCollapseExecutionProcess === enabled) return
-    this.state = { ...this.state, autoCollapseExecutionProcess: enabled }
-    localStorage.setItem(STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS, String(enabled))
-    this.emit()
-  }
-
-  setCollapseToolOutput(enabled: boolean) {
-    if (this.state.collapseToolOutput === enabled) return
-    this.state = { ...this.state, collapseToolOutput: enabled }
-    localStorage.setItem(STORAGE_KEY_COLLAPSE_TOOL_OUTPUT, String(enabled))
-    this.emit()
-  }
-
   setEnterKeyBehavior(behavior: EnterKeyBehavior) {
     if (this.state.enterKeyBehavior === behavior) return
     this.state = { ...this.state, enterKeyBehavior: behavior }
     localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, behavior)
-    this.emit()
-  }
-
-  setRenderUserMarkdown(enabled: boolean) {
-    if (this.state.renderUserMarkdown === enabled) return
-    this.state = { ...this.state, renderUserMarkdown: enabled }
-    localStorage.setItem(STORAGE_KEY_RENDER_USER_MARKDOWN, String(enabled))
     this.emit()
   }
 
@@ -929,15 +873,7 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
     customCSSSnippets,
     activeCustomCSSSnippetId,
     collapseUserMessages: typeof parsed?.collapseUserMessages === 'boolean' ? parsed.collapseUserMessages : true,
-    autoCollapseExecutionProcess:
-      typeof parsed?.autoCollapseExecutionProcess === 'boolean'
-        ? parsed.autoCollapseExecutionProcess
-        : DEFAULT_AUTO_COLLAPSE_EXECUTION_PROCESS,
-    collapseToolOutput:
-      typeof parsed?.collapseToolOutput === 'boolean' ? parsed.collapseToolOutput : DEFAULT_COLLAPSE_TOOL_OUTPUT,
     enterKeyBehavior: parsed?.enterKeyBehavior === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR,
-    renderUserMarkdown:
-      typeof parsed?.renderUserMarkdown === 'boolean' ? parsed.renderUserMarkdown : DEFAULT_RENDER_USER_MARKDOWN,
     stepFinishDisplay:
       parsed?.stepFinishDisplay && typeof parsed.stepFinishDisplay === 'object'
         ? { ...DEFAULT_STEP_FINISH_DISPLAY, ...(parsed.stepFinishDisplay as Partial<StepFinishDisplay>) }
@@ -1003,10 +939,7 @@ export function importThemeBackup(raw: unknown): void {
     localStorage.removeItem(STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID)
   }
   localStorage.setItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES, String(backup.collapseUserMessages))
-  localStorage.setItem(STORAGE_KEY_AUTO_COLLAPSE_EXECUTION_PROCESS, String(backup.autoCollapseExecutionProcess))
-  localStorage.setItem(STORAGE_KEY_COLLAPSE_TOOL_OUTPUT, String(backup.collapseToolOutput))
   localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, backup.enterKeyBehavior)
-  localStorage.setItem(STORAGE_KEY_RENDER_USER_MARKDOWN, String(backup.renderUserMarkdown))
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
   localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(backup.descriptiveToolSteps))

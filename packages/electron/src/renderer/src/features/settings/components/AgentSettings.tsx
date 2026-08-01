@@ -46,7 +46,6 @@ export function AgentSettings() {
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
   const [descriptiveToolSteps, setDescriptiveToolSteps] = useState(themeStore.descriptiveToolSteps)
   const [inlineToolRequests, setInlineToolRequests] = useState(themeStore.inlineToolRequests)
-  const [immersiveMode, setImmersiveMode] = useState(themeStore.immersiveMode)
   const [compactInlinePermission, setCompactInlinePermission] = useState(themeStore.compactInlinePermission)
   const desktopPreferences = useDesktopPreferences()
 
@@ -84,15 +83,6 @@ export function AgentSettings() {
     const next = !compactInlinePermission
     setCompactInlinePermission(next)
     themeStore.setCompactInlinePermission(next)
-  }
-
-  const handleImmersiveModeToggle = () => {
-    const next = !immersiveMode
-    setImmersiveMode(next)
-    themeStore.setImmersiveMode(next)
-    setInlineToolRequests(next)
-    setDescriptiveToolSteps(next)
-    setCompactInlinePermission(next)
   }
 
   const handleBackgroundSubagentsToggle = () => {
@@ -151,14 +141,6 @@ export function AgentSettings() {
 
       <SettingsSection title={t('agent.toolInteraction')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('agent.toolInteractionDesc')}</p>
-
-        <SettingRow
-          label={t('chat.immersiveMode')}
-          description={t('chat.immersiveModeDesc')}
-          onClick={handleImmersiveModeToggle}
-        >
-          <Toggle enabled={immersiveMode} onChange={handleImmersiveModeToggle} />
-        </SettingRow>
 
         <SettingRow
           label={t('chat.inlineToolRequests')}

@@ -1,10 +1,8 @@
-import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ContentBlock } from '../../../../components'
 import { AlertCircleIcon } from '../../../../components/Icons'
 import { detectLanguage } from '../../../../utils/languageUtils'
 import { getMaterialIconUrl } from '../../../../utils/materialIcons'
-import { themeStore } from '../../../../store/themeStore'
 import type { ToolRendererProps, ExtractedToolData } from '../types'
 
 // ============================================
@@ -15,7 +13,6 @@ import type { ToolRendererProps, ExtractedToolData } from '../types'
 export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRendererProps) {
   const { t } = useTranslation('message')
   const { state, tool } = part
-  const { collapseToolOutput } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
   const isActive = state.status === 'running' || state.status === 'pending'
 
   const hasInput = !!data.input?.trim()
@@ -51,7 +48,7 @@ export function DefaultRenderer({ part, data, onFullscreenChange }: ToolRenderer
           hasError={hasError}
           hasOutput={hasOutput}
           compact={false}
-          defaultCollapsed={collapseToolOutput}
+          defaultCollapsed
           onFullscreenChange={onFullscreenChange}
           fullscreenBaseId={`tool:${part.sessionID}:${part.messageID}:${part.id}:output`}
           stateBaseKey={`message:${part.messageID}:tool:${part.id}:output`}

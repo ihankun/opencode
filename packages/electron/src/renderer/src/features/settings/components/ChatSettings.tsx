@@ -14,17 +14,8 @@ import type { PathMode } from '../../../utils/directoryUtils'
 export function ChatSettings() {
   const { t } = useTranslation(['settings'])
   const { pathMode, setPathMode, effectiveStyle, detectedStyle, isAutoMode } = usePathMode()
-  const {
-    outlineCurrentHighlight,
-    setOutlineCurrentHighlight,
-    renderUserMarkdown,
-    setRenderUserMarkdown,
-  } = useTheme()
+  const { outlineCurrentHighlight, setOutlineCurrentHighlight } = useTheme()
   const [collapseUserMessages, setCollapseUserMessages] = useState(themeStore.collapseUserMessages)
-  const [autoCollapseExecutionProcess, setAutoCollapseExecutionProcess] = useState(
-    themeStore.autoCollapseExecutionProcess,
-  )
-  const [collapseToolOutput, setCollapseToolOutput] = useState(themeStore.collapseToolOutput)
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [fileChangeIndicatorScope, setFileChangeIndicatorScope] = useState(themeStore.fileChangeIndicatorScope)
@@ -36,22 +27,6 @@ export function ChatSettings() {
     const v = !collapseUserMessages
     setCollapseUserMessages(v)
     themeStore.setCollapseUserMessages(v)
-  }
-
-  const handleRenderUserMarkdownToggle = () => {
-    setRenderUserMarkdown(!renderUserMarkdown)
-  }
-
-  const handleAutoCollapseExecutionProcessToggle = () => {
-    const next = !autoCollapseExecutionProcess
-    setAutoCollapseExecutionProcess(next)
-    themeStore.setAutoCollapseExecutionProcess(next)
-  }
-
-  const handleCollapseToolOutputToggle = () => {
-    const next = !collapseToolOutput
-    setCollapseToolOutput(next)
-    themeStore.setCollapseToolOutput(next)
   }
 
   const handleEnterKeyBehaviorChange = (behavior: EnterKeyBehavior) => {
@@ -108,33 +83,6 @@ export function ChatSettings() {
           onClick={handleCollapseToggle}
         >
           <Toggle enabled={collapseUserMessages} onChange={handleCollapseToggle} />
-        </SettingRow>
-
-        <SettingRow
-          label={t('chat.autoCollapseExecutionProcess')}
-          description={t('chat.autoCollapseExecutionProcessDesc')}
-          onClick={handleAutoCollapseExecutionProcessToggle}
-        >
-          <Toggle
-            enabled={autoCollapseExecutionProcess}
-            onChange={handleAutoCollapseExecutionProcessToggle}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label={t('chat.collapseToolOutput')}
-          description={t('chat.collapseToolOutputDesc')}
-          onClick={handleCollapseToolOutputToggle}
-        >
-          <Toggle enabled={collapseToolOutput} onChange={handleCollapseToolOutputToggle} />
-        </SettingRow>
-
-        <SettingRow
-          label={t('chat.renderUserMarkdown')}
-          description={t('chat.renderUserMarkdownDesc')}
-          onClick={handleRenderUserMarkdownToggle}
-        >
-          <Toggle enabled={renderUserMarkdown} onChange={handleRenderUserMarkdownToggle} />
         </SettingRow>
 
         <SettingRow
