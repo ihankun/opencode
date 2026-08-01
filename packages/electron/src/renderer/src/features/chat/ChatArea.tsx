@@ -247,19 +247,10 @@ export const ChatArea = memo(
         () => turnDurationMapProp ?? buildTurnDurationMap(messages, visibleMessages),
         [messages, turnDurationMapProp, visibleMessages],
       )
-      // 兜底：如果最后一条 assistant 消息已完成，忽略 store 的 isStreaming 状态
-      // 防止 session.idle SSE 事件延迟导致指示器持续显示
-      const lastAssistantCompleted = useMemo(() => {
-        if (!isStreaming) return true
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const msg = messages[i]
-          if (msg.info.role === 'assistant') {
-            return msg.info.time.completed != null
-          }
-        }
-        return false
-      }, [messages, isStreaming])
-      const showProcessing = isStreaming && !lastAssistantCompleted
+      // 发送后 agent 尚未产出任何 assistant 回复时显示"正在处理"，
+      // 一旦最后一条消息变为 assistant（开始回复）即隐藏，无需等待回复完成
+      const lastMessage = messages[messages.length - 1]
+      const showProcessing = isStreaming && lastMessage?.info.role !== 'assistant'
 
       const activePages = pageRecords ?? pages
 

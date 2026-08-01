@@ -845,11 +845,22 @@ export function SidePanel({
     [displayedProjects, expandedProjectIds],
   )
 
+  const pinnedProjectBusyCount = useMemo(
+    () =>
+      busySessions.filter(entry => {
+        if (!entry.directory) return false
+        const group = findProjectGroupForDirectory(displayedProjects, entry.directory)
+        return Boolean(group && group.pinnedAt !== undefined)
+      }).length,
+    [busySessions, displayedProjects],
+  )
+
   const projectBusyCount = useMemo(
     () =>
       busySessions.filter(entry => {
         if (!entry.directory) return false
-        return Boolean(findProjectGroupForDirectory(displayedProjects, entry.directory))
+        const group = findProjectGroupForDirectory(displayedProjects, entry.directory)
+        return Boolean(group && group.pinnedAt === undefined)
       }).length,
     [busySessions, displayedProjects],
   )
@@ -1660,6 +1671,14 @@ export function SidePanel({
             {pinnedProjectOrder.length > 0 ? (
               <div className="sidebar-muted-text mb-0.5 flex items-center px-[6px] text-[length:var(--fs-sm)]">
                 <span>{t('sidebar.pinnedProjects')}</span>
+                {pinnedProjectBusyCount > 0 && (
+                  <span
+                    className="ml-1.5 inline-flex h-[15px] min-w-[15px] shrink-0 items-center justify-center rounded-full bg-success-100/10 px-1 text-[length:var(--fs-xxs)] font-medium leading-none text-success-100"
+                    title={t('sidebar.active')}
+                  >
+                    {pinnedProjectBusyCount}
+                  </span>
+                )}
               </div>
             ) : projectsHeading}
             <div
