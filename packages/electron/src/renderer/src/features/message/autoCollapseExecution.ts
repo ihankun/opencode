@@ -3,6 +3,54 @@ import { isVisibleTextPart, type Message } from '../../types/message'
 import { extractToolData } from './tools'
 import { summarizeTodoItems, type TurnTodoProgress } from './todoProgress'
 
+/** 单条消息是否是"纯过程"消息：无结论正文，只有思考 + 夹带文字 + 工具 */
+export function isProcessMessage(message: Message): boolean {
+  const visible = message.parts.filter(part => {
+    if (part.type === 'step-start' || part.type === 'step-finish' || part.type === 'snapshot' || part.type === 'patch')
+      return false
+    if (part.type === 'text') return isVisibleTextPart(part)
+    return true
+  })
+  const hasExecution = visible.some(part => part.type === 'reasoning' || part.type === 'tool')
+  if (!hasExecution) return false
+  // 夹带的 text（后面还有工具）允许；结论性 text（后面没有工具）视为正文，单独展示
+  for (let i = 0; i < visible.length; i++) {
+    if (visible[i].type !== 'text') continue
+    const hasToolAfter = visible.slice(i + 1).some(p => p.type === 'tool')
+    if (!hasToolAfter) return false
+  }
+  return true
+}
+
+/** 把相邻的纯过程消息拼接成虚拟消息，让 part 级聚合能跨消息合成一个折叠块；结论消息保持独立 */
+export function mergeProcessMessages(messages: Message[]): Message[] {
+  const merged: Message[] = []
+  let run: Message[] = []
+  const flush = () => {
+    if (run.length === 1) {
+      merged.push(run[0])
+    } else if (run.length > 1) {
+      const first = run[0]
+      merged.push({
+        ...first,
+        parts: run.flatMap(m => m.parts),
+        isStreaming: run.some(m => m.isStreaming),
+      })
+    }
+    run = []
+  }
+  for (const message of messages) {
+    if (isProcessMessage(message)) {
+      run.push(message)
+    } else {
+      flush()
+      merged.push(message)
+    }
+  }
+  flush()
+  return merged
+}
+
 export type ExecutionCollapsePlan = {
   conclusionMessageIndex: number
   conclusionPartIndex: number

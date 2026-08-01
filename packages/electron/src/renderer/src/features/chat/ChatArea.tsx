@@ -26,7 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
-import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
+import { buildExecutionCollapsePlan, mergeProcessMessages } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
 import { ChevronRightIcon, SpinnerIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
@@ -1171,7 +1171,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   }, [isProcessing, turnStart])
 
   if (!plan) {
-    return messages.map(message => (
+    return mergeProcessMessages(messages).map(message => (
       <RenderedMessageItem
         key={message.info.id}
         messageId={message.info.id}
@@ -1238,10 +1238,12 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
           <div className="min-h-0 overflow-hidden">
             {shouldRenderProcess && (
               <div className="flex flex-col gap-2 pt-2">
-                {processMessages.map((message, index) => {
-                  const isBoundaryMessage = index === processMessages.length - 1 &&
-                    message.info.id === messages[plan.conclusionMessageIndex]?.info.id
-                  const content = (
+                {mergeProcessMessages(processMessages).map(message => (
+                  <RenderedMessageItem
+                    key={`${message.info.id}:process`}
+                    messageId={message.info.id}
+                    registerMessage={registerMessage}
+                  >
                     <MessageRenderer
                       message={message}
                       showActions={false}
@@ -1249,18 +1251,8 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
                       onEnsureParts={NOOP}
                       descriptiveTools
                     />
-                  )
-                  if (isBoundaryMessage) return <div key={`${message.info.id}:process`}>{content}</div>
-                  return (
-                    <RenderedMessageItem
-                      key={`${message.info.id}:process`}
-                      messageId={message.info.id}
-                      registerMessage={registerMessage}
-                    >
-                      {content}
-                    </RenderedMessageItem>
-                  )
-                })}
+                  </RenderedMessageItem>
+                ))}
               </div>
             )}
           </div>

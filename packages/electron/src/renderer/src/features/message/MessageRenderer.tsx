@@ -30,6 +30,7 @@ import type {
   Message,
   Part,
   TextPart,
+  ReasoningPart,
   ToolPart,
   FilePart,
   AgentPart,
@@ -485,7 +486,9 @@ const AssistantMessageView = memo(function AssistantMessageView({
             const isLastStepFinish =
               idx ===
               renderItems.findLastIndex(it =>
-                it.type === 'tool-group' ? !!it.stepFinish : it.part.type === 'step-finish',
+                it.type === 'tool-group' || it.type === 'auto-fold'
+                  ? !!it.stepFinish
+                  : it.part.type === 'step-finish',
               )
 
             if (item.type === 'tool-group') {
@@ -501,6 +504,25 @@ const AssistantMessageView = memo(function AssistantMessageView({
                   modelLabel={modelLabel}
                   completedAt={isLastStepFinish ? completed : undefined}
                   descriptiveTools={descriptiveTools}
+                />
+              )
+            }
+
+            if (item.type === 'auto-fold') {
+              return (
+                <AutoFoldGroup
+                  key={item.reasons[0]?.id || item.tools[0]?.id}
+                  reasons={item.reasons}
+                  texts={item.texts}
+                  tools={item.tools}
+                  stepFinish={item.stepFinish}
+                  duration={isLastStepFinish ? duration : undefined}
+                  turnDuration={isLastStepFinish ? turnDuration : undefined}
+                  isStreaming={isStreaming}
+                  agent={agent}
+                  modelLabel={modelLabel}
+                  completedAt={isLastStepFinish ? completed : undefined}
+                  endedReasoningIds={endedReasoningIds}
                 />
               )
             }
@@ -796,6 +818,99 @@ const ToolGroup = memo(function ToolGroup({
 })
 
 // ============================================
+// Auto-Fold Group (连续无正文的思考 + 工具)
+// ============================================
+
+interface AutoFoldGroupProps {
+  reasons: ReasoningPart[]
+  texts: TextPart[]
+  tools: ToolPart[]
+  stepFinish?: StepFinishPart
+  duration?: number
+  turnDuration?: number
+  isStreaming?: boolean
+  agent?: string
+  modelLabel?: string
+  completedAt?: number
+  /** 已结束的 reasoning id 集合，用于关闭 shimmer */
+  endedReasoningIds: Set<string>
+}
+
+/** 始终折叠的"过程段"：标题显示摘要，展开后复用现有思考标签 + 中间文字 + 工具组渲染 */
+const AutoFoldGroup = memo(function AutoFoldGroup({
+  reasons,
+  texts,
+  tools,
+  stepFinish,
+  duration,
+  turnDuration,
+  isStreaming,
+  agent,
+  modelLabel,
+  completedAt,
+  endedReasoningIds,
+}: AutoFoldGroupProps) {
+  const { t } = useTranslation('message')
+  const groupStateKey = `message:${tools[0]?.messageID || reasons[0]?.messageID || 'unknown'}:auto-fold:${
+    tools[0]?.id || reasons[0]?.id || 'empty'
+  }`
+  const [expanded, setExpanded] = useUiDisclosureState(groupStateKey, false)
+  const shouldRenderBody = useDelayedRender(expanded)
+  const label = buildAutoFoldSummary(reasons, tools, t)
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        className="flex w-full min-w-0 items-center gap-1.5 py-1.5 text-left text-text-400 hover:text-text-200 hover:bg-bg-200/30 rounded-md transition-colors"
+      >
+        <span className="inline-flex w-[14px] items-center justify-center shrink-0">
+          {expanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)] leading-5 text-text-300">{label}</span>
+        {!expanded && stepFinish && (
+          <span className="text-[length:var(--fs-sm)] text-text-500 font-mono opacity-70 shrink-0">
+            {formatTokens(stepFinish.tokens, t)}
+          </span>
+        )}
+      </button>
+
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+      >
+        <div className="flex flex-col min-h-0 min-w-0 overflow-hidden" style={{ clipPath: 'inset(0 -100% 0 -100%)' }}>
+          {shouldRenderBody && (
+            <>
+              {reasons.map(r => (
+                <ReasoningPartView key={r.id} part={r} isStreaming={isStreaming && !endedReasoningIds.has(r.id)} />
+              ))}
+              {texts.map(tx => (
+                <TextPartView key={tx.id} part={tx} isStreaming={isStreaming} />
+              ))}
+              {tools.length > 0 && (
+                <ToolGroup
+                  parts={tools}
+                  stepFinish={stepFinish}
+                  duration={duration}
+                  turnDuration={turnDuration}
+                  isStreaming={isStreaming}
+                  agent={agent}
+                  modelLabel={modelLabel}
+                  completedAt={completedAt}
+                  descriptiveTools
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+// ============================================
 // Helpers
 // ============================================
 
@@ -923,6 +1038,24 @@ function buildDescriptiveToolStepsSummary(
   return segments
 }
 
+/** 自动折叠块标题：思考次数 + 工具分类摘要（复用 toolSteps 文案） */
+function buildAutoFoldSummary(
+  reasons: ReasoningPart[],
+  tools: ToolPart[],
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const sep = t('toolSteps.separator')
+  const segments: string[] = []
+  if (reasons.length > 0) {
+    segments.push(t('toolSteps.thinkDone', { count: reasons.length }))
+  }
+  const toolText = buildDescriptiveToolStepsSummary(tools, t)
+    .map(s => s.text)
+    .join('')
+  if (toolText) segments.push(toolText)
+  return segments.join(sep)
+}
+
 function formatToolSummarySegment(
   category: ToolSummaryCategory,
   count: number,
@@ -1026,15 +1159,23 @@ function diffPairStats(before: string, after: string): { additions: number; dele
 type RenderItem =
   | { type: 'single'; part: Part }
   | { type: 'tool-group'; parts: ToolPart[]; stepFinish?: StepFinishPart }
+  | {
+      type: 'auto-fold'
+      reasons: ReasoningPart[]
+      texts: TextPart[]
+      tools: ToolPart[]
+      stepFinish?: StepFinishPart
+    }
 
-/** parts[from..] 跳过基础设施和空内容后，下一个有意义的 part 是否为 tool */
+/** parts[from..] 跳过基础设施、空内容、reasoning 以及会被吞入的中间 text 后，是否还会出现 tool */
 function hasMoreToolsAhead(parts: Part[], from: number): boolean {
   for (let k = from; k < parts.length; k++) {
     const part = parts[k]
     if (part.type === 'step-start' || part.type === 'step-finish' || part.type === 'snapshot' || part.type === 'patch')
       continue
+    // 空 text、可见 reasoning、夹带的可见 text 都不阻断工具流
     if (part.type === 'text' && !isVisibleTextPart(part)) continue
-    if (part.type === 'reasoning' && !isVisibleReasoningPart(part)) continue
+    if (part.type === 'reasoning' || part.type === 'text') continue
     return part.type === 'tool'
   }
   return false
@@ -1042,13 +1183,25 @@ function hasMoreToolsAhead(parts: Part[], from: number): boolean {
 
 function groupPartsForRender(parts: Part[]): RenderItem[] {
   const result: RenderItem[] = []
-  let toolGroup: ToolPart[] = []
+  let currentReasons: ReasoningPart[] = []
+  let currentTexts: TextPart[] = []
+  let currentTools: ToolPart[] = []
   let stepFinish: StepFinishPart | undefined
 
-  const flushToolGroup = (sf?: StepFinishPart) => {
-    if (toolGroup.length === 0) return
-    result.push({ type: 'tool-group', parts: toolGroup, stepFinish: sf })
-    toolGroup = []
+  const flushRun = (sf?: StepFinishPart) => {
+    const total = currentReasons.length + currentTools.length
+    if (total === 0) return
+    // 连续无结论正文的过程段（思考 + 工具，夹带的中间 text 一并折叠）聚合成自动折叠块
+    if (total >= 2 && currentTools.length >= 1) {
+      result.push({ type: 'auto-fold', reasons: currentReasons, texts: currentTexts, tools: currentTools, stepFinish: sf })
+    } else {
+      for (const r of currentReasons) result.push({ type: 'single', part: r })
+      for (const t of currentTexts) result.push({ type: 'single', part: t })
+      if (currentTools.length > 0) result.push({ type: 'tool-group', parts: currentTools, stepFinish: sf })
+    }
+    currentReasons = []
+    currentTexts = []
+    currentTools = []
     stepFinish = undefined
   }
 
@@ -1060,24 +1213,34 @@ function groupPartsForRender(parts: Part[]): RenderItem[] {
     if (part.type === 'text' && !isVisibleTextPart(part)) continue
     if (part.type === 'reasoning' && !isVisibleReasoningPart(part)) continue
 
-    if (isToolPart(part)) {
-      toolGroup.push(part)
+    if (part.type === 'reasoning') {
+      currentReasons.push(part)
+    } else if (part.type === 'text') {
+      // 夹在过程段中间的过渡文字并入折叠块；结论性文字（后面无工具）作为分隔
+      if ((currentReasons.length > 0 || currentTools.length > 0) && hasMoreToolsAhead(parts, i + 1)) {
+        currentTexts.push(part)
+      } else {
+        flushRun(stepFinish)
+        result.push({ type: 'single', part })
+      }
+    } else if (isToolPart(part)) {
+      currentTools.push(part)
     } else if (part.type === 'step-finish') {
-      if (toolGroup.length > 0 && hasMoreToolsAhead(parts, i + 1)) {
+      if ((currentReasons.length > 0 || currentTools.length > 0) && hasMoreToolsAhead(parts, i + 1)) {
         // 中间 step-finish：后面还有 tool，暂存不 flush
         stepFinish = part
-      } else if (toolGroup.length > 0) {
-        // 最后一个 step-finish，结束 tool group
-        flushToolGroup(part)
+      } else if (currentReasons.length > 0 || currentTools.length > 0) {
+        // 最后一个 step-finish，结束过程段
+        flushRun(part)
       } else {
         result.push({ type: 'single', part })
       }
     } else {
-      flushToolGroup(stepFinish)
+      flushRun(stepFinish)
       result.push({ type: 'single', part })
     }
   }
 
-  flushToolGroup(stepFinish)
+  flushRun(stepFinish)
   return result
 }
