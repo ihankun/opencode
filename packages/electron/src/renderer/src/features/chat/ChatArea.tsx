@@ -346,25 +346,6 @@ export const ChatArea = memo(
           }),
         [activePages, measuredPageHeights, renderPageSelection],
       )
-      useEffect(() => {
-        const root = scrollRef.current
-        if (!root) return
-        const sig = renderSegments
-          .map(s => (s.kind === 'expanded' ? `E:${s.page.key.slice(-8)}` : `C:${Math.round(s.height)}`))
-          .join('|')
-        console.warn(
-          '[BOUNCE] segments',
-          sig,
-          'scrollH',
-          root.scrollHeight,
-          'clientH',
-          root.clientHeight,
-          'scrollTop',
-          root.scrollTop.toFixed(1),
-          'atBottom',
-          isAtBottomRef.current,
-        )
-      }, [renderSegments])
       const observedMessageIdsSignature = useMemo(
         () =>
           renderSegments
@@ -453,7 +434,6 @@ export const ChatArea = memo(
           isAtBottomRef.current = next
           if (previous !== next) {
             onAtBottomChange?.(next)
-            console.warn('[BOUNCE] at-bottom', previous, '->', next)
             if (next) {
               pendingLayoutAnchorRef.current = null
               stableLayoutAnchorRef.current = null
@@ -718,7 +698,6 @@ export const ChatArea = memo(
         const delta = computeAnchorRestoreScrollDelta(anchor.topOffset, nextTopOffset)
         if (Math.abs(delta) >= 1) {
           root.scrollTop += delta
-          console.warn('[BOUNCE] anchor-scroll', delta.toFixed(1), 'at-bottom=', isAtBottomRef.current, 'anchor=', anchor.messageId)
           updateScrollOffsetSnapshot()
         }
         if (!disclosureLocked) stableLayoutAnchorRef.current = captureLoadMoreAnchor(root)
@@ -826,7 +805,6 @@ export const ChatArea = memo(
         // 贴底时高度测量只在 ref 中累积，不触发重渲染，避免"测量→重渲染→尺寸变化→再测量"反馈造成内容弹跳
         if (isAtBottomRef.current) {
           pendingMeasuredHeightsRef.current = true
-          console.warn('[BOUNCE] measure-at-bottom', pageKey, current ?? 'null', '->', nextHeight)
           return
         }
         setMeasuredPageHeights(next)
