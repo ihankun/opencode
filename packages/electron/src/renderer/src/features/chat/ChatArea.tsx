@@ -26,7 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { animate } from 'motion/mini'
 import { MessageRenderer } from '../message'
-import { buildExecutionCollapsePlan, mergeProcessMessages } from '../message/autoCollapseExecution'
+import { buildExecutionCollapsePlan } from '../message/autoCollapseExecution'
 import { MessageErrorView } from '../message/parts'
 import { ChevronRightIcon, SpinnerIcon } from '../../components/Icons'
 import { messageStore } from '../../store'
@@ -201,6 +201,7 @@ export const ChatArea = memo(
       const lastScrollRootSizeRef = useRef({ width: 0, height: 0 })
       const scrollOffsetFromBottomRef = useRef(0)
       const measuredPageHeightsRef = useRef<Record<string, number>>({})
+      const pendingMeasuredHeightsRef = useRef(false)
       const lastPublishedVisibleIdsRef = useRef<string[]>([])
       const previousActivePagesRef = useRef<{ sessionId?: string | null; pages: StableChatPage[] }>({ pages: [] })
       const lastStreamingPageKeysRef = useRef<ReadonlySet<string>>(new Set())
@@ -345,6 +346,25 @@ export const ChatArea = memo(
           }),
         [activePages, measuredPageHeights, renderPageSelection],
       )
+      useEffect(() => {
+        const root = scrollRef.current
+        if (!root) return
+        const sig = renderSegments
+          .map(s => (s.kind === 'expanded' ? `E:${s.page.key.slice(-8)}` : `C:${Math.round(s.height)}`))
+          .join('|')
+        console.warn(
+          '[BOUNCE] segments',
+          sig,
+          'scrollH',
+          root.scrollHeight,
+          'clientH',
+          root.clientHeight,
+          'scrollTop',
+          root.scrollTop.toFixed(1),
+          'atBottom',
+          isAtBottomRef.current,
+        )
+      }, [renderSegments])
       const observedMessageIdsSignature = useMemo(
         () =>
           renderSegments
@@ -431,7 +451,20 @@ export const ChatArea = memo(
         (next: boolean) => {
           const previous = isAtBottomRef.current
           isAtBottomRef.current = next
-          if (previous !== next) onAtBottomChange?.(next)
+          if (previous !== next) {
+            onAtBottomChange?.(next)
+            console.warn('[BOUNCE] at-bottom', previous, '->', next)
+            if (next) {
+              pendingLayoutAnchorRef.current = null
+              stableLayoutAnchorRef.current = null
+              disclosureLayoutAnchorRef.current = null
+            }
+            // 离开底部时一次性应用贴底期间累积的页高度测量
+            if (!next && pendingMeasuredHeightsRef.current) {
+              pendingMeasuredHeightsRef.current = false
+              setMeasuredPageHeights(measuredPageHeightsRef.current)
+            }
+          }
         },
         [onAtBottomChange],
       )
@@ -685,10 +718,11 @@ export const ChatArea = memo(
         const delta = computeAnchorRestoreScrollDelta(anchor.topOffset, nextTopOffset)
         if (Math.abs(delta) >= 1) {
           root.scrollTop += delta
+          console.warn('[BOUNCE] anchor-scroll', delta.toFixed(1), 'at-bottom=', isAtBottomRef.current, 'anchor=', anchor.messageId)
           updateScrollOffsetSnapshot()
         }
         if (!disclosureLocked) stableLayoutAnchorRef.current = captureLoadMoreAnchor(root)
-      }, [activePages, measuredPageHeights, renderSegments, updateScrollOffsetSnapshot])
+      }, [activePages, measuredPageHeights, updateScrollOffsetSnapshot])
 
       const onVisibleIdsChangeRef = useRef(onVisibleMessageIdsChange)
       useEffect(() => {
@@ -789,6 +823,12 @@ export const ChatArea = memo(
         }
         const next = { ...measuredPageHeightsRef.current, [pageKey]: nextHeight }
         measuredPageHeightsRef.current = next
+        // 贴底时高度测量只在 ref 中累积，不触发重渲染，避免"测量→重渲染→尺寸变化→再测量"反馈造成内容弹跳
+        if (isAtBottomRef.current) {
+          pendingMeasuredHeightsRef.current = true
+          console.warn('[BOUNCE] measure-at-bottom', pageKey, current ?? 'null', '->', nextHeight)
+          return
+        }
         setMeasuredPageHeights(next)
       }, [])
 
@@ -894,8 +934,8 @@ export const ChatArea = memo(
             ref={setScrollContainerRef}
             data-chat-scroll-root="true"
             onClickCapture={captureAnchorBeforeDisclosure}
-            className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar contain-content flex flex-col-reverse"
             style={{ overflowAnchor: 'none' }}
+            className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar contain-content flex flex-col-reverse"
           >
             <div className="flex-1" />
 
@@ -1166,7 +1206,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   }, [isProcessing, turnStart])
 
   if (!plan) {
-    return mergeProcessMessages(messages).map(message => (
+    return messages.map(message => (
       <RenderedMessageItem
         key={message.info.id}
         messageId={message.info.id}
@@ -1233,7 +1273,7 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
           <div className="min-h-0 overflow-hidden">
             {shouldRenderProcess && (
               <div className="flex flex-col gap-2 pt-2">
-                {mergeProcessMessages(processMessages).map(message => (
+                {processMessages.map(message => (
                   <RenderedMessageItem
                     key={`${message.info.id}:process`}
                     messageId={message.info.id}

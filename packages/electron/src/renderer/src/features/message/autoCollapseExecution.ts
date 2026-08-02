@@ -3,54 +3,6 @@ import { isVisibleTextPart, type Message } from '../../types/message'
 import { extractToolData } from './tools'
 import { summarizeTodoItems, type TurnTodoProgress } from './todoProgress'
 
-/** 单条消息是否是"纯过程"消息：无结论正文，只有思考 + 夹带文字 + 工具 */
-export function isProcessMessage(message: Message): boolean {
-  const visible = message.parts.filter(part => {
-    if (part.type === 'step-start' || part.type === 'step-finish' || part.type === 'snapshot' || part.type === 'patch')
-      return false
-    if (part.type === 'text') return isVisibleTextPart(part)
-    return true
-  })
-  const hasExecution = visible.some(part => part.type === 'reasoning' || part.type === 'tool')
-  if (!hasExecution) return false
-  // 夹带的 text（后面还有工具）允许；结论性 text（后面没有工具）视为正文，单独展示
-  for (let i = 0; i < visible.length; i++) {
-    if (visible[i].type !== 'text') continue
-    const hasToolAfter = visible.slice(i + 1).some(p => p.type === 'tool')
-    if (!hasToolAfter) return false
-  }
-  return true
-}
-
-/** 把相邻的纯过程消息拼接成虚拟消息，让 part 级聚合能跨消息合成一个折叠块；结论消息保持独立 */
-export function mergeProcessMessages(messages: Message[]): Message[] {
-  const merged: Message[] = []
-  let run: Message[] = []
-  const flush = () => {
-    if (run.length === 1) {
-      merged.push(run[0])
-    } else if (run.length > 1) {
-      const first = run[0]
-      merged.push({
-        ...first,
-        parts: run.flatMap(m => m.parts),
-        isStreaming: run.some(m => m.isStreaming),
-      })
-    }
-    run = []
-  }
-  for (const message of messages) {
-    if (isProcessMessage(message)) {
-      run.push(message)
-    } else {
-      flush()
-      merged.push(message)
-    }
-  }
-  flush()
-  return merged
-}
-
 export type ExecutionCollapsePlan = {
   conclusionMessageIndex: number
   conclusionPartIndex: number
@@ -104,30 +56,52 @@ export function buildExecutionCollapsePlan(messages: Message[]): ExecutionCollap
   }
 }
 
+const AUTO_FOLD_SUMMARY_HEIGHT = 36
+
+function estimateMessageCollapsedHeight(message: Message): number {
+  let content = 0
+  let runReasoning = 0
+  let runTools = 0
+
+  const flushRun = () => {
+    if (runReasoning + runTools === 0) return
+    // 与渲染一致：连续的纯思考 + 工具段折叠成摘要行，单条思考/工具独立计算
+    content += runReasoning + runTools >= 2 && runTools >= 1
+      ? AUTO_FOLD_SUMMARY_HEIGHT
+      : runReasoning * 24 + runTools * 32
+    runReasoning = 0
+    runTools = 0
+  }
+
+  for (const part of message.parts) {
+    if (part.type === 'reasoning') {
+      runReasoning += 1
+    } else if (part.type === 'tool') {
+      runTools += 1
+    } else if (part.type === 'text') {
+      flushRun()
+      if (!part.synthetic && part.text.trim()) {
+        const estimatedLines = part.text
+          .split(/\r?\n/)
+          .reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 88)), 0)
+        content += Math.min(500, estimatedLines) * 24
+      }
+    }
+  }
+  flushRun()
+  return Math.max(60, content + 56)
+}
+
 export function estimateCollapsedRowHeight(messages: Message[]): number {
   if (messages.length === 0) return 0
   if (messages.some(m => m.info.role !== 'assistant')) return 0
 
-  const plan = buildExecutionCollapsePlan(messages)
-  if (!plan) return 0
-
-  let height = 36
-  const conclusionMessages = messages.slice(plan.conclusionMessageIndex)
-  for (let i = 0; i < conclusionMessages.length; i++) {
-    const parts = i === 0
-      ? conclusionMessages[i].parts.slice(plan.conclusionPartIndex)
-      : conclusionMessages[i].parts
-    for (const part of parts) {
-      if (part.type === 'text' && !part.synthetic && part.text.trim()) {
-        const estimatedLines = part.text
-          .split(/\r?\n/)
-          .reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 88)), 0)
-        height += Math.min(500, estimatedLines) * 24
-      }
-    }
-    if (i > 0) height += 8
+  let height = 24
+  for (let index = 0; index < messages.length; index++) {
+    if (index > 0) height += 8
+    height += estimateMessageCollapsedHeight(messages[index])
   }
-  return Math.max(56, height + 24)
+  return Math.max(56, height)
 }
 
 export function summarizeTurnChanges(userMessage: Message, assistantMessages: Message[]): TurnChangeSummary {

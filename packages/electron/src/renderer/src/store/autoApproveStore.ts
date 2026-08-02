@@ -7,7 +7,6 @@ import { serverStorage } from '../utils/perServerStorage'
 
 // Full Auto 模式：off / session / global
 export type FullAutoMode = 'off' | 'session' | 'global'
-export type AlwaysAllowMode = 'backend' | 'frontend'
 export type ApprovalMode = 'ask' | 'writes' | 'risk' | 'full'
 
 export type SessionPermissionRule = {
@@ -68,21 +67,6 @@ export interface AutoApproveRule {
 }
 
 /**
- * 通配符匹配函数
- * 支持 * (任意字符) 和 ? (单个字符)
- */
-function wildcardMatch(pattern: string, text: string): boolean {
-  // 转换为正则表达式
-  const regexStr = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // 转义特殊字符
-    .replace(/\*/g, '.*') // * -> .*
-    .replace(/\?/g, '.') // ? -> .
-
-  const regex = new RegExp(`^${regexStr}$`, 'i')
-  return regex.test(text)
-}
-
-/**
  * Auto-Approve Store
  * 按 sessionId 存储自动批准规则
  */
@@ -90,10 +74,7 @@ class AutoApproveStore {
   // 规则存储：sessionId -> rules[]
   private rulesMap = new Map<string, AutoApproveRule[]>()
 
-  // 功能开关（存 localStorage，持久化）
-  private _enabled: boolean = false
-  private readonly STORAGE_KEY = 'opencode-auto-approve-enabled'
-
+  // 前端自动批准恒为关闭：始终允许固定交给后端处理
   // Full Auto 开启时是否追补已经等待中的权限（危险操作，默认关闭）
   private _approvePendingOnFullAuto: boolean = false
   private readonly STORAGE_KEY_APPROVE_PENDING_ON_FULL_AUTO = 'opencode-approve-pending-on-full-auto'
@@ -113,12 +94,9 @@ class AutoApproveStore {
   constructor() {
     // 从 localStorage 读取开关状态
     try {
-      const stored = serverStorage.get(this.STORAGE_KEY)
-      this._enabled = stored === 'true'
       const approvePendingStored = serverStorage.get(this.STORAGE_KEY_APPROVE_PENDING_ON_FULL_AUTO)
       this._approvePendingOnFullAuto = approvePendingStored === 'true'
     } catch {
-      this._enabled = false
       this._approvePendingOnFullAuto = false
     }
   }
@@ -132,12 +110,9 @@ class AutoApproveStore {
    */
   reloadFromStorage(): void {
     try {
-      const stored = serverStorage.get(this.STORAGE_KEY)
-      this._enabled = stored === 'true'
       const approvePendingStored = serverStorage.get(this.STORAGE_KEY_APPROVE_PENDING_ON_FULL_AUTO)
       this._approvePendingOnFullAuto = approvePendingStored === 'true'
     } catch {
-      this._enabled = false
       this._approvePendingOnFullAuto = false
     }
     // 切换服务器时清空规则并关闭 Full Auto
@@ -153,31 +128,10 @@ class AutoApproveStore {
   }
 
   /**
-   * 获取功能开关状态
+   * 前端自动批准功能状态：固定关闭，始终允许交给后端处理
    */
   get enabled(): boolean {
-    return this._enabled
-  }
-
-  /**
-   * 设置功能开关
-   */
-  setEnabled(value: boolean): void {
-    this._enabled = value
-    try {
-      serverStorage.set(this.STORAGE_KEY, String(value))
-    } catch {
-      // ignore
-    }
-    this.notify()
-  }
-
-  get alwaysAllowMode(): AlwaysAllowMode {
-    return this._enabled ? 'frontend' : 'backend'
-  }
-
-  setAlwaysAllowMode(mode: AlwaysAllowMode): void {
-    this.setEnabled(mode === 'frontend')
+    return false
   }
 
   get approvePendingOnFullAuto(): boolean {
@@ -314,29 +268,10 @@ class AutoApproveStore {
 
   /**
    * 添加自动批准规则
-   * @param sessionId 会话 ID
-   * @param permission 工具类型
-   * @param patterns 要添加的 pattern 列表
+   * 前端自动批准恒关闭，规则不记录，始终允许固定交给后端处理
    */
   addRules(sessionId: string, permission: string, patterns: string[]): void {
-    if (!this._enabled) return
-
-    const existing = this.rulesMap.get(sessionId) || []
-    const newRules: AutoApproveRule[] = patterns.map(pattern => ({
-      permission,
-      pattern,
-    }))
-
-    // 去重
-    const uniqueRules = [...existing]
-    for (const rule of newRules) {
-      const isDuplicate = uniqueRules.some(r => r.permission === rule.permission && r.pattern === rule.pattern)
-      if (!isDuplicate) {
-        uniqueRules.push(rule)
-      }
-    }
-
-    this.rulesMap.set(sessionId, uniqueRules)
+    return
   }
 
   /**
@@ -362,30 +297,10 @@ class AutoApproveStore {
 
   /**
    * 检查权限请求是否应该自动批准
-   * @param sessionId 会话 ID
-   * @param permission 工具类型
-   * @param requestPatterns 请求的 patterns
-   * @returns true 如果所有 patterns 都被规则匹配
+   * 前端自动批准恒关闭，始终返回 false，交由后端处理
    */
   shouldAutoApprove(sessionId: string, permission: string, requestPatterns: string[]): boolean {
-    if (!this._enabled) return false
-    if (!requestPatterns || requestPatterns.length === 0) return false
-
-    const rules = this.getRules(sessionId)
-    if (rules.length === 0) return false
-
-    // 检查每个请求的 pattern 是否都被至少一条规则匹配
-    return requestPatterns.every(reqPattern => {
-      return rules.some(rule => {
-        // 权限类型必须匹配（或规则是 * 通配）
-        if (rule.permission !== permission && rule.permission !== '*') {
-          return false
-        }
-        // 双向通配匹配：rule 作为模式匹配 request，或 request 作为模式匹配 rule
-        // patterns 和 always 可能格式不同，双向确保都能命中
-        return wildcardMatch(rule.pattern, reqPattern) || wildcardMatch(reqPattern, rule.pattern)
-      })
-    })
+    return false
   }
 
   /**
@@ -393,7 +308,7 @@ class AutoApproveStore {
    */
   getDebugInfo(): { enabled: boolean; sessions: { id: string; rules: AutoApproveRule[] }[] } {
     return {
-      enabled: this._enabled,
+      enabled: false,
       sessions: Array.from(this.rulesMap.entries()).map(([id, rules]) => ({
         id,
         rules,

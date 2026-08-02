@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { autoApproveStore } from '../../../store'
-import type { AlwaysAllowMode } from '../../../store/autoApproveStore'
 import { themeStore } from '../../../store/themeStore'
-import { Toggle, SegmentedControl, SettingRow, SettingsSection } from './SettingsUI'
+import { Toggle, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
 import { notifyAgentsChanged } from '../../../api/agent'
 import { useModels } from '../../../hooks'
@@ -41,19 +40,12 @@ const emptyAgent: AgentDraft = {
 
 export function AgentSettings() {
   const { t } = useTranslation(['settings'])
-  const [alwaysAllowMode, setAlwaysAllowMode] = useState<AlwaysAllowMode>(autoApproveStore.alwaysAllowMode)
   const [approvePendingOnFullAuto, setApprovePendingOnFullAuto] = useState(autoApproveStore.approvePendingOnFullAuto)
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
   const [descriptiveToolSteps, setDescriptiveToolSteps] = useState(themeStore.descriptiveToolSteps)
   const [inlineToolRequests, setInlineToolRequests] = useState(themeStore.inlineToolRequests)
   const [compactInlinePermission, setCompactInlinePermission] = useState(themeStore.compactInlinePermission)
   const desktopPreferences = useDesktopPreferences()
-
-  const handleAlwaysAllowModeChange = (mode: AlwaysAllowMode) => {
-    setAlwaysAllowMode(mode)
-    autoApproveStore.setAlwaysAllowMode(mode)
-    if (mode === 'backend') autoApproveStore.clearAllRules()
-  }
 
   const handleApprovePendingOnFullAutoToggle = () => {
     const next = !approvePendingOnFullAuto
@@ -96,19 +88,6 @@ export function AgentSettings() {
       <AgentProfiles scope="global" />
       <SettingsSection title={t('agent.behavior')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('agent.behaviorDesc')}</p>
-
-        <div>
-          <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.alwaysAllowMode')}</p>
-          <p className="text-[length:var(--fs-sm)] text-text-400 mb-3">{t('chat.alwaysAllowModeDesc')}</p>
-          <SegmentedControl
-            value={alwaysAllowMode}
-            options={[
-              { value: 'backend', label: t('chat.alwaysAllowBackend') },
-              { value: 'frontend', label: t('chat.alwaysAllowFrontend') },
-            ]}
-            onChange={v => handleAlwaysAllowModeChange(v as AlwaysAllowMode)}
-          />
-        </div>
 
         <SettingRow
           label={t('chat.approvePendingOnFullAuto')}
