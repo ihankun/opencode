@@ -96,6 +96,9 @@ export type { NotificationPolicy } from './notificationPolicyStore'
 export { followupQueueStore, useFollowupQueue } from './followupQueueStore'
 export type { QueuedFollowupDraft } from './followupQueueStore'
 
+export { composerDraftStore } from './composerDraftStore'
+export type { ComposerDraft } from './composerDraftStore'
+
 export {
   updateStore,
   useUpdateStore,

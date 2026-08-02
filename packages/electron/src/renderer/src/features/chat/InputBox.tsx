@@ -30,6 +30,7 @@ import {
 } from './input/inputUtils'
 import { keybindingStore, matchesKeybinding } from '../../store/keybindingStore'
 import { themeStore } from '../../store/themeStore'
+import { composerDraftStore } from '../../store/composerDraftStore'
 import type { QueuedFollowupDraft } from '../../store/followupQueueStore'
 import { useChatViewport } from './chatViewport'
 import { useDirectory } from '../../contexts/useDirectory'
@@ -820,7 +821,7 @@ function InputBoxComponent({
   const supportsAnyFile = true
 
   // 文本状态
-  const [text, setText] = useState('')
+  const [text, setText] = useState(() => composerDraftStore.getDraft(paneId)?.text ?? '')
   const [voiceListening, setVoiceListening] = useState(false)
   const [voiceTranscribing, setVoiceTranscribing] = useState(false)
   const voiceRecorderRef = useRef<VoiceRecorderState | null>(null)
@@ -958,7 +959,7 @@ function InputBoxComponent({
     [],
   )
   // 附件状态（图片、文件、文件夹、agent）
-  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>(() => composerDraftStore.getDraft(paneId)?.attachments ?? [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [taskPreflightIssues, setTaskPreflightIssues] = useState<TaskPreflightIssue[]>([])
   const applyProjectProfile = useCallback((profile: ProjectProfile) => {
@@ -1056,6 +1057,15 @@ function InputBoxComponent({
   useEffect(() => {
     latestDraftRef.current = { text, attachments }
   }, [text, attachments])
+
+  // 草稿记忆：输入内容写入 composerDraftStore，页面切换（组件卸载/重挂载）后恢复
+  useEffect(() => {
+    if (text.trim().length === 0 && attachments.length === 0) {
+      composerDraftStore.clearDraft(paneId)
+      return
+    }
+    composerDraftStore.saveDraft(paneId, { text, attachments })
+  }, [attachments, paneId, text])
 
   useEffect(() => {
     let frameId: number | null = null
