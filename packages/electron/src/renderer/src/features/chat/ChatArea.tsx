@@ -52,6 +52,7 @@ import {
   retainNearbyPageSelection,
   resolveAtBottomState,
   seedMeasuredPageHeightsFromPreviousPages,
+  unionExpandedPageSelections,
   type ChatPage,
   type StableChatPage,
 } from './chatPageModel'
@@ -62,6 +63,8 @@ const LOAD_MORE_DEFER_MS = 100
 const PENDING_SCROLL_TARGET_KEEPALIVE_MS = 900
 const DISCLOSURE_ANCHOR_LOCK_MS = 420
 const PAGE_SELECTION_SETTLE_MS = 140
+const SCROLL_MEASURE_SUPPRESS_MS = 160
+const SCROLLING_EXPANDED_RADIUS = 4
 
 type LoadMoreAnchorSnapshot = {
   messageId: string
@@ -187,6 +190,9 @@ export const ChatArea = memo(
       const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null)
       const [pendingLoadMoreAnchorMessageId, setPendingLoadMoreAnchorMessageId] = useState<string | null>(null)
       const scrollSnapshotRafRef = useRef<number | null>(null)
+      const scrollSnapshotSettleTimerRef = useRef<number | null>(null)
+      const isScrollingRef = useRef(false)
+      const [isScrolling, setIsScrolling] = useState(false)
       const pendingLoadMoreAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
       const pendingLayoutAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
       const stableLayoutAnchorRef = useRef<LoadMoreAnchorSnapshot | null>(null)
@@ -292,8 +298,9 @@ export const ChatArea = memo(
             measuredPageHeights,
             scrollOffsetFromBottom,
             viewportHeight,
+            radius: isScrolling ? SCROLLING_EXPANDED_RADIUS : undefined,
           }),
-        [activePages, measuredPageHeights, scrollOffsetFromBottom, viewportHeight],
+        [activePages, isScrolling, measuredPageHeights, scrollOffsetFromBottom, viewportHeight],
       )
 
       const expandedPageSelection = useMemo(
@@ -303,7 +310,13 @@ export const ChatArea = memo(
       const latestExpandedPageSelectionRef = useRef(expandedPageSelection)
       useLayoutEffect(() => {
         latestExpandedPageSelectionRef.current = expandedPageSelection
-        setRetainedPageSelection(previous => retainNearbyPageSelection(expandedPageSelection, previous))
+        // 滚动期间累积保留已展开页（并集）：滚动经过的区域保持展开，避免快速滚动时大片空白；
+        // 停止后由 settle timer 收敛回视口附近
+        setRetainedPageSelection(previous =>
+          isScrollingRef.current
+            ? unionExpandedPageSelections(expandedPageSelection, previous)
+            : retainNearbyPageSelection(expandedPageSelection, previous),
+        )
         if (pageSelectionSettleTimerRef.current !== null) window.clearTimeout(pageSelectionSettleTimerRef.current)
         pageSelectionSettleTimerRef.current = window.setTimeout(() => {
           pageSelectionSettleTimerRef.current = null
@@ -392,7 +405,7 @@ export const ChatArea = memo(
         return () => {
           clearPendingLoadMoreTimer()
           clearPendingScrollTimer()
-          if (scrollSnapshotRafRef.current !== null) cancelAnimationFrame(scrollSnapshotRafRef.current)
+          if (scrollSnapshotSettleTimerRef.current !== null) window.clearTimeout(scrollSnapshotSettleTimerRef.current)
           if (pendingAnchorClearRafRef.current !== null) cancelAnimationFrame(pendingAnchorClearRafRef.current)
           if (pendingSessionResetRafRef.current !== null) cancelAnimationFrame(pendingSessionResetRafRef.current)
           if (visibleIdsPublishRafRef.current !== null) cancelAnimationFrame(visibleIdsPublishRafRef.current)
@@ -489,6 +502,23 @@ export const ChatArea = memo(
           if (atBottom) allowBottomReattachRef.current = false
 
           if (!atBottom) loadMoreBlockedRef.current = false
+          // 滚动期间展开区跟随视口，但页高度测量只写 ref 不触发重渲染；
+          // 滚动停止后统一应用测量，避免"挂载→测量→重建→再挂载"反馈风暴卡死主线程。
+          // 滚动中临时扩大展开半径，让展开窗口覆盖滚动缓冲，滚动经过区域大多已渲染。
+          isScrollingRef.current = true
+          setIsScrolling(true)
+          if (scrollSnapshotSettleTimerRef.current !== null) window.clearTimeout(scrollSnapshotSettleTimerRef.current)
+          scrollSnapshotSettleTimerRef.current = window.setTimeout(() => {
+            scrollSnapshotSettleTimerRef.current = null
+            isScrollingRef.current = false
+            setIsScrolling(false)
+            // 兜底结算：保证滚动停止后展开区落在最终位置
+            updateScrollOffsetSnapshot()
+            if (pendingMeasuredHeightsRef.current) {
+              pendingMeasuredHeightsRef.current = false
+              setMeasuredPageHeights(measuredPageHeightsRef.current)
+            }
+          }, SCROLL_MEASURE_SUPPRESS_MS)
           updateScrollOffsetSnapshot()
         }
 
@@ -802,8 +832,8 @@ export const ChatArea = memo(
         }
         const next = { ...measuredPageHeightsRef.current, [pageKey]: nextHeight }
         measuredPageHeightsRef.current = next
-        // 贴底时高度测量只在 ref 中累积，不触发重渲染，避免"测量→重渲染→尺寸变化→再测量"反馈造成内容弹跳
-        if (isAtBottomRef.current) {
+        // 贴底或滚动中高度测量只在 ref 中累积，不触发重渲染，避免"测量→重渲染→尺寸变化→再测量"反馈造成内容弹跳或滚动卡死
+        if (isAtBottomRef.current || isScrollingRef.current) {
           pendingMeasuredHeightsRef.current = true
           return
         }
@@ -984,6 +1014,7 @@ export const ChatArea = memo(
                   forkTargetIdMap={localForkTargetIdMap}
                   allowStreamingLayoutAnimation={allowStreamingLayoutAnimation}
                   onMeasuredHeightChange={updateMeasuredPageHeight}
+                  skipSyncMeasureRef={isScrollingRef}
                 />
               ) : (
                 <CollapsedPagesBlock key={segment.key} height={segment.height} />
@@ -1020,6 +1051,7 @@ interface PageBlockProps {
   forkTargetIdMap: Map<string, string | undefined>
   allowStreamingLayoutAnimation: boolean
   onMeasuredHeightChange: (pageKey: string, nextHeight: number) => void
+  skipSyncMeasureRef: { current: boolean }
 }
 
 interface PageDerivedValueProps {
@@ -1052,12 +1084,14 @@ export function arePageBlockPropsEqual(previous: PageBlockProps, next: PageBlock
     return false
   }
   if (previous.onMeasuredHeightChange !== next.onMeasuredHeightChange) return false
+  if (previous.skipSyncMeasureRef !== next.skipSyncMeasureRef) return false
   return pageMessageDerivedValuesEqual(previous, next)
 }
 
 function usePageHeightMeasurement(
   pageKey: string,
   onMeasuredHeightChange: (pageKey: string, nextHeight: number) => void,
+  skipSyncMeasureRef?: { current: boolean },
 ) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
 
@@ -1068,8 +1102,11 @@ function usePageHeightMeasurement(
   }, [onMeasuredHeightChange, pageKey])
 
   useLayoutEffect(() => {
+    // 滚动中挂载的页跳过同步测量：读 offsetHeight 会强制同步 reflow，
+    // 快速滚动挂载大量新页时会造成 reflow 风暴卡死主线程；交由 ResizeObserver 异步补测
+    if (skipSyncMeasureRef?.current) return
     measure()
-  }, [measure])
+  }, [measure, skipSyncMeasureRef])
 
   useEffect(() => {
     const element = wrapperRef.current
@@ -1095,8 +1132,9 @@ const PageBlock = memo(function PageBlock({
   forkTargetIdMap,
   allowStreamingLayoutAnimation,
   onMeasuredHeightChange,
+  skipSyncMeasureRef,
 }: PageBlockProps) {
-  const wrapperRef = usePageHeightMeasurement(page.key, onMeasuredHeightChange)
+  const wrapperRef = usePageHeightMeasurement(page.key, onMeasuredHeightChange, skipSyncMeasureRef)
 
   return (
     <div ref={wrapperRef} className="shrink-0" data-page-key={page.key}>

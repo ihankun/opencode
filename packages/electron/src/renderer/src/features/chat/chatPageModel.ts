@@ -8,6 +8,12 @@ export const PREMEASURE_MAX_MESSAGE_BUDGET = 60
 const PREMEASURE_TARGET_VIEWPORTS = 2
 const ESTIMATED_PREMEASURE_MESSAGE_HEIGHT = 80
 
+// 与 TextPartView / CollapsibleUserText 的折叠截断保持一致，
+// 让折叠态下超长消息的估算高度接近真实渲染高度，避免滚动定位偏差
+const LONG_TEXT_THRESHOLD = 30000
+const LONG_TEXT_PREVIEW_CHARS = 6000
+const USER_TEXT_PREVIEW_CHARS = 4000
+
 export interface MessageGroupRow {
   key: string
   messages: Message[]
@@ -74,6 +80,22 @@ export function retainNearbyPageSelection(
   return next
 }
 
+export function unionExpandedPageSelections(
+  current: ExpandedPageSelection,
+  previous: ExpandedPageSelection,
+): ExpandedPageSelection {
+  if (previous.size === 0) return current
+  if (current.size === 0) return previous
+
+  let next = current
+  for (const index of previous) {
+    if (current.has(index)) continue
+    if (next === current) next = new Set(current)
+    next.add(index)
+  }
+  return next
+}
+
 export function computeAnchorRestoreScrollDelta(previousTopOffset: number, nextTopOffset: number): number {
   return nextTopOffset - previousTopOffset
 }
@@ -82,12 +104,16 @@ function estimateMessageHeight(message: Message): number {
   if (message.info.role === 'user') {
     const textHeight = message.parts.reduce((height, part) => {
       if (part.type !== 'text' || part.synthetic) return height
-      return height + estimateTextHeight(part.text, 8)
+      const previewLength = Math.min(part.text.length, part.text.length > LONG_TEXT_THRESHOLD ? USER_TEXT_PREVIEW_CHARS : part.text.length)
+      return height + estimateTextHeight(part.text.slice(0, previewLength), 8)
     }, 0)
     return Math.max(72, textHeight + message.parts.length * 20)
   }
   const contentHeight = message.parts.reduce((height, part) => {
-    if (part.type === 'text' && !part.synthetic) return height + estimateTextHeight(part.text)
+    if (part.type === 'text' && !part.synthetic) {
+      const previewLength = Math.min(part.text.length, part.text.length > LONG_TEXT_THRESHOLD ? LONG_TEXT_PREVIEW_CHARS : part.text.length)
+      return height + estimateTextHeight(part.text.slice(0, previewLength))
+    }
     if (part.type === 'reasoning') return height + 24
     if (part.type === 'tool') return height + 32
     if (part.type === 'subtask') return height + 40

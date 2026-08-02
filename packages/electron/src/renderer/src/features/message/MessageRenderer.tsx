@@ -132,6 +132,20 @@ function useEntryGrowAnimation(created: number) {
 /** 默认预览 8 行 */
 const COLLAPSE_PREVIEW_LINES = 8
 
+/**
+ * 超长用户文本内容级截断阈值：折叠态只渲染前 N 字符，
+ * 避免挂载时全量 markdown 解析 + 渲染海量 DOM 卡死主线程。
+ */
+const USER_TEXT_TRUNCATE_THRESHOLD = 30000
+const USER_TEXT_PREVIEW_CHARS = 4000
+
+function truncateUserText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const boundary = text.lastIndexOf('\n', maxChars)
+  if (boundary > maxChars * 0.5) return text.slice(0, boundary)
+  return text.slice(0, maxChars)
+}
+
 // 折叠状态缓存：消息是否溢出
 const overflowStateCache = new Map<string, boolean>()
 
@@ -180,6 +194,10 @@ const CollapsibleUserText = memo(function CollapsibleUserText({
 
   const showCollapse = collapseEnabled && isOverflow
   const isCollapsed = collapseEnabled && !expanded
+  // 超长文本折叠态只渲染截断预览，展开后才全量渲染，避免挂载时卡死主线程；
+  // 独立于 collapseEnabled，即使主题关闭了折叠也强制截断，防止超长文本白屏
+  const isTruncated = !expanded && text.length > USER_TEXT_TRUNCATE_THRESHOLD
+  const renderText = isTruncated ? truncateUserText(text, USER_TEXT_PREVIEW_CHARS) : text
 
   return (
     <div className="px-4 py-2.5 bg-bg-300 rounded-2xl max-w-full">
@@ -193,14 +211,14 @@ const CollapsibleUserText = memo(function CollapsibleUserText({
           }`}
           style={isCollapsed ? { maxHeight: `${COLLAPSE_PREVIEW_LINES}lh` } : undefined}
         >
-          {renderMarkdown ? <LazyMarkdownRenderer content={text} /> : text}
+          {renderMarkdown ? <LazyMarkdownRenderer content={renderText} /> : renderText}
         </div>
         {/* 底部渐变遮罩 */}
         {showCollapse && isCollapsed && (
           <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-bg-300 to-transparent pointer-events-none" />
         )}
       </div>
-      {showCollapse && (
+      {(showCollapse || isTruncated) && (
         <button
           onClick={() => setExpanded(prev => !prev)}
           className="mt-1 text-[length:var(--fs-sm)] text-text-400 hover:text-text-200 transition-colors"
