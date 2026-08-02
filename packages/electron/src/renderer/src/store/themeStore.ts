@@ -132,8 +132,6 @@ export interface ThemeState {
   customCSSSnippets: CustomCSSSnippet[]
   /** 当前选中的已保存方案 ID；仅用于切换/保存，不直接决定渲染 */
   activeCustomCSSSnippetId: string | null
-  /** 是否自动折叠长用户消息 */
-  collapseUserMessages: boolean
   /** 输入框按下普通回车键时的行为 */
   enterKeyBehavior: EnterKeyBehavior
   /** step-finish 信息栏显示开关 */
@@ -177,7 +175,6 @@ const STORAGE_KEY_COLOR_MODE = 'theme-mode'
 const STORAGE_KEY_CUSTOM_CSS = 'theme-custom-css'
 const STORAGE_KEY_CUSTOM_CSS_SNIPPETS = 'theme-custom-css-snippets'
 const STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID = 'theme-active-custom-css-snippet-id'
-const STORAGE_KEY_COLLAPSE_USER_MESSAGES = 'collapse-user-messages'
 const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
@@ -241,8 +238,6 @@ class ThemeStore {
     const activeCustomCSSSnippetId = customCSSSnippets.some(item => item.id === savedActiveCustomCSSSnippetId)
       ? savedActiveCustomCSSSnippetId
       : null
-    const savedCollapse = localStorage.getItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES)
-    const collapseUserMessages = savedCollapse === null ? true : savedCollapse === 'true'
     const enterKeyBehavior: EnterKeyBehavior =
       localStorage.getItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR) === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR
 
@@ -311,7 +306,6 @@ class ThemeStore {
       customCSS: savedCSS,
       customCSSSnippets,
       activeCustomCSSSnippetId,
-      collapseUserMessages,
       enterKeyBehavior,
       stepFinishDisplay,
       fileChangeIndicatorScope,
@@ -350,9 +344,6 @@ class ThemeStore {
   }
   get activeCustomCSSSnippetId() {
     return this.state.activeCustomCSSSnippetId
-  }
-  get collapseUserMessages() {
-    return this.state.collapseUserMessages
   }
   get enterKeyBehavior() {
     return this.state.enterKeyBehavior
@@ -516,13 +507,6 @@ class ThemeStore {
     if (this.state.activeCustomCSSSnippetId === null) return
     this.state = { ...this.state, activeCustomCSSSnippetId: null }
     localStorage.removeItem(STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID)
-    this.emit()
-  }
-
-  setCollapseUserMessages(enabled: boolean) {
-    if (this.state.collapseUserMessages === enabled) return
-    this.state = { ...this.state, collapseUserMessages: enabled }
-    localStorage.setItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES, String(enabled))
     this.emit()
   }
 
@@ -850,7 +834,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
     customCSS: typeof parsed?.customCSS === 'string' ? parsed.customCSS : '',
     customCSSSnippets,
     activeCustomCSSSnippetId,
-    collapseUserMessages: typeof parsed?.collapseUserMessages === 'boolean' ? parsed.collapseUserMessages : true,
     enterKeyBehavior: parsed?.enterKeyBehavior === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR,
     stepFinishDisplay:
       parsed?.stepFinishDisplay && typeof parsed.stepFinishDisplay === 'object'
@@ -912,7 +895,6 @@ export function importThemeBackup(raw: unknown): void {
   } else {
     localStorage.removeItem(STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID)
   }
-  localStorage.setItem(STORAGE_KEY_COLLAPSE_USER_MESSAGES, String(backup.collapseUserMessages))
   localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, backup.enterKeyBehavior)
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)

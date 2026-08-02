@@ -296,7 +296,6 @@ const UserMessageView = memo(function UserMessageView({
     false,
   )
   const shouldRenderSystemContext = useDelayedRender(showSystemContext)
-  const { collapseUserMessages } = useTheme()
 
   const wrapperRef = useEntryGrowAnimation(info.time.created)
 
@@ -329,7 +328,7 @@ const UserMessageView = memo(function UserMessageView({
         {messageText && (
           <CollapsibleUserText
             text={messageText}
-            collapseEnabled={collapseUserMessages}
+            collapseEnabled
             renderMarkdown
             messageId={info.id}
           />

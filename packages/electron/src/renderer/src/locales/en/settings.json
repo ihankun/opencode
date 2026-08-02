@@ -366,8 +366,6 @@
     "folderStyleRecentsDesc": "Group recent chats by project folder while keeping the default list available",
     "conversationExperience": "Conversation Experience",
     "conversationExperienceDesc": "Message density, reasoning style, and step summary fields",
-    "collapseLongMessages": "Collapse Long Messages",
-    "collapseLongMessagesDesc": "Auto-collapse lengthy user messages",
     "fileChangeIndicatorScope": "File Change Indicator Scope",
     "fileChangeIndicatorScopeDesc": "Choose whether the top file change indicator counts only the latest turn or accumulates across the current session",
     "fileChangeIndicatorScopeLatestTurn": "Latest Turn",

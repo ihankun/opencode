@@ -181,12 +181,6 @@ export function useTheme() {
     themeStore.clearActiveCustomCSSSnippet()
   }, [])
 
-  // ---- Collapse User Messages ----
-
-  const setCollapseUserMessages = useCallback((enabled: boolean) => {
-    themeStore.setCollapseUserMessages(enabled)
-  }, [])
-
   // ---- Step Finish Display ----
 
   const setStepFinishDisplay = useCallback((display: Partial<StepFinishDisplay>) => {
@@ -269,10 +263,6 @@ export function useTheme() {
     deleteCustomCSSSnippet,
     applyCustomCSSSnippet,
     clearActiveCustomCSSSnippet,
-
-    // 折叠长用户消息
-    collapseUserMessages: state.collapseUserMessages,
-    setCollapseUserMessages,
 
     // step-finish 信息栏显示
     stepFinishDisplay: state.stepFinishDisplay,

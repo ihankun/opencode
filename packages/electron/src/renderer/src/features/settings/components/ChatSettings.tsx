@@ -14,19 +14,12 @@ import type { PathMode } from '../../../utils/directoryUtils'
 export function ChatSettings() {
   const { t } = useTranslation(['settings'])
   const { pathMode, setPathMode, effectiveStyle, detectedStyle, isAutoMode } = usePathMode()
-  const [collapseUserMessages, setCollapseUserMessages] = useState(themeStore.collapseUserMessages)
   const [enterKeyBehavior, setEnterKeyBehavior] = useState(themeStore.enterKeyBehavior)
   const [stepFinishDisplay, setStepFinishDisplay] = useState(themeStore.stepFinishDisplay)
   const [fileChangeIndicatorScope, setFileChangeIndicatorScope] = useState(themeStore.fileChangeIndicatorScope)
   const [browserOpenMode, setBrowserOpenModeState] = useState<BrowserOpenMode>(() => getBrowserOpenMode())
   const isMobile = useIsMobile()
   void isMobile
-
-  const handleCollapseToggle = () => {
-    const v = !collapseUserMessages
-    setCollapseUserMessages(v)
-    themeStore.setCollapseUserMessages(v)
-  }
 
   const handleEnterKeyBehaviorChange = (behavior: EnterKeyBehavior) => {
     setEnterKeyBehavior(behavior)
@@ -71,14 +64,6 @@ export function ChatSettings() {
 
       <SettingsSection title={t('chat.conversationExperience')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('chat.conversationExperienceDesc')}</p>
-
-        <SettingRow
-          label={t('chat.collapseLongMessages')}
-          description={t('chat.collapseLongMessagesDesc')}
-          onClick={handleCollapseToggle}
-        >
-          <Toggle enabled={collapseUserMessages} onChange={handleCollapseToggle} />
-        </SettingRow>
 
         <div>
           <p className="text-[length:var(--fs-md)] text-text-100 mb-1.5">{t('chat.fileChangeIndicatorScope')}</p>
