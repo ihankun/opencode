@@ -183,12 +183,13 @@ const ModelListPanel = memo(function ModelListPanel({
     <div className="flex flex-1 flex-col min-h-0 pt-1.5">
       {/* 搜索栏 */}
       <div className="shrink-0 px-2 pb-1.5">
-        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-bg-200/40 transition-colors focus-within:bg-bg-200/60">
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border-200/60 bg-bg-200/40 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
           <SearchIcon aria-hidden="true" className="w-3.5 h-3.5 text-text-400 flex-shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
             name="model-search"
+            data-model-search-input
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value)
@@ -198,7 +199,7 @@ const ModelListPanel = memo(function ModelListPanel({
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
             autoComplete="off"
-            className="flex-1 bg-transparent border-none outline-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400"
+            className="flex-1 bg-transparent border-none text-[length:var(--fs-base)] text-text-100 placeholder:text-text-400 outline-none focus-visible:outline-none"
           />
         </div>
       </div>

@@ -17,7 +17,7 @@
     "restoreCheckpointConfirm": "Restore the workspace checkpoint from {{label}}? Current unsaved file changes will be replaced. Conversation history is not reverted.",
     "deleteCheckpointConfirm": "Delete workspace checkpoint {{label}}?",
     "checkpointNoDiff": "The workspace has no differences from this checkpoint.",
-    "openLocation": "Open location",
+    "openLocation": "Open",
     "selectLocationApp": "Choose application",
     "closeBottomPanel": "Close bottom panel",
     "openBottomPanel": "Open bottom panel",

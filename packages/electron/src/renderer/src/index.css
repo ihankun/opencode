@@ -1600,6 +1600,12 @@ input[data-session-search-input]:focus-visible {
   outline: none;
 }
 
+input[data-model-search-input]:focus-visible,
+input[data-provider-search-input]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

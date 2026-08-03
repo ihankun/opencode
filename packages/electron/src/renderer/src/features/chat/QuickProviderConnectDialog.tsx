@@ -274,14 +274,15 @@ export function QuickProviderConnectDialog({
       <div className="min-h-0">
         {!selectedProviderID ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/60 px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/60 px-3 py-2 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
               <SearchIcon size={14} className="shrink-0 text-text-400" />
               <input
                 autoFocus
+                data-provider-search-input
                 value={query}
                 onChange={event => setQuery(event.target.value)}
                 placeholder={t('providerConnect.search')}
-                className="min-w-0 flex-1 bg-transparent text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400"
+                className="min-w-0 flex-1 bg-transparent text-[length:var(--fs-md)] text-text-100 placeholder:text-text-400 outline-none focus-visible:outline-none"
               />
             </div>
             <div className="max-h-[min(460px,60vh)] space-y-1 overflow-y-auto pr-1 custom-scrollbar">
