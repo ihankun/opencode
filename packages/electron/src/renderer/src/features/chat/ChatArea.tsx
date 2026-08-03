@@ -49,6 +49,7 @@ import {
   buildTurnDurationMap,
   computeExpandedPageRange,
   expandSelectionWithPageKeys,
+  getMessageReplyStart,
   retainNearbyPageSelection,
   resolveAtBottomState,
   seedMeasuredPageHeightsFromPreviousPages,
@@ -253,10 +254,12 @@ export const ChatArea = memo(
         () => turnDurationMapProp ?? buildTurnDurationMap(messages, visibleMessages),
         [messages, turnDurationMapProp, visibleMessages],
       )
-      // 发送后 agent 尚未产出任何 assistant 回复时显示"正在处理"，
-      // 一旦最后一条消息变为 assistant（开始回复）即隐藏，无需等待回复完成
+      // 发送后 agent 尚未产出可见回复时显示"正在处理"：
+      // 最后一条仍是已完成的历史 assistant 回复（SSE 尚未回显新用户消息）或用户消息时均显示，
+      // 仅当最后一条变为正在流式输出的 assistant 回复（开始回复）即隐藏
       const lastMessage = messages[messages.length - 1]
-      const showProcessing = isStreaming && lastMessage?.info.role !== 'assistant'
+      const showProcessing =
+        isStreaming && !(lastMessage?.info.role === 'assistant' && lastMessage.info.time.completed == null)
 
       const activePages = pageRecords ?? pages
 
@@ -1211,9 +1214,17 @@ const AssistantTurnMessages = memo(function AssistantTurnMessages({
   const [expanded, setExpanded] = useUiDisclosureState(disclosureKey, true)
   const shouldRenderProcess = useDelayedRender(expanded)
 
-  // 处理中：实时累加耗时（每秒刷新），完成后回落实际耗时
+  // 处理中：实时累加耗时（每秒刷新），完成后回落实际耗时。
+  // 计时起点取该轮最早产出内容的时间（首个 part 的 start），即 agent 真正开始回复的时刻，
+  // 排除等待 agent 开始回复前的耗时；无 part 时退回到消息创建时间
   const isProcessing = messages.some(message => message.isStreaming)
-  const turnStart = messages[0]?.info.time.created
+  const turnStart = messages.reduce(
+    (earliest, message) => {
+      const start = getMessageReplyStart(message) ?? message.info.time.created
+      return earliest == null || start < earliest ? start : earliest
+    },
+    undefined as number | undefined,
+  )
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!isProcessing || turnStart == null) return

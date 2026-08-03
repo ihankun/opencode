@@ -825,10 +825,27 @@ function InputBoxComponent({
   const [voiceListening, setVoiceListening] = useState(false)
   const [voiceTranscribing, setVoiceTranscribing] = useState(false)
   const voiceRecorderRef = useRef<VoiceRecorderState | null>(null)
+  // 语音模型是否已在 设置-语音模型 中配置可用（apiKeyRequired 且缺 key 视为未配置）
+  const [voiceConfigured, setVoiceConfigured] = useState(false)
+  useEffect(() => {
+    let disposed = false
+    void window.customOpenCode?.speechModelConfig?.()
+      .then(config => {
+        if (disposed) return
+        setVoiceConfigured(!!config && !(config.apiKeyRequired && !config.hasApiKey))
+      })
+      .catch(() => {
+        if (!disposed) setVoiceConfigured(false)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [])
   const voiceSupported = typeof window !== 'undefined'
     && typeof MediaRecorder !== 'undefined'
     && Boolean(navigator.mediaDevices?.getUserMedia)
     && typeof window.customOpenCode?.transcribeAudio === 'function'
+    && voiceConfigured
   const toggleVoice = useCallback(async () => {
     if (voiceTranscribing) return
     if (voiceListening) {

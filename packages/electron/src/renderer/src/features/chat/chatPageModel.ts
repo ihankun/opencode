@@ -1,4 +1,4 @@
-import type { Message } from '../../types/message'
+import type { Message, Part } from '../../types/message'
 
 export const PAGE_MESSAGE_COUNT = 16
 export const EXPANDED_PAGE_RADIUS = 2
@@ -605,32 +605,58 @@ export function buildPageRenderSegments(options: {
   return segments
 }
 
+function getPartStart(part: Part): number | undefined {
+  if (part.type === 'tool') return part.state.time?.start
+  if ('time' in part) {
+    if (part.type === 'retry') return part.time.created
+    return part.time?.start
+  }
+  return undefined
+}
+
+/** 该消息最早产出内容的时间（第一个 part 的 start），无任何 part 时返回 undefined */
+export function getMessageReplyStart(message: Message): number | undefined {
+  let start: number | undefined
+  for (const part of message.parts) {
+    const partStart = getPartStart(part)
+    if (partStart == null) continue
+    if (start == null || partStart < start) start = partStart
+  }
+  return start
+}
+
 export function buildTurnDurationMap(messages: Message[], visibleMessages: Message[]): Map<string, number> {
   const map = new Map<string, number>()
   const visibleAssistantIds = new Set(
     visibleMessages.filter(message => message.info.role === 'assistant').map(message => message.info.id),
   )
 
-  let currentUserCreated: number | null = null
+  // 以每轮最早产出内容的时间（首个 part 的 start）作为计时起点，排除等待 agent
+  // 真正开始回复前的耗时；无 part 时退回到消息创建时间
+  let currentTurnStart: number | null = null
   let currentVisibleAssistantId: string | null = null
   let currentLastCompleted: number | null = null
 
   const commitTurn = () => {
-    if (currentUserCreated == null || currentVisibleAssistantId == null || currentLastCompleted == null) return
-    map.set(currentVisibleAssistantId, currentLastCompleted - currentUserCreated)
+    if (currentTurnStart == null || currentVisibleAssistantId == null || currentLastCompleted == null) return
+    map.set(currentVisibleAssistantId, currentLastCompleted - currentTurnStart)
   }
 
   for (const message of messages) {
     if (message.info.role === 'user') {
       commitTurn()
-      currentUserCreated = message.info.time.created
+      currentTurnStart = null
       currentVisibleAssistantId = null
       currentLastCompleted = null
       continue
     }
 
-    if (currentUserCreated == null || message.info.role !== 'assistant') continue
+    if (message.info.role !== 'assistant') continue
 
+    const messageStart = getMessageReplyStart(message) ?? message.info.time.created
+    if (currentTurnStart == null || messageStart < currentTurnStart) {
+      currentTurnStart = messageStart
+    }
     if (visibleAssistantIds.has(message.info.id)) {
       currentVisibleAssistantId = message.info.id
     }
