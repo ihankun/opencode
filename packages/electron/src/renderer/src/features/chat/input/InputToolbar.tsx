@@ -25,7 +25,7 @@ import { ContextDetailsDialog } from '../sidebar/ContextDetailsDialog'
 import { computeContextSources } from '../contextSources'
 import { useChatViewport } from '../chatViewport'
 import { selectableAgentsInDisplayOrder } from '../agentOrder'
-import { formatTokens, formatCost } from '../../../hooks'
+import { formatTokens } from '../../../hooks'
 import type { ApiAgent } from '../../../api/client'
 import type { ModelInfo, FileCapabilities } from '../../../api'
 import type { SessionStats } from '../../../hooks'
@@ -198,7 +198,7 @@ function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; h
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [tooltipOpen, setTooltipOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [sourcesOpen, setSourcesOpen] = useState(true)
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
   const { messages } = useMessageStore()
   const contextUsed = hasMessages ? (stats?.contextUsed ?? 0) : 0
@@ -309,7 +309,6 @@ function ContextUsageIndicator({ stats, hasMessages }: { stats?: SessionStats; h
                   </div>
                 )}
               </div>
-              <div className="mt-1.5 text-[length:var(--fs-xxs)] text-text-500">{formatCost(stats?.totalCost ?? 0)}</div>
             </div>,
             document.body,
           )
