@@ -6,7 +6,7 @@
 
 import { memo, useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, GitCommitIcon, DownloadIcon } from './Icons'
+import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, DownloadIcon, GitCommitIcon, UploadIcon, MoreIcon, CheckIcon } from './Icons'
 import { getMaterialIconUrl } from '../utils/materialIcons'
 import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
@@ -38,10 +38,10 @@ const MIN_PREVIEW_HEIGHT = 120
 type ChangeMode = ChangeScopeMode
 
 function getDefaultChangeMode(options: ChangeMode[]) {
-  if (options.includes('turn')) return 'turn'
   if (options.includes('git')) return 'git'
   if (options.includes('branch')) return 'branch'
   if (options.includes('session')) return 'session'
+  if (options.includes('turn')) return 'turn'
   return options[0] ?? 'session'
 }
 
@@ -98,7 +98,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   const [turnDiffs, setTurnDiffs] = useState<FileDiff[]>([])
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
-  const [listMode, setListMode] = useState<'flat' | 'tree'>('tree')
+  const [listMode, setListMode] = useState<'flat' | 'tree'>('flat')
   const [changeMenuOpen, setChangeMenuOpen] = useState(false)
   const changeMode = useSessionChangeScope(sessionId)
 
@@ -109,6 +109,9 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
 
   // 展开的目录
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
+
+  // 勾选的暂存文件（git 模式）
+  const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set())
 
   const projectRequestIdRef = useRef(0)
   const diffRequestIdRef = useRef({ git: 0, branch: 0, session: 0, turn: 0 })
@@ -485,6 +488,34 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
     setSelectedFile(prev => (prev === file ? prev : file))
   }, [])
 
+  // 勾选文件用于暂存
+  const handleToggleFileCheck = useCallback((file: string) => {
+    setCheckedFiles(prev => {
+      const next = new Set(prev)
+      if (next.has(file)) next.delete(file)
+      else next.add(file)
+      return next
+    })
+  }, [])
+
+  const handleToggleAllCheck = useCallback(() => {
+    setCheckedFiles(prev => {
+      const allFiles = diffs.map(diff => diff.file)
+      const next = allFiles.every(file => prev.has(file)) ? [] : allFiles
+      return new Set(next)
+    })
+  }, [diffs])
+
+  // diffs 变化时清理失效的勾选
+  useEffect(() => {
+    setCheckedFiles(prev => {
+      const available = new Set(diffs.map(diff => diff.file))
+      const next = new Set([...prev].filter(file => available.has(file)))
+      if (next.size === prev.size) return prev
+      return next
+    })
+  }, [diffs])
+
   // 切换目录展开/折叠
   const handleToggleDir = useCallback((path: string) => {
     setExpandedDirs(prev => {
@@ -631,6 +662,16 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
             style={statFadeMaskStyle}
           >
             <div className="inline-flex h-6 min-w-max items-center gap-1.5 whitespace-nowrap text-[length:var(--fs-xxs)] font-mono tabular-nums">
+              {changeMode === 'git' && diffs.length > 0 && (
+                <input
+                  type="checkbox"
+                  checked={diffs.every(diff => checkedFiles.has(diff.file))}
+                  onChange={handleToggleAllCheck}
+                  title={t('sessionChanges.selectAll')}
+                  aria-label={t('sessionChanges.selectAll')}
+                  className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent-main-100"
+                />
+              )}
               <span className="text-success-100">+{totalStats.additions}</span>
               <span className="text-danger-100">-{totalStats.deletions}</span>
               <span className="text-text-400">{compactFileCountLabel}</span>
@@ -659,18 +700,6 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
             >
               <DownloadIcon size={12} />
             </button>
-            {changeMode === 'git' && (
-              <GitActions
-                files={diffs.map(diff => diff.file)}
-                selectedFile={selectedFile}
-                directory={directory}
-                vcsInfo={vcsInfo}
-                containerRef={containerRef}
-                onChanged={handleRefresh}
-                onError={setError}
-              />
-            )}
-
             <button
               ref={changeMenuTriggerRef}
               type="button"
@@ -826,6 +855,19 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />
         </div>
 
+        {changeMode === 'git' && (
+          <GitActions
+            files={diffs.map(diff => diff.file)}
+            checkedFiles={checkedFiles}
+            selectedFile={selectedFile}
+            directory={directory}
+            vcsInfo={vcsInfo}
+            containerRef={containerRef}
+            onChanged={handleRefresh}
+            onError={setError}
+          />
+        )}
+
         {/* File List */}
         <div className="flex-1 overflow-auto panel-scrollbar-y">
           {loading ? (
@@ -844,6 +886,8 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
                       node={node}
                       depth={0}
                       expandedDirs={expandedDirs}
+                      checkedFiles={checkedFiles}
+                      onToggleFileCheck={handleToggleFileCheck}
                       onSelectFile={handleSelectFile}
                       onToggleDir={handleToggleDir}
                     />
@@ -862,6 +906,16 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
                        text-text-300
                      `}
                       >
+                        {changeMode === 'git' && (
+                          <input
+                            type="checkbox"
+                            checked={checkedFiles.has(diff.file)}
+                            onChange={() => handleToggleFileCheck(diff.file)}
+                            onClick={event => event.stopPropagation()}
+                            aria-label={t('sessionChanges.selectFile')}
+                            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent-main-100"
+                          />
+                        )}
                         <img
                           src={getMaterialIconUrl(diff.file, 'file')}
                           alt=""
@@ -926,8 +980,11 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   )
 })
 
+const COMMIT_MESSAGE_KEY = 'opencode-commit-message'
+
 function GitActions({
   files,
+  checkedFiles,
   selectedFile,
   directory,
   vcsInfo,
@@ -936,6 +993,7 @@ function GitActions({
   onError,
 }: {
   files: string[]
+  checkedFiles: Set<string>
   selectedFile: string | null
   directory?: string
   vcsInfo: VcsInfo | null
@@ -949,7 +1007,8 @@ function GitActions({
   const [isOpen, setIsOpen] = useState(false)
   const [action, setAction] = useState<string | null>(null)
   const [commitOpen, setCommitOpen] = useState(false)
-  const [commitMessage, setCommitMessage] = useState('')
+  const [commitError, setCommitError] = useState<string | null>(null)
+  const [commitMessage, setCommitMessage] = useState(() => localStorage.getItem(COMMIT_MESSAGE_KEY) ?? '')
   const [pullRequestOpen, setPullRequestOpen] = useState(false)
   const [pullRequestTitle, setPullRequestTitle] = useState('')
   const [pullRequestBody, setPullRequestBody] = useState('')
@@ -982,7 +1041,7 @@ function GitActions({
   }, [isOpen])
 
   const run = useCallback(
-    async (name: string, operation: () => Promise<string>) => {
+    async (name: string, operation: () => Promise<string>, reportError?: (message: string) => void) => {
       setAction(name)
       setIsOpen(false)
       onError(null)
@@ -993,7 +1052,9 @@ function GitActions({
         return true
       } catch (error) {
         sessionErrorHandler(`git ${name}`, error)
-        onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))
+        const message = error instanceof Error ? error.message : t('sessionChanges.gitActionFailed')
+        onError(message)
+        reportError?.(message)
         return false
       } finally {
         setAction(null)
@@ -1006,21 +1067,75 @@ function GitActions({
   const selected = selectedFile ? [selectedFile] : []
   const pullRequestUrl = createPullRequestUrl(vcsInfo?.remote_url, vcsInfo?.branch, vcsInfo?.default_branch)
 
+  const toolbarIconButtonClass =
+    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-200/80 bg-bg-200/60 text-text-200 transition-colors hover:bg-bg-300 hover:text-text-100 disabled:opacity-40 disabled:cursor-not-allowed'
+
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setIsOpen(open => !open)}
-        disabled={action !== null || !mutationsSupported}
-        aria-label={t('sessionChanges.gitActions')}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        title={t('sessionChanges.gitActions')}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors disabled:opacity-50"
-      >
-        <GitCommitIcon size={13} className={action ? 'animate-pulse' : ''} />
-      </button>
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-border-200/30 bg-bg-000/40 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={() => void run('stage', () => stageVcsFiles([...checkedFiles], directory))}
+          disabled={checkedFiles.size === 0 || action !== null || !mutationsSupported}
+          title={t('sessionChanges.stageChecked', { count: checkedFiles.size })}
+          aria-label={t('sessionChanges.stageChecked', { count: checkedFiles.size })}
+          className={`${toolbarIconButtonClass} ${checkedFiles.size > 0 ? '!border-accent-main-100/60 !bg-accent-main-100/10 !text-accent-main-100' : ''}`}
+        >
+          <CheckIcon size={13} />
+          {checkedFiles.size > 0 && (
+            <span className="text-[length:var(--fs-xxs)] font-mono tabular-nums">{checkedFiles.size}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(false)
+            setCommitError(null)
+            setCommitOpen(true)
+          }}
+          disabled={action !== null || !mutationsSupported}
+          title={t('sessionChanges.commit')}
+          aria-label={t('sessionChanges.commit')}
+          className={toolbarIconButtonClass}
+        >
+          <GitCommitIcon size={13} className={action === 'commit' ? 'animate-pulse' : ''} />
+        </button>
+        <div className="h-4 w-px shrink-0 bg-border-200/50" />
+        <button
+          type="button"
+          onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}
+          disabled={action !== null || !advancedSupported}
+          title={t('sessionChanges.pull')}
+          aria-label={t('sessionChanges.pull')}
+          className={toolbarIconButtonClass}
+        >
+          <DownloadIcon size={13} className={action === 'pull' ? 'animate-pulse' : ''} />
+        </button>
+        <button
+          type="button"
+          onClick={() => void run('push', () => pushVcsBranch(directory))}
+          disabled={action !== null || !mutationsSupported}
+          title={t('sessionChanges.push')}
+          aria-label={t('sessionChanges.push')}
+          className={toolbarIconButtonClass}
+        >
+          <UploadIcon size={13} className={action === 'push' ? 'animate-pulse' : ''} />
+        </button>
+        <div className="flex-1" />
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setIsOpen(open => !open)}
+          disabled={action !== null || !mutationsSupported}
+          aria-label={t('sessionChanges.gitActions')}
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
+          title={t('sessionChanges.gitActions')}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-400 hover:text-text-100 hover:bg-bg-200/50 transition-colors disabled:opacity-50"
+        >
+          <MoreIcon size={13} className={action ? 'animate-pulse' : ''} />
+        </button>
+      </div>
 
       <DropdownMenu
         triggerRef={triggerRef}
@@ -1044,7 +1159,7 @@ function GitActions({
             {t('sessionChanges.unstageAll')}
           </button>
           <div className="my-1 h-px bg-border-200/50" />
-          <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setCommitOpen(true) }}>
+          <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setCommitError(null); setCommitOpen(true) }}>
             {t('sessionChanges.commit')}
           </button>
           <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('push', () => pushVcsBranch(directory))}>
@@ -1094,9 +1209,11 @@ function GitActions({
           className="space-y-4"
           onSubmit={event => {
             event.preventDefault()
-            if (!commitMessage.trim()) return
-            void run('commit', () => commitVcsChanges(commitMessage, directory)).then(success => {
+            if (!commitMessage.trim() || action !== null) return
+            setCommitError(null)
+            void run('commit', () => commitVcsChanges(commitMessage, directory), setCommitError).then(success => {
               if (!success) return
+              localStorage.setItem(COMMIT_MESSAGE_KEY, commitMessage)
               setCommitMessage('')
               setCommitOpen(false)
             })
@@ -1110,6 +1227,11 @@ function GitActions({
             autoFocus
             className="w-full resize-y rounded-lg border border-border-200 bg-bg-100 px-3 py-2 text-[length:var(--fs-sm)] text-text-100 outline-none focus:border-accent-main-100"
           />
+          {commitError && (
+            <div className="rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100 whitespace-pre-wrap break-words">
+              {commitError}
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setCommitOpen(false)} disabled={action !== null}>
               {t('common:cancel')}
@@ -1527,6 +1649,8 @@ interface ChangesTreeItemProps {
   node: ChangesTreeNode
   depth: number
   expandedDirs: Set<string>
+  checkedFiles?: Set<string>
+  onToggleFileCheck?: (file: string) => void
   onSelectFile: (path: string) => void
   onToggleDir: (path: string) => void
 }
@@ -1535,9 +1659,12 @@ const ChangesTreeItem = memo(function ChangesTreeItem({
   node,
   depth,
   expandedDirs,
+  checkedFiles,
+  onToggleFileCheck,
   onSelectFile,
   onToggleDir,
 }: ChangesTreeItemProps) {
+  const { t } = useTranslation(['components', 'common'])
   const isExpanded = expandedDirs.has(node.path)
   const paddingLeft = 8 + depth * 16
 
@@ -1578,6 +1705,8 @@ const ChangesTreeItem = memo(function ChangesTreeItem({
               node={child}
               depth={depth + 1}
               expandedDirs={expandedDirs}
+              checkedFiles={checkedFiles}
+              onToggleFileCheck={onToggleFileCheck}
               onSelectFile={onSelectFile}
               onToggleDir={onToggleDir}
             />
@@ -1597,6 +1726,16 @@ const ChangesTreeItem = memo(function ChangesTreeItem({
        `}
       style={{ paddingLeft: paddingLeft + 16 }}
     >
+      {onToggleFileCheck && (
+        <input
+          type="checkbox"
+          checked={checkedFiles?.has(node.path) ?? false}
+          onChange={() => onToggleFileCheck(node.path)}
+          onClick={event => event.stopPropagation()}
+          aria-label={t('sessionChanges.selectFile')}
+          className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent-main-100"
+        />
+      )}
       <img
         src={getMaterialIconUrl(node.name, 'file')}
         alt=""

@@ -174,7 +174,10 @@
     "lineFeedbackPrompt": "Please address this inline feedback:\n- File: {{file}}\n- Line: {{line}} ({{side}})\n- Feedback: {{feedback}}",
     "beforeChange": "before the change",
     "afterChange": "after the change",
-    "addToConversation": "Add to conversation"
+    "addToConversation": "Add to conversation",
+    "selectAll": "Select all files",
+    "selectFile": "Select file for staging",
+    "stageChecked": "Stage {{count}} checked"
   },
   "taskPanel": {
     "artifacts": "Artifacts",

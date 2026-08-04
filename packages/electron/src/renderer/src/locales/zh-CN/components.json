@@ -173,7 +173,10 @@
     "lineFeedbackPrompt": "请处理这条行级反馈：\n- 文件：{{file}}\n- 行号：{{line}}（{{side}}）\n- 反馈：{{feedback}}",
     "beforeChange": "修改前",
     "afterChange": "修改后",
-    "addToConversation": "加入对话"
+    "addToConversation": "加入对话",
+    "selectAll": "全选文件",
+    "selectFile": "勾选以暂存",
+    "stageChecked": "暂存已勾选 {{count}} 个文件"
   },
   "taskPanel": {
     "artifacts": "产物",
