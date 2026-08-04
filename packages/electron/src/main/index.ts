@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, dialog, nativeImage, Notification, protocol, session, shell, systemPreferences } from "electron"
-import { access, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { access, chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
 import { homedir, tmpdir } from "node:os"
@@ -37,6 +37,8 @@ import { registerFilesIpc } from "./ipc/files"
 import { registerImBridgeIpc } from "./ipc/imBridge"
 import { registerMarketplaceIpc } from "./ipc/marketplace"
 import { registerNotificationIpc } from "./ipc/notifications"
+import { registerNotificationHistoryIpc } from "./ipc/notificationHistory"
+import { createNotificationDatabase, type DesktopNotificationDatabase, type StoredNotification } from "./notificationDatabase"
 import { registerDesktopPreferencesIpc } from "./ipc/preferences"
 import { registerProjectsIpc } from "./ipc/projects"
 import { registerQuotaIpc } from "./ipc/quota"
@@ -652,6 +654,22 @@ registerNotificationIpc({
   microphonePermission,
   notificationPermission,
   sendNotification: sendNativeNotification,
+})
+
+let notificationDatabase: DesktopNotificationDatabase | undefined
+function getNotificationDatabase() {
+  if (!notificationDatabase) {
+    const databasePath = join(app.getPath("userData"), "notifications.sqlite")
+    notificationDatabase = createNotificationDatabase(databasePath)
+    void chmod(databasePath, 0o600).catch(() => undefined)
+  }
+  return notificationDatabase
+}
+
+registerNotificationHistoryIpc({
+  assertSender: assertMainWindow,
+  list: () => getNotificationDatabase().list(),
+  replaceAll: (notifications) => getNotificationDatabase().replaceAll(notifications as StoredNotification[]),
 })
 registerDiagnosticsIpc({
   exportLogs: exportDebugLogs,

@@ -18,12 +18,15 @@ import {
   SearchIcon,
   SidebarIcon,
   TeachIcon,
+  BellIcon,
 } from './components/Icons'
+import { NotificationCenterDialog } from './components/NotificationCenter'
 import { useDirectory, useGlobalEvents, useGlobalKeybindings, useRouter } from './hooks'
 import { useViewportHeight } from './hooks/useViewportHeight'
 import { useWakeLock } from './hooks/useWakeLock'
 import type { KeybindingHandlers } from './hooks/useKeybindings'
 import { keybindingStore } from './store/keybindingStore'
+import { useUnreadNotificationCount } from './store/notificationStore'
 import {
   composerDraftStore,
   layoutStore,
@@ -137,6 +140,32 @@ function ElectronSidebarSearch({ title, onOpen }: { title: string; onOpen: () =>
   )
 }
 
+function ElectronNotificationToggle({
+  title,
+  unreadCount,
+  onOpen,
+}: {
+  title: string
+  unreadCount: number
+  onOpen: () => void
+}) {
+  return createPortal(
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={title}
+      title={title}
+      className="electron-notification-toggle window-no-drag"
+    >
+      <BellIcon size={16} />
+      {unreadCount > 0 && (
+        <span className="electron-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+      )}
+    </button>,
+    document.body,
+  )
+}
+
 interface ElectronHistoryNavigationProps {
   backTitle: string
   forwardTitle: string
@@ -210,6 +239,8 @@ function App() {
   const [utilityPage, setUtilityPage] = useState<MainUtilityPage | null>(null)
   const [extensionPageTab, setExtensionPageTab] = useState<ExtensionPageTab>('skills')
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false)
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
+  const unreadNotificationCount = useUnreadNotificationCount()
   const navRestoringRef = useRef(false)
   const prevUtilityPageRef = useRef<MainUtilityPage | null>(null)
 
@@ -1196,8 +1227,10 @@ function App() {
           onOpenSidebarPreview={openSidebarPreview}
           onCloseSidebarPreview={closeSidebarPreview}
           onOpenSearch={() => setSessionSearchOpen(true)}
+          onOpenNotifications={() => setNotificationCenterOpen(true)}
           sidebarTitle={sidebarExpanded ? t('chat:sidebar.collapseSidebar') : t('chat:sidebar.expandSidebar')}
           searchTitle={t('chat:sidebar.search')}
+          notificationsTitle={t('chat:sidebar.notifications')}
           backTitle={t('components:desktopTitlebar.goBack')}
           forwardTitle={t('components:desktopTitlebar.goForward')}
           onGoBack={handleGoBack}
@@ -1213,6 +1246,11 @@ function App() {
             onPreviewClose={closeSidebarPreview}
           />
           <ElectronSidebarSearch title={t('chat:sidebar.search')} onOpen={() => setSessionSearchOpen(true)} />
+          <ElectronNotificationToggle
+            title={t('chat:sidebar.notifications')}
+            unreadCount={unreadNotificationCount}
+            onOpen={() => setNotificationCenterOpen(true)}
+          />
           <ElectronHistoryNavigation backTitle={t('components:desktopTitlebar.goBack')} forwardTitle={t('components:desktopTitlebar.goForward')} onGoBack={handleGoBack} onGoForward={handleGoForward} />
         </>
       ) : null}
@@ -1428,6 +1466,8 @@ function App() {
           onClose={() => setSessionSearchOpen(false)}
           onSelectSession={handleSelectSession}
         />
+
+        <NotificationCenterDialog isOpen={notificationCenterOpen} onClose={() => setNotificationCenterOpen(false)} />
 
       </ChatViewportProvider>
     </div>

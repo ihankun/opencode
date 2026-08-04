@@ -54,17 +54,17 @@ type Subscriber = () => void
 const TOAST_DURATION = 8000
 const MAX_TOASTS = 3
 const EXIT_ANIMATION_MS = 200
-const STORAGE_KEY = 'opencode:notifications'
 const TOAST_ENABLED_KEY = 'opencode:toast-enabled'
 const MAX_NOTIFICATIONS = 50
+const LEGACY_STORAGE_KEY = 'opencode:notifications'
 
 // ============================================
-// localStorage helpers
+// 历史数据 helpers
 // ============================================
 
-function loadNotifications(): NotificationEntry[] {
+function loadLegacyNotifications(): NotificationEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) return []
     return (JSON.parse(raw) as NotificationEntry[]).slice(0, MAX_NOTIFICATIONS)
   } catch {
@@ -72,11 +72,19 @@ function loadNotifications(): NotificationEntry[] {
   }
 }
 
-function saveNotifications(entries: NotificationEntry[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
-  } catch {
-    // quota exceeded
+function normalizeNotification(value: unknown): NotificationEntry | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Record<string, unknown>
+  if (typeof item.id !== 'string' || typeof item.title !== 'string') return null
+  return {
+    id: item.id,
+    type: (item.type as NotificationType) || 'completed',
+    title: item.title,
+    body: typeof item.body === 'string' ? item.body : '',
+    sessionId: typeof item.sessionId === 'string' ? item.sessionId : '',
+    directory: typeof item.directory === 'string' ? item.directory : undefined,
+    timestamp: typeof item.timestamp === 'number' ? item.timestamp : Date.now(),
+    read: item.read === true,
   }
 }
 
@@ -87,11 +95,12 @@ function saveNotifications(entries: NotificationEntry[]) {
 class NotificationStore {
   private state: NotificationState = {
     toasts: [],
-    notifications: loadNotifications(),
+    notifications: [],
   }
   private subscribers = new Set<Subscriber>()
   private toastTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private pushListeners = new Set<NotificationPushListener>()
+  private initialized = false
 
   /** toast 弹窗总开关 */
   toastEnabled: boolean = (() => {
@@ -112,7 +121,46 @@ class NotificationStore {
   }
 
   private persist() {
-    saveNotifications(this.state.notifications)
+    try {
+      void window.customOpenCode?.notificationHistoryReplaceAll(this.state.notifications)
+    } catch {
+      // ignore persistence failures
+    }
+  }
+
+  /** 从 SQLite 加载历史（启动时调用一次），并迁移旧 localStorage 数据 */
+  async init() {
+    if (this.initialized) return
+    this.initialized = true
+    try {
+      const stored = await window.customOpenCode?.notificationHistoryList()
+      const entries = Array.isArray(stored)
+        ? stored.map(normalizeNotification).filter((entry): entry is NotificationEntry => entry !== null)
+        : []
+
+      // SQLite 为空时迁移旧的 localStorage 数据
+      if (entries.length === 0) {
+        const legacy = loadLegacyNotifications()
+        if (legacy.length > 0) {
+          this.state = { ...this.state, notifications: legacy }
+          this.persist()
+          this.notify()
+          return
+        }
+      }
+
+      const byId = new Map(this.state.notifications.map(entry => [entry.id, entry]))
+      for (const entry of entries) {
+        if (!byId.has(entry.id)) byId.set(entry.id, entry)
+      }
+      const notifications = [...byId.values()]
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, MAX_NOTIFICATIONS)
+      this.state = { ...this.state, notifications }
+      this.notify()
+    } catch {
+      // ignore load failures
+    }
   }
 
   getSnapshot = (): NotificationState => this.state
@@ -289,6 +337,8 @@ class NotificationStore {
 // ============================================
 
 export const notificationStore = new NotificationStore()
+
+void notificationStore.init()
 
 export function exportNotificationPreferencesBackup(): NotificationPreferencesBackup {
   return {
