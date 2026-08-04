@@ -3313,7 +3313,7 @@ export class Vcs extends HeyApiClient {
     parameters?: {
       directory?: string
       workspace?: string
-      action?: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort"
+      action?: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort" | "undo-commit"
       argument?: string
     },
     options?: Options<never, ThrowOnError>,

@@ -372,7 +372,16 @@ export const MutationResult = Schema.Struct({
 export type MutationResult = Schema.Schema.Type<typeof MutationResult>
 
 export const OperationInput = Schema.Struct({
-  action: Schema.Literals(["fetch", "pull", "stash", "stash-pop", "create-branch", "merge", "merge-abort"]),
+  action: Schema.Literals([
+    "fetch",
+    "pull",
+    "stash",
+    "stash-pop",
+    "create-branch",
+    "merge",
+    "merge-abort",
+    "undo-commit",
+  ]),
   argument: Schema.optional(Schema.String),
 })
 export type OperationInput = Schema.Schema.Type<typeof OperationInput>
@@ -771,7 +780,9 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
                   ? ["switch", "--create", argument!]
                   : input.action === "merge"
                     ? ["merge", "--no-edit", argument!]
-                    : ["merge", "--abort"]
+                    : input.action === "undo-commit"
+                      ? ["reset", "--soft", "HEAD~1"]
+                      : ["merge", "--abort"]
         return yield* result(
           yield* git.run(args, { cwd: ctx.directory, maxOutputBytes: 1_000_000 }),
           `Git ${input.action} failed`,

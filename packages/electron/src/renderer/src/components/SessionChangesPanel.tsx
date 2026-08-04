@@ -6,7 +6,7 @@
 
 import { memo, useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, DownloadIcon, GitCommitIcon, UploadIcon, MoreIcon, CheckIcon, CloseIcon } from './Icons'
+import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, DownloadIcon, GitCommitIcon, UploadIcon, MoreIcon, CloseIcon } from './Icons'
 import { getMaterialIconUrl } from '../utils/materialIcons'
 import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
@@ -1077,19 +1077,6 @@ function GitActions({
       <div className="flex shrink-0 items-center gap-1.5 border-b border-border-200/30 bg-bg-000/40 px-3 py-1.5">
         <button
           type="button"
-          onClick={() => void run('stage', () => stageVcsFiles([...checkedFiles], directory))}
-          disabled={checkedFiles.size === 0 || action !== null || !mutationsSupported}
-          title={t('sessionChanges.stageChecked', { count: checkedFiles.size })}
-          aria-label={t('sessionChanges.stageChecked', { count: checkedFiles.size })}
-          className={`${toolbarIconButtonClass} ${checkedFiles.size > 0 ? '!border-accent-main-100/60 !bg-accent-main-100/10 !text-accent-main-100' : ''}`}
-        >
-          <CheckIcon size={13} />
-          {checkedFiles.size > 0 && (
-            <span className="text-[length:var(--fs-xxs)] font-mono tabular-nums">{checkedFiles.size}</span>
-          )}
-        </button>
-        <button
-          type="button"
           onClick={() => {
             setIsOpen(false)
             setCommitError(null)
@@ -1219,7 +1206,17 @@ function GitActions({
             event.preventDefault()
             if (!commitMessage.trim() || action !== null) return
             setCommitError(null)
-            void run('commit', () => commitVcsChanges(commitMessage, directory), setCommitError).then(success => {
+            void run(
+              'commit',
+              async () => {
+                const filesToStage = [...checkedFiles]
+                if (filesToStage.length > 0) {
+                  await stageVcsFiles(filesToStage, directory)
+                }
+                return commitVcsChanges(commitMessage, directory)
+              },
+              setCommitError,
+            ).then(success => {
               if (!success) return
               localStorage.setItem(COMMIT_MESSAGE_KEY, commitMessage)
               setCommitMessage('')
@@ -1227,6 +1224,11 @@ function GitActions({
             })
           }}
         >
+          <div className="rounded-lg bg-bg-200/40 px-3 py-2 text-[length:var(--fs-xs)] text-text-400">
+            {checkedFiles.size > 0
+              ? t('sessionChanges.commitCheckedHint', { count: checkedFiles.size })
+              : t('sessionChanges.commitStagedHint')}
+          </div>
           <textarea
             value={commitMessage}
             onChange={event => setCommitMessage(event.target.value)}

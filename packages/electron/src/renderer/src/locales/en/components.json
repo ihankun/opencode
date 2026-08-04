@@ -177,14 +177,15 @@
     "addToConversation": "Add to conversation",
     "selectAll": "Select all files",
     "selectFile": "Select file for staging",
-    "stageChecked": "Stage {{count}} checked",
     "pushConfirmTitle": "Confirm push",
     "pushConfirmHint": "{{count}} file(s) changed in commits to be pushed. Click a file to review before pushing.",
     "pushNoChanges": "Nothing to push on the current branch",
     "pushSelectFile": "Select a file to review",
     "undoCommit": "Undo last commit",
     "undoCommitConfirm": "The last commit will be removed. Your changes are kept in the staging area.",
-    "undoCommitComplete": "Last commit undone, changes kept in staging"
+    "undoCommitComplete": "Last commit undone, changes kept in staging",
+    "commitCheckedHint": "Will stage and commit {{count}} checked file(s)",
+    "commitStagedHint": "No files checked — will commit already-staged changes"
   },
   "taskPanel": {
     "artifacts": "Artifacts",

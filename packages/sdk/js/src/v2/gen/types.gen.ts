@@ -9554,7 +9554,7 @@ export type VcsPushResponse = VcsPushResponses[keyof VcsPushResponses]
 
 export type VcsOperationData = {
   body?: {
-    action: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort"
+    action: "fetch" | "pull" | "stash" | "stash-pop" | "create-branch" | "merge" | "merge-abort" | "undo-commit"
     argument?: string
   }
   path?: never

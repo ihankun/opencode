@@ -176,11 +176,15 @@
     "addToConversation": "加入对话",
     "selectAll": "全选文件",
     "selectFile": "勾选以暂存",
-    "stageChecked": "暂存已勾选 {{count}} 个文件",
     "pushConfirmTitle": "确认推送",
     "pushConfirmHint": "本次推送将包含 {{count}} 个已提交文件的变更，点击文件可查看具体改动。",
     "pushNoChanges": "当前分支没有待推送的提交",
-    "pushSelectFile": "选择文件查看变更"
+    "pushSelectFile": "选择文件查看变更",
+    "undoCommit": "撤销最近一次提交",
+    "undoCommitConfirm": "将移除最近一次提交，你的改动会保留在暂存区，可以重新提交。",
+    "undoCommitComplete": "已撤销最近一次提交，改动保留在暂存区",
+    "commitCheckedHint": "将自动暂存并提交 {{count}} 个已勾选的文件",
+    "commitStagedHint": "未勾选文件，将只提交已暂存的变更"
   },
   "taskPanel": {
     "artifacts": "产物",
