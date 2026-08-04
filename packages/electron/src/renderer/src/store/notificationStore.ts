@@ -122,7 +122,7 @@ class NotificationStore {
 
   private persist() {
     try {
-      void window.customOpenCode?.notificationHistoryReplaceAll(this.state.notifications)
+      window.customOpenCode?.notificationHistoryReplaceAll(this.state.notifications)?.catch(() => undefined)
     } catch {
       // ignore persistence failures
     }
@@ -138,15 +138,20 @@ class NotificationStore {
         ? stored.map(normalizeNotification).filter((entry): entry is NotificationEntry => entry !== null)
         : []
 
-      // SQLite 为空时迁移旧的 localStorage 数据
+      // SQLite 为空时迁移旧的 localStorage 数据（一次性，迁移后清除旧 key）
       if (entries.length === 0) {
         const legacy = loadLegacyNotifications()
         if (legacy.length > 0) {
           this.state = { ...this.state, notifications: legacy }
           this.persist()
           this.notify()
-          return
         }
+        try {
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+        } catch {
+          // ignore
+        }
+        return
       }
 
       const byId = new Map(this.state.notifications.map(entry => [entry.id, entry]))
@@ -278,6 +283,11 @@ class NotificationStore {
     this.state = { ...this.state, notifications: [] }
     this.persist()
     this.notify()
+    try {
+      localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
   }
 
   // ============================================
