@@ -101,8 +101,6 @@ interface LayoutState {
 
   // 侧边栏
   sidebarExpanded: boolean
-  sidebarFolderRecents: boolean
-  sidebarFolderRecentsShowDiff: boolean
   sidebarShowChildSessions: boolean
 
   // 右侧栏
@@ -125,8 +123,6 @@ type Subscriber = () => void
 
 const STORAGE_KEY_WAKE_LOCK = 'opencode-wake-lock'
 const STORAGE_KEY_SIDEBAR = 'opencode-sidebar-expanded'
-const STORAGE_KEY_SIDEBAR_FOLDER_RECENTS = 'opencode-sidebar-folder-recents'
-const STORAGE_KEY_SIDEBAR_FOLDER_RECENTS_SHOW_DIFF = 'opencode-sidebar-folder-recents-show-diff'
 const STORAGE_KEY_SIDEBAR_SHOW_CHILD_SESSIONS = 'opencode-sidebar-show-child-sessions'
 const STORAGE_KEY_PANEL_LAYOUT = 'opencode-panel-layout'
 const STORAGE_KEY_TERMINAL_LAYOUT = 'opencode-terminal-layout'
@@ -326,8 +322,6 @@ export class LayoutStore {
       right: 'files',
     },
     sidebarExpanded: true,
-    sidebarFolderRecents: false,
-    sidebarFolderRecentsShowDiff: true,
     sidebarShowChildSessions: false,
     rightPanelOpen: false,
     rightPanelWidth: 450,
@@ -414,16 +408,6 @@ export class LayoutStore {
         this.state.sidebarExpanded = savedSidebar !== 'false'
       }
 
-      const savedFolderRecents = localStorage.getItem(STORAGE_KEY_SIDEBAR_FOLDER_RECENTS)
-      if (savedFolderRecents !== null) {
-        this.state.sidebarFolderRecents = savedFolderRecents === 'true'
-      }
-
-      const savedFolderRecentsShowDiff = localStorage.getItem(STORAGE_KEY_SIDEBAR_FOLDER_RECENTS_SHOW_DIFF)
-      if (savedFolderRecentsShowDiff !== null) {
-        this.state.sidebarFolderRecentsShowDiff = savedFolderRecentsShowDiff !== 'false'
-      }
-
       const savedShowChildSessions = localStorage.getItem(STORAGE_KEY_SIDEBAR_SHOW_CHILD_SESSIONS)
       if (savedShowChildSessions !== null) {
         this.state.sidebarShowChildSessions = savedShowChildSessions === 'true'
@@ -505,28 +489,6 @@ export class LayoutStore {
     this.state.sidebarExpanded = expanded
     try {
       localStorage.setItem(STORAGE_KEY_SIDEBAR, String(expanded))
-    } catch {
-      // ignore
-    }
-    this.notify()
-  }
-
-  setSidebarFolderRecents(enabled: boolean) {
-    if (this.state.sidebarFolderRecents === enabled) return
-    this.state.sidebarFolderRecents = enabled
-    try {
-      localStorage.setItem(STORAGE_KEY_SIDEBAR_FOLDER_RECENTS, String(enabled))
-    } catch {
-      // ignore
-    }
-    this.notify()
-  }
-
-  setSidebarFolderRecentsShowDiff(enabled: boolean) {
-    if (this.state.sidebarFolderRecentsShowDiff === enabled) return
-    this.state.sidebarFolderRecentsShowDiff = enabled
-    try {
-      localStorage.setItem(STORAGE_KEY_SIDEBAR_FOLDER_RECENTS_SHOW_DIFF, String(enabled))
     } catch {
       // ignore
     }
@@ -1208,8 +1170,6 @@ export const layoutStore = new LayoutStore()
 
 export interface LayoutBackup {
   sidebarExpanded: boolean
-  sidebarFolderRecents: boolean
-  sidebarFolderRecentsShowDiff: boolean
   sidebarShowChildSessions: boolean
   wakeLock: boolean
   rightPanelWidth: number
@@ -1253,8 +1213,6 @@ export function exportLayoutBackup(): LayoutBackup {
 
   return {
     sidebarExpanded: state.sidebarExpanded,
-    sidebarFolderRecents: state.sidebarFolderRecents,
-    sidebarFolderRecentsShowDiff: state.sidebarFolderRecentsShowDiff,
     sidebarShowChildSessions: state.sidebarShowChildSessions,
     wakeLock: state.wakeLock,
     rightPanelWidth: state.rightPanelWidth,
@@ -1284,11 +1242,6 @@ export function importLayoutBackup(raw: unknown): void {
       : null
 
   localStorage.setItem(STORAGE_KEY_SIDEBAR, String(parsed?.sidebarExpanded === true))
-  localStorage.setItem(STORAGE_KEY_SIDEBAR_FOLDER_RECENTS, String(parsed?.sidebarFolderRecents === true))
-  localStorage.setItem(
-    STORAGE_KEY_SIDEBAR_FOLDER_RECENTS_SHOW_DIFF,
-    String(parsed?.sidebarFolderRecentsShowDiff !== false),
-  )
   localStorage.setItem(STORAGE_KEY_SIDEBAR_SHOW_CHILD_SESSIONS, String(parsed?.sidebarShowChildSessions === true))
   localStorage.setItem(STORAGE_KEY_WAKE_LOCK, String(parsed?.wakeLock === true))
   localStorage.setItem(STORAGE_KEY_RIGHT_PANEL_WIDTH, String(rightPanelWidth))

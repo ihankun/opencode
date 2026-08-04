@@ -19,8 +19,6 @@ export function WorkspaceSettings() {
     setManualTerminalTitles,
   } = useTheme()
   const {
-    sidebarFolderRecents,
-    sidebarFolderRecentsShowDiff,
     sidebarShowChildSessions,
     terminalCopyOnSelect,
     terminalRightClickPaste,
@@ -96,28 +94,6 @@ export function WorkspaceSettings() {
 
       <SettingsSection title={t('workspace.sidebar')}>
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('workspace.sidebarDesc')}</p>
-
-        <SettingRow
-          label={t('appearance.folderStyleRecents')}
-          description={t('appearance.folderStyleRecentsDesc')}
-          onClick={() => layoutStore.setSidebarFolderRecents(!sidebarFolderRecents)}
-        >
-          <Toggle
-            enabled={sidebarFolderRecents}
-            onChange={() => layoutStore.setSidebarFolderRecents(!sidebarFolderRecents)}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label={t('appearance.folderStyleRecentsShowDiff')}
-          description={t('appearance.folderStyleRecentsShowDiffDesc')}
-          onClick={() => layoutStore.setSidebarFolderRecentsShowDiff(!sidebarFolderRecentsShowDiff)}
-        >
-          <Toggle
-            enabled={sidebarFolderRecentsShowDiff}
-            onChange={() => layoutStore.setSidebarFolderRecentsShowDiff(!sidebarFolderRecentsShowDiff)}
-          />
-        </SettingRow>
 
         <SettingRow
           label={t('appearance.showChildSessions')}

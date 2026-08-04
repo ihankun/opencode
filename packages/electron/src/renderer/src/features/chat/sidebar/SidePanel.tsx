@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState, useEffect, useRef, useSyncExternalStore
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SessionList } from '../../sessions'
-import { FolderRecentList } from './FolderRecentList'
 import { getProjectGroupIdentity } from './projectGrouping'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { ActiveSessionItem } from './ActiveSessionItem'
@@ -25,7 +24,6 @@ import {
   SearchIcon,
   PencilIcon,
   CheckIcon,
-  CloseIcon,
   SpinnerIcon,
   PackagePlusIcon,
   ClockIcon,
@@ -294,7 +292,7 @@ export function SidePanel({
   )
   const { catalog: gitWorkspaceCatalog, isLoading: isGitWorkspaceCatalogLoading } =
     useGitWorkspaceCatalog(catalogDirectories)
-  const { sidebarFolderRecents, sidebarShowChildSessions } = useLayoutStore()
+  const { sidebarShowChildSessions } = useLayoutStore()
   const normalizedCurrentDirectory = useMemo(
     () => (currentDirectory ? normalizeToForwardSlash(currentDirectory) : undefined),
     [currentDirectory],
@@ -314,7 +312,6 @@ export function SidePanel({
   } | null>(null)
   const projectContextMenuRef = useRef<HTMLDivElement>(null)
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
-  const [expandedRecentProjectIds, setExpandedRecentProjectIds] = useState<string[]>([])
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
   const [expandedProjectSessionIds, setExpandedProjectSessionIds] = useState<string[]>([])
 
@@ -325,14 +322,11 @@ export function SidePanel({
   // ---- 编辑模式状态 ----
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set())
-  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const sessionSelectionAnchorIdRef = useRef<string | null>(null)
-  const projectSelectionAnchorIdRef = useRef<string | null>(null)
   const recentsSelectionRootRef = useRef<HTMLDivElement>(null)
   const projectsDropdownRef = useRef<HTMLDivElement>(null)
   // 批量删除确认弹窗
   const [batchDeleteSessionConfirm, setBatchDeleteSessionConfirm] = useState(false)
-  const [batchRemoveProjectConfirm, setBatchRemoveProjectConfirm] = useState(false)
   const [isBatchDeleting, setIsBatchDeleting] = useState(false)
 
   useEffect(() => {
@@ -394,43 +388,15 @@ export function SidePanel({
     [getVisibleSelectionIds],
   )
 
-  const toggleProjectSelection = useCallback(
-    (projectId: string, options?: { shiftKey?: boolean }) => {
-      const anchorId = projectSelectionAnchorIdRef.current
-      const visibleIds = getVisibleSelectionIds('project')
-
-      setSelectedProjectIds(prev => {
-        if (options?.shiftKey && anchorId) {
-          const range = getSelectionRange(visibleIds, anchorId, projectId)
-          if (range) {
-            const next = new Set(prev)
-            for (const id of range) next.add(id)
-            return next
-          }
-        }
-
-        const next = new Set(prev)
-        if (next.has(projectId)) next.delete(projectId)
-        else next.add(projectId)
-        return next
-      })
-      projectSelectionAnchorIdRef.current = projectId
-    },
-    [getVisibleSelectionIds],
-  )
-
   const exitEditMode = useCallback(() => {
     setIsEditMode(false)
     setSelectedSessionIds(new Set())
-    setSelectedProjectIds(new Set())
     sessionSelectionAnchorIdRef.current = null
-    projectSelectionAnchorIdRef.current = null
   }, [])
 
   const enterEditMode = useCallback(() => {
     setIsEditMode(true)
     sessionSelectionAnchorIdRef.current = null
-    projectSelectionAnchorIdRef.current = null
   }, [])
 
   const showLabels = isExpanded || isMobile
@@ -1043,7 +1009,6 @@ export function SidePanel({
 
     return list
   }, [folderProjectGroups, currentDirectory, currentProject])
-  const canShowFolderRecents = sidebarFolderRecents && !search && folderProjects.length > 0
 
   const workspaceDirectoriesByProjectId = useMemo(() => {
     const map = new Map<string, string[]>()
@@ -1062,7 +1027,6 @@ export function SidePanel({
   const shouldRenderWorkspaceTreeOnly =
     !search && currentProjectWorkspaceDirectories.length > 1 && currentProject.id !== 'global'
   const shouldWaitForWorkspaceResolution =
-    !sidebarFolderRecents &&
     !search &&
     !!currentDirectory &&
     isGitWorkspaceCatalogLoading &&
@@ -1094,14 +1058,6 @@ export function SidePanel({
   const allDisplayedProjects = useMemo(() => {
     return [...folderProjects, ...currentProjectTreeProjects]
   }, [folderProjects, currentProjectTreeProjects])
-
-  const handleSelectFolderProject = useCallback(
-    (project: ProjectItem) => {
-      if (currentDirectory && isSameDirectory(currentDirectory, project.worktree)) return
-      setCurrentDirectory(project.worktree)
-    },
-    [currentDirectory, setCurrentDirectory],
-  )
 
   const getProjectDirectoriesToRemove = useCallback(
     (projectId: string) => {
@@ -1363,37 +1319,6 @@ export function SidePanel({
     [handleDeleteSession, onNewSession, refresh, selectedSessionId, sessionLookup],
   )
 
-  const handleRenameFolderSession = useCallback(
-    async (session: ApiSession, newTitle: string) => {
-      try {
-        await updateSession(session.id, { title: newTitle }, session.directory)
-        pinnedSessionsStore.update(session.id, { title: newTitle })
-        if (!currentDirectory || isSameDirectory(currentDirectory, session.directory)) {
-          await refresh()
-        }
-      } catch (e) {
-        uiErrorHandler('rename session', e)
-      }
-    },
-    [currentDirectory, refresh],
-  )
-
-  const handleDeleteFolderSession = useCallback(
-    async (session: ApiSession) => {
-      await apiArchiveSession(session.id, session.directory)
-      pinnedSessionsStore.unpin(session.id)
-
-      if (!currentDirectory || isSameDirectory(currentDirectory, session.directory)) {
-        await refresh()
-      }
-
-      if (selectedSessionId === session.id) {
-        onNewSession()
-      }
-    },
-    [currentDirectory, onNewSession, refresh, selectedSessionId],
-  )
-
   // ---- 批量删除 session ----
   const handleBatchDeleteSessions = useCallback(async () => {
     if (selectedSessionIds.size === 0) return
@@ -1430,36 +1355,6 @@ export function SidePanel({
       onNewSession()
     }
   }, [selectedSessionIds, selectedSessionId, sessionLookup, currentDirectory, pathInfo?.directory, refresh, onNewSession])
-
-  // ---- 批量移除项目 ----
-  const handleBatchRemoveProjects = useCallback(() => {
-    if (selectedProjectIds.size === 0) return
-    for (const projectId of selectedProjectIds) {
-      getProjectDirectoriesToRemove(projectId).forEach(directory => removeDirectory(directory))
-    }
-    setSelectedProjectIds(new Set())
-    projectSelectionAnchorIdRef.current = null
-    setBatchRemoveProjectConfirm(false)
-  }, [getProjectDirectoriesToRemove, selectedProjectIds, removeDirectory])
-
-  const commonFolderRecentListProps = {
-    currentDirectory,
-    selectedSessionId,
-    expandedProjectIds: expandedRecentProjectIds,
-    onExpandedProjectIdsChange: setExpandedRecentProjectIds,
-    onSelectProject: handleSelectFolderProject,
-    onSelectSession: handleSelectActive,
-    onRenameSession: handleRenameFolderSession,
-    onDeleteSession: handleDeleteFolderSession,
-    expandedChildSessionIds,
-    inlineChildSessions,
-    onSelectChildSession: handleSelectActive,
-    isEditMode,
-    selectedSessionIds,
-    selectedProjectIds,
-    onToggleSessionSelection: toggleSessionSelection,
-    onToggleProjectSelection: toggleProjectSelection,
-  }
 
   const localConversationSource =
     currentProject.id === 'global'
@@ -1891,9 +1786,7 @@ export function SidePanel({
             <div className="shrink-0 px-3 py-1.5 flex items-center gap-1.5 border-b border-border-200/30">
               <span className="text-[length:var(--fs-xxs)] text-text-400 flex-1 min-w-0 truncate">
                 {selectedSessionIds.size > 0 && t('sidebar.selectedSessions', { count: selectedSessionIds.size })}
-                {selectedSessionIds.size > 0 && selectedProjectIds.size > 0 && ' / '}
-                {selectedProjectIds.size > 0 && t('sidebar.selectedProjects', { count: selectedProjectIds.size })}
-                {selectedSessionIds.size === 0 && selectedProjectIds.size === 0 && t('sidebar.selectItems')}
+                {selectedSessionIds.size === 0 && t('sidebar.selectItems')}
               </span>
               {selectedSessionIds.size > 0 && (
                 <button
@@ -1902,15 +1795,6 @@ export function SidePanel({
                 >
                   <ArchiveIcon size={11} />
                   {t('sidebar.deleteSessions', { count: selectedSessionIds.size })}
-                </button>
-              )}
-              {selectedProjectIds.size > 0 && (
-                <button
-                  onClick={() => setBatchRemoveProjectConfirm(true)}
-                  className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[length:var(--fs-xxs)] font-medium text-warning-100 bg-warning-100/10 hover:bg-warning-100/20 transition-colors"
-                >
-                  <CloseIcon size={11} />
-                  {t('sidebar.removeProjects', { count: selectedProjectIds.size })}
                 </button>
               )}
             </div>
@@ -2112,17 +1996,6 @@ export function SidePanel({
         confirmText={t('sidebar.deleteChat')}
         variant="info"
         isLoading={isBatchDeleting}
-      />
-
-      {/* 批量移除项目确认弹窗 */}
-      <ConfirmDialog
-        isOpen={batchRemoveProjectConfirm}
-        onClose={() => setBatchRemoveProjectConfirm(false)}
-        onConfirm={handleBatchRemoveProjects}
-        title={t('sidebar.batchRemoveProjects', { count: selectedProjectIds.size })}
-        description={t('sidebar.batchRemoveProjectsConfirm', { count: selectedProjectIds.size })}
-        confirmText={t('common:remove')}
-        variant="warning"
       />
 
     </div>
