@@ -18,7 +18,9 @@
     "failedToLoadFile": "加载文件内容失败",
     "binaryFile": "二进制文件，无法预览",
     "fit": "适应",
-    "oneToOne": "1:1"
+    "oneToOne": "1:1",
+    "edit": "编辑文件",
+    "saveFailed": "保存文件失败"
   },
   "terminal": {
     "terminal": "终端",

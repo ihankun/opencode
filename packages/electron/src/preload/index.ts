@@ -332,6 +332,7 @@ export type CustomOpenCodeApi = {
   writeSkillFiles(root: string, files: Array<{ path: string; content: string }>): Promise<CustomOpenCodeSkillWriteResult>
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
+  writeProjectFile(directory: string, path: string, content: string): Promise<{ ok: boolean }>
   openExternalUrl(url: string): Promise<boolean>
   openInternalUrl(url: string): Promise<boolean>
   openLocalFileUrl(url: string): Promise<boolean>
@@ -447,6 +448,7 @@ const api: CustomOpenCodeApi = {
     return () => ipcRenderer.removeListener("task:changed", listener)
   },
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
+  writeProjectFile: (directory, path, content) => ipcRenderer.invoke("file:write", directory, path, content),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
   openExternalUrl: (url) => ipcRenderer.invoke("browser:open-external", url),

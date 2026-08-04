@@ -9,7 +9,8 @@ import { useTranslation } from 'react-i18next'
 import { useFileExplorer, type FileTreeNode } from '../hooks'
 import { useVerticalSplitResize } from '../hooks/useVerticalSplitResize'
 import { layoutStore, type PreviewFile } from '../store/layoutStore'
-import { ChevronRightIcon, ChevronDownIcon, RetryIcon, AlertCircleIcon, DownloadIcon, MaximizeIcon } from './Icons'
+import { ChevronRightIcon, ChevronDownIcon, RetryIcon, AlertCircleIcon, DownloadIcon, MaximizeIcon, PencilIcon } from './Icons'
+import { Button } from './ui'
 import { CodePreview } from './CodePreview'
 import { PreviewTabsBar, type PreviewTabsBarItem } from './PreviewTabsBar'
 import { MarkdownRenderer } from './MarkdownRenderer'
@@ -268,6 +269,8 @@ export const FileExplorer = memo(function FileExplorer({
             content={previewContent}
             isLoading={previewLoading}
             error={previewError}
+            directory={directory}
+            onContentChanged={handleRefresh}
             onClose={handleClosePreview}
             onActivatePreview={handleActivatePreview}
             onClosePreview={handleClosePreviewTab}
@@ -408,6 +411,8 @@ interface FilePreviewProps {
   content: FileContent | null
   isLoading: boolean
   error: string | null
+  directory?: string
+  onContentChanged?: () => void
   onClose: () => void
   onActivatePreview: (path: string) => void
   onClosePreview: (path: string) => void
@@ -421,6 +426,8 @@ function FilePreview({
   content,
   isLoading,
   error,
+  directory,
+  onContentChanged,
   onClose,
   onActivatePreview,
   onClosePreview,
@@ -429,6 +436,10 @@ function FilePreview({
 }: FilePreviewProps) {
   const { t } = useTranslation(['components', 'common'])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   // 获取文件名
   const fileName = path?.split(/[/\\]/).pop() || 'Untitled'
@@ -517,6 +528,39 @@ function FilePreview({
     }
   }, [content, language])
 
+  // 是否可编辑（文本或 markdown 内容）
+  const isEditable = displayContent?.type === 'text' || displayContent?.type === 'markdown'
+
+  // 切换文件时退出编辑模式
+  useEffect(() => {
+    setEditing(false)
+    setDraft('')
+    setEditError(null)
+  }, [path])
+
+  const handleStartEdit = useCallback(() => {
+    if (displayContent?.type !== 'text' && displayContent?.type !== 'markdown') return
+    setDraft(displayContent.text)
+    setEditError(null)
+    setEditing(true)
+  }, [displayContent])
+
+  const handleSave = useCallback(async () => {
+    if (!path || !directory || saving) return
+    setSaving(true)
+    setEditError(null)
+    try {
+      await window.customOpenCode.writeProjectFile(directory, path, draft)
+      setEditing(false)
+      setDraft('')
+      onContentChanged?.()
+    } catch (cause) {
+      setEditError(cause instanceof Error ? cause.message : t('fileExplorer.saveFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }, [directory, draft, onContentChanged, path, saving, t])
+
   // 全屏内容
   const fullscreenContent = useMemo((): ReactNode => {
     if (!displayContent) return null
@@ -593,20 +637,42 @@ function FilePreview({
         rightActions={
           content ? (
             <>
-              <button
-                onClick={openFullscreen}
-                className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-300/50 rounded transition-colors"
-                title={t('contentBlock.fullscreen')}
-              >
-                <MaximizeIcon size={12} />
-              </button>
-              <button
-                onClick={handleDownload}
-                className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-300/50 rounded transition-colors"
-                title={`${t('common:save')} ${fileName}`}
-              >
-                <DownloadIcon size={12} />
-              </button>
+              {editing ? (
+                <>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving}>
+                    {t('common:cancel')}
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => void handleSave()} disabled={!directory} isLoading={saving}>
+                    {t('common:save')}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {isEditable && (
+                    <button
+                      onClick={handleStartEdit}
+                      className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-300/50 rounded transition-colors"
+                      title={t('fileExplorer.edit')}
+                    >
+                      <PencilIcon size={12} />
+                    </button>
+                  )}
+                  <button
+                    onClick={openFullscreen}
+                    className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-300/50 rounded transition-colors"
+                    title={t('contentBlock.fullscreen')}
+                  >
+                    <MaximizeIcon size={12} />
+                  </button>
+                  <button
+                    onClick={handleDownload}
+                    className="p-1 text-text-400 hover:text-text-100 hover:bg-bg-300/50 rounded transition-colors"
+                    title={`${t('common:save')} ${fileName}`}
+                  >
+                    <DownloadIcon size={12} />
+                  </button>
+                </>
+              )}
             </>
           ) : null
         }
@@ -614,7 +680,22 @@ function FilePreview({
 
       {/* Preview Content */}
       <div ref={scrollRef} className="flex-1 overflow-auto panel-scrollbar">
-        {isLoading ? (
+        {editing ? (
+          <>
+            <textarea
+              value={draft}
+              onChange={event => setDraft(event.target.value)}
+              spellCheck={false}
+              autoFocus
+              className="h-full w-full resize-none bg-bg-100 p-3 font-mono text-[length:var(--fs-code)] leading-relaxed text-text-100 outline-none"
+            />
+            {editError && (
+              <div className="sticky bottom-0 border-t border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">
+                {editError}
+              </div>
+            )}
+          </>
+        ) : isLoading ? (
           <div className="flex items-center justify-center h-full text-text-400 text-[length:var(--fs-sm)]">
             {t('common:loading')}
           </div>

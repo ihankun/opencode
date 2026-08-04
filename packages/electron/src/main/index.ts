@@ -33,6 +33,7 @@ import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
 import { registerDiagnosticsIpc } from "./ipc/diagnostics"
 import { registerDraftsIpc } from "./ipc/drafts"
 import { registerDrivesIpc } from "./ipc/drives"
+import { registerFilesIpc } from "./ipc/files"
 import { registerImBridgeIpc } from "./ipc/imBridge"
 import { registerMarketplaceIpc } from "./ipc/marketplace"
 import { registerNotificationIpc } from "./ipc/notifications"
@@ -624,6 +625,10 @@ registerSkillsIpc({
   deleteSkill,
   ensureRoot: ensureSkillRootConfig,
   writeFiles: writeSkillFiles,
+})
+registerFilesIpc({
+  assertSender: assertMainWindow,
+  writeFile: writeProjectFile,
 })
 registerBrowserIpc({
   assertSender: assertMainWindow,
@@ -1898,6 +1903,20 @@ async function writeSkillFiles(rawRoot: string, rawFiles: unknown) {
 
   await ensureSkillRootConfig()
   return { ok: true as const, root, count: files.length }
+}
+
+async function writeProjectFile(rawDirectory: string, rawPath: string, content: string) {
+  if (!rawDirectory || !rawPath) throw new Error("Directory and file path are required")
+  const directory = resolve(rawDirectory)
+  const relativePath = rawPath.replace(/\\/g, "/")
+  if (!relativePath || relativePath.startsWith("/") || /^[a-zA-Z]:/.test(relativePath)) {
+    throw new Error("File path must be relative to the project directory")
+  }
+  const destination = resolve(directory, relativePath)
+  if (!containsPath(directory, destination)) throw new Error("File path is outside the project directory")
+  await mkdir(dirname(destination), { recursive: true })
+  await writeFile(destination, content, "utf8")
+  return { ok: true as const }
 }
 
 async function ensureSkillRootConfig() {
