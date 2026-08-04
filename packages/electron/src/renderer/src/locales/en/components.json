@@ -177,7 +177,11 @@
     "addToConversation": "Add to conversation",
     "selectAll": "Select all files",
     "selectFile": "Select file for staging",
-    "stageChecked": "Stage {{count}} checked"
+    "stageChecked": "Stage {{count}} checked",
+    "pushConfirmTitle": "Confirm push",
+    "pushConfirmHint": "{{count}} file(s) will be pushed. Click a file to review its changes before pushing.",
+    "pushNoChanges": "No uncommitted changes in the working tree",
+    "pushSelectFile": "Select a file to review"
   },
   "taskPanel": {
     "artifacts": "Artifacts",
