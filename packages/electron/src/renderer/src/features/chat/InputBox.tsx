@@ -25,6 +25,7 @@ import {
   TEXT_STYLE,
   detectSlashTrigger,
   ensureFileMime,
+  isDuplicateAttachment,
   isFileSupported,
   readFileAsDataUrl,
 } from './input/inputUtils'
@@ -987,6 +988,21 @@ function InputBoxComponent({
   }, [agents, models, onAgentChange, onModelChange])
   const updateTaskPreflight = useCallback((issues: TaskPreflightIssue[]) => setTaskPreflightIssues(issues), [])
 
+  // 挂载时从主进程异步恢复持久化草稿；仅当用户尚未输入时回填
+  useEffect(() => {
+    let disposed = false
+    void composerDraftStore.hydratePane(paneId).then(() => {
+      if (disposed) return
+      const draft = composerDraftStore.getDraft(paneId)
+      if (!draft) return
+      setText(current => (current === '' && draft.text ? draft.text : current))
+      setAttachments(current => (current.length === 0 && draft.attachments.length > 0 ? draft.attachments : current))
+    })
+    return () => {
+      disposed = true
+    }
+  }, [paneId])
+
   useEffect(
     () =>
       onComposerDraftInsertion(insertion => {
@@ -1815,6 +1831,7 @@ function InputBoxComponent({
       const nextAttachments: Attachment[] = []
       const unsupportedFiles: string[] = []
       const unreadableFiles: string[] = []
+      const duplicateFiles: string[] = []
 
       for (const rawFile of files) {
         const file = ensureFileMime(rawFile)
@@ -1841,8 +1858,19 @@ function InputBoxComponent({
         }
       }
 
-      if (nextAttachments.length > 0) {
-        setAttachments(prev => [...prev, ...nextAttachments])
+      const deduped: Attachment[] = []
+      const seen = [...attachments]
+      for (const candidate of nextAttachments) {
+        if (isDuplicateAttachment(seen, candidate)) {
+          duplicateFiles.push(candidate.displayName)
+          continue
+        }
+        deduped.push(candidate)
+        seen.push(candidate)
+      }
+
+      if (deduped.length > 0) {
+        setAttachments(prev => [...prev, ...deduped])
       }
       if (unsupportedFiles.length > 0) {
         notificationStore.push(
@@ -1862,8 +1890,17 @@ function InputBoxComponent({
           currentDirectory,
         )
       }
+      if (duplicateFiles.length > 0) {
+        notificationStore.push(
+          'error',
+          t('inputBox.attachmentDuplicateTitle'),
+          t('inputBox.attachmentDuplicateDescription', { files: duplicateFiles.join(', ') }),
+          sessionId ?? '',
+          currentDirectory,
+        )
+      }
     },
-    [currentDirectory, fileCaps, isSubmitting, sessionId, supportsAnyFile, t],
+    [attachments, currentDirectory, fileCaps, isSubmitting, sessionId, supportsAnyFile, t],
   )
 
   // 删除附件

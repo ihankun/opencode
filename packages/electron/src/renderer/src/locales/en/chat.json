@@ -68,6 +68,8 @@
     "unsupportedFilesDescription": "Supported types are images, PDF, Word, Excel, PowerPoint, audio, and video: {{files}}",
     "fileReadFailedTitle": "Could not read file",
     "fileReadFailedDescription": "Could not read: {{files}}",
+    "attachmentDuplicateTitle": "Duplicate attachment",
+    "attachmentDuplicateDescription": "This file has already been attached: {{files}}",
     "replyToAgentMobile": "Reply to Agent...",
     "replyToAgent": "Reply to Agent (type @ to mention, / for commands, #history)"
   },

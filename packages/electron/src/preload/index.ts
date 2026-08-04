@@ -334,6 +334,13 @@ export type CustomOpenCodeApi = {
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   openExternalUrl(url: string): Promise<boolean>
   openInternalUrl(url: string): Promise<boolean>
+  openLocalFileUrl(url: string): Promise<boolean>
+  draftGet(key: string): Promise<string | null>
+  draftSet(key: string, value: string): Promise<void>
+  draftDelete(key: string): Promise<void>
+  draftKeys(): Promise<string[]>
+  draftBlobPut(data: ArrayBuffer): Promise<string>
+  draftBlobGet(id: string): Promise<ArrayBuffer | null>
   discoverPreviewPorts(host: string): Promise<string[]>
   capturePreview(rect: { x: number; y: number; width: number; height: number }): Promise<{ saved: boolean; file?: string }>
   locationApps(): Promise<CustomOpenCodeLocationApp[]>
@@ -444,6 +451,13 @@ const api: CustomOpenCodeApi = {
   deleteSkill: (location) => ipcRenderer.invoke("skill:delete", location),
   openExternalUrl: (url) => ipcRenderer.invoke("browser:open-external", url),
   openInternalUrl: (url) => ipcRenderer.invoke("browser:open-internal", url),
+  openLocalFileUrl: (url) => ipcRenderer.invoke("browser:open-local-file", url),
+  draftGet: (key) => ipcRenderer.invoke("draft-get", key),
+  draftSet: (key, value) => ipcRenderer.invoke("draft-set", key, value),
+  draftDelete: (key) => ipcRenderer.invoke("draft-set", key, null),
+  draftKeys: () => ipcRenderer.invoke("draft-keys"),
+  draftBlobPut: (data) => ipcRenderer.invoke("draft-blob-put", data),
+  draftBlobGet: (id) => ipcRenderer.invoke("draft-blob-get", id),
   discoverPreviewPorts: (host) => ipcRenderer.invoke("preview:discover", host),
   capturePreview: (rect) => ipcRenderer.invoke("preview:capture", rect),
   locationApps: () => ipcRenderer.invoke("location:apps"),

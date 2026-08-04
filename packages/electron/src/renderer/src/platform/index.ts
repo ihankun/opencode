@@ -1,5 +1,7 @@
 export async function platformOpenUrl(url: string, mode: 'internal' | 'system') {
-  if (mode === 'internal' && typeof window.customOpenCode?.openInternalUrl === 'function') {
+  // mailto 只能在系统邮件客户端打开，internal 沙箱不支持
+  const isMailto = url.startsWith('mailto:')
+  if (!isMailto && mode === 'internal' && typeof window.customOpenCode?.openInternalUrl === 'function') {
     await window.customOpenCode.openInternalUrl(url)
     return
   }

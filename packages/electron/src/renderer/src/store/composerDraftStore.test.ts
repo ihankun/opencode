@@ -39,4 +39,10 @@ describe('composerDraftStore', () => {
     composerDraftStore.clearDraft('pane-missing')
     expect(composerDraftStore.getDraft('pane-missing')).toBeUndefined()
   })
+
+  test('hydrate is a no-op without the preload draft API', async () => {
+    await composerDraftStore.hydrateAll()
+    await composerDraftStore.hydratePane('pane-1')
+    expect(composerDraftStore.getDraft('pane-1')).toBeUndefined()
+  })
 })

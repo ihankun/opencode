@@ -443,7 +443,15 @@ export const Terminal = memo(function Terminal({ ptyId, directory, isActive }: T
 
     const fitAddon = new FitAddon()
     const serializeAddon = new SerializeAddon()
-    const webLinksAddon = new WebLinksAddon((_event, uri) => void openUrl(uri))
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      if (uri.startsWith('file:')) {
+        if (typeof window.customOpenCode?.openLocalFileUrl === 'function') {
+          void window.customOpenCode.openLocalFileUrl(uri)
+          return
+        }
+      }
+      void openUrl(uri)
+    })
 
     terminal.loadAddon(fitAddon)
     terminal.loadAddon(serializeAddon)

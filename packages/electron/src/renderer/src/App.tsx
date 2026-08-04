@@ -25,6 +25,7 @@ import { useWakeLock } from './hooks/useWakeLock'
 import type { KeybindingHandlers } from './hooks/useKeybindings'
 import { keybindingStore } from './store/keybindingStore'
 import {
+  composerDraftStore,
   layoutStore,
   paneLayoutStore,
   useLayoutStore,
@@ -764,6 +765,7 @@ function App() {
 
   // 桌面标题栏通过 CustomEvent 触发打开项目/设置
   useEffect(() => {
+    void composerDraftStore.hydrateAll()
     const onOpenProject = () => openProject()
     const onOpenSettings = () => openSettings()
     window.addEventListener('titlebar:open-project', onOpenProject)

@@ -5,6 +5,7 @@ export function registerBrowserIpc(input: {
   assertSender: AssertIpcSender
   openExternal: (url: string) => unknown
   openInternal: (url: string) => unknown
+  openLocalFile: (url: string) => unknown
 }) {
   ipcMain.handle("browser:open-external", (event, url: unknown) => {
     input.assertSender(event)
@@ -13,5 +14,9 @@ export function registerBrowserIpc(input: {
   ipcMain.handle("browser:open-internal", (event, url: unknown) => {
     input.assertSender(event)
     return input.openInternal(String(url ?? ""))
+  })
+  ipcMain.handle("browser:open-local-file", (event, url: unknown) => {
+    input.assertSender(event)
+    return input.openLocalFile(String(url ?? ""))
   })
 }

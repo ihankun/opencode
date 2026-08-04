@@ -24,11 +24,14 @@ import { SpeechModelService } from "./speechModel"
 import { ProjectsStore } from "./projects"
 import { SessionListCacheStore } from "./sessionListCache"
 import { deepLinkUrlsFromArgv, parseDeepLink } from "./deepLinks"
+import { createDesktopDraftStore } from "./draft-store"
+import { openExternalURL, openLocalFileURL } from "./external-url"
 import { registerBrowserIpc } from "./ipc/browser"
 import { registerCredentialsIpc } from "./ipc/credentials"
 import { registerDeepLinkIpc } from "./ipc/deepLinks"
 import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
 import { registerDiagnosticsIpc } from "./ipc/diagnostics"
+import { registerDraftsIpc } from "./ipc/drafts"
 import { registerDrivesIpc } from "./ipc/drives"
 import { registerImBridgeIpc } from "./ipc/imBridge"
 import { registerMarketplaceIpc } from "./ipc/marketplace"
@@ -343,7 +346,7 @@ async function createWindow() {
     sampler.stopAndFlush()
   })
   createdWindow.webContents.setWindowOpenHandler(({ url: target }) => {
-    void openExternalUrl(target).catch((error) => writeLog("security", "blocked window open", { target, error }))
+    void openExternalURL(target).catch((error) => writeLog("security", "blocked window open", { target, error }))
     return { action: "deny" }
   })
   createdWindow.webContents.on("will-navigate", (event, target) => {
@@ -546,6 +549,7 @@ speechModelService = new SpeechModelService(join(app.getPath("userData"), "speec
 projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
 sessionListCacheStore = new SessionListCacheStore(join(app.getPath("userData"), "session-list-cache.json"))
 const rendererSettingsStore = new RendererSettingsStore(join(app.getPath("userData"), "renderer-settings.json"))
+const draftsStore = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 registerWindowIpc({ getWindow: () => mainWindow })
@@ -623,8 +627,13 @@ registerSkillsIpc({
 })
 registerBrowserIpc({
   assertSender: assertMainWindow,
-  openExternal: openExternalUrl,
+  openExternal: openExternalURL,
   openInternal: openInternalUrl,
+  openLocalFile: openLocalFileURL,
+})
+registerDraftsIpc({
+  assertSender: assertMainWindow,
+  drafts: draftsStore,
 })
 registerDesktopIntegrationIpc({
   capturePreview,
@@ -705,7 +714,11 @@ app.on("before-quit", (event) => {
   event.preventDefault()
   isQuitting = true
   isStoppingForQuit = true
-  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => app.exit(0))
+  draftsStore.flush()
+  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => {
+    draftsStore.close()
+    app.exit(0)
+  })
 })
 
 app.on("window-all-closed", () => {
@@ -1958,13 +1971,6 @@ async function deleteSkill(rawLocation: string) {
   if (!containsPath(allowedRoot, root) || root === allowedRoot) throw new Error("Only user skills can be deleted")
   await rm(root, { recursive: true, force: true })
   return { ok: true as const, root }
-}
-
-async function openExternalUrl(rawUrl: string) {
-  const url = new URL(rawUrl)
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
-  await shell.openExternal(url.toString())
-  return true
 }
 
 async function createHostedPullRequest(rawInput: unknown) {

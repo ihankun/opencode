@@ -1,4 +1,5 @@
 import { extToMime } from '../../../utils/platform'
+import type { Attachment } from '../../attachment'
 import type { FileCapabilities } from '../../../api'
 
 // ============================================
@@ -108,4 +109,18 @@ export function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+/**
+ * 判断候选附件是否与现有附件重复（内容相同）。
+ * file 附件按 dataURL 内容判重；有 relativePath 时路径也需一致。
+ */
+export function isDuplicateAttachment(attachments: Attachment[], candidate: Attachment): boolean {
+  if (candidate.type !== 'file') return false
+  return attachments.some(
+    existing =>
+      existing.type === 'file' &&
+      existing.url === candidate.url &&
+      (candidate.relativePath ? existing.relativePath === candidate.relativePath : true),
+  )
 }

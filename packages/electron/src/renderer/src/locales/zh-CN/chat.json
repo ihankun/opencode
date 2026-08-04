@@ -68,6 +68,8 @@
     "unsupportedFilesDescription": "当前仅支持图片、PDF、Word、Excel、PowerPoint、音频和视频：{{files}}",
     "fileReadFailedTitle": "文件读取失败",
     "fileReadFailedDescription": "无法读取：{{files}}",
+    "attachmentDuplicateTitle": "重复的附件",
+    "attachmentDuplicateDescription": "该文件已添加：{{files}}",
     "replyToAgentMobile": "回复 Agent...",
     "replyToAgent": "回复 Agent（输入 @ 提及，/ 执行命令，#历史会话）"
   },
