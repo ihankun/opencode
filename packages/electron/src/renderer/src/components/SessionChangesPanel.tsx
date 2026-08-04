@@ -1385,14 +1385,12 @@ function PushConfirmDialog({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [pushing, setPushing] = useState(false)
-  const [pushError, setPushError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
     setLoading(true)
     setLoadError(null)
-    setPushError(null)
     getVcsDiff('upstream', directory)
       .then(data => {
         if (cancelled) return
@@ -1431,7 +1429,7 @@ function PushConfirmDialog({
     const result = await onConfirm()
     setPushing(false)
     if (result.ok) onClose()
-    else setPushError(result.error ?? t('sessionChanges.gitActionFailed'))
+    else notificationStore.push('error', t('sessionChanges.gitActionFailed'), result.error ?? '', '')
   }, [onClose, onConfirm, t])
 
   return (
@@ -1514,11 +1512,6 @@ function PushConfirmDialog({
                   )}
                 </div>
               </div>
-            </div>
-          )}
-          {pushError && (
-            <div className="mt-2 rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100 whitespace-pre-wrap break-words">
-              {pushError}
             </div>
           )}
         </div>
