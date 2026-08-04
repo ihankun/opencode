@@ -8423,13 +8423,49 @@ export type ExperimentalMemoryListResponses = {
     name: string
     path: string
     scope: "global" | "project" | "workspace"
-    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     exists: boolean
     content: string
   }>
 }
 
 export type ExperimentalMemoryListResponse = ExperimentalMemoryListResponses[keyof ExperimentalMemoryListResponses]
+
+export type ExperimentalMemoryGetData = {
+  body?: never
+  path: {
+    sourceID: "global" | "project" | "workspace"
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/memory/{sourceID}"
+}
+
+export type ExperimentalMemoryGetErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalMemoryGetError = ExperimentalMemoryGetErrors[keyof ExperimentalMemoryGetErrors]
+
+export type ExperimentalMemoryGetResponses = {
+  /**
+   * Memory source
+   */
+  200: {
+    id: "global" | "project" | "workspace"
+    name: string
+    path: string
+    scope: "global" | "project" | "workspace"
+    exists: boolean
+    content: string
+  }
+}
+
+export type ExperimentalMemoryGetResponse = ExperimentalMemoryGetResponses[keyof ExperimentalMemoryGetResponses]
 
 export type ExperimentalMemoryUpdateData = {
   body?: {
@@ -8463,7 +8499,6 @@ export type ExperimentalMemoryUpdateResponses = {
     name: string
     path: string
     scope: "global" | "project" | "workspace"
-    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     exists: boolean
     content: string
   }
@@ -8502,7 +8537,6 @@ export type ExperimentalMemoryCaptureResponses = {
     name: string
     path: string
     scope: "global" | "project" | "workspace"
-    priority: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     exists: boolean
     content: string
   }
@@ -9276,7 +9310,7 @@ export type VcsDiffData = {
   query: {
     directory?: string
     workspace?: string
-    mode: "git" | "branch"
+    mode: "git" | "branch" | "upstream"
     context?: number
   }
   url: "/vcs/diff"

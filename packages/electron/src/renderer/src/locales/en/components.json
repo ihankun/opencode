@@ -179,8 +179,8 @@
     "selectFile": "Select file for staging",
     "stageChecked": "Stage {{count}} checked",
     "pushConfirmTitle": "Confirm push",
-    "pushConfirmHint": "{{count}} file(s) will be pushed. Click a file to review its changes before pushing.",
-    "pushNoChanges": "No uncommitted changes in the working tree",
+    "pushConfirmHint": "{{count}} file(s) changed in commits to be pushed. Click a file to review before pushing.",
+    "pushNoChanges": "Nothing to push on the current branch",
     "pushSelectFile": "Select a file to review"
   },
   "taskPanel": {

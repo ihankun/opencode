@@ -74,6 +74,8 @@ import type {
   ExperimentalHooksUpdateResponses,
   ExperimentalMemoryCaptureErrors,
   ExperimentalMemoryCaptureResponses,
+  ExperimentalMemoryGetErrors,
+  ExperimentalMemoryGetResponses,
   ExperimentalMemoryListErrors,
   ExperimentalMemoryListResponses,
   ExperimentalMemoryUpdateErrors,
@@ -1891,6 +1893,37 @@ export class Experimental extends HeyApiClient {
     })
   }
 
+  public memoryGet<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: "global" | "project" | "workspace"
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalMemoryGetResponses,
+      ExperimentalMemoryGetErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/memory/{sourceID}",
+      ...options,
+      ...params,
+    })
+  }
+
   public memoryUpdate<ThrowOnError extends boolean = false>(
     parameters: {
       sourceID: "global" | "project" | "workspace"
@@ -3031,7 +3064,7 @@ export class Vcs extends HeyApiClient {
     parameters: {
       directory?: string
       workspace?: string
-      mode: "git" | "branch"
+      mode: "git" | "branch" | "upstream"
       context?: number
     },
     options?: Options<never, ThrowOnError>,

@@ -232,7 +232,89 @@ const track = Effect.fnUntraced(function* (
   return yield* diffAgainstRef(git, cwd, ref, options)
 })
 
-export const Mode = Schema.Literals(["git", "branch"])
+const committedKind = (code: string): Git.Kind => {
+  if (code.includes("A") && !code.includes("D")) return "added"
+  if (code.includes("D") && !code.includes("A")) return "deleted"
+  return "modified"
+}
+
+const diffCommitted = Effect.fnUntraced(function* (
+  git: Git.Interface,
+  cwd: string,
+  base: string,
+  options?: DiffOptions,
+) {
+  const range = `${base}...HEAD`
+  const [nameStatus, numstat, patchResult] = yield* Effect.all(
+    [
+      git.run(["diff", "--name-status", "-z", range, "--", "."], { cwd }),
+      git.run(["diff", "--numstat", "-z", range, "--", "."], { cwd }),
+      git.run(
+        [
+          "diff",
+          "--patch",
+          "--no-ext-diff",
+          "--no-renames",
+          `--unified=${options?.context ?? PATCH_CONTEXT_LINES}`,
+          range,
+          "--",
+          ".",
+        ],
+        { cwd, maxOutputBytes: MAX_TOTAL_PATCH_BYTES },
+      ),
+    ],
+    { concurrency: 3 },
+  )
+
+  const list: Git.Item[] = []
+  const statusTokens = nameStatus.text() ? nameStatus.text().split("\0").filter(Boolean) : []
+  for (let idx = 0; idx < statusTokens.length; idx += 2) {
+    const code = statusTokens[idx]
+    const file = statusTokens[idx + 1]
+    if (code && file) list.push({ file, code, status: committedKind(code) })
+  }
+
+  const statsMap = new Map<string, { additions: number; deletions: number }>()
+  const numTokens = numstat.text() ? numstat.text().split("\0").filter(Boolean) : []
+  for (const token of numTokens) {
+    const a = token.indexOf("\t")
+    const b = token.indexOf("\t", a + 1)
+    if (a === -1 || b === -1) continue
+    const file = token.slice(b + 1)
+    if (!file) continue
+    const adds = token.slice(0, a)
+    const dels = token.slice(a + 1, b)
+    const additions = adds === "-" ? 0 : Number.parseInt(adds || "0", 10)
+    const deletions = dels === "-" ? 0 : Number.parseInt(dels || "0", 10)
+    statsMap.set(file, {
+      additions: Number.isFinite(additions) ? additions : 0,
+      deletions: Number.isFinite(deletions) ? deletions : 0,
+    })
+  }
+
+  const patches = splitGitPatch({ text: patchResult.text(), truncated: patchResult.truncated }).reduce(
+    (acc, patch, index) => {
+      const file = fileFromPatchChunk(patch) ?? list[index]?.file
+      if (!file) return acc
+      acc.set(file, (acc.get(file) ?? "") + patch)
+      return acc
+    },
+    new Map<string, string>(),
+  )
+
+  return list.map(item => {
+    const stat = statsMap.get(item.file)
+    return {
+      file: item.file,
+      patch: patchResult.truncated ? emptyPatch(item.file) : patches.get(item.file) ?? emptyPatch(item.file),
+      additions: stat?.additions ?? 0,
+      deletions: stat?.deletions ?? 0,
+      status: item.status,
+    }
+  })
+})
+
+export const Mode = Schema.Literals(["git", "branch", "upstream"])
 export type Mode = Schema.Schema.Type<typeof Mode>
 
 export const Event = VcsEvent
@@ -529,6 +611,17 @@ const layer: Layer.Layer<Service, never, Git.Service | EventV2Bridge.Service> = 
         if (ctx.project.vcs !== "git") return []
         if (mode === "git") {
           return yield* track(git, ctx.directory, (yield* git.hasHead(ctx.directory)) ? "HEAD" : undefined, options)
+        }
+
+        if (mode === "upstream") {
+          if (!value.current) return []
+          const upstream = yield* git.run(["rev-parse", "--quiet", "--verify", "@{upstream}"], {
+            cwd: ctx.directory,
+          })
+          if (upstream.exitCode !== 0) return []
+          const base = upstream.text().trim()
+          if (!base) return []
+          return yield* diffCommitted(git, ctx.directory, base, options)
         }
 
         if (!value.root) return []

@@ -6,7 +6,7 @@
 
 import { memo, useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, DownloadIcon, GitCommitIcon, UploadIcon, MoreIcon, CheckIcon } from './Icons'
+import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, GitDiffIcon, LayersIcon, DownloadIcon, GitCommitIcon, UploadIcon, MoreIcon, CheckIcon, CloseIcon } from './Icons'
 import { getMaterialIconUrl } from '../utils/materialIcons'
 import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
@@ -1368,7 +1368,7 @@ function PushConfirmDialog({
     setLoading(true)
     setLoadError(null)
     setPushError(null)
-    getVcsDiff('git', directory)
+    getVcsDiff('upstream', directory)
       .then(data => {
         if (cancelled) return
         setDiffs(data)
@@ -1410,79 +1410,99 @@ function PushConfirmDialog({
   }, [onClose, onConfirm, t])
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={t('sessionChanges.pushConfirmTitle')} width={760}>
-      <div className="space-y-3">
-        {loading ? (
-          <div className="flex h-64 items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
-            {t('common:loading')}
+    <Dialog isOpen={isOpen} onClose={onClose} title={t('sessionChanges.pushConfirmTitle')} width={760} rawContent>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-100/50 px-4 py-2">
+          <div className="truncate text-[length:var(--fs-heading-3)] font-semibold text-text-100">
+            {t('sessionChanges.pushConfirmTitle')}
           </div>
-        ) : loadError ? (
-          <div className="rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">
-            {loadError}
-          </div>
-        ) : diffs.length === 0 ? (
-          <div className="flex h-64 items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
-            {t('sessionChanges.pushNoChanges')}
-          </div>
-        ) : (
-          <>
-            <p className="text-[length:var(--fs-xs)] text-text-400">
-              {t('sessionChanges.pushConfirmHint', { count: diffs.length })}
-            </p>
-            <div className="flex h-72 min-h-0 gap-3">
-              <div className="w-52 shrink-0 overflow-auto rounded-lg border border-border-200/60 bg-bg-100 panel-scrollbar-y">
-                {diffs.map(diff => {
-                  const fileStatus = getFileStatus(diff)
-                  return (
-                    <button
-                      key={diff.file}
-                      type="button"
-                      onClick={() => setSelectedFile(diff.file)}
-                      className={`w-full min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors text-[length:var(--fs-sm)] hover:bg-bg-200/50 ${selectedFile === diff.file ? 'bg-bg-200/70' : ''}`}
-                    >
-                      <img
-                        src={getMaterialIconUrl(diff.file, 'file')}
-                        alt=""
-                        width={14}
-                        height={14}
-                        className="shrink-0"
-                        loading="lazy"
-                        decoding="async"
-                        onError={e => {
-                          e.currentTarget.style.visibility = 'hidden'
-                        }}
-                      />
-                      <span className={`flex-1 min-w-0 font-mono truncate ${FILE_STATUS_COLOR[fileStatus]}`}>{diff.file}</span>
-                      <span className="flex shrink-0 items-center gap-1 text-[length:var(--fs-xxs)] font-mono">
-                        {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
-                        {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border-200/60">
-                {selectedDiff ? (
-                  <DiffViewer before={before} after={after} language={language} viewMode="unified" data={diffViewerData} />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
-                    {t('sessionChanges.pushSelectFile')}
-                  </div>
-                )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common:close')}
+            title={t('common:close')}
+            className="rounded-md p-1.5 text-text-400 transition-colors hover:bg-bg-100 hover:text-text-200"
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {loading ? (
+            <div className="flex h-72 items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
+              {t('common:loading')}
+            </div>
+          ) : loadError ? (
+            <div className="flex h-72 items-center justify-center">
+              <div className="rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100">
+                {loadError}
               </div>
             </div>
-          </>
-        )}
-        {pushError && (
-          <div className="rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100 whitespace-pre-wrap break-words">
-            {pushError}
-          </div>
-        )}
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={pushing}>
+          ) : diffs.length === 0 ? (
+            <div className="flex h-72 items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
+              {t('sessionChanges.pushNoChanges')}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-[length:var(--fs-xs)] text-text-400">
+                {t('sessionChanges.pushConfirmHint', { count: diffs.length })}
+              </p>
+              <div className="flex min-h-0 flex-1 gap-3">
+                <div className="w-52 shrink-0 overflow-auto rounded-lg border border-border-200/60 bg-bg-100 panel-scrollbar-y">
+                  {diffs.map(diff => {
+                    const fileStatus = getFileStatus(diff)
+                    return (
+                      <button
+                        key={diff.file}
+                        type="button"
+                        onClick={() => setSelectedFile(diff.file)}
+                        className={`w-full min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors text-[length:var(--fs-sm)] hover:bg-bg-200/50 ${selectedFile === diff.file ? 'bg-bg-200/70' : ''}`}
+                      >
+                        <img
+                          src={getMaterialIconUrl(diff.file, 'file')}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="shrink-0"
+                          loading="lazy"
+                          decoding="async"
+                          onError={e => {
+                            e.currentTarget.style.visibility = 'hidden'
+                          }}
+                        />
+                        <span className={`flex-1 min-w-0 font-mono truncate ${FILE_STATUS_COLOR[fileStatus]}`}>{diff.file}</span>
+                        <span className="flex shrink-0 items-center gap-1 text-[length:var(--fs-xxs)] font-mono">
+                          {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
+                          {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border-200/60">
+                  {selectedDiff ? (
+                    <DiffViewer before={before} after={after} language={language} viewMode="unified" data={diffViewerData} />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-text-400 text-[length:var(--fs-sm)]">
+                      {t('sessionChanges.pushSelectFile')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {pushError && (
+            <div className="mt-2 rounded-lg border border-danger-100/30 bg-danger-100/10 px-3 py-2 text-[length:var(--fs-xs)] text-danger-100 whitespace-pre-wrap break-words">
+              {pushError}
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-100/50 px-4 py-2">
+          <Button type="button" size="sm" variant="secondary" onClick={onClose} disabled={pushing}>
             {t('common:cancel')}
           </Button>
-          <Button onClick={() => void handleConfirm()} disabled={diffs.length === 0 || loading || loadError !== null} isLoading={pushing}>
+          <Button size="sm" onClick={() => void handleConfirm()} disabled={diffs.length === 0 || loading || loadError !== null} isLoading={pushing}>
             {t('sessionChanges.push')}
           </Button>
         </div>
