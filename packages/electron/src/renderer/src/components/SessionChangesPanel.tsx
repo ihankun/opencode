@@ -1349,11 +1349,15 @@ function GitActions({
         directory={directory}
         onClose={() => setPushOpen(false)}
         onConfirm={async () => {
-          let pushError: string | undefined
-          const success = await run('push', () => pushVcsBranch(directory), message => {
-            pushError = message
-          })
-          return { ok: success, error: pushError }
+          try {
+            const output = await pushVcsBranch(directory)
+            await onChanged()
+            notificationStore.push('completed', t('sessionChanges.pushComplete'), output, '', directory)
+            return { ok: true }
+          } catch (error) {
+            sessionErrorHandler('git push', error)
+            return { ok: false, error: error instanceof Error ? error.message : t('sessionChanges.gitActionFailed') }
+          }
         }}
       />
     </>
@@ -1431,7 +1435,7 @@ function PushConfirmDialog({
   }, [onClose, onConfirm, t])
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title={t('sessionChanges.pushConfirmTitle')} width={760} rawContent>
+    <Dialog isOpen={isOpen} onClose={onClose} title={t('sessionChanges.pushConfirmTitle')} width={760} rawContent className="h-[480px]">
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-100/50 px-4 py-2">
           <div className="truncate text-[length:var(--fs-heading-3)] font-semibold text-text-100">
