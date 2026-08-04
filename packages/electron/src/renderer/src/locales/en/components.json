@@ -181,7 +181,10 @@
     "pushConfirmTitle": "Confirm push",
     "pushConfirmHint": "{{count}} file(s) changed in commits to be pushed. Click a file to review before pushing.",
     "pushNoChanges": "Nothing to push on the current branch",
-    "pushSelectFile": "Select a file to review"
+    "pushSelectFile": "Select a file to review",
+    "undoCommit": "Undo last commit",
+    "undoCommitConfirm": "The last commit will be removed. Your changes are kept in the staging area.",
+    "undoCommitComplete": "Last commit undone, changes kept in staging"
   },
   "taskPanel": {
     "artifacts": "Artifacts",

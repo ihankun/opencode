@@ -1017,6 +1017,7 @@ function GitActions({
   const [operationDialog, setOperationDialog] = useState<'create-branch' | 'merge' | null>(null)
   const [operationArgument, setOperationArgument] = useState('')
   const [discardFiles, setDiscardFiles] = useState<string[]>([])
+  const [undoCommitOpen, setUndoCommitOpen] = useState(false)
   const [history, setHistory] = useState<VcsHistoryItem[] | null>(null)
   const mutationsSupported = serverStore.supports('vcsMutations')
   const advancedSupported = serverStore.supports('advancedVcs')
@@ -1165,6 +1166,9 @@ function GitActions({
           <div className="my-1 h-px bg-border-200/50" />
           <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setCommitError(null); setCommitOpen(true) }}>
             {t('sessionChanges.commit')}
+          </button>
+          <button type="button" role="menuitem" className={`${menuItemClass} !text-danger-100`} onClick={() => { setIsOpen(false); setUndoCommitOpen(true) }}>
+            {t('sessionChanges.undoCommit')}
           </button>
           <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setPushOpen(true) }}>
             {t('sessionChanges.push')}
@@ -1321,6 +1325,21 @@ function GitActions({
         confirmText={t('sessionChanges.discard')}
         variant="danger"
         isLoading={action === 'discard'}
+      />
+
+      <ConfirmDialog
+        isOpen={undoCommitOpen}
+        onClose={() => setUndoCommitOpen(false)}
+        onConfirm={() => {
+          void run('undoCommit', () => runVcsOperation('undo-commit', undefined, directory)).then(success => {
+            if (success) setUndoCommitOpen(false)
+          })
+        }}
+        title={t('sessionChanges.undoCommit')}
+        description={t('sessionChanges.undoCommitConfirm')}
+        confirmText={t('sessionChanges.undoCommit')}
+        variant="danger"
+        isLoading={action === 'undoCommit'}
       />
 
       <PushConfirmDialog

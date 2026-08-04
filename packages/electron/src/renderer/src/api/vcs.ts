@@ -69,7 +69,7 @@ export async function pushVcsBranch(directory?: string): Promise<string> {
   return unwrap(await sdk.vcs.push({ directory: formatPathForApi(directory) })).output
 }
 
-export type VcsOperation = 'fetch' | 'pull' | 'stash' | 'stash-pop' | 'create-branch' | 'merge' | 'merge-abort'
+export type VcsOperation = 'fetch' | 'pull' | 'stash' | 'stash-pop' | 'create-branch' | 'merge' | 'merge-abort' | 'undo-commit'
 
 export interface VcsHistoryItem {
   hash: string
