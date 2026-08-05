@@ -94,6 +94,7 @@ function ServerItem({
     return (
       <EditServerForm
         server={server}
+        isLocal={server.id === 'local'}
         onSave={updates => {
           onEdit(updates)
           setEditing(false)
@@ -159,33 +160,31 @@ function ServerItem({
         >
           {statusIcon()}
         </button>
+        <button
+          type="button"
+          className="p-2 rounded text-text-400 hover:text-accent-main-100 hover:bg-accent-main-100/10 transition-all"
+          onClick={e => {
+            e.stopPropagation()
+            setEditing(true)
+          }}
+          title={t('servers.editServer')}
+          aria-label={t('servers.editServer')}
+        >
+          <PencilIcon size={12} />
+        </button>
         {!server.isDefault && (
-          <>
-            <button
-              type="button"
-              className="p-2 rounded text-text-400 hover:text-accent-main-100 hover:bg-accent-main-100/10 transition-all"
-              onClick={e => {
-                e.stopPropagation()
-                setEditing(true)
-              }}
-              title={t('servers.editServer')}
-              aria-label={t('servers.editServer')}
-            >
-              <PencilIcon size={12} />
-            </button>
-            <button
-              type="button"
-              className="p-2 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 transition-all"
-              onClick={e => {
-                e.stopPropagation()
-                setConfirmDelete(true)
-              }}
-              title={t('common:remove')}
-              aria-label={t('common:remove')}
-            >
-              <TrashIcon size={12} />
-            </button>
-          </>
+          <button
+            type="button"
+            className="p-2 rounded text-text-400 hover:text-danger-100 hover:bg-danger-100/10 transition-all"
+            onClick={e => {
+              e.stopPropagation()
+              setConfirmDelete(true)
+            }}
+            title={t('common:remove')}
+            aria-label={t('common:remove')}
+          >
+            <TrashIcon size={12} />
+          </button>
         )}
       </div>
 
@@ -212,10 +211,12 @@ function ServerItem({
 
 function EditServerForm({
   server,
+  isLocal,
   onSave,
   onCancel,
 }: {
   server: ServerConfig
+  isLocal?: boolean
   onSave: (updates: { name: string; url: string; allowInsecureHttp: boolean; username?: string; password?: string }) => void
   onCancel: () => void
 }) {
@@ -252,7 +253,7 @@ function EditServerForm({
     }
     onSave({
       name: name.trim(),
-      url: url.trim(),
+      url: isLocal ? server.url : url.trim(),
       allowInsecureHttp,
       username: password.trim() ? username.trim() || 'opencode' : undefined,
       password: password.trim() || undefined,
@@ -286,12 +287,15 @@ function EditServerForm({
         <input
           type="text"
           value={url}
+          readOnly={isLocal}
+          disabled={isLocal}
           onChange={e => {
             setUrl(e.target.value)
             setError('')
           }}
           placeholder={t('servers.urlPlaceholder')}
-          className={`${inputCls} font-mono`}
+          className={`${inputCls} font-mono ${isLocal ? 'opacity-60 cursor-not-allowed' : ''}`}
+          title={isLocal ? t('servers.localUrlLocked') : undefined}
         />
       </div>
 

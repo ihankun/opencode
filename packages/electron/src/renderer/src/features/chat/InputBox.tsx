@@ -348,9 +348,7 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
       currentDirectory
     : t('emptyState.chooseProject')
   const serverName = activeServer
-    ? isLoopbackServer(activeServer.url)
-      ? t('emptyState.localServer')
-      : activeServer.name
+    ? activeServer.name
     : t('emptyState.noServer')
   const selectedBranch = branches.find(branch => branch.current)?.name
   const activeHealth = activeServer ? getHealth(activeServer.id) : null
@@ -624,7 +622,7 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
                 >
                   {isLoopbackServer(server.url) ? <LaptopIcon size={14} /> : <GlobeIcon size={14} />}
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${health?.status === 'online' ? 'bg-success-100' : health?.status === 'checking' ? 'animate-pulse bg-warning-100' : health ? 'bg-danger-100' : 'bg-text-500'}`} /><span className="truncate">{isLoopbackServer(server.url) ? t('emptyState.localServer') : server.name}</span>{health?.latency !== undefined ? <span className="shrink-0 text-[length:var(--fs-xxs)] text-text-500">{health.latency}ms</span> : null}</span>
+                    <span className="flex items-center gap-1.5"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${health?.status === 'online' ? 'bg-success-100' : health?.status === 'checking' ? 'animate-pulse bg-warning-100' : health ? 'bg-danger-100' : 'bg-text-500'}`} /><span className="truncate">{server.name}</span>{health?.latency !== undefined ? <span className="shrink-0 text-[length:var(--fs-xxs)] text-text-500">{health.latency}ms</span> : null}</span>
                     <span className="block truncate font-mono text-[length:var(--fs-xxs)] text-text-500">{server.url}</span>
                     {health?.status === 'online' ? <span className="block truncate text-[length:var(--fs-xxs)] text-text-500">OpenCode {health.version || '—'} · {health.compatibility || 'unknown'}</span> : health?.error ? <span className="block truncate text-[length:var(--fs-xxs)] text-danger-100">{health.error}</span> : null}
                   </span>

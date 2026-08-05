@@ -68,7 +68,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
       disconnected: 'bg-text-500',
       error: 'bg-danger-100',
     }[connectionState] || 'bg-text-500'
-  const connectionLabel = t(`sidebar.connection.${connectionState}`, {
+  const connectionLabel = activeServer?.name || t(`sidebar.connection.${connectionState}`, {
     defaultValue: t('sidebar.connection.unknown'),
   })
 

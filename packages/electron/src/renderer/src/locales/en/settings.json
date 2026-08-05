@@ -228,6 +228,7 @@
     "namePlaceholder": "My Server",
     "url": "URL",
     "urlPlaceholder": "http://192.168.1.100:4096",
+    "localUrlLocked": "Local server address is managed by the app and cannot be modified",
     "hideAuth": "Hide authentication",
     "addAuth": "Add authentication",
     "username": "Username",

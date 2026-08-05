@@ -228,6 +228,7 @@
     "namePlaceholder": "我的服务器",
     "url": "URL",
     "urlPlaceholder": "http://192.168.1.100:4096",
+    "localUrlLocked": "本地服务器地址由程序自动管理，不可修改",
     "hideAuth": "隐藏认证",
     "addAuth": "添加认证",
     "username": "用户名",
