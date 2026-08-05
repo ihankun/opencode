@@ -414,7 +414,7 @@ function NewTaskContextBar({ paneId, onApplyProfile, onPreflight }: { paneId: st
     void Promise.all([getVcsInfo(currentDirectory), listVcsBranches(currentDirectory).catch(() => []), getVcsDiff('git', currentDirectory).catch(() => [])])
       .then(([info, listed, changes]) => {
         if (disposed) return
-        setBranches(listed.length > 0 ? listed : info?.branch ? [{ name: info.branch, current: true }] : [])
+        setBranches(Array.isArray(listed) && listed.length > 0 ? listed : info?.branch ? [{ name: info.branch, current: true }] : [])
         setDirtyCount(changes.length)
       })
       .finally(() => {

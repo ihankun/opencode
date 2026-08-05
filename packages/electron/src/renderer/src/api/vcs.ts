@@ -28,7 +28,9 @@ export interface VcsBranch {
 
 export async function listVcsBranches(directory?: string): Promise<VcsBranch[]> {
   const sdk = getSDKClient()
-  return unwrap(await sdk.vcs.branch.list({ directory: formatPathForApi(directory) }))
+  const branches = unwrap(await sdk.vcs.branch.list({ directory: formatPathForApi(directory) }))
+  if (!Array.isArray(branches)) return []
+  return branches
 }
 
 export async function switchVcsBranch(branch: string, directory?: string): Promise<string> {
