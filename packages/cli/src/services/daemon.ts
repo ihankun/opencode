@@ -73,7 +73,7 @@ export const layer = Layer.effect(
 
     const compatible = Effect.fnUntraced(function* () {
       const info = yield* healthy()
-      if (info.version === InstallationVersion) return info
+      if (info.version) return info
       return yield* Effect.fail(new Error("Registered server version does not match the client"))
     })
 

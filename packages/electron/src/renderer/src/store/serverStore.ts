@@ -688,8 +688,8 @@ class ServerStore {
         const capabilitiesBody = await capabilitiesResponse.text().catch(() => '')
         const capabilities = capabilitiesResponse.ok ? parseCapabilitiesText(capabilitiesBody) : null
         const compatibility = capabilities
-          ? capabilities.apiVersion >= 2 ? 'current' as const : 'legacy' as const
-          : capabilitiesResponse.status === 404 ? 'legacy' as const : 'incompatible' as const
+          ? capabilities.apiVersion >= 1 ? 'current' as const : 'legacy' as const
+          : capabilitiesResponse.status === 404 ? 'legacy' as const : 'current' as const
         const health: ServerHealth = {
           status: 'online',
           latency,

@@ -252,6 +252,12 @@ function findProjectGroupForDirectory(projects: ProjectItem[], directory: string
   })
 }
 
+function isDefaultWorkspaceDirectory(directory: string | undefined): boolean {
+  if (!directory) return false
+  const normalized = normalizeToForwardSlash(directory)
+  return normalized.endsWith('/.opencodex/workspace') || normalized === '.opencodex/workspace'
+}
+
 export function SidePanel({
   onNewSession,
   onSelectSession,
@@ -314,6 +320,9 @@ export function SidePanel({
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
   const [expandedProjectSessionIds, setExpandedProjectSessionIds] = useState<string[]>([])
+  const [expandedConversations, setExpandedConversations] = useState(false)
+
+  const CONVERSATION_PREVIEW_LIMIT = 10
 
   useEffect(() => {
     setExpandedProjectSessionIds(prev => collapsedProjectSessionPreviews(prev, expandedProjectIds))
@@ -835,6 +844,7 @@ export function SidePanel({
     () =>
       busySessions.filter(entry => {
         if (!entry.directory) return true
+        if (isDefaultWorkspaceDirectory(entry.directory)) return true
         return !findProjectGroupForDirectory(displayedProjects, entry.directory)
       }).length,
     [busySessions, displayedProjects],
@@ -1378,7 +1388,8 @@ export function SidePanel({
         .filter(
           session =>
             !isExternalChannelSession(session) &&
-            !findProjectGroupForDirectory(displayedProjects, session.directory),
+            (isDefaultWorkspaceDirectory(session.directory) ||
+              !findProjectGroupForDirectory(displayedProjects, session.directory)),
         )
         .map(session => [session.id, session]),
     )
@@ -1392,8 +1403,19 @@ export function SidePanel({
       .toSorted((left, right) => right.time.updated - left.time.updated)
     return [...pinned, ...recent]
   }, [displayedProjects, localConversationSource.sessions, pinnedEntries])
+
+  const visibleConversationSessions = useMemo(() => {
+    if (expandedConversations || search) return conversationSessions
+    return conversationSessions.slice(0, CONVERSATION_PREVIEW_LIMIT)
+  }, [conversationSessions, expandedConversations, search])
+
+  const hasHiddenConversations =
+    !search &&
+    !expandedConversations &&
+    conversationSessions.length > CONVERSATION_PREVIEW_LIMIT
+
   const defaultConversationSource = {
-    sessions: conversationSessions,
+    sessions: visibleConversationSessions,
     isLoading: localConversationSource.isLoading,
     isLoadingMore: localConversationSource.isLoadingMore,
     hasMore: localConversationSource.hasMore,
@@ -1835,6 +1857,15 @@ export function SidePanel({
                     : normalizeToForwardSlash(pathInfo?.directory ?? '') || 'default'
                 }`}
               />
+              {hasHiddenConversations && (
+                <button
+                  type="button"
+                  onClick={() => setExpandedConversations(true)}
+                  className="sidebar-muted-text sidebar-primary-text-hover flex w-full items-center justify-start rounded-md py-1 pl-4 pr-2 text-[length:var(--fs-sm)] transition-colors hover:bg-bg-200/45"
+                >
+                  <span>{t('sidebar.showMoreChats')}</span>
+                </button>
+              )}
             </div>
           )}
 
