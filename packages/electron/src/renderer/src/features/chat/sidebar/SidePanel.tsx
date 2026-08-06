@@ -809,9 +809,16 @@ export function SidePanel({
   }, [currentProject.id, selectedSessionId])
 
   const displayedProjects = useMemo(() => {
-    if (currentProject.id === 'global') return projects
-    if (projects.some(project => isSameDirectory(project.id, currentProject.id))) return projects
-    return [...projects, { ...currentProject, canReorder: false }]
+    const base =
+      currentProject.id === 'global'
+        ? projects
+        : projects.some(project => isSameDirectory(project.id, currentProject.id))
+          ? projects
+          : [...projects, { ...currentProject, canReorder: false }]
+    return base.filter(
+      project =>
+        project.id === 'global' || (!isDefaultWorkspaceDirectory(project.id) && !isDefaultWorkspaceDirectory(project.worktree)),
+    )
   }, [currentProject, projects])
 
   const expandedProjects = useMemo(
