@@ -17,6 +17,10 @@ const fetchPromises = new Map<string, Promise<void>>()
 const fetchGenerations = new Map<string, number>()
 const listeners = new Set<Listener>()
 const FETCH_RETRY_DELAYS = [0, 500, 1500]
+// 快速重试全部失败后的自动恢复间隔，超过后停止（保留 error，用户可手动刷新）
+const RECOVERY_RETRY_DELAYS = [3000, 5000, 10000, 20000, 30000, 60000]
+const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const recoveryAttempts = new Map<string, number>()
 
 function notify() {
   listeners.forEach(listener => listener())
@@ -31,7 +35,37 @@ function setState(serverId: string, patch: Partial<ModelsState>) {
   notify()
 }
 
-async function fetchModels(serverId: string, force = false) {
+function clearRecovery(serverId: string) {
+  const timer = recoveryTimers.get(serverId)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    recoveryTimers.delete(serverId)
+  }
+}
+
+function clearAllRecoveries() {
+  for (const timer of recoveryTimers.values()) clearTimeout(timer)
+  recoveryTimers.clear()
+  recoveryAttempts.clear()
+}
+
+function scheduleRecovery(serverId: string, generation: number) {
+  const attempt = recoveryAttempts.get(serverId) ?? 0
+  if (attempt >= RECOVERY_RETRY_DELAYS.length) return
+  const delay = RECOVERY_RETRY_DELAYS[attempt]
+  recoveryAttempts.set(serverId, attempt + 1)
+  recoveryTimers.set(
+    serverId,
+    setTimeout(() => {
+      recoveryTimers.delete(serverId)
+      if (fetchGenerations.get(serverId) !== generation) return
+      void fetchModels(serverId, true, true)
+    }, delay),
+  )
+}
+
+async function fetchModels(serverId: string, force = false, isRecovery = false) {
+  if (!isRecovery) recoveryAttempts.delete(serverId)
   const pending = fetchPromises.get(serverId)
   if (pending && !force) return pending
   const current = stateFor(serverId)
@@ -49,7 +83,11 @@ async function fetchModels(serverId: string, force = false) {
           await getSDKClientAsync(serverId)
           const models = await getActiveModels(undefined, serverId)
           if (models.length === 0) throw new Error('Server returned no active models')
-          if (generation === fetchGenerations.get(serverId)) setState(serverId, { models, isLoading: false, error: null })
+          if (generation === fetchGenerations.get(serverId)) {
+            setState(serverId, { models, isLoading: false, error: null })
+            clearRecovery(serverId)
+            recoveryAttempts.delete(serverId)
+          }
           return
         } catch (error) {
           if (generation !== fetchGenerations.get(serverId)) return
@@ -57,13 +95,14 @@ async function fetchModels(serverId: string, force = false) {
           if (index === FETCH_RETRY_DELAYS.length - 1) {
             console.error(`[models:${serverId}] Failed to fetch models after retries:`, normalized)
             setState(serverId, { error: normalized, isLoading: false })
+            scheduleRecovery(serverId, generation)
             return
           }
           console.warn(`[models:${serverId}] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalized)
         }
       }
     } finally {
-      if (generation === fetchGenerations.get(serverId)) fetchPromises.delete(serverId)
+      if (fetchPromises.get(serverId) === promise) fetchPromises.delete(serverId)
     }
   })()
 
@@ -81,7 +120,26 @@ export function initializeModels() {
 
 serverStore.onServerChange((serverId, reason) => {
   if (reason !== 'server-switch') states.delete(serverId)
+  if (reason === 'server-switch') clearAllRecoveries()
+  else clearRecovery(serverId)
   queueMicrotask(() => void fetchModels(serverId, reason !== 'server-switch'))
+})
+
+// 服务器健康状态由非 online 转为 online 时，若模型仍处于失败/空状态，立即重试，
+// 避免错过 server:updated 之后服务端尚未就绪导致的重试窗口
+let previousHealthStatus = new Map<string, string>()
+serverStore.subscribe(() => {
+  const activeId = serverStore.getActiveServerId()
+  for (const serverId of new Set([...states.keys(), activeId])) {
+    const status = serverStore.getHealth(serverId)?.status ?? 'unknown'
+    const wasOnline = previousHealthStatus.get(serverId) === 'online'
+    previousHealthStatus.set(serverId, status)
+    if (status !== 'online' || wasOnline) continue
+    const state = stateFor(serverId)
+    if (state.error || (!state.isLoading && state.models.length === 0)) {
+      void fetchModels(serverId, true)
+    }
+  }
 })
 
 function subscribe(listener: Listener) {

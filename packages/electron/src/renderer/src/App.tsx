@@ -157,7 +157,7 @@ function ElectronNotificationToggle({
       title={title}
       className="electron-notification-toggle window-no-drag"
     >
-      <BellIcon size={16} />
+      <BellIcon size={18} />
       {unreadCount > 0 && (
         <span className="electron-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
       )}

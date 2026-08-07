@@ -114,7 +114,7 @@ export function ElectronWindowsTitlebar({
           className="electron-windows-titlebar-btn window-no-drag"
         >
           <span className="relative flex items-center justify-center">
-            <BellIcon size={16} />
+            <BellIcon size={18} />
             {unreadNotificationCount > 0 && (
               <span className="electron-notification-badge">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>
             )}

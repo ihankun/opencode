@@ -387,17 +387,18 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 
 .electron-notification-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: -1px;
+  right: -1px;
   display: inline-flex;
-  height: 14px;
-  min-width: 14px;
+  height: 12px;
+  min-width: 12px;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
+  border: 1.5px solid hsl(var(--bg-100));
   background: hsl(var(--danger-100));
-  padding: 0 3px;
-  font-size: 9px;
+  padding: 0 2px;
+  font-size: 8px;
   font-weight: 600;
   line-height: 1;
   color: hsl(var(--always-white));
