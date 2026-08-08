@@ -75,38 +75,37 @@ async function fetchModels(serverId: string, force = false, isRecovery = false) 
   fetchGenerations.set(serverId, generation)
   const promise = (async () => {
     setState(serverId, { isLoading: true, error: null })
-    try {
-      for (const [index, delay] of FETCH_RETRY_DELAYS.entries()) {
-        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
-        if (generation !== fetchGenerations.get(serverId)) return
-        try {
-          await getSDKClientAsync(serverId)
-          const models = await getActiveModels(undefined, serverId)
-          if (models.length === 0) throw new Error('Server returned no active models')
-          if (generation === fetchGenerations.get(serverId)) {
-            setState(serverId, { models, isLoading: false, error: null })
-            clearRecovery(serverId)
-            recoveryAttempts.delete(serverId)
-          }
-          return
-        } catch (error) {
-          if (generation !== fetchGenerations.get(serverId)) return
-          const normalized = error instanceof Error ? error : new Error('Failed to fetch models')
-          if (index === FETCH_RETRY_DELAYS.length - 1) {
-            console.error(`[models:${serverId}] Failed to fetch models after retries:`, normalized)
-            setState(serverId, { error: normalized, isLoading: false })
-            scheduleRecovery(serverId, generation)
-            return
-          }
-          console.warn(`[models:${serverId}] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalized)
+    for (const [index, delay] of FETCH_RETRY_DELAYS.entries()) {
+      if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+      if (generation !== fetchGenerations.get(serverId)) return
+      try {
+        await getSDKClientAsync(serverId)
+        const models = await getActiveModels(undefined, serverId)
+        if (models.length === 0) throw new Error('Server returned no active models')
+        if (generation === fetchGenerations.get(serverId)) {
+          setState(serverId, { models, isLoading: false, error: null })
+          clearRecovery(serverId)
+          recoveryAttempts.delete(serverId)
         }
+        return
+      } catch (error) {
+        if (generation !== fetchGenerations.get(serverId)) return
+        const normalized = error instanceof Error ? error : new Error('Failed to fetch models')
+        if (index === FETCH_RETRY_DELAYS.length - 1) {
+          console.error(`[models:${serverId}] Failed to fetch models after retries:`, normalized)
+          setState(serverId, { error: normalized, isLoading: false })
+          scheduleRecovery(serverId, generation)
+          return
+        }
+        console.warn(`[models:${serverId}] Failed to fetch models, retrying (${index + 1}/${FETCH_RETRY_DELAYS.length}):`, normalized)
       }
-    } finally {
-      if (fetchPromises.get(serverId) === promise) fetchPromises.delete(serverId)
     }
   })()
 
   fetchPromises.set(serverId, promise)
+  void promise.finally(() => {
+    if (fetchPromises.get(serverId) === promise) fetchPromises.delete(serverId)
+  })
   return promise
 }
 
