@@ -1004,6 +1004,18 @@ html.electron-app[data-theme-preset='codex'][data-platform="linux"][data-glass] 
   backdrop-filter: blur(40px) saturate(180%);
 }
 
+/* Windows + glass: light mode uses a pale blue-white sidebar/titlebar background.
+ * --sidebar-bg 同时驱动 .sidebar-surface 与 .electron-windows-titlebar 背景。 */
+:root:root[data-theme-preset='codex'][data-platform='windows'][data-glass][data-mode='light'] {
+  --sidebar-bg: 210 60% 96%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:root[data-theme-preset='codex'][data-platform='windows'][data-glass]:not([data-mode]) {
+    --sidebar-bg: 210 60% 96%;
+  }
+}
+
 /* Codex theme: send button & new-task button — neutral black/white instead of accent blue */
 :root[data-theme-preset='codex'][data-mode='light'] button[data-codex-btn] {
   background: hsl(var(--always-black));
