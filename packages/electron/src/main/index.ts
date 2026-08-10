@@ -33,6 +33,7 @@ import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
 import { registerDiagnosticsIpc } from "./ipc/diagnostics"
 import { registerDraftsIpc } from "./ipc/drafts"
 import { registerDrivesIpc } from "./ipc/drives"
+import { registerAgentsIpc } from "./ipc/agents"
 import { registerFilesIpc } from "./ipc/files"
 import { registerImBridgeIpc } from "./ipc/imBridge"
 import { registerMarketplaceIpc } from "./ipc/marketplace"
@@ -631,6 +632,10 @@ registerSkillsIpc({
 registerFilesIpc({
   assertSender: assertMainWindow,
   writeFile: writeProjectFile,
+})
+registerAgentsIpc({
+  assertSender: assertMainWindow,
+  removeAgentConfig,
 })
 registerBrowserIpc({
   assertSender: assertMainWindow,
@@ -1935,6 +1940,76 @@ async function writeProjectFile(rawDirectory: string, rawPath: string, content: 
   await mkdir(dirname(destination), { recursive: true })
   await writeFile(destination, content, "utf8")
   return { ok: true as const }
+}
+
+type RemoveAgentTarget = {
+  scope: "global" | "project"
+  directory?: string
+  name: string
+}
+
+async function removeAgentConfig(target: RemoveAgentTarget): Promise<{ changed: boolean; file: string }> {
+  const file = await findAgentConfigFile(target)
+  if (!file) return { changed: false, file: "" }
+  const source = await readFile(file, "utf8")
+  const errors: ParseError[] = []
+  const parsed = parseJsonc(source, errors, { allowTrailingComma: true })
+  if (errors.length) throw new Error(`Invalid JSON in ${file}: ${printParseErrorCode(errors[0]?.error ?? 1)}`)
+  if (!isRecord(parsed) || !isRecord(parsed.agent) || !(target.name in parsed.agent)) {
+    return { changed: false, file }
+  }
+  await writeFile(
+    file,
+    applyEdits(
+      source,
+      modify(source, ["agent", target.name], undefined, {
+        formattingOptions: {
+          insertSpaces: true,
+          tabSize: 2,
+        },
+      }),
+    ),
+    "utf8",
+  )
+  writeLog("main", "removed agent from config", { file, name: target.name })
+  return { changed: true, file }
+}
+
+async function findAgentConfigFile(target: RemoveAgentTarget): Promise<string | undefined> {
+  const candidates = []
+  if (target.scope === "global") {
+    const dir = join(app.getPath("userData"), "config", "opencode")
+    candidates.push(...["opencode.jsonc", "opencode.json", "config.json"].map((file) => join(dir, file)))
+  } else {
+    let current = resolve(target.directory ?? "")
+    while (current && current.length > 1) {
+      candidates.push(
+        join(current, "opencode.jsonc"),
+        join(current, "opencode.json"),
+        join(current, ".opencode", "opencode.jsonc"),
+        join(current, ".opencode", "opencode.json"),
+      )
+      const parent = dirname(current)
+      if (parent === current || current === homedir()) break
+      current = parent
+    }
+  }
+  for (const file of candidates) {
+    if (await hasAgentKey(file, target.name)) return file
+  }
+  return undefined
+}
+
+async function hasAgentKey(file: string, name: string): Promise<boolean> {
+  const source = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return ""
+    throw error
+  })
+  if (!source) return false
+  const errors: ParseError[] = []
+  const parsed = parseJsonc(source, errors, { allowTrailingComma: true })
+  if (errors.length) return false
+  return isRecord(parsed) && isRecord(parsed.agent) && name in parsed.agent
 }
 
 async function ensureSkillRootConfig() {

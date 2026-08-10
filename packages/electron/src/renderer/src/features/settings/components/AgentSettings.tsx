@@ -4,10 +4,11 @@ import { autoApproveStore } from '../../../store'
 import { themeStore } from '../../../store/themeStore'
 import { Toggle, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
-import { notifyAgentsChanged } from '../../../api/agent'
+import { notifyAgentsChanged, removeAgent } from '../../../api/agent'
 import { useModels } from '../../../hooks'
 import type { AgentConfig, Config } from '../../../types/api/config'
 import { Button, Dialog } from '../../../components/ui'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { apiErrorHandler } from '../../../utils'
 import { desktopPreferencesStore, useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 
@@ -162,6 +163,7 @@ export function AgentProfiles({ scope, directory, panel = false }: AgentProfiles
   const [draft, setDraft] = useState<AgentDraft>()
   const [originalName, setOriginalName] = useState('')
   const [permissions, setPermissions] = useState('{}')
+  const [confirmDelete, setConfirmDelete] = useState<{ name: string; value: AgentConfig }>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const zh = i18n.language.startsWith('zh')
@@ -298,6 +300,23 @@ export function AgentProfiles({ scope, directory, panel = false }: AgentProfiles
     }
   }
 
+  const remove = async (name: string) => {
+    if (!config) return
+    setBusy(true)
+    setError('')
+    setConfirmDelete(undefined)
+    try {
+      await removeAgent({ scope, directory, name })
+      setConfig(await loadProfiles())
+      notifyAgentsChanged()
+    } catch (cause) {
+      apiErrorHandler('remove agent profile', cause)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const content = (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -322,6 +341,7 @@ export function AgentProfiles({ scope, directory, panel = false }: AgentProfiles
             <Button size="sm" variant="secondary" onClick={() => open(name, value)}>{zh ? '编辑' : 'Edit'}</Button>
             <Button size="sm" variant="secondary" disabled={busy} onClick={() => open(`${name}-copy`, { ...value, disable: false })}>{zh ? '复制' : 'Duplicate'}</Button>
             <Button size="sm" variant="secondary" disabled={busy} onClick={() => void disable(name, value)}>{value.disable ? (zh ? '启用' : 'Enable') : (zh ? '停用' : 'Disable')}</Button>
+            <button type="button" disabled={busy} onClick={() => setConfirmDelete({ name, value })} className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg px-2 text-[length:var(--fs-btn-sm)] font-medium text-danger-100 transition-colors hover:bg-danger-100/10 disabled:cursor-not-allowed disabled:opacity-40">{zh ? '删除' : 'Delete'}</button>
           </div>
         ))}
       </div>
@@ -422,6 +442,16 @@ export function AgentProfiles({ scope, directory, panel = false }: AgentProfiles
           <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setDraft(undefined)}>{zh ? '取消' : 'Cancel'}</Button><Button disabled={!draft.name.trim()} isLoading={busy} onClick={() => void save()}>{zh ? '保存' : 'Save'}</Button></div>
         </div> : null}
       </Dialog>
+      <ConfirmDialog
+        isOpen={Boolean(confirmDelete)}
+        onClose={() => setConfirmDelete(undefined)}
+        onConfirm={() => (confirmDelete ? void remove(confirmDelete.name) : undefined)}
+        title={zh ? '删除 Agent' : 'Delete agent'}
+        description={confirmDelete ? (zh ? `确定删除 Agent “${confirmDelete.name}” 吗？修改的配置文件条目将被移除，此操作不可撤销。` : `Delete agent "${confirmDelete.name}"? This removes the config entry and cannot be undone.`) : undefined}
+        confirmText={zh ? '删除' : 'Delete'}
+        variant="danger"
+        isLoading={busy}
+      />
     </>
   )
 

@@ -333,6 +333,7 @@ export type CustomOpenCodeApi = {
   ensureSkillRoot(): Promise<CustomOpenCodeSkillEnsureRootResult>
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   writeProjectFile(directory: string, path: string, content: string): Promise<{ ok: boolean }>
+  removeAgentConfig(input: { scope: "global" | "project"; directory?: string; name: string }): Promise<{ changed: boolean; file: string }>
   notificationHistoryList(): Promise<Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>>
   notificationHistoryReplaceAll(notifications: Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>): Promise<boolean>
   openExternalUrl(url: string): Promise<boolean>
@@ -451,6 +452,7 @@ const api: CustomOpenCodeApi = {
   },
   writeSkillFiles: (root, files) => ipcRenderer.invoke("skill:write-files", root, files),
   writeProjectFile: (directory, path, content) => ipcRenderer.invoke("file:write", directory, path, content),
+  removeAgentConfig: (input) => ipcRenderer.invoke("agents:remove-config", input),
   notificationHistoryList: () => ipcRenderer.invoke("notification-history:list"),
   notificationHistoryReplaceAll: (notifications) => ipcRenderer.invoke("notification-history:replace-all", notifications),
   ensureSkillRoot: () => ipcRenderer.invoke("skill:ensure-root"),
