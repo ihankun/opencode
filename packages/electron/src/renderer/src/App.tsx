@@ -37,6 +37,7 @@ import {
   usePaneLayout,
 } from './store'
 import { initNavigation, pushNavigation, goBack as navGoBack, goForward as navGoForward, canGoBack, canGoForward, subscribe } from './store/navigationHistoryStore'
+import { setSettingsTab } from './store/settingsStore'
 import {
   ChatViewportProvider,
   CHAT_SURFACE_MIN_WIDTH,
@@ -54,8 +55,8 @@ import { completeOnboarding, resetOnboarding, shouldShowOnboarding } from './sto
 import { insertComposerDraft } from './utils/composerDraft'
 import type { CustomOpenCodeDeepLink } from '../../shared/deepLinks'
 
-const SettingsDialog = lazy(() =>
-  import('./features/settings/SettingsDialog').then(module => ({ default: module.SettingsDialog })),
+const SettingsPage = lazy(() =>
+  import('./features/settings/SettingsDialog').then(module => ({ default: module.SettingsPage })),
 )
 const CommandPalette = lazy(() =>
   import('./components/CommandPalette').then(module => ({ default: module.CommandPalette })),
@@ -93,7 +94,7 @@ const MOBILE_RIGHT_PANEL_UNMOUNT_MS = 420
 const SIDEBAR_TRANSITION_MS = 300
 
 type MobilePagerPage = 'left' | 'chat' | 'right'
-type MainUtilityPage = 'plugins' | 'tasks'
+type MainUtilityPage = 'plugins' | 'tasks' | 'settings'
 type ExtensionPageTab = 'skills' | 'plugins' | 'mcp' | 'kits'
 
 function ElectronSidebarToggle({
@@ -722,13 +723,11 @@ function App() {
 
   const focusedDirectory = focusedRouteDirectory || ''
 
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(() => shouldShowOnboarding())
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('servers')
   const openSettingsTab = useCallback((tab: SettingsTab) => {
-    setSettingsInitialTab(tab)
-    setSettingsDialogOpen(true)
-  }, [])
+    setSettingsTab(tab)
+    openUtilityPage('settings')
+  }, [openUtilityPage])
   const openSettings = useCallback(() => {
     openSettingsTab('servers')
   }, [openSettingsTab])
@@ -738,14 +737,14 @@ function App() {
   const openAboutSettings = useCallback(() => {
     openSettingsTab('about')
   }, [openSettingsTab])
-  const closeSettings = useCallback(() => {
-    setSettingsDialogOpen(false)
-    if (shouldShowOnboarding()) setOnboardingOpen(true)
-  }, [])
   const openSettingsFromOnboarding = useCallback((tab: SettingsTab) => {
     setOnboardingOpen(false)
     openSettingsTab(tab)
   }, [openSettingsTab])
+  const closeSettingsPage = useCallback(() => {
+    setUtilityPage(null)
+    if (shouldShowOnboarding()) setOnboardingOpen(true)
+  }, [])
   const completeGettingStarted = useCallback(() => {
     completeOnboarding()
     setOnboardingOpen(false)
@@ -822,7 +821,6 @@ function App() {
     if (!paneId) return
 
     setUtilityPage(null)
-    setSettingsDialogOpen(false)
     setProjectDialogOpen(false)
     setCommandPaletteOpen(false)
     addDirectory(deepLink.directory)
@@ -1258,6 +1256,11 @@ function App() {
       <ChatViewportProvider value={chatViewport}>
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {isMobilePanelLayout ? (
+            utilityPage === 'settings' ? (
+              <Suspense fallback={null}>
+                <SettingsPage onBack={closeSettingsPage} />
+              </Suspense>
+            ) : (
             <>
               <div
                 ref={mobilePagerRef}
@@ -1376,7 +1379,13 @@ function App() {
 
               {!utilityPage && <BottomPanel directory={focusedDirectory} />}
             </>
+            )
           ) : (
+            utilityPage === 'settings' ? (
+              <Suspense fallback={null}>
+                <SettingsPage onBack={closeSettingsPage} />
+              </Suspense>
+            ) : (
             <>
               {sidebarExpanded && (
                 <Sidebar
@@ -1447,12 +1456,12 @@ function App() {
                 {!utilityPage && <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />}
               </div>
             </>
+            )
           )}
           <ToastContainer onOpenAbout={openAboutSettings} />
         </div>
 
         <Suspense fallback={null}>
-          <SettingsDialog isOpen={settingsDialogOpen} onClose={closeSettings} initialTab={settingsInitialTab} />
           <OnboardingDialog isOpen={onboardingOpen} projectSelected={Boolean(currentDirectory)} onOpenSettings={openSettingsFromOnboarding} onComplete={completeGettingStarted} />
           <CommandPalette
             isOpen={commandPaletteOpen}

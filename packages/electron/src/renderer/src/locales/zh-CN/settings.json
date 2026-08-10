@@ -1,6 +1,7 @@
 {
   "title": "设置",
   "subtitle": "自定义界面、行为和服务器配置",
+  "backToWorkspace": "返回工作区",
   "closeSettings": "关闭设置",
   "version": "OpenCodex v{{version}}",
   "search": {

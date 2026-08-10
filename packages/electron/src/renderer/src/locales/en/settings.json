@@ -1,6 +1,7 @@
 {
   "title": "Settings",
   "subtitle": "Customize UI, behavior, and server setup",
+  "backToWorkspace": "Back to workspace",
   "closeSettings": "Close settings",
   "version": "OpenCodex v{{version}}",
   "search": {

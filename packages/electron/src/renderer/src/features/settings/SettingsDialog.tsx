@@ -1,13 +1,12 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Dialog } from '../../components/ui/Dialog'
 import {
   SunIcon,
   GlobeIcon,
   AgentIcon,
   CpuIcon,
   KeyboardIcon,
-  CloseIcon,
+  ChevronLeftIcon,
   BellIcon,
   KeyIcon,
   PlugIcon,
@@ -23,8 +22,11 @@ import {
   DownloadIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
+import { useChatViewport } from '../chat/chatViewport'
+import { isElectron, getDesktopPlatform } from '../../utils/platform'
 import { SettingsSearch } from './SettingsSearch'
 import { SETTINGS_SEARCH_DEFINITIONS, type SettingsSearchItem } from './settingsSearchCatalog'
+import { setSettingsTab, useSettingsTab } from '../../store/settingsStore'
 const KeybindingsSection = lazy(() => import('./KeybindingsSection').then(module => ({ default: module.KeybindingsSection })))
 const AgentSettings = lazy(() => import('./components/AgentSettings').then(module => ({ default: module.AgentSettings })))
 const AppearanceSettings = lazy(() => import('./components/AppearanceSettings').then(module => ({ default: module.AppearanceSettings })))
@@ -73,12 +75,6 @@ export type SettingsTab =
   | 'logs'
   | 'backup'
   | 'about'
-
-interface SettingsDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  initialTab?: SettingsTab
-}
 
 // ============================================
 // Nav Tabs
@@ -247,22 +243,17 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 }
 
 // ============================================
-// Main Settings Dialog
+// Settings Page (replaces the legacy dialog)
 // ============================================
 
-export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: SettingsDialogProps) {
+export function SettingsPage({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation(['settings'])
   const isMobile = useIsMobile()
+  const { layout } = useChatViewport()
+  const tab = useSettingsTab()
   const scrollRef = useRef<HTMLDivElement>(null)
   const highlightFrameRef = useRef<number | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const normalizeTab = useCallback((next: SettingsDialogProps['initialTab']): SettingsTab => next || 'servers', [])
-  const [tab, setTab] = useState<SettingsTab>(normalizeTab(initialTab))
-  const close = useCallback((event?: React.SyntheticEvent) => {
-    event?.preventDefault()
-    event?.stopPropagation()
-    onClose()
-  }, [onClose])
 
   const visibleTabs = useMemo(
     () =>
@@ -305,34 +296,22 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
   }, [t, visibleTabs])
 
   useEffect(() => {
-    if (!isOpen) return
-
-    const frameId = requestAnimationFrame(() => {
-      setTab(normalizeTab(initialTab))
-    })
-
-    return () => cancelAnimationFrame(frameId)
-  }, [isOpen, initialTab, normalizeTab])
-
-  useEffect(() => {
     if (visibleTabs.some(t => t.id === tab)) return
 
-    const frameId = requestAnimationFrame(() => {
-      setTab(visibleTabs[0]?.id || 'appearance')
-    })
-
-    return () => cancelAnimationFrame(frameId)
+    setSettingsTab(visibleTabs[0]?.id || 'appearance')
   }, [tab, visibleTabs])
 
+  // Esc 返回工作区；有更上层弹窗打开时让位给弹窗自身处理
   useEffect(() => {
-    if (!isOpen) return
-
-    const frameId = requestAnimationFrame(() => {
-      document.getElementById(`settings-tab-${tab}`)?.focus()
-    })
-
-    return () => cancelAnimationFrame(frameId)
-  }, [isOpen, tab])
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const topDialog = document.querySelector('[role="dialog"][aria-modal="true"][data-dialog-open="true"]')
+      if (topDialog) return
+      onBack()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onBack])
 
   useEffect(
     () => () => {
@@ -342,18 +321,9 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     [],
   )
 
-  useEffect(() => {
-    if (isOpen) return
-    if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current)
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
-    highlightFrameRef.current = null
-    highlightTimerRef.current = null
-    scrollRef.current?.querySelector('.settings-search-highlight')?.classList.remove('settings-search-highlight')
-  }, [isOpen])
-
   // 切换 tab 时重置滚动位置
   const switchTab = useCallback((nextTab: SettingsTab) => {
-    setTab(nextTab)
+    setSettingsTab(nextTab)
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: 0 })
     })
@@ -419,103 +389,109 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
     />
   )
 
+  const backButton = (
+    <button
+      type="button"
+      onClick={onBack}
+      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[length:var(--fs-sm)] font-medium text-text-300 transition-colors hover:bg-bg-100 hover:text-text-100"
+      aria-label={t('backToWorkspace')}
+    >
+      <ChevronLeftIcon size={16} />
+      <span className="truncate">{t('backToWorkspace')}</span>
+    </button>
+  )
+
   // 移动端：全屏体验，顶部 sticky tab
   if (isMobile) {
     return (
-      <Dialog
-        isOpen={isOpen}
-        onClose={onClose}
-        title=""
-        ariaLabel={t('title')}
-        width="100%"
-        className="settings-dialog h-full"
-        showCloseButton={false}
-        rawContent
-      >
-        <div className="settings-surface settings-mobile-surface flex min-h-0 flex-1 flex-col">
-          {/* Sticky Header + Tabs */}
-          <div className="shrink-0">
-            {/* Title bar */}
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <div className="w-9" aria-hidden="true" />
-              <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{t('title')}</div>
-              <button type="button" onClick={close} className="rounded-md p-2 text-text-400 hover:bg-bg-100 hover:text-text-200" aria-label={t('closeSettings')}>
-                <CloseIcon size={18} />
-              </button>
-            </div>
-            <div className="px-4 pb-2">{search}</div>
-
-            {/* Tab Bar - horizontal scroll with padding for visual safety */}
-            <div className="relative">
-              <div
-                role="tablist"
-                aria-label={t('title')}
-                onKeyDown={handleTabKeyDown}
-                className="flex items-center gap-1.5 px-4 pb-3 overflow-x-auto scrollbar-none"
-              >
-                {visibleTabs.map(vt => (
-                  <button
-                    key={vt.id}
-                    id={`settings-tab-${vt.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={vt.id === tab}
-                    aria-controls={`settings-panel-${vt.id}`}
-                    tabIndex={vt.id === tab ? 0 : -1}
-                    onClick={() => switchTab(vt.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[length:var(--fs-md)] font-medium transition-colors whitespace-nowrap shrink-0 border
-                      ${
-                        vt.id === tab
-                          ? 'bg-accent-main-100/10 text-accent-main-100 border-accent-main-100/30'
-                          : 'text-text-400 border-transparent active:bg-bg-100/60'
-                      }`}
-                  >
-                    {vt.icon}
-                    {vt.label}
-                  </button>
-                ))}
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 border-b border-border-100/40" />
-            </div>
+      <div className="settings-surface settings-mobile-surface flex min-h-0 flex-1 flex-col">
+        {/* Sticky Header + Tabs */}
+        <div className="shrink-0">
+          {/* macOS 红绿灯区域（与主界面侧边栏一致） */}
+          {!(isElectron() && getDesktopPlatform() === 'windows') && (
+            <div className="mobile-safe-topbar-14 window-drag-region shrink-0" />
+          )}
+          {/* Title bar */}
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+            <button type="button" onClick={onBack} className="flex items-center gap-1 rounded-md p-1 text-text-400 hover:bg-bg-100 hover:text-text-200" aria-label={t('backToWorkspace')}>
+              <ChevronLeftIcon size={18} />
+              <span className="text-[length:var(--fs-sm)]">{t('backToWorkspace')}</span>
+            </button>
+            <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{t('title')}</div>
+            <div className="w-9" aria-hidden="true" />
           </div>
+          <div className="px-4 pb-2">{search}</div>
 
-          {/* Content - single scroll container */}
-          <div
-            id={activePanelId}
-            role="tabpanel"
-            aria-labelledby={`settings-tab-${tab}`}
-            ref={scrollRef}
-            className="flex-1 min-h-0 py-4 px-4 overflow-y-auto custom-scrollbar overscroll-contain"
-          >
-            <TabContent tab={tab} />
+          {/* Tab Bar - horizontal scroll with padding for visual safety */}
+          <div className="relative">
+            <div
+              role="tablist"
+              aria-label={t('title')}
+              onKeyDown={handleTabKeyDown}
+              className="flex items-center gap-1.5 px-4 pb-3 overflow-x-auto scrollbar-none"
+            >
+              {visibleTabs.map(vt => (
+                <button
+                  key={vt.id}
+                  id={`settings-tab-${vt.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={vt.id === tab}
+                  aria-controls={`settings-panel-${vt.id}`}
+                  tabIndex={vt.id === tab ? 0 : -1}
+                  onClick={() => switchTab(vt.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[length:var(--fs-md)] font-medium transition-colors whitespace-nowrap shrink-0 border
+                    ${
+                      vt.id === tab
+                        ? 'bg-accent-main-100/10 text-accent-main-100 border-accent-main-100/30'
+                        : 'text-text-400 border-transparent active:bg-bg-100/60'
+                    }`}
+                >
+                  {vt.icon}
+                  {vt.label}
+                </button>
+              ))}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 border-b border-border-100/40" />
           </div>
         </div>
-      </Dialog>
+
+        {/* Content - single scroll container */}
+        <div
+          id={activePanelId}
+          role="tabpanel"
+          aria-labelledby={`settings-tab-${tab}`}
+          ref={scrollRef}
+          className="flex-1 min-h-0 py-4 px-4 overflow-y-auto custom-scrollbar overscroll-contain"
+        >
+          <TabContent tab={tab} />
+        </div>
+      </div>
     )
   }
 
   // 桌面端：左侧导航 + 右侧内容
   return (
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title=""
-      ariaLabel={t('title')}
-      width="min(97vw, 1040px)"
-      className="settings-dialog"
-      showCloseButton={false}
-      rawContent
-    >
-      <div className="settings-surface flex h-[min(90vh,820px)]">
-        {/* Left Nav - 窄屏时收缩 */}
-        <nav
-          role="tablist"
-          aria-orientation="vertical"
-          aria-label={t('title')}
-          className="settings-sidebar-surface w-[200px] xl:w-[236px] shrink-0 border-r border-border-100/60 py-4 px-2 xl:px-2.5 flex flex-col overflow-y-auto scrollbar-none"
-          onKeyDown={handleTabKeyDown}
-        >
-          <div className="px-2.5 xl:px-3 mb-4">
+    <div className="settings-surface flex h-full min-h-0 flex-1 min-w-0">
+      {/* Left Nav - 窄屏时收缩 */}
+      <nav
+        role="tablist"
+        aria-orientation="vertical"
+        aria-label={t('title')}
+        className="settings-sidebar-surface shrink-0 border-r border-border-100/60 flex flex-col"
+        style={{ width: layout.sidebar.openWidth }}
+        onKeyDown={handleTabKeyDown}
+      >
+        {/* macOS 红绿灯区域（与主界面侧边栏一致） */}
+        {!(isElectron() && getDesktopPlatform() === 'windows') && (
+          <div className="mobile-safe-topbar-14 window-drag-region shrink-0" />
+        )}
+        {/* 返回工作区 - 固定不随滚动 */}
+        <div className="shrink-0 px-2 xl:px-2.5 pb-3">
+          <div className="px-2.5 xl:px-3">{backButton}</div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-none px-2 xl:px-2.5 pb-4">
+          <div className="px-2.5 xl:px-3 mb-3">
             <div className="text-[length:var(--fs-base)] font-semibold text-text-100">{t('title')}</div>
             <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 leading-relaxed hidden xl:block">
               {t('subtitle')}
@@ -558,41 +534,36 @@ export function SettingsDialog({ isOpen, onClose, initialTab = 'servers' }: Sett
           <div className="mt-auto pt-3 px-2.5 xl:px-3 text-[length:var(--fs-xxs)] text-text-400">
             {t('version', { version: __APP_VERSION__ })}
           </div>
-        </nav>
+        </div>
+      </nav>
 
-        {/* Right Content */}
-        <div className="settings-content-surface flex-1 min-w-0 flex flex-col">
-          {/* Content Header - sticky at top */}
-          <div className="shrink-0 border-b border-border-100/60 px-5 xl:px-6 py-3.5 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{activeTabMeta.label}</div>
-              <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 leading-relaxed truncate">
-                {activeTabMeta.description}
-              </div>
+      {/* Right Content */}
+      <div className="settings-content-surface flex-1 min-w-0 flex flex-col">
+        {/* macOS 红绿灯/标题栏安全高度（与主界面 chat header 一致） */}
+        {!(isElectron() && getDesktopPlatform() === 'windows') && (
+          <div className="mobile-safe-topbar-10 window-drag-region shrink-0" />
+        )}
+        {/* Content Header - sticky at top */}
+        <div className="shrink-0 border-b border-border-100/60 px-5 xl:px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{activeTabMeta.label}</div>
+            <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 leading-relaxed truncate">
+              {activeTabMeta.description}
             </div>
-            <button
-              type="button"
-              onPointerDown={event => event.stopPropagation()}
-              onClick={close}
-              className="p-2 text-text-400 hover:text-text-200 hover:bg-bg-100 rounded-md transition-colors -mr-1 shrink-0"
-              aria-label={t('closeSettings')}
-            >
-              <CloseIcon size={18} />
-            </button>
-          </div>
-
-          {/* Scroll area - single scroll container for all tab content */}
-          <div
-            id={activePanelId}
-            role="tabpanel"
-            aria-labelledby={`settings-tab-${tab}`}
-            ref={scrollRef}
-            className="flex-1 min-h-0 py-5 px-5 xl:px-6 overflow-y-auto custom-scrollbar"
-          >
-            <TabContent tab={tab} />
           </div>
         </div>
+
+        {/* Scroll area - single scroll container for all tab content */}
+        <div
+          id={activePanelId}
+          role="tabpanel"
+          aria-labelledby={`settings-tab-${tab}`}
+          ref={scrollRef}
+          className="flex-1 min-h-0 py-5 px-5 xl:px-6 overflow-y-auto custom-scrollbar"
+        >
+          <TabContent tab={tab} />
+        </div>
       </div>
-    </Dialog>
+    </div>
   )
 }
