@@ -69,6 +69,8 @@ interface InputToolbarProps {
   voiceListening?: boolean
   voiceTranscribing?: boolean
   onVoiceToggle?: () => void
+  /** 紧凑模式：仅显示图标，隐藏文本标签 */
+  iconOnly?: boolean
 }
 
 const approvalModes: ApprovalMode[] = ['ask', 'writes', 'risk', 'full']
@@ -80,10 +82,11 @@ function ApprovalModeIcon({ mode }: { mode: ApprovalMode }) {
   return <PermissionListIcon className="text-accent-main-100" />
 }
 
-function ApprovalModeSelector({ paneId, disabled, inputContainerRef }: {
+function ApprovalModeSelector({ paneId, disabled, inputContainerRef, iconOnly }: {
   paneId: string
   disabled: boolean
   inputContainerRef?: React.RefObject<HTMLDivElement | null>
+  iconOnly?: boolean
 }) {
   const { t } = useTranslation('chat')
   const mode = useSyncExternalStore(autoApproveStore.subscribe, () => autoApproveStore.getApprovalMode(paneId))
@@ -114,8 +117,12 @@ function ApprovalModeSelector({ paneId, disabled, inputContainerRef }: {
         aria-expanded={open}
       >
         <span className="text-text-400"><ApprovalModeIcon mode={mode} /></span>
-        <span className="text-[length:var(--fs-sm)] text-text-300">{t(`inputToolbar.approvalModes.${mode}.label`)}</span>
-        <span className="text-text-400"><ChevronDownIcon /></span>
+        {!iconOnly && (
+          <span className="text-[length:var(--fs-sm)] text-text-300">{t(`inputToolbar.approvalModes.${mode}.label`)}</span>
+        )}
+        {!iconOnly && (
+          <span className="text-text-400"><ChevronDownIcon /></span>
+        )}
       </button>
       <DropdownMenu triggerRef={triggerRef} isOpen={open} position="top" align="left" constrainToRef={inputContainerRef}>
         <div ref={menuRef} role="menu" aria-label={t('inputToolbar.approvalMode')}>
@@ -348,6 +355,7 @@ export function InputToolbar({
   voiceListening = false,
   voiceTranscribing = false,
   onVoiceToggle,
+  iconOnly = false,
 }: InputToolbarProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { presentation } = useChatViewport()
@@ -647,14 +655,15 @@ export function InputToolbar({
                   : selectedAgent || 'build'
               }
             >
-              {/* 紧凑信息流隐藏 AgentIcon 节省空间 */}
               <span
-                className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}
+                className={`text-text-400 shrink-0 ${isCompact && !iconOnly ? 'hidden' : ''}`}
               >
                 <AgentModeIcon name={selectedAgent || 'build'} color={currentAgent?.color} />
               </span>
-              <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{getAgentLabel(selectedAgent || 'build', t)}</span>
-              <span className={`text-text-400 shrink-0 ${isCompact ? 'hidden' : ''}`}>
+              {!iconOnly && (
+                <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{getAgentLabel(selectedAgent || 'build', t)}</span>
+              )}
+              <span className={`text-text-400 shrink-0 ${isCompact || iconOnly ? 'hidden' : ''}`}>
                 <ChevronDownIcon />
               </span>
             </button>
@@ -698,7 +707,7 @@ export function InputToolbar({
           </div>
         </AnimatedPresence>
 
-        <ApprovalModeSelector paneId={paneId} disabled={controlsDisabled} inputContainerRef={inputContainerRef} />
+        <ApprovalModeSelector paneId={paneId} disabled={controlsDisabled} inputContainerRef={inputContainerRef} iconOnly={iconOnly} />
 
       </div>
 

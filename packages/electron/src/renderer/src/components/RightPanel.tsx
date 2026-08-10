@@ -8,6 +8,7 @@ import { ResizablePanel } from './ui/ResizablePanel'
 import { logger } from '../utils/logger'
 import { normalizeToForwardSlash, uiErrorHandler } from '../utils'
 import { useChatViewport } from '../features/chat/chatViewport'
+import { RightPanelEmptyGuide } from './RightPanelEmptyGuide'
 
 const SessionChangesPanel = lazy(() =>
   import('./SessionChangesPanel').then(module => ({ default: module.SessionChangesPanel })),
@@ -93,11 +94,7 @@ export const RightPanel = memo(function RightPanel({ directory, sessionId, inlin
   const renderContent = useCallback(
     (activeTab: PanelTab | null) => {
       if (!activeTab) {
-        return (
-          <div className="flex items-center justify-center h-full text-text-400 text-[length:var(--fs-sm)]">
-            {t('common:noContent')}
-          </div>
-        )
+        return <RightPanelEmptyGuide directory={normalizedDirectory} onNewTerminal={handleNewTerminal} />
       }
 
       return (

@@ -1051,6 +1051,20 @@ function InputBoxComponent({
   const [composerMaxHeight, setComposerMaxHeight] = useState(280)
   const [inputContainerMaxHeight, setInputContainerMaxHeight] = useState(240)
   const [textareaMaxHeight, setTextareaMaxHeight] = useState(180)
+  const [toolbarWidth, setToolbarWidth] = useState(0)
+
+  // 监听输入框宽度，用于紧凑模式判断
+  useEffect(() => {
+    const el = inputContainerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setToolbarWidth(entry.contentRect.width)
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // 附件横向轨道
   const {
@@ -2343,6 +2357,7 @@ function InputBoxComponent({
                       voiceListening={voiceListening}
                       voiceTranscribing={voiceTranscribing}
                       onVoiceToggle={toggleVoice}
+                      iconOnly={toolbarWidth > 0 && toolbarWidth < 480}
                     />
                   </div>
                 </div>

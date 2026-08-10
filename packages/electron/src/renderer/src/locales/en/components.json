@@ -37,7 +37,11 @@
   },
   "rightPanel": {
     "loadingPanel": "Loading panel...",
-    "noActiveSession": "No active session"
+    "noActiveSession": "No active session",
+    "emptyGuide": {
+      "title": "Open Tab",
+      "description": "Select a tab to open in the side panel."
+    }
   },
   "contextFile": {
     "selectProject": "Select a project before viewing or editing context files",

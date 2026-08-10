@@ -37,7 +37,11 @@
   },
   "rightPanel": {
     "loadingPanel": "加载面板中...",
-    "noActiveSession": "没有活跃会话"
+    "noActiveSession": "没有活跃会话",
+    "emptyGuide": {
+      "title": "打开标签页",
+      "description": "选择要在侧边面板中打开的标签。"
+    }
   },
   "contextFile": {
     "selectProject": "请先选择项目，再查看或修改上下文文件",
