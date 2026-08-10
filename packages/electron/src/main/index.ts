@@ -545,6 +545,7 @@ const usesMockKeychain = shouldUseMockKeychain({ override: process.env.OPENCODE_
 if (usesMockKeychain) {
   app.commandLine.appendSwitch("use-mock-keychain")
 }
+app.commandLine.appendSwitch("enable-javascript-call-stack")
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())

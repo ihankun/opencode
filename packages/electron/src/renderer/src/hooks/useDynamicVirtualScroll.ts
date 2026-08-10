@@ -112,18 +112,40 @@ export function useDynamicVirtualScroll({
     return { startIndex: start, endIndex: end, offsetY: offsets[start] || 0 }
   }, [scrollTop, containerHeight, findIndex, offsets, lineCount])
 
-  // 监听容器高度
+  // 监听容器尺寸（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
-    setContainerHeight(container.clientHeight)
-    setContainerWidth(container.clientWidth)
-    const ro = new ResizeObserver(() => {
-      setContainerHeight(container.clientHeight)
-      setContainerWidth(container.clientWidth)
-    })
+    let lastHeight = -1
+    let lastWidth = -1
+    let rafId = 0
+
+    const update = () => {
+      const h = container.clientHeight
+      if (h !== lastHeight) {
+        lastHeight = h
+        setContainerHeight(h)
+      }
+      const w = container.clientWidth
+      if (w !== lastWidth) {
+        lastWidth = w
+        setContainerWidth(w)
+      }
+    }
+    const schedule = () => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        update()
+      })
+    }
+    update()
+    const ro = new ResizeObserver(schedule)
     ro.observe(container)
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [isResizing])
 
   // 监听容器宽度变化 → 清空测量值
@@ -133,16 +155,24 @@ export function useDynamicVirtualScroll({
     const container = containerRef.current
     if (!container) return
     lastWidthRef.current = container.clientWidth
+    let rafId = 0
     const ro = new ResizeObserver(() => {
-      const w = container.clientWidth
-      if (Math.abs(w - lastWidthRef.current) > 20) {
-        lastWidthRef.current = w
-        pendingHeightsRef.current = null
-        setMeasuredHeights(new Float32Array(lineCount))
-      }
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        const w = container.clientWidth
+        if (Math.abs(w - lastWidthRef.current) > 20) {
+          lastWidthRef.current = w
+          pendingHeightsRef.current = null
+          setMeasuredHeights(new Float32Array(lineCount))
+        }
+      })
     })
     ro.observe(container)
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [lineCount])
 
   useEffect(() => {

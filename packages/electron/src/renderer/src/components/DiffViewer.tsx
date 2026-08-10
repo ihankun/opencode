@@ -29,6 +29,9 @@ function codeLineHeight(offset: number): number {
 }
 const OVERSCAN = 5
 
+/** word diff 行长度上限：超过则跳过（diffWordsWithSpace 对超长行是 O(n²)） */
+const MAX_WORD_DIFF_CHARS = 4000
+
 /** diffStyle 配置已移除，固定使用 markers 行标记风格 */
 const FIXED_DIFF_STYLE: DiffStyle = 'markers'
 
@@ -326,7 +329,7 @@ function useDiffLineNumberWidth(before: string, after: string, lineNumbers?: Dif
 
 const DiffLineSelectionContext = createContext<DiffViewerProps['onLineSelect']>(undefined)
 
-function LineNumberCell({ lineNo, width, type }: { lineNo?: number; width: number; type?: LineType }) {
+const LineNumberCell = memo(function LineNumberCell({ lineNo, width, type }: { lineNo?: number; width: number; type?: LineType }) {
   const onLineSelect = useContext(DiffLineSelectionContext)
   const toneClass = type === 'add' || type === 'delete' ? 'text-text-300' : 'text-text-400'
   if (onLineSelect && lineNo) {
@@ -350,20 +353,20 @@ function LineNumberCell({ lineNo, width, type }: { lineNo?: number; width: numbe
       {lineNo}
     </div>
   )
-}
+})
 
-function DiffMarkerCell({ type }: { type: LineType }) {
+const DiffMarkerCell = memo(function DiffMarkerCell({ type }: { type: LineType }) {
   return (
     <div className="w-5 shrink-0 text-center text-[length:var(--fs-code)] leading-[var(--fs-code-line-height)] select-none">
       {type === 'add' && <span className="text-success-100">+</span>}
       {type === 'delete' && <span className="text-danger-100">−</span>}
     </div>
   )
-}
+})
 
-function EmptyContentBuffer({ height, yOffset = 0, xOffset = 0 }: { height: number; yOffset?: number; xOffset?: number }) {
+const EmptyContentBuffer = memo(function EmptyContentBuffer({ height, yOffset = 0, xOffset = 0 }: { height: number; yOffset?: number; xOffset?: number }) {
   return <div className="diff-empty-content-buffer min-w-full" style={getEmptyBufferRowStyle(height, yOffset, xOffset)} />
-}
+})
 
 /** Change bar 样式 — 行号左侧的 3px 竖条，add 实心 / delete 虚线 */
 function getChangeBarProps(type: LineType, yOffset = 0): { className: string; style?: React.CSSProperties } {
@@ -737,6 +740,11 @@ const WrappedSplitDiffView = memo(function WrappedSplitDiffView({
     [measureRef, offsetY],
   )
 
+  const rowRef = useCallback(
+    (index: number) => (el: HTMLDivElement | null) => measureWrappedRowRef(index, el),
+    [measureWrappedRowRef],
+  )
+
   if (pairedLines.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-text-400 text-[length:var(--fs-base)]">
@@ -751,7 +759,7 @@ const WrappedSplitDiffView = memo(function WrappedSplitDiffView({
 
     if (isCollapsed(item)) {
       visibleRows.push(
-        <div key={`c-${i}`} ref={el => measureWrappedRowRef(i, el)}>
+        <div key={`c-${i}`} ref={rowRef(i)}>
           <CollapsedBar
             count={item.count}
             t={t}
@@ -771,7 +779,7 @@ const WrappedSplitDiffView = memo(function WrappedSplitDiffView({
     const leftEmptyStyle = pair.left.type === 'empty' ? getEmptyBufferBackgroundStyle(0) : undefined
     const rightEmptyStyle = pair.right.type === 'empty' ? getEmptyBufferBackgroundStyle(0) : undefined
     visibleRows.push(
-      <div key={i} ref={el => measureWrappedRowRef(i, el)} className="flex items-stretch">
+      <div key={i} ref={rowRef(i)} className="flex items-stretch">
         {/* Left panel */}
         <div
           className={`flex-1 flex items-stretch min-w-0 border-r border-border-100/30 ${getContentBgClass(pair.left.type)}`}
@@ -893,10 +901,10 @@ const SplitDiffView = memo(function SplitDiffView({
   const [containerHeight, setContainerHeight] = useState(300)
   const [leftContentWidth, setLeftContentWidth] = useState(0)
   const [rightContentWidth, setRightContentWidth] = useState(0)
-  const [leftClientWidth, setLeftClientWidth] = useState(0)
-  const [rightClientWidth, setRightClientWidth] = useState(0)
   const [leftScrollLeft, setLeftScrollLeft] = useState(0)
   const [rightScrollLeft, setRightScrollLeft] = useState(0)
+  const leftProxyRef = useRef<HTMLDivElement>(null)
+  const rightProxyRef = useRef<HTMLDivElement>(null)
 
   const [expandedRegions, setExpandedRegions] = useUiState<Map<number, ExpansionRegion>>(stateKey, new Map())
   const displayLines = useMemo(() => collapseContextPaired(pairedLines, expandedRegions), [pairedLines, expandedRegions])
@@ -913,18 +921,39 @@ const SplitDiffView = memo(function SplitDiffView({
     return { startIndex: start, endIndex: end, offsetY: start * lineHeight }
   }, [scrollTop, containerHeight, displayLines.length, lineHeight])
 
-  // 监听容器大小
+  // 监听容器大小（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
+    let lastHeight = -1
+    let rafId = 0
 
-    setContainerHeight(container.clientHeight)
-    const resizeObserver = new ResizeObserver(() => setContainerHeight(container.clientHeight))
+    const update = () => {
+      const h = container.clientHeight
+      if (h !== lastHeight) {
+        lastHeight = h
+        setContainerHeight(h)
+      }
+    }
+    const schedule = () => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        update()
+      })
+    }
+    update()
+    const resizeObserver = new ResizeObserver(schedule)
     resizeObserver.observe(container)
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [isResizing])
 
-  // 测量 content 宽度 — 追踪可见行 scrollWidth 历史最大值
+  // 测量 content 宽度 — 追踪可见行 scrollWidth 历史最大值。
+  // minWidth 只增不减、不依赖容器宽度，内容变化由 MutationObserver 重新测量；
+  // 容器宽度变化只直接同步 proxy scrollbar 显隐（DOM 操作，不触发 React 渲染）
   useEffect(() => {
     const leftContent = leftContentRef.current
     const rightContent = rightContentRef.current
@@ -932,7 +961,20 @@ const SplitDiffView = memo(function SplitDiffView({
     const leftInner = leftContent.firstElementChild as HTMLElement
     const rightInner = rightContent.firstElementChild as HTMLElement
 
-    const measure = () => {
+    const syncProxyVisibility = () => {
+      const leftVisible = maxLeftScrollWidthRef.current > leftContent.clientWidth
+      if (leftProxyRef.current) {
+        leftProxyRef.current.style.opacity = leftVisible ? '1' : '0'
+        leftProxyRef.current.style.pointerEvents = leftVisible ? 'auto' : 'none'
+      }
+      const rightVisible = maxRightScrollWidthRef.current > rightContent.clientWidth
+      if (rightProxyRef.current) {
+        rightProxyRef.current.style.opacity = rightVisible ? '1' : '0'
+        rightProxyRef.current.style.pointerEvents = rightVisible ? 'auto' : 'none'
+      }
+    }
+
+    const measureContent = () => {
       if (leftInner) {
         const sw = leftInner.scrollWidth
         if (sw > maxLeftScrollWidthRef.current) {
@@ -949,21 +991,14 @@ const SplitDiffView = memo(function SplitDiffView({
         }
         setRightContentWidth(maxRightScrollWidthRef.current)
       }
-      setLeftClientWidth(leftContent.clientWidth)
-      setRightClientWidth(rightContent.clientWidth)
+      syncProxyVisibility()
     }
 
-    measure()
-    const ro = new ResizeObserver(() => {
-      maxLeftScrollWidthRef.current = 0
-      maxRightScrollWidthRef.current = 0
-      if (leftInner) leftInner.style.minWidth = ''
-      if (rightInner) rightInner.style.minWidth = ''
-      measure()
-    })
+    measureContent()
+    const ro = new ResizeObserver(syncProxyVisibility)
     ro.observe(leftContent)
     ro.observe(rightContent)
-    const mo = new MutationObserver(measure)
+    const mo = new MutationObserver(measureContent)
     mo.observe(leftContent, { childList: true, subtree: true })
     mo.observe(rightContent, { childList: true, subtree: true })
     return () => {
@@ -1201,33 +1236,31 @@ const SplitDiffView = memo(function SplitDiffView({
         </div>
       </div>
 
-      {/* Sticky proxy 横向滚动条 — 只在内容实际溢出时显示 */}
-      {(leftContentWidth > leftClientWidth || rightContentWidth > rightClientWidth) && (
-        <div className="sticky bottom-0 z-10 flex">
-          {/* 左面板: gutter 占位 + scrollbar */}
-          <div className="flex-1 flex min-w-0 border-r border-border-100/30">
-            <div className="shrink-0" style={{ width: gutterWidth }} />
-            <div
-              ref={leftScrollbarRef}
-              className="flex-1 min-w-0 overflow-x-auto code-scrollbar"
-              onScroll={handleLeftScrollbar}
-            >
-              <div style={{ width: leftContentWidth, height: 1 }} />
-            </div>
-          </div>
-          {/* 右面板: gutter 占位 + scrollbar */}
-          <div className="flex-1 flex min-w-0">
-            <div className="shrink-0" style={{ width: gutterWidth }} />
-            <div
-              ref={rightScrollbarRef}
-              className="flex-1 min-w-0 overflow-x-auto code-scrollbar"
-              onScroll={handleRightScrollbar}
-            >
-              <div style={{ width: rightContentWidth, height: 1 }} />
-            </div>
+      {/* Proxy 横向滚动条 — 常驻布局，显隐由 RO 直接改 opacity（不触发 React 渲染） */}
+      <div className="sticky bottom-0 z-10 flex">
+        {/* 左面板: gutter 占位 + scrollbar */}
+        <div ref={leftProxyRef} className="flex-1 flex min-w-0 border-r border-border-100/30" style={{ opacity: 0, pointerEvents: 'none' }}>
+          <div className="shrink-0" style={{ width: gutterWidth }} />
+          <div
+            ref={leftScrollbarRef}
+            className="flex-1 min-w-0 overflow-x-auto code-scrollbar"
+            onScroll={handleLeftScrollbar}
+          >
+            <div style={{ width: leftContentWidth, height: 1 }} />
           </div>
         </div>
-      )}
+        {/* 右面板: gutter 占位 + scrollbar */}
+        <div ref={rightProxyRef} className="flex-1 flex min-w-0" style={{ opacity: 0, pointerEvents: 'none' }}>
+          <div className="shrink-0" style={{ width: gutterWidth }} />
+          <div
+            ref={rightScrollbarRef}
+            className="flex-1 min-w-0 overflow-x-auto code-scrollbar"
+            onScroll={handleRightScrollbar}
+          >
+            <div style={{ width: rightContentWidth, height: 1 }} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 })
@@ -1278,7 +1311,7 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
   const [scrollTop, setScrollTop] = useState(0)
   const [containerHeight, setContainerHeight] = useState(300)
   const [contentWidth, setContentWidth] = useState(0)
-  const [contentClientWidth, setContentClientWidth] = useState(0)
+  const proxyRef = useRef<HTMLDivElement>(null)
 
   const [expandedRegions, setExpandedRegions] = useUiState<Map<number, ExpansionRegion>>(stateKey, new Map())
   const displayLines = useMemo(() => collapseContextUnified(lines, expandedRegions), [lines, expandedRegions])
@@ -1295,23 +1328,53 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
     return { startIndex: start, endIndex: end, offsetY: start * lineHeight }
   }, [scrollTop, containerHeight, displayLines.length, lineHeight])
 
+  // 监听容器大小（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
+    let lastHeight = -1
+    let rafId = 0
 
-    setContainerHeight(container.clientHeight)
-    const resizeObserver = new ResizeObserver(() => setContainerHeight(container.clientHeight))
+    const update = () => {
+      const h = container.clientHeight
+      if (h !== lastHeight) {
+        lastHeight = h
+        setContainerHeight(h)
+      }
+    }
+    const schedule = () => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        update()
+      })
+    }
+    update()
+    const resizeObserver = new ResizeObserver(schedule)
     resizeObserver.observe(container)
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [isResizing])
 
-  // 测量 content 宽度 — 追踪可见行 scrollWidth 历史最大值
+  // 测量 content 宽度 — 追踪可见行 scrollWidth 历史最大值。
+  // minWidth 只增不减、不依赖容器宽度，内容变化由 MutationObserver 重新测量；
+  // 容器宽度变化只直接同步 proxy scrollbar 显隐（DOM 操作，不触发 React 渲染）
   useEffect(() => {
     const content = contentRef.current
     if (!content) return
     const inner = content.firstElementChild as HTMLElement
 
-    const measure = () => {
+    const syncProxyVisibility = () => {
+      const visible = maxScrollWidthRef.current > content.clientWidth
+      if (proxyRef.current) {
+        proxyRef.current.style.opacity = visible ? '1' : '0'
+        proxyRef.current.style.pointerEvents = visible ? 'auto' : 'none'
+      }
+    }
+
+    const measureContent = () => {
       if (inner) {
         const sw = inner.scrollWidth
         if (sw > maxScrollWidthRef.current) {
@@ -1320,17 +1383,13 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
         }
         setContentWidth(maxScrollWidthRef.current)
       }
-      setContentClientWidth(content.clientWidth)
+      syncProxyVisibility()
     }
 
-    measure()
-    const ro = new ResizeObserver(() => {
-      maxScrollWidthRef.current = 0
-      if (inner) inner.style.minWidth = ''
-      measure()
-    })
+    measureContent()
+    const ro = new ResizeObserver(syncProxyVisibility)
     ro.observe(content)
-    const mo = new MutationObserver(measure)
+    const mo = new MutationObserver(measureContent)
     mo.observe(content, { childList: true, subtree: true })
     return () => {
       ro.disconnect()
@@ -1444,7 +1503,7 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
         className={`pr-2 pl-2 leading-[var(--fs-code-line-height)] text-[length:var(--fs-code)] whitespace-pre ${getLineBgClass(line.type)}`}
         style={{ height: lineHeight }}
       >
-        <LineContent line={{ ...line, lineNo }} tokens={tokens} />
+        <LineContent line={line} lineNo={lineNo} tokens={tokens} />
       </div>,
     )
   }
@@ -1475,15 +1534,13 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
         </div>
       </div>
 
-      {/* Sticky proxy 横向滚动条 — 只在内容实际溢出时显示 */}
-      {contentWidth > contentClientWidth && (
-        <div className="sticky bottom-0 z-10 flex">
-          <div className="shrink-0" style={{ width: GUTTER_WIDTH }} />
-          <div ref={scrollbarRef} className="flex-1 min-w-0 overflow-x-auto code-scrollbar" onScroll={handleScrollbar}>
-            <div style={{ width: contentWidth, height: 1 }} />
-          </div>
+      {/* Proxy 横向滚动条 — 常驻布局，显隐由 RO 直接改 opacity（不触发 React 渲染） */}
+      <div ref={proxyRef} className="sticky bottom-0 z-10 flex" style={{ opacity: 0, pointerEvents: 'none' }}>
+        <div className="shrink-0" style={{ width: GUTTER_WIDTH }} />
+        <div ref={scrollbarRef} className="flex-1 min-w-0 overflow-x-auto code-scrollbar" onScroll={handleScrollbar}>
+          <div style={{ width: contentWidth, height: 1 }} />
         </div>
-      )}
+      </div>
     </div>
   )
 })
@@ -1547,6 +1604,11 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
     [measureRef, offsetY],
   )
 
+  const rowRef = useCallback(
+    (index: number) => (el: HTMLDivElement | null) => measureWrappedUnifiedRowRef(index, el),
+    [measureWrappedUnifiedRowRef],
+  )
+
   if (lines.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-text-400 text-[length:var(--fs-base)]">
@@ -1561,7 +1623,7 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
 
     if (isCollapsed(item)) {
       visibleRows.push(
-        <div key={`c-${i}`} ref={el => measureWrappedUnifiedRowRef(i, el)}>
+        <div key={`c-${i}`} ref={rowRef(i)}>
           <CollapsedBar
             count={item.count}
             t={t}
@@ -1590,7 +1652,7 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
     }
 
     visibleRows.push(
-      <div key={i} ref={el => measureWrappedUnifiedRowRef(i, el)} className={`flex items-stretch ${getLineBgClass(line.type)}`}>
+      <div key={i} ref={rowRef(i)} className={`flex items-stretch ${getLineBgClass(line.type)}`}>
         <div className="shrink-0" style={{ width: gutterWidth }}>
             {useChangeBars ? (
               <div className="flex items-stretch h-full">
@@ -1611,7 +1673,7 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
           className="min-w-0 flex-1 px-2 leading-[var(--fs-code-line-height)] text-[length:var(--fs-code)] whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
           style={{ minHeight: lineHeight }}
         >
-          <LineContent line={{ ...line, lineNo }} tokens={tokens} />
+          <LineContent line={line} lineNo={lineNo} tokens={tokens} />
         </div>
       </div>,
     )
@@ -1640,8 +1702,17 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
 type HighlightToken = HighlightTokens[number][number]
 type WordDiffChange = ReturnType<typeof diffWordsWithSpace>[number]
 
-const LineContent = memo(function LineContent({ line, tokens }: { line: DiffLine; tokens: HighlightTokens | null }) {
-  const lineTokens = tokens && line.lineNo ? tokens[line.lineNo - 1] : null
+const LineContent = memo(function LineContent({
+  line,
+  tokens,
+  lineNo,
+}: {
+  line: DiffLine
+  tokens: HighlightTokens | null
+  lineNo?: number
+}) {
+  const resolvedLineNo = lineNo ?? line.lineNo
+  const lineTokens = tokens && resolvedLineNo ? tokens[resolvedLineNo - 1] : null
 
   // 有 word diff 标记时：在语法着色基础上叠加增删背景
   if (line.wordDiffSegments) {
@@ -1778,10 +1849,13 @@ function computePairedLines(
           let rightSegments: WordDiffSegment[] | undefined
 
           if (!skipWordDiff && oldLine !== undefined && newLine !== undefined) {
-            const wordDiff = computeWordDiff(oldLine, newLine)
-            if (!isTooFragmented(wordDiff.changes)) {
-              leftSegments = wordDiff.left
-              rightSegments = wordDiff.right
+            // 超长行跳过 word diff：diffWordsWithSpace 对超长行是 O(n²)，大文件会阻塞主线程
+            if (oldLine.length + newLine.length <= MAX_WORD_DIFF_CHARS) {
+              const wordDiff = computeWordDiff(oldLine, newLine)
+              if (!isTooFragmented(wordDiff.changes)) {
+                leftSegments = wordDiff.left
+                rightSegments = wordDiff.right
+              }
             }
           }
 

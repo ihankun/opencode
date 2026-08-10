@@ -22,6 +22,10 @@ type IdleWindowApi = {
 
 type HighlightTask = () => Promise<void>
 
+// 同步高亮长度上限：超大代码块（如大文件 diff 预览）跳过 useLayoutEffect 同步路径，
+// 交给异步队列分片处理，避免阻塞主线程导致渲染进程无响应
+const SYNC_HIGHLIGHT_MAX_CHARS = 100_000
+
 // ============================================
 // LRU 缓存层 - 避免重复高亮相同代码
 // ============================================
@@ -537,6 +541,7 @@ export function useSyntaxHighlight(code: string, options: HighlightOptions & { m
 
   useLayoutEffect(() => {
     if (!enabled || delayMs > 0) return
+    if (code.length > SYNC_HIGHLIGHT_MAX_CHARS) return
 
     const syncResult =
       mode === 'html'
