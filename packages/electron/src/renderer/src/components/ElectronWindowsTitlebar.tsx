@@ -95,7 +95,7 @@ export function ElectronWindowsTitlebar({
           title={sidebarTitle}
           className="electron-windows-titlebar-btn window-no-drag"
         >
-          <SidebarIcon size={16} />
+          <SidebarIcon size={18} />
         </button>
         <button
           type="button"
@@ -104,7 +104,7 @@ export function ElectronWindowsTitlebar({
           title={searchTitle}
           className="electron-windows-titlebar-btn window-no-drag"
         >
-          <SearchIcon size={16} />
+          <SearchIcon size={18} />
         </button>
         <button
           type="button"
