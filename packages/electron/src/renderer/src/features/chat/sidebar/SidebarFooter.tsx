@@ -61,13 +61,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const closeTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 菜单中连接状态显示用
-  const statusColorClass =
-    {
-      connected: 'bg-success-100',
-      connecting: 'bg-warning-100 animate-pulse',
-      disconnected: 'bg-text-500',
-      error: 'bg-danger-100',
-    }[connectionState] || 'bg-text-500'
   const connectionLabel = activeServer?.name || t(`sidebar.connection.${connectionState}`, {
     defaultValue: t('sidebar.connection.unknown'),
   })
@@ -222,9 +215,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
         >
           {/* Theme Selector */}
           <div className="relative p-2">
-            <div className="text-[length:var(--fs-xxs)] font-bold text-text-400 uppercase tracking-wider px-1 mb-1.5">
-              {t('sidebar.appearance')}
-            </div>
             <div className="flex bg-bg-200/50 p-1 rounded-md border border-border-200/30 relative isolate">
               <div
                 className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/3)] bg-bg-000 rounded-sm shadow-sm ring-1 ring-border-200/50 transition-transform duration-300 ease-out -z-10"
@@ -352,13 +342,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
               <CogIcon size={14} />
               <span>{t('sidebar.settings')}</span>
             </button>
-          </div>
-
-          {/* Connection Status */}
-          <div className="relative flex items-center gap-2 px-3 py-2 text-[length:var(--fs-xxs)] text-text-300 cursor-default">
-            <div className="pointer-events-none absolute inset-x-3 top-0 h-px bg-border-200/30" />
-            <div className={`w-1.5 h-1.5 rounded-full ${statusColorClass}`} />
-            <span>{connectionLabel}</span>
           </div>
         </div>,
         document.body,
