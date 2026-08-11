@@ -28,6 +28,7 @@ function codeLineHeight(offset: number): number {
   return 24 + offset * 2
 }
 const OVERSCAN = 5
+const RESIZE_SETTLE_DELAY_MS = 120
 
 /** word diff 行长度上限：超过则跳过（diffWordsWithSpace 对超长行是 O(n²)） */
 const MAX_WORD_DIFF_CHARS = 4000
@@ -837,7 +838,7 @@ const WrappedSplitDiffView = memo(function WrappedSplitDiffView({
   return (
     <div
       ref={containerRef}
-      className="overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
+      className="min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
       onScroll={handleScroll}
       style={maxHeight !== undefined ? { maxHeight } : undefined}
     >
@@ -921,12 +922,12 @@ const SplitDiffView = memo(function SplitDiffView({
     return { startIndex: start, endIndex: end, offsetY: start * lineHeight }
   }, [scrollTop, containerHeight, displayLines.length, lineHeight])
 
-  // 监听容器大小（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
+  // 窗口连续 resize 时延后提交高度，避免每一帧重建可见行。
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
     let lastHeight = -1
-    let rafId = 0
+    let settleTimerId: number | null = null
 
     const update = () => {
       const h = container.clientHeight
@@ -936,18 +937,18 @@ const SplitDiffView = memo(function SplitDiffView({
       }
     }
     const schedule = () => {
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
+      settleTimerId = window.setTimeout(() => {
+        settleTimerId = null
         update()
-      })
+      }, RESIZE_SETTLE_DELAY_MS)
     }
     update()
     const resizeObserver = new ResizeObserver(schedule)
     resizeObserver.observe(container)
     return () => {
       resizeObserver.disconnect()
-      if (rafId) cancelAnimationFrame(rafId)
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
     }
   }, [isResizing])
 
@@ -960,15 +961,19 @@ const SplitDiffView = memo(function SplitDiffView({
     if (!leftContent || !rightContent) return
     const leftInner = leftContent.firstElementChild as HTMLElement
     const rightInner = rightContent.firstElementChild as HTMLElement
+    let lastLeftProxyVisible: boolean | null = null
+    let lastRightProxyVisible: boolean | null = null
 
     const syncProxyVisibility = () => {
       const leftVisible = maxLeftScrollWidthRef.current > leftContent.clientWidth
-      if (leftProxyRef.current) {
+      if (leftProxyRef.current && leftVisible !== lastLeftProxyVisible) {
+        lastLeftProxyVisible = leftVisible
         leftProxyRef.current.style.opacity = leftVisible ? '1' : '0'
         leftProxyRef.current.style.pointerEvents = leftVisible ? 'auto' : 'none'
       }
       const rightVisible = maxRightScrollWidthRef.current > rightContent.clientWidth
-      if (rightProxyRef.current) {
+      if (rightProxyRef.current && rightVisible !== lastRightProxyVisible) {
+        lastRightProxyVisible = rightVisible
         rightProxyRef.current.style.opacity = rightVisible ? '1' : '0'
         rightProxyRef.current.style.pointerEvents = rightVisible ? 'auto' : 'none'
       }
@@ -1195,7 +1200,7 @@ const SplitDiffView = memo(function SplitDiffView({
   return (
     <div
       ref={containerRef}
-      className="overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
+      className="min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
       style={maxHeight !== undefined ? { maxHeight } : undefined}
       onScroll={handleScroll}
     >
@@ -1328,12 +1333,12 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
     return { startIndex: start, endIndex: end, offsetY: start * lineHeight }
   }, [scrollTop, containerHeight, displayLines.length, lineHeight])
 
-  // 监听容器大小（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
+  // 窗口连续 resize 时延后提交高度，避免每一帧重建可见行。
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
     let lastHeight = -1
-    let rafId = 0
+    let settleTimerId: number | null = null
 
     const update = () => {
       const h = container.clientHeight
@@ -1343,18 +1348,18 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
       }
     }
     const schedule = () => {
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
+      settleTimerId = window.setTimeout(() => {
+        settleTimerId = null
         update()
-      })
+      }, RESIZE_SETTLE_DELAY_MS)
     }
     update()
     const resizeObserver = new ResizeObserver(schedule)
     resizeObserver.observe(container)
     return () => {
       resizeObserver.disconnect()
-      if (rafId) cancelAnimationFrame(rafId)
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
     }
   }, [isResizing])
 
@@ -1365,10 +1370,12 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
     const content = contentRef.current
     if (!content) return
     const inner = content.firstElementChild as HTMLElement
+    let lastProxyVisible: boolean | null = null
 
     const syncProxyVisibility = () => {
       const visible = maxScrollWidthRef.current > content.clientWidth
-      if (proxyRef.current) {
+      if (proxyRef.current && visible !== lastProxyVisible) {
+        lastProxyVisible = visible
         proxyRef.current.style.opacity = visible ? '1' : '0'
         proxyRef.current.style.pointerEvents = visible ? 'auto' : 'none'
       }
@@ -1511,7 +1518,7 @@ const UnifiedDiffView = memo(function UnifiedDiffView({
   return (
     <div
       ref={containerRef}
-      className="overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
+      className="min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
       style={maxHeight !== undefined ? { maxHeight } : undefined}
       onScroll={handleScroll}
     >
@@ -1682,7 +1689,7 @@ const WrappedUnifiedDiffView = memo(function WrappedUnifiedDiffView({
   return (
     <div
       ref={containerRef}
-      className="overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
+      className="min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-[length:var(--fs-code)] h-full"
       onScroll={handleScroll}
       style={maxHeight !== undefined ? { maxHeight } : undefined}
     >

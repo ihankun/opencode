@@ -641,7 +641,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   } as const
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full">
+    <div ref={containerRef} className="flex min-w-0 flex-col h-full">
       {/* 文件列表区 */}
       <div
         ref={listRef}
@@ -958,7 +958,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
 
       {/* Diff 预览区 */}
       {showPreview && selectedDiff && (
-        <div className="flex-1 flex flex-col min-h-0" style={{ minHeight: MIN_PREVIEW_HEIGHT }}>
+        <div className="flex min-w-0 flex-1 flex-col min-h-0" style={{ minHeight: MIN_PREVIEW_HEIGHT }}>
           {mountedPreviewDiffs.map(previewDiff => (
             <div key={previewDiff.file} className={previewDiff.file === selectedFile ? 'h-full min-h-0' : 'hidden'}>
               <DiffPreviewPanel
@@ -1636,7 +1636,7 @@ const DiffPreviewPanel = memo(function DiffPreviewPanel({
 
   return (
     <>
-      <div className="flex flex-col h-full">
+      <div className="flex min-w-0 flex-col h-full">
       <PreviewTabsBar
         items={previewTabItems}
         activeId={diff.file}

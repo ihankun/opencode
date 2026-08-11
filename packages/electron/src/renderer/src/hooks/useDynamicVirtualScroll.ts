@@ -14,6 +14,7 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 
 const DEFAULT_LINE_HEIGHT = 20
 const OVERSCAN = 5
+const RESIZE_SETTLE_DELAY_MS = 120
 
 interface UseDynamicVirtualScrollOptions {
   /** 总行数 */
@@ -112,13 +113,15 @@ export function useDynamicVirtualScroll({
     return { startIndex: start, endIndex: end, offsetY: offsets[start] || 0 }
   }, [scrollTop, containerHeight, findIndex, offsets, lineCount])
 
-  // 监听容器尺寸（rAF 合并 + 值变化才更新：连续 resize 一帧最多渲染一次）
+  const lastWidthRef = useRef(0)
+  const lastMeasuredWidthRef = useRef(0)
+
+  // 窗口连续 resize 时延后提交尺寸，避免每一帧清空行高并重建虚拟列表。
   useEffect(() => {
     const container = containerRef.current
     if (!container || isResizing) return
     let lastHeight = -1
-    let lastWidth = -1
-    let rafId = 0
+    let settleTimerId: number | null = null
 
     const update = () => {
       const h = container.clientHeight
@@ -126,54 +129,37 @@ export function useDynamicVirtualScroll({
         lastHeight = h
         setContainerHeight(h)
       }
+
       const w = container.clientWidth
-      if (w !== lastWidth) {
-        lastWidth = w
+      if (w !== lastWidthRef.current) {
+        lastWidthRef.current = w
         setContainerWidth(w)
+      }
+
+      if (lastMeasuredWidthRef.current === 0 || Math.abs(w - lastMeasuredWidthRef.current) > 20) {
+        lastMeasuredWidthRef.current = w
+        pendingHeightsRef.current = null
+        setMeasuredHeights(new Float32Array(lineCount))
       }
     }
     const schedule = () => {
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
+      settleTimerId = window.setTimeout(() => {
+        settleTimerId = null
         update()
-      })
+      }, RESIZE_SETTLE_DELAY_MS)
     }
+
+    if (lastWidthRef.current === 0) lastWidthRef.current = container.clientWidth
+    if (lastMeasuredWidthRef.current === 0) lastMeasuredWidthRef.current = container.clientWidth
     update()
     const ro = new ResizeObserver(schedule)
     ro.observe(container)
     return () => {
       ro.disconnect()
-      if (rafId) cancelAnimationFrame(rafId)
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId)
     }
-  }, [isResizing])
-
-  // 监听容器宽度变化 → 清空测量值
-  // 阈值 20px：滚动条出现/消失约 15-17px，不应触发全部重测
-  const lastWidthRef = useRef(0)
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    lastWidthRef.current = container.clientWidth
-    let rafId = 0
-    const ro = new ResizeObserver(() => {
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
-        const w = container.clientWidth
-        if (Math.abs(w - lastWidthRef.current) > 20) {
-          lastWidthRef.current = w
-          pendingHeightsRef.current = null
-          setMeasuredHeights(new Float32Array(lineCount))
-        }
-      })
-    })
-    ro.observe(container)
-    return () => {
-      ro.disconnect()
-      if (rafId) cancelAnimationFrame(rafId)
-    }
-  }, [lineCount])
+  }, [isResizing, lineCount])
 
   useEffect(() => {
     return () => {
