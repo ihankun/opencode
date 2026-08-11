@@ -389,6 +389,7 @@ export function useGlobalEvents(directories?: string[]) {
       removePendingByRequestId(pendingPermissions, sessionID, requestID)
       latePendingRequests.delete(requestID)
       activeSessionStore.resolvePendingRequest(requestID)
+      notificationStore.markRequestRead(requestID)
 
       // Broadcast to ALL consumers regardless of session match.
       // Each consumer clears its local state by requestID (which is globally unique),
@@ -597,7 +598,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知 — 不属于当前 session family 的才弹
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('permission', `${sessionLabel} — ${i18n.t('chat:notification.permissionTitle')}`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('permission', `${sessionLabel} — ${i18n.t('chat:notification.permissionTitle')}`, desc, request.sessionID, meta?.directory, request.id)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           // 当前会话：如果开启了当前会话提示音
           playNotificationSoundDeduped('permission')
@@ -638,7 +639,7 @@ export function useGlobalEvents(directories?: string[]) {
 
         // Toast 通知
         if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('question', `${sessionLabel} — ${i18n.t('chat:notification.questionTitle')}`, desc, request.sessionID, meta?.directory)
+          notificationStore.push('question', `${sessionLabel} — ${i18n.t('chat:notification.questionTitle')}`, desc, request.sessionID, meta?.directory, request.id)
         } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           playNotificationSoundDeduped('question')
         }
@@ -654,6 +655,7 @@ export function useGlobalEvents(directories?: string[]) {
         removePendingByRequestId(pendingQuestions, data.sessionID, data.requestID)
         latePendingRequests.delete(data.requestID)
         activeSessionStore.resolvePendingRequest(data.requestID)
+        notificationStore.markRequestRead(data.requestID)
 
         if (belongsToCurrentSession(data.sessionID)) {
           dispatchToConsumers(data.sessionID, cb => cb.onQuestionReplied?.(data))
@@ -664,6 +666,7 @@ export function useGlobalEvents(directories?: string[]) {
         removePendingByRequestId(pendingQuestions, data.sessionID, data.requestID)
         latePendingRequests.delete(data.requestID)
         activeSessionStore.resolvePendingRequest(data.requestID)
+        notificationStore.markRequestRead(data.requestID)
 
         if (belongsToCurrentSession(data.sessionID)) {
           dispatchToConsumers(data.sessionID, cb => cb.onQuestionRejected?.(data))
