@@ -9,13 +9,22 @@ export function registerSecurityIpc(input: {
   set: (value: unknown) => unknown
   windowsSandboxStatus: () => unknown
 }) {
-  ipcMain.handle("security:get", input.get)
-  ipcMain.handle("security:audit", input.audit)
+  ipcMain.handle("security:get", (event) => {
+    input.assertSender(event)
+    return input.get()
+  })
+  ipcMain.handle("security:audit", (event) => {
+    input.assertSender(event)
+    return input.audit()
+  })
   ipcMain.handle("security:set", (event, value: unknown) => {
     input.assertSender(event)
     return input.set(value)
   })
-  ipcMain.handle("security:windows-sandbox-status", input.windowsSandboxStatus)
+  ipcMain.handle("security:windows-sandbox-status", (event) => {
+    input.assertSender(event)
+    return input.windowsSandboxStatus()
+  })
   ipcMain.handle("security:windows-sandbox-install", (event) => {
     input.assertSender(event)
     return input.installWindowsSandbox()

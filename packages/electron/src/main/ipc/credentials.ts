@@ -49,7 +49,8 @@ export function registerCredentialsIpc(input: {
     return setSecureCredential(id, Object.keys(values).length ? values : null)
   })
 
-  ipcMain.handle("hosting:credentials", async () => {
+  ipcMain.handle("hosting:credentials", async (event) => {
+    input.assertSender(event)
     const ids = new Set(await listServerCredentialIDs())
     return Object.fromEntries(
       ["github", "gitlab", "bitbucket"].map(provider => [provider, ids.has(`hosting.${provider}`)]),

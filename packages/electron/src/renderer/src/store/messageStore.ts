@@ -289,6 +289,8 @@ class MessageStore {
       logger.log('[MessageStore] Evicting old session:', oldestId)
       this.sessions.delete(oldestId)
       this.sessionAccessTime.delete(oldestId)
+      this.sessionVersions.delete(oldestId)
+      this.dirtyMessagesBySession.delete(oldestId)
     }
   }
 
@@ -458,6 +460,9 @@ class MessageStore {
   clearAll() {
     this.sessions.clear()
     this.sessionAccessTime.clear()
+    this.sessionVersions.clear()
+    this.protectedSessions.clear()
+    this.pendingSessionNotifyIds.clear()
     this.dirtyMessagesBySession.clear()
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId)
@@ -470,6 +475,9 @@ class MessageStore {
   clearSession(sessionId: string) {
     this.sessions.delete(sessionId)
     this.sessionAccessTime.delete(sessionId)
+    this.sessionVersions.delete(sessionId)
+    this.protectedSessions.delete(sessionId)
+    this.pendingSessionNotifyIds.delete(sessionId)
     this.dirtyMessagesBySession.delete(sessionId)
     this.notify([sessionId])
   }

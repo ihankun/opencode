@@ -11,7 +11,10 @@ export function registerServerIpc(input: {
   current: () => ServerState
   restart: () => Promise<ServerState>
 }) {
-  ipcMain.handle("server:get", input.current)
+  ipcMain.handle("server:get", (event) => {
+    input.assertSender(event)
+    return input.current()
+  })
   ipcMain.handle("server:restart", (event) => {
     input.assertSender(event)
     return input.restart()

@@ -242,7 +242,10 @@ function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRu
   const [busy, setBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
-  const searchIndex = useMemo(() => new Map(runs.map(run => [run.id, `${run.taskTitle} ${run.prompt} ${run.directory} ${run.modelProviderID} ${run.modelID} ${run.log}`.toLowerCase()])), [runs])
+  const searchIndex = useMemo(() => {
+    if (!deferredSearch) return null
+    return new Map(runs.map(run => [run.id, `${run.taskTitle} ${run.prompt} ${run.directory} ${run.modelProviderID} ${run.modelID} ${run.log}`.toLowerCase()]))
+  }, [deferredSearch, runs])
   const perform = async (id: string, action: () => Promise<unknown>) => {
     setBusy(id)
     setActionError('')
@@ -260,7 +263,7 @@ function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRu
     if (status === 'active' && !active) return false
     if (status === 'success' && run.status !== 'completed') return false
     if (status === 'error' && !['failed', 'timed_out', 'cancelled', 'blocked'].includes(run.status)) return false
-    return !deferredSearch || searchIndex.get(run.id)?.includes(deferredSearch) === true
+    return !deferredSearch || searchIndex?.get(run.id)?.includes(deferredSearch) === true
   }), [deferredSearch, runs, searchIndex, status])
   const groups = useMemo(() => Array.from(filtered.reduce((result, run) => {
     const group = result.get(run.taskID) ?? { title: run.taskTitle, runs: [] as TaskRun[] }

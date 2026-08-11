@@ -14,19 +14,42 @@ export function registerMarketplaceIpc(input: {
   searchPlugins: (query: string) => unknown
   setMcpMarketplaceSource: (value: unknown) => unknown
 }) {
-  ipcMain.handle("plugin:search", (_event, query: unknown) => input.searchPlugins(String(query ?? "")))
-  ipcMain.handle("plugin:inspect", (_event, specs: unknown) => input.inspectPlugins(specs))
-  ipcMain.handle("mcp:search", (_event, value: unknown) => input.searchMcpServers(value))
-  ipcMain.handle("mcp:source-set", (_event, value: unknown) => input.setMcpMarketplaceSource(value))
-  ipcMain.handle("mcp:source-list", (_event, value: unknown) => input.mcpSources(value))
-  ipcMain.handle("expert-kit:search", (_event, query: unknown) => input.searchExpertKits(String(query ?? "")))
-  ipcMain.handle("expert-kit:skill-sources", () => input.expertKitSkillSources())
-  ipcMain.handle("expert-kit:install", (_event, id: unknown, force: unknown) =>
-    input.installExpertKit(String(id ?? ""), Boolean(force)),
-  )
-  ipcMain.handle("expert-kit:remove", (_event, id: unknown, force: unknown) =>
-    input.removeExpertKit(String(id ?? ""), Boolean(force)),
-  )
+  ipcMain.handle("plugin:search", (event, query: unknown) => {
+    input.assertSender(event)
+    return input.searchPlugins(String(query ?? ""))
+  })
+  ipcMain.handle("plugin:inspect", (event, specs: unknown) => {
+    input.assertSender(event)
+    return input.inspectPlugins(specs)
+  })
+  ipcMain.handle("mcp:search", (event, value: unknown) => {
+    input.assertSender(event)
+    return input.searchMcpServers(value)
+  })
+  ipcMain.handle("mcp:source-set", (event, value: unknown) => {
+    input.assertSender(event)
+    return input.setMcpMarketplaceSource(value)
+  })
+  ipcMain.handle("mcp:source-list", (event, value: unknown) => {
+    input.assertSender(event)
+    return input.mcpSources(value)
+  })
+  ipcMain.handle("expert-kit:search", (event, query: unknown) => {
+    input.assertSender(event)
+    return input.searchExpertKits(String(query ?? ""))
+  })
+  ipcMain.handle("expert-kit:skill-sources", (event) => {
+    input.assertSender(event)
+    return input.expertKitSkillSources()
+  })
+  ipcMain.handle("expert-kit:install", (event, id: unknown, force: unknown) => {
+    input.assertSender(event)
+    return input.installExpertKit(String(id ?? ""), Boolean(force))
+  })
+  ipcMain.handle("expert-kit:remove", (event, id: unknown, force: unknown) => {
+    input.assertSender(event)
+    return input.removeExpertKit(String(id ?? ""), Boolean(force))
+  })
   ipcMain.handle("plugin:install", (event, spec: unknown) => {
     input.assertSender(event)
     return input.installPlugin(String(spec ?? ""))

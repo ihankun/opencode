@@ -567,13 +567,14 @@ const rendererSettingsStore = new RendererSettingsStore(join(app.getPath("userDa
 const draftsStore = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
-registerWindowIpc({ getWindow: () => mainWindow })
-registerBadgeIpc({ updateBadge })
+registerWindowIpc({ assertSender: assertMainWindow, getWindow: () => mainWindow })
+registerBadgeIpc({ assertSender: assertMainWindow, updateBadge })
 registerCredentialsIpc({
   assertSender: assertMainWindow,
   createPullRequest: createHostedPullRequest,
 })
 registerDesktopPreferencesIpc({
+  assertSender: assertMainWindow,
   current: () => desktopPreferencesStore.current(),
   save: async (value) => {
     const backgroundSubagents = desktopPreferences.backgroundSubagents
@@ -606,6 +607,7 @@ registerRendererSettingsIpc({
   store: rendererSettingsStore,
 })
 registerImBridgeIpc({
+  assertSender: assertMainWindow,
   getServerUrl: () => server?.state.url,
   service: imBridgeService,
 })
@@ -660,6 +662,7 @@ registerDraftsIpc({
   drafts: draftsStore,
 })
 registerDesktopIntegrationIpc({
+  assertSender: assertMainWindow,
   capturePreview,
   discoverPreviewPorts,
   listLocationApps: locationApps,
@@ -689,10 +692,12 @@ registerNotificationHistoryIpc({
   replaceAll: (notifications) => getNotificationDatabase().replaceAll(notifications as StoredNotification[]),
 })
 registerDiagnosticsIpc({
+  assertSender: assertMainWindow,
   exportLogs: exportDebugLogs,
   getDiagnostics: readDiagnostics,
 })
 registerTaskIpc({
+  assertSender: assertMainWindow,
   scheduler: taskScheduler,
   ensureReady: ensureTaskSchedulerStarted,
   notifyChanged: notifyTasksChanged,
@@ -702,7 +707,7 @@ registerSpeechModelIpc({
   ready: () => speechModelReady,
   service: speechModelService,
 })
-registerDrivesIpc()
+registerDrivesIpc({ assertSender: assertMainWindow })
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 

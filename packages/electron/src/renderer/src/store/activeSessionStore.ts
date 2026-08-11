@@ -49,6 +49,7 @@ interface ActiveSessionState {
 }
 
 type Subscriber = () => void
+const MAX_SESSION_METADATA = 1_000
 
 // ============================================
 // Store
@@ -117,6 +118,18 @@ class ActiveSessionStore {
       if (req.sessionId === sessionId) return true
     }
     return false
+  }
+
+  private pruneSessionMeta() {
+    if (this.sessionMeta.size <= MAX_SESSION_METADATA) return
+
+    const protectedSessionIds = new Set(Object.keys(this.state.statusMap))
+    this.pendingRequests.forEach(request => protectedSessionIds.add(request.sessionId))
+    for (const sessionId of this.sessionMeta.keys()) {
+      if (protectedSessionIds.has(sessionId)) continue
+      this.sessionMeta.delete(sessionId)
+      if (this.sessionMeta.size <= MAX_SESSION_METADATA) return
+    }
   }
 
   getSnapshot = (): ActiveSessionState => this.state
@@ -333,7 +346,9 @@ class ActiveSessionStore {
     const newTitle = title ?? existing?.title
     const newDir = directory ?? existing?.directory
     if (newTitle !== existing?.title || newDir !== existing?.directory) {
+      this.sessionMeta.delete(sessionId)
       this.sessionMeta.set(sessionId, { title: newTitle, directory: newDir })
+      this.pruneSessionMeta()
       this.notify()
     }
   }
@@ -347,12 +362,14 @@ class ActiveSessionStore {
       const newDir = entry.directory ?? existing?.directory
 
       if (newTitle !== existing?.title || newDir !== existing?.directory) {
+        this.sessionMeta.delete(entry.sessionId)
         this.sessionMeta.set(entry.sessionId, { title: newTitle, directory: newDir })
         changed = true
       }
     }
 
     if (changed) {
+      this.pruneSessionMeta()
       this.notify()
     }
   }

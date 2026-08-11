@@ -7,8 +7,14 @@ export function registerNotificationIpc(input: {
   notificationPermission: () => unknown
   sendNotification: (value: unknown) => unknown
 }) {
-  ipcMain.handle("notification:permission", () => input.notificationPermission())
-  ipcMain.handle("notification:send", (_event, value: unknown) => input.sendNotification(value))
+  ipcMain.handle("notification:permission", (event) => {
+    input.assertSender(event)
+    return input.notificationPermission()
+  })
+  ipcMain.handle("notification:send", (event, value: unknown) => {
+    input.assertSender(event)
+    return input.sendNotification(value)
+  })
   ipcMain.handle("microphone:permission", (event) => {
     input.assertSender(event)
     return input.microphonePermission()
