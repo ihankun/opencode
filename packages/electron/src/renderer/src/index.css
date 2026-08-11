@@ -1916,6 +1916,30 @@ input[data-provider-search-input]:focus-visible {
   }
 }
 
+/* Windows/Linux: no vibrancy support, use opaque sidebar background with glass.
+ * Mirrors the .sidebar-surface rule above; without it the translucent settings
+ * nav blends the dark window backdrop (#0f1115) and becomes unreadable in light mode. */
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass] .settings-sidebar-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass] .settings-sidebar-surface,
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass]:not([data-mode]) .settings-sidebar-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass]:not([data-mode]) .settings-sidebar-surface {
+  background-color: hsl(var(--sidebar-bg));
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+}
+
+/* Windows/Linux: opaque content/mobile surfaces for the same reason as the sidebar. */
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass] .settings-content-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass] .settings-content-surface,
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass] .settings-mobile-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass] .settings-mobile-surface,
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass]:not([data-mode]) .settings-content-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass]:not([data-mode]) .settings-content-surface,
+:root[data-theme-preset='codex'][data-platform="windows"][data-glass]:not([data-mode]) .settings-mobile-surface,
+:root[data-theme-preset='codex'][data-platform="linux"][data-glass]:not([data-mode]) .settings-mobile-surface {
+  background-color: hsl(var(--bg-000));
+}
+
 /* ============================================
  * Todo Swap Transition
  * ============================================ */
