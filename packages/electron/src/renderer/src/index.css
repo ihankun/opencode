@@ -1850,6 +1850,21 @@ input[data-provider-search-input]:focus-visible {
   }
 }
 
+/* Sidebar footer popover: higher opacity so background text doesn't bleed through */
+:root[data-glass] .sidebar-footer-popover {
+  background-color: hsl(var(--bg-100) / 0.92);
+}
+
+:root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-footer-popover {
+  background-color: hsl(0 0% 18% / 0.85);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-footer-popover {
+    background-color: hsl(0 0% 18% / 0.85);
+  }
+}
+
 /*
  * Settings uses separate frosted surfaces so the navigation pane blurs the app
  * behind it directly instead of inheriting a single, overly transparent panel.
@@ -1868,9 +1883,13 @@ input[data-provider-search-input]:focus-visible {
 }
 
 :root[data-theme-preset='codex'][data-glass] .settings-sidebar-surface {
-  background-color: hsl(var(--bg-100) / 0.86);
-  -webkit-backdrop-filter: blur(44px) saturate(175%);
-  backdrop-filter: blur(44px) saturate(175%);
+  background-color: hsl(var(--sidebar-bg) / 0.42);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
+}
+
+:root[data-theme-preset='codex']:not([data-glass]) .settings-sidebar-surface {
+  background-color: hsl(var(--sidebar-bg));
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .settings-mobile-surface,
@@ -1879,7 +1898,9 @@ input[data-provider-search-input]:focus-visible {
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .settings-sidebar-surface {
-  background-color: hsl(0 0% 12% / 0.84);
+  background-color: hsl(0 0% 8% / 0.32);
+  -webkit-backdrop-filter: blur(44px) saturate(210%);
+  backdrop-filter: blur(44px) saturate(210%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1889,7 +1910,9 @@ input[data-provider-search-input]:focus-visible {
   }
 
   :root[data-theme-preset='codex']:not([data-mode])[data-glass] .settings-sidebar-surface {
-    background-color: hsl(0 0% 12% / 0.84);
+    background-color: hsl(0 0% 8% / 0.32);
+    -webkit-backdrop-filter: blur(44px) saturate(210%);
+    backdrop-filter: blur(44px) saturate(210%);
   }
 }
 

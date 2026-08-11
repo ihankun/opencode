@@ -518,8 +518,8 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
                       className={`w-full flex items-center gap-2.5 px-2.5 xl:px-3 py-2 xl:py-2.5 rounded-lg text-[length:var(--fs-md)] font-medium transition-colors
                         ${
                           vt.id === tab
-                            ? 'bg-bg-100 text-text-100 ring-1 ring-border-200/60'
-                            : 'text-text-400 hover:text-text-200 hover:bg-bg-100/50'
+                            ? 'sidebar-selected-row text-text-100 ring-1 ring-border-200/60'
+                            : 'text-text-400 hover:text-text-200 sidebar-hover-row'
                         }`}
                     >
                       {vt.icon}

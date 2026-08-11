@@ -202,7 +202,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
         <div
           ref={menuRef}
           className={`
-        fixed z-[9999] max-h-[min(78vh,680px)] overflow-y-auto rounded-lg border border-border-200/60 glass-alt shadow-lg
+        fixed z-[9999] max-h-[min(78vh,680px)] overflow-y-auto rounded-lg border border-border-200/60 glass-alt sidebar-footer-popover shadow-lg
         transition-all duration-150 ease-out
         ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
       `}
