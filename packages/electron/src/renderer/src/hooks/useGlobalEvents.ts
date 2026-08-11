@@ -596,10 +596,10 @@ export function useGlobalEvents(directories?: string[]) {
           })
         }
 
-        // Toast 通知 — 不属于当前 session family 的才弹
-        if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('permission', `${sessionLabel} — ${i18n.t('chat:notification.permissionTitle')}`, desc, request.sessionID, meta?.directory, request.id)
-        } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
+        // Toast 通知 — 当前会话的请求也计入通知历史（Dock 角标），但不弹 toast
+        const isCurrent = belongsToCurrentSession(request.sessionID)
+        notificationStore.push('permission', `${sessionLabel} — ${i18n.t('chat:notification.permissionTitle')}`, desc, request.sessionID, meta?.directory, request.id, isCurrent)
+        if (isCurrent && isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           // 当前会话：如果开启了当前会话提示音
           playNotificationSoundDeduped('permission')
         }
@@ -637,10 +637,10 @@ export function useGlobalEvents(directories?: string[]) {
           })
         }
 
-        // Toast 通知
-        if (!belongsToCurrentSession(request.sessionID)) {
-          notificationStore.push('question', `${sessionLabel} — ${i18n.t('chat:notification.questionTitle')}`, desc, request.sessionID, meta?.directory, request.id)
-        } else if (isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
+        // Toast 通知 — 当前会话的请求也计入通知历史（Dock 角标），但不弹 toast
+        const isCurrent = belongsToCurrentSession(request.sessionID)
+        notificationStore.push('question', `${sessionLabel} — ${i18n.t('chat:notification.questionTitle')}`, desc, request.sessionID, meta?.directory, request.id, isCurrent)
+        if (isCurrent && isSessionDirectlyOpen(request.sessionID) && soundStore.getSnapshot().currentSessionEnabled) {
           playNotificationSoundDeduped('question')
         }
 

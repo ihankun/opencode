@@ -193,7 +193,7 @@ class NotificationStore {
   // 推送通知（加历史 + 弹 toast）
   // ============================================
 
-  push(type: NotificationType, title: string, body: string, sessionId: string, directory?: string, requestId?: string) {
+  push(type: NotificationType, title: string, body: string, sessionId: string, directory?: string, requestId?: string, suppressToast = false) {
     const entry: NotificationEntry = {
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -213,8 +213,8 @@ class NotificationStore {
       ? [{ ...grouped, title, body, requestId, timestamp: Date.now(), read: false }, ...this.state.notifications.filter(item => item.id !== grouped.id)].slice(0, MAX_NOTIFICATIONS)
       : [entry, ...this.state.notifications].slice(0, MAX_NOTIFICATIONS)
 
-    // 弹 toast（仅开关打开时）
-    const showToast = this.toastEnabled && notificationPolicyStore.canDeliver('inApp')
+    // 弹 toast（仅开关打开时；suppressToast 用于当前会话，已有弹窗不再重复提示）
+    const showToast = !suppressToast && this.toastEnabled && notificationPolicyStore.canDeliver('inApp')
     if (showToast) {
       const toasts = [...this.state.toasts]
       if (toasts.length >= MAX_TOASTS) {
