@@ -334,8 +334,8 @@ export type CustomOpenCodeApi = {
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   writeProjectFile(directory: string, path: string, content: string): Promise<{ ok: boolean }>
   removeAgentConfig(input: { scope: "global" | "project"; directory?: string; name: string }): Promise<{ changed: boolean; file: string }>
-  notificationHistoryList(): Promise<Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>>
-  notificationHistoryReplaceAll(notifications: Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>): Promise<boolean>
+  notificationHistoryList(): Promise<Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; requestId?: string; timestamp: number; read: boolean }>>
+  notificationHistoryReplaceAll(notifications: Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; requestId?: string; timestamp: number; read: boolean }>): Promise<boolean>
   openExternalUrl(url: string): Promise<boolean>
   openInternalUrl(url: string): Promise<boolean>
   openLocalFileUrl(url: string): Promise<boolean>
@@ -384,6 +384,7 @@ export type CustomOpenCodeApi = {
   windowIsMaximized(): Promise<boolean>
   windowSetTheme(theme: "system" | "light" | "dark"): Promise<void>
   onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void
+  setBadgeCount(count: number): Promise<void>
 }
 
 const api: CustomOpenCodeApi = {
@@ -508,6 +509,7 @@ const api: CustomOpenCodeApi = {
     ipcRenderer.on("window:maximize-change", listener)
     return () => ipcRenderer.removeListener("window:maximize-change", listener)
   },
+  setBadgeCount: (count) => ipcRenderer.invoke("badge:set-count", count),
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

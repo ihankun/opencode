@@ -27,6 +27,7 @@ import { deepLinkUrlsFromArgv, parseDeepLink } from "./deepLinks"
 import { createDesktopDraftStore } from "./draft-store"
 import { openExternalURL, openLocalFileURL } from "./external-url"
 import { registerBrowserIpc } from "./ipc/browser"
+import { registerBadgeIpc } from "./ipc/badge"
 import { registerCredentialsIpc } from "./ipc/credentials"
 import { registerDeepLinkIpc } from "./ipc/deepLinks"
 import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
@@ -68,6 +69,7 @@ let server: SidecarHandle | undefined
 let initialServerStartup: Promise<void> | undefined
 let serverError: string | undefined
 let tray: Tray | undefined
+let badgeCount = 0
 let isQuitting = false
 let isStoppingForQuit = false
 let desktopPreferencesStore: DesktopPreferencesStore
@@ -463,6 +465,14 @@ function applyDesktopPreferences() {
   showDockIcon()
 }
 
+function updateBadge(count: number) {
+  if (count === badgeCount) return
+  badgeCount = count
+  if (process.platform !== "darwin") return
+  if (count > 0) app.dock?.setBadge(count > 99 ? "99+" : String(count))
+  else app.dock?.setBadge("")
+}
+
 async function startServer(url: string) {
   const startedAt = performance.now()
   try {
@@ -558,6 +568,7 @@ const draftsStore = createDesktopDraftStore(join(app.getPath("userData"), "draft
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
 registerWindowIpc({ getWindow: () => mainWindow })
+registerBadgeIpc({ updateBadge })
 registerCredentialsIpc({
   assertSender: assertMainWindow,
   createPullRequest: createHostedPullRequest,

@@ -27,6 +27,7 @@ export interface NotificationEntry {
   body: string
   sessionId: string
   directory?: string
+  requestId?: string
   timestamp: number
   read: boolean
 }
@@ -83,6 +84,7 @@ function normalizeNotification(value: unknown): NotificationEntry | null {
     body: typeof item.body === 'string' ? item.body : '',
     sessionId: typeof item.sessionId === 'string' ? item.sessionId : '',
     directory: typeof item.directory === 'string' ? item.directory : undefined,
+    requestId: typeof item.requestId === 'string' ? item.requestId : undefined,
     timestamp: typeof item.timestamp === 'number' ? item.timestamp : Date.now(),
     read: item.read === true,
   }
@@ -191,7 +193,7 @@ class NotificationStore {
   // 推送通知（加历史 + 弹 toast）
   // ============================================
 
-  push(type: NotificationType, title: string, body: string, sessionId: string, directory?: string) {
+  push(type: NotificationType, title: string, body: string, sessionId: string, directory?: string, requestId?: string) {
     const entry: NotificationEntry = {
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -199,6 +201,7 @@ class NotificationStore {
       body,
       sessionId,
       directory,
+      requestId,
       timestamp: Date.now(),
       read: false,
     }
@@ -207,7 +210,7 @@ class NotificationStore {
       ? this.state.notifications.find(item => item.sessionId === sessionId && item.type === type && Date.now() - item.timestamp < 120_000)
       : undefined
     const notifications = grouped
-      ? [{ ...grouped, title, body, timestamp: Date.now(), read: false }, ...this.state.notifications.filter(item => item.id !== grouped.id)].slice(0, MAX_NOTIFICATIONS)
+      ? [{ ...grouped, title, body, requestId, timestamp: Date.now(), read: false }, ...this.state.notifications.filter(item => item.id !== grouped.id)].slice(0, MAX_NOTIFICATIONS)
       : [entry, ...this.state.notifications].slice(0, MAX_NOTIFICATIONS)
 
     // 弹 toast（仅开关打开时）
@@ -267,6 +270,16 @@ class NotificationStore {
       return { ...n, read: true }
     })
     if (!changed) return
+    this.state = { ...this.state, notifications }
+    this.persist()
+    this.notify()
+  }
+
+  /** 权限/问题请求处理完成后，按 requestId 标记对应通知已读（未读数 -1） */
+  markRequestRead(requestId: string) {
+    const notifications = this.state.notifications.map(n =>
+      n.requestId === requestId && !n.read ? { ...n, read: true } : n,
+    )
     this.state = { ...this.state, notifications }
     this.persist()
     this.notify()
