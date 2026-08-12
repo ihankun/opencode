@@ -109,14 +109,12 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
 const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTurn'
 
 const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
-const DEFAULT_INLINE_TOOL_REQUESTS = true
 const DEFAULT_CODE_WORD_WRAP = false
 const DEFAULT_UI_FONT_SCALE = 0
 const DEFAULT_CODE_FONT_SCALE = 0
 
 /** 工具输出渲染风格：classic = 经典（input+output 分离），compact = 精简（只展示 output，header 更矮） */
 const DEFAULT_IMMERSIVE_MODE = true
-const DEFAULT_COMPACT_INLINE_PERMISSION = true
 const DEFAULT_GLASS_EFFECT = true
 const DEFAULT_QUEUE_FOLLOWUP_MESSAGES = true
 const DEFAULT_MANUAL_TERMINAL_TITLES = false
@@ -140,8 +138,6 @@ export interface ThemeState {
   fileChangeIndicatorScope: FileChangeIndicatorScope
   /** 是否启用带工具描述的 steps 摘要 */
   descriptiveToolSteps: boolean
-  /** 是否在工具下方内嵌权限/提问请求 */
-  inlineToolRequests: boolean
   /** 代码块/diff 自动换行 */
   codeWordWrap: boolean
   /** UI 字号偏移 (px)，0 = 基准 */
@@ -150,8 +146,6 @@ export interface ThemeState {
   codeFontScale: number
   /** 沉浸模式 */
   immersiveMode: boolean
-  /** 内嵌权限精简模式：ToolBody 有内容时只显示操作按钮 */
-  compactInlinePermission: boolean
   /** 毛玻璃效果开关（backdrop-filter blur） */
   glassEffect: boolean
   /** 忙碌时后续消息是否进入队列 */
@@ -179,12 +173,10 @@ const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
 const STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS = 'descriptive-tool-steps'
-const STORAGE_KEY_INLINE_TOOL_REQUESTS = 'inline-tool-requests'
 const STORAGE_KEY_CODE_WORD_WRAP = 'code-word-wrap'
 const STORAGE_KEY_FONT_SCALE = 'font-scale'
 const STORAGE_KEY_CODE_FONT_SCALE = 'code-font-scale'
 const STORAGE_KEY_IMMERSIVE_MODE = 'immersive-mode'
-const STORAGE_KEY_COMPACT_INLINE_PERMISSION = 'compact-inline-permission'
 const STORAGE_KEY_GLASS_EFFECT = 'glass-effect'
 const STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES = 'queue-followup-messages'
 const STORAGE_KEY_MANUAL_TERMINAL_TITLES = 'manual-terminal-titles'
@@ -257,10 +249,6 @@ class ThemeStore {
     const descriptiveToolSteps =
       savedDescriptiveToolSteps === null ? DEFAULT_DESCRIPTIVE_TOOL_STEPS : savedDescriptiveToolSteps === 'true'
 
-    const savedInlineToolRequests = localStorage.getItem(STORAGE_KEY_INLINE_TOOL_REQUESTS)
-    const inlineToolRequests =
-      savedInlineToolRequests === null ? DEFAULT_INLINE_TOOL_REQUESTS : savedInlineToolRequests === 'true'
-
     const savedCodeWordWrap = localStorage.getItem(STORAGE_KEY_CODE_WORD_WRAP)
     const codeWordWrap = savedCodeWordWrap === 'true' ? true : DEFAULT_CODE_WORD_WRAP
 
@@ -273,12 +261,6 @@ class ThemeStore {
 
     const savedImmersiveMode = localStorage.getItem(STORAGE_KEY_IMMERSIVE_MODE)
     const immersiveMode = savedImmersiveMode === null ? DEFAULT_IMMERSIVE_MODE : savedImmersiveMode === 'true'
-
-    const savedCompactInlinePermission = localStorage.getItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION)
-    const compactInlinePermission =
-      savedCompactInlinePermission === null
-        ? DEFAULT_COMPACT_INLINE_PERMISSION
-        : savedCompactInlinePermission === 'true'
 
     const savedGlassEffect = localStorage.getItem(STORAGE_KEY_GLASS_EFFECT)
     const glassEffect = savedGlassEffect === null ? DEFAULT_GLASS_EFFECT : savedGlassEffect === 'true'
@@ -310,12 +292,10 @@ class ThemeStore {
       stepFinishDisplay,
       fileChangeIndicatorScope,
       descriptiveToolSteps,
-      inlineToolRequests,
       codeWordWrap,
       uiFontScale,
       codeFontScale,
       immersiveMode,
-      compactInlinePermission,
       glassEffect,
       queueFollowupMessages,
       manualTerminalTitles,
@@ -357,9 +337,6 @@ class ThemeStore {
   get descriptiveToolSteps() {
     return this.state.descriptiveToolSteps
   }
-  get inlineToolRequests() {
-    return this.state.inlineToolRequests
-  }
   get codeWordWrap() {
     return this.state.codeWordWrap
   }
@@ -371,9 +348,6 @@ class ThemeStore {
   }
   get immersiveMode() {
     return this.state.immersiveMode
-  }
-  get compactInlinePermission() {
-    return this.state.compactInlinePermission
   }
   get glassEffect() {
     return this.state.glassEffect
@@ -538,13 +512,6 @@ class ThemeStore {
     this.emit()
   }
 
-  setInlineToolRequests(enabled: boolean) {
-    if (this.state.inlineToolRequests === enabled) return
-    this.state = { ...this.state, inlineToolRequests: enabled }
-    localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(enabled))
-    this.emit()
-  }
-
   setCodeWordWrap(enabled: boolean) {
     if (this.state.codeWordWrap === enabled) return
     this.state = { ...this.state, codeWordWrap: enabled }
@@ -575,22 +542,11 @@ class ThemeStore {
     this.state = {
       ...this.state,
       immersiveMode: enabled,
-      // 联动三个子功能
-      inlineToolRequests: enabled,
+      // 联动一个子功能
       descriptiveToolSteps: enabled,
-      compactInlinePermission: enabled,
     }
     localStorage.setItem(STORAGE_KEY_IMMERSIVE_MODE, String(enabled))
-    localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(enabled))
     localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(enabled))
-    localStorage.setItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION, String(enabled))
-    this.emit()
-  }
-
-  setCompactInlinePermission(enabled: boolean) {
-    if (this.state.compactInlinePermission === enabled) return
-    this.state = { ...this.state, compactInlinePermission: enabled }
-    localStorage.setItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION, String(enabled))
     this.emit()
   }
 
@@ -843,18 +799,12 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       parsed?.fileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE,
     descriptiveToolSteps:
       typeof parsed?.descriptiveToolSteps === 'boolean' ? parsed.descriptiveToolSteps : DEFAULT_DESCRIPTIVE_TOOL_STEPS,
-    inlineToolRequests:
-      typeof parsed?.inlineToolRequests === 'boolean' ? parsed.inlineToolRequests : DEFAULT_INLINE_TOOL_REQUESTS,
     codeWordWrap: typeof parsed?.codeWordWrap === 'boolean' ? parsed.codeWordWrap : DEFAULT_CODE_WORD_WRAP,
     uiFontScale: clampFontScale(typeof parsed?.uiFontScale === 'number' ? parsed.uiFontScale : DEFAULT_UI_FONT_SCALE),
     codeFontScale: clampFontScale(
       typeof parsed?.codeFontScale === 'number' ? parsed.codeFontScale : DEFAULT_CODE_FONT_SCALE,
     ),
     immersiveMode: typeof parsed?.immersiveMode === 'boolean' ? parsed.immersiveMode : DEFAULT_IMMERSIVE_MODE,
-    compactInlinePermission:
-      typeof parsed?.compactInlinePermission === 'boolean'
-        ? parsed.compactInlinePermission
-        : DEFAULT_COMPACT_INLINE_PERMISSION,
     glassEffect: typeof parsed?.glassEffect === 'boolean' ? parsed.glassEffect : DEFAULT_GLASS_EFFECT,
     queueFollowupMessages:
       typeof parsed?.queueFollowupMessages === 'boolean'
@@ -899,12 +849,10 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
   localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(backup.descriptiveToolSteps))
-  localStorage.setItem(STORAGE_KEY_INLINE_TOOL_REQUESTS, String(backup.inlineToolRequests))
   localStorage.setItem(STORAGE_KEY_CODE_WORD_WRAP, String(backup.codeWordWrap))
   localStorage.setItem(STORAGE_KEY_FONT_SCALE, String(backup.uiFontScale))
   localStorage.setItem(STORAGE_KEY_CODE_FONT_SCALE, String(backup.codeFontScale))
   localStorage.setItem(STORAGE_KEY_IMMERSIVE_MODE, String(backup.immersiveMode))
-  localStorage.setItem(STORAGE_KEY_COMPACT_INLINE_PERMISSION, String(backup.compactInlinePermission))
   localStorage.setItem(STORAGE_KEY_GLASS_EFFECT, String(backup.glassEffect))
   localStorage.setItem(STORAGE_KEY_QUEUE_FOLLOWUP_MESSAGES, String(backup.queueFollowupMessages))
   localStorage.setItem(STORAGE_KEY_MANUAL_TERMINAL_TITLES, String(backup.manualTerminalTitles))

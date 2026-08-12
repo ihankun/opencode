@@ -772,7 +772,7 @@ export const ChatPane = memo(function ChatPane({
     if (questionRequestId) setQuestionCollapsed(false)
   }, [questionRequestId])
 
-  const { inlineToolRequests, fileChangeIndicatorScope } = useTheme()
+  const { fileChangeIndicatorScope } = useTheme()
   const latestTurnOverview = useMemo(() => {
     if (renderedMessages.length === 0) return
 
@@ -1046,7 +1046,7 @@ export const ChatPane = memo(function ChatPane({
           showScrollToBottom={!isAtBottom}
           onScrollToBottom={() => chatAreaRef.current?.scrollToBottom()}
           collapsedPermission={
-            !inlineToolRequests && pendingPermissionRequests.length > 0 && permissionCollapsed
+            pendingPermissionRequests.length > 0 && permissionCollapsed
               ? {
                   label: t('chat:permissionDialog.permission', {
                     permission: pendingPermissionRequests[0].permission,
@@ -1057,7 +1057,6 @@ export const ChatPane = memo(function ChatPane({
               : undefined
           }
           collapsedQuestion={
-            !inlineToolRequests &&
             pendingPermissionRequests.length === 0 &&
             pendingQuestionRequests.length > 0 &&
             questionCollapsed
@@ -1072,7 +1071,7 @@ export const ChatPane = memo(function ChatPane({
         />
       </div>
 
-      {!inlineToolRequests && pendingPermissionRequests.length > 0 && (
+      {pendingPermissionRequests.length > 0 && (
         <PermissionDialog
           request={pendingPermissionRequests[0]}
           onReply={reply =>
@@ -1091,7 +1090,7 @@ export const ChatPane = memo(function ChatPane({
         />
       )}
 
-      {!inlineToolRequests && pendingPermissionRequests.length === 0 && pendingQuestionRequests.length > 0 && (
+      {pendingPermissionRequests.length === 0 && pendingQuestionRequests.length > 0 && (
         <QuestionDialog
           request={pendingQuestionRequests[0]}
           onReply={answers => handleQuestionReply(pendingQuestionRequests[0].id, answers, effectiveDirectory)}

@@ -44,8 +44,6 @@ export function AgentSettings() {
   const [approvePendingOnFullAuto, setApprovePendingOnFullAuto] = useState(autoApproveStore.approvePendingOnFullAuto)
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
   const [descriptiveToolSteps, setDescriptiveToolSteps] = useState(themeStore.descriptiveToolSteps)
-  const [inlineToolRequests, setInlineToolRequests] = useState(themeStore.inlineToolRequests)
-  const [compactInlinePermission, setCompactInlinePermission] = useState(themeStore.compactInlinePermission)
   const desktopPreferences = useDesktopPreferences()
 
   const handleApprovePendingOnFullAutoToggle = () => {
@@ -64,18 +62,6 @@ export function AgentSettings() {
     const next = !descriptiveToolSteps
     setDescriptiveToolSteps(next)
     themeStore.setDescriptiveToolSteps(next)
-  }
-
-  const handleInlineToolRequestsToggle = () => {
-    const next = !inlineToolRequests
-    setInlineToolRequests(next)
-    themeStore.setInlineToolRequests(next)
-  }
-
-  const handleCompactInlinePermissionToggle = () => {
-    const next = !compactInlinePermission
-    setCompactInlinePermission(next)
-    themeStore.setCompactInlinePermission(next)
   }
 
   const handleBackgroundSubagentsToggle = () => {
@@ -123,27 +109,11 @@ export function AgentSettings() {
         <p className="text-[length:var(--fs-sm)] text-text-400">{t('agent.toolInteractionDesc')}</p>
 
         <SettingRow
-          label={t('chat.inlineToolRequests')}
-          description={t('chat.inlineToolRequestsDesc')}
-          onClick={handleInlineToolRequestsToggle}
-        >
-          <Toggle enabled={inlineToolRequests} onChange={handleInlineToolRequestsToggle} />
-        </SettingRow>
-
-        <SettingRow
           label={t('chat.descriptiveToolSteps')}
           description={t('chat.descriptiveToolStepsDesc')}
           onClick={handleDescriptiveToolStepsToggle}
         >
           <Toggle enabled={descriptiveToolSteps} onChange={handleDescriptiveToolStepsToggle} />
-        </SettingRow>
-
-        <SettingRow
-          label={t('chat.compactInlinePermission')}
-          description={t('chat.compactInlinePermissionDesc')}
-          onClick={handleCompactInlinePermissionToggle}
-        >
-          <Toggle enabled={compactInlinePermission} onChange={handleCompactInlinePermissionToggle} />
         </SettingRow>
       </SettingsSection>
     </div>

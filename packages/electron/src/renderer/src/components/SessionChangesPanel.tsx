@@ -406,14 +406,15 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
 
         if (requestId !== diffRequestIdRef.current[mode]) return
 
+        const visibleDiffs = filterSystemJunkDiffs(data)
         if (mode === 'git') {
-          setGitDiffs(data)
+          setGitDiffs(visibleDiffs)
         } else if (mode === 'branch') {
-          setBranchDiffs(data)
+          setBranchDiffs(visibleDiffs)
         } else if (mode === 'session') {
-          setSessionDiffs(data)
+          setSessionDiffs(visibleDiffs)
         } else {
-          setTurnDiffs(data)
+          setTurnDiffs(visibleDiffs)
         }
 
         setLoadedModes(prev => ({ ...prev, [mode]: true }))
@@ -1065,6 +1066,16 @@ function matchSubRepoPrefix(prefixes: string[], file: string): string | undefine
   return prefixes
     .filter(prefix => file === prefix || file.startsWith(`${prefix}/`))
     .sort((a, b) => b.length - a.length)[0]
+}
+
+// macOS / Windows 系统文件，即使仓库未在 .gitignore 中忽略也从变更列表过滤
+function isSystemJunkFile(file: string): boolean {
+  const name = file.split('/').pop()?.toLowerCase() ?? ''
+  return name === '.ds_store' || name === 'thumbs.db' || name === 'desktop.ini'
+}
+
+function filterSystemJunkDiffs(diffs: FileDiff[]): FileDiff[] {
+  return diffs.filter(diff => !isSystemJunkFile(diff.file))
 }
 
 async function loadAggregatedGitDiffs(subRepos: string[], directory: string | undefined): Promise<FileDiff[]> {

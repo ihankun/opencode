@@ -8,11 +8,6 @@ import { LazyMarkdownRenderer } from '../../components/LazyMarkdownRenderer'
 import { useDelayedRender } from '../../hooks'
 import { useTheme } from '../../hooks/useTheme'
 import {
-  useInlineToolRequests,
-  findPermissionRequestForTool,
-  findQuestionRequestForTool,
-} from '../chat/InlineToolRequestContext'
-import {
   TextPartView,
   ReasoningPartView,
   ToolPartView,
@@ -635,18 +630,8 @@ const ToolGroup = memo(function ToolGroup({
   descriptiveTools = false,
 }: ToolGroupProps) {
   const { t } = useTranslation('message')
-  const { descriptiveToolSteps, inlineToolRequests, immersiveMode } = useTheme()
+  const { descriptiveToolSteps, immersiveMode } = useTheme()
   const descriptive = descriptiveTools || descriptiveToolSteps
-  const { pendingPermissions, pendingQuestions } = useInlineToolRequests()
-  const hasPendingInteraction =
-    inlineToolRequests &&
-    parts.some(part => {
-      const childSessionId = getTaskChildSessionId(part)
-      return (
-        findPermissionRequestForTool(pendingPermissions, part.callID, childSessionId) ||
-        findQuestionRequestForTool(pendingQuestions, part.callID, childSessionId)
-      )
-    })
 
   const doneCount = parts.filter(p => p.state.status === 'completed').length
   const totalCount = parts.length
@@ -676,7 +661,6 @@ const ToolGroup = memo(function ToolGroup({
   const shouldStartExpanded =
     !descriptive ||
     hasActiveTools ||
-    hasPendingInteraction ||
     (immersiveMode && !!isStreaming && hasReadableTools)
 
   // descriptive 模式默认收起，运行时展开，完成后保持展开
@@ -693,11 +677,11 @@ const ToolGroup = memo(function ToolGroup({
       return
     }
     // "已处理"执行区：工具始终折叠为摘要行，运行中也不展开（避免先显示再隐藏）
-    if (descriptiveTools && !hasPendingInteraction) {
+    if (descriptiveTools) {
       setExpanded(false, { touched: false, respectUser: true })
       return
     }
-    if (hasActiveTools || hasPendingInteraction) {
+    if (hasActiveTools) {
       if (immersiveMode && hasReadableTools) {
         hasAutoExpandedReadableRef.current = true
       }
@@ -713,14 +697,13 @@ const ToolGroup = memo(function ToolGroup({
     descriptive,
     descriptiveTools,
     hasActiveTools,
-    hasPendingInteraction,
     immersiveMode,
     hasReadableTools,
     isStreaming,
     setExpanded,
   ])
 
-  const effectiveExpanded = expanded || hasPendingInteraction
+  const effectiveExpanded = expanded
   const shouldRenderBody = useDelayedRender(effectiveExpanded)
 
   // compact: 单工具时用紧凑布局（图标内联，无 timeline 连接线）
@@ -1125,12 +1108,6 @@ function getToolSummaryCategory(toolName: string): ToolSummaryCategory {
 
 function isToolPartActive(part: ToolPart): boolean {
   return part.state.status === 'running' || part.state.status === 'pending'
-}
-
-function getTaskChildSessionId(part: ToolPart): string | undefined {
-  if (part.tool.toLowerCase() !== 'task') return undefined
-  const metadata = part.state.metadata as Record<string, unknown> | undefined
-  return metadata?.sessionId as string | undefined
 }
 
 /** 从 extractToolData 的结果计算 diff stats（当 metadata 没给 diffStats 时） */

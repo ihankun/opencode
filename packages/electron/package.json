@@ -1,7 +1,7 @@
 {
   "name": "opencodex",
   "private": true,
-  "version": "1.16.6",
+  "version": "1.16.7",
   "type": "module",
   "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
@@ -22,6 +22,7 @@
     "package": "electron-builder --config electron-builder.config.ts",
     "prepackage:win": "bun run verify && bun run build",
     "package:win": "electron-builder --win --config electron-builder.config.ts",
+    "prepackage:mac": "bun run verify && bun run build",
     "package:mac": "electron-builder --mac --config electron-builder.config.ts"
   },
   "dependencies": {
