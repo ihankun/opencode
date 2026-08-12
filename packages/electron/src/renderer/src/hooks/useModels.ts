@@ -17,7 +17,9 @@ const fetchPromises = new Map<string, Promise<void>>()
 const fetchGenerations = new Map<string, number>()
 const listeners = new Set<Listener>()
 const FETCH_RETRY_DELAYS = [0, 500, 1500]
-// 快速重试全部失败后的自动恢复间隔，超过后停止（保留 error，用户可手动刷新）
+// 快速重试全部失败后的自动恢复间隔。服务端实例（插件、models.dev 等）首次启动可能
+// 需要数十秒，期间 /config/providers 会持续返回空 500；因此恢复不终止，间隔封顶后
+// 持续按最长间隔重试，服务就绪后模型列表会自动出现，无需重启应用。
 const RECOVERY_RETRY_DELAYS = [3000, 5000, 10000, 20000, 30000, 60000]
 const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const recoveryAttempts = new Map<string, number>()
@@ -51,8 +53,7 @@ function clearAllRecoveries() {
 
 function scheduleRecovery(serverId: string, generation: number) {
   const attempt = recoveryAttempts.get(serverId) ?? 0
-  if (attempt >= RECOVERY_RETRY_DELAYS.length) return
-  const delay = RECOVERY_RETRY_DELAYS[attempt]
+  const delay = RECOVERY_RETRY_DELAYS[Math.min(attempt, RECOVERY_RETRY_DELAYS.length - 1)]
   recoveryAttempts.set(serverId, attempt + 1)
   recoveryTimers.set(
     serverId,

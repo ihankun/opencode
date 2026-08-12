@@ -6,6 +6,11 @@ const config: Configuration = {
   directories: {
     output: "release",
   },
+  publish: {
+    provider: "github",
+    owner: "ihankun",
+    repo: "opencodex",
+  },
   files: ["out/**/*", "assets/**/*", "package.json"],
   extraResources: [
     {

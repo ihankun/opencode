@@ -18,6 +18,7 @@ import type {
 import type { ProjectDirectory, ProjectState } from "../shared/projects"
 import type { CachedSessionList } from "../shared/sessionListCache"
 import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
+import type { UpdaterState } from "../shared/updater"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 export type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
@@ -397,6 +398,10 @@ export type CustomOpenCodeApi = {
   windowSetTheme(theme: "system" | "light" | "dark"): Promise<void>
   onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void
   setBadgeCount(count: number): Promise<void>
+  updaterState(): Promise<UpdaterState>
+  updaterCheck(): Promise<void>
+  updaterInstall(): Promise<void>
+  onUpdaterStateChanged(callback: (state: UpdaterState) => void): () => void
 }
 
 const api: CustomOpenCodeApi = {
@@ -524,6 +529,14 @@ const api: CustomOpenCodeApi = {
     return () => ipcRenderer.removeListener("window:maximize-change", listener)
   },
   setBadgeCount: (count) => ipcRenderer.invoke("badge:set-count", count),
+  updaterState: () => ipcRenderer.invoke("updater:get-state"),
+  updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  updaterInstall: () => ipcRenderer.invoke("updater:install"),
+  onUpdaterStateChanged(callback) {
+    const listener = (_event: unknown, state: UpdaterState) => callback(state)
+    ipcRenderer.on("updater:state", listener)
+    return () => ipcRenderer.removeListener("updater:state", listener)
+  },
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

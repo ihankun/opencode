@@ -394,6 +394,20 @@
       "unknown": "未知状态"
     },
     "settings": "设置",
+    "update": {
+      "title": "软件更新",
+      "checking": "正在检查更新…",
+      "available": "发现新版本",
+      "newVersion": "新版本",
+      "downloading": "正在下载更新 {{percent}}%",
+      "downloaded": "更新已下载完成，点击按钮重启安装",
+      "error": "检查更新失败：{{error}}",
+      "retry": "重试",
+      "restartAndInstall": "重启并安装",
+      "viewReleasePage": "查看发布页面",
+      "releaseNotes": "更新说明",
+      "upToDate": "当前已是最新版本"
+    },
     "noProjectFoldersYet": "还没有项目文件夹",
     "addProjectDesc": "添加一个项目以按文件夹浏览最近的对话。",
     "deleteChat": "归档对话",

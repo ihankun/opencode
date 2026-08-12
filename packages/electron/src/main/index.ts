@@ -52,9 +52,11 @@ import { registerServerIpc } from "./ipc/server"
 import { registerSkillsIpc } from "./ipc/skills"
 import { registerSpeechModelIpc } from "./ipc/speechModel"
 import { registerTaskIpc } from "./ipc/tasks"
+import { registerUpdaterIpc } from "./ipc/updater"
 import { registerWindowIpc } from "./ipc/window"
 import { updateOpenCodeGoQuotaConfig } from "./quota/index.ts"
 import { RendererSettingsStore } from "./rendererSettings"
+import { createAutoUpdater } from "./updater"
 import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 import type { OpenCodeGoLoginResult } from "../shared/quota.ts"
 import {
@@ -712,6 +714,10 @@ registerSpeechModelIpc({
   service: speechModelService,
 })
 registerDrivesIpc({ assertSender: assertMainWindow })
+const autoUpdater = createAutoUpdater((state) => {
+  BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("updater:state", state))
+})
+registerUpdaterIpc({ assertSender: assertMainWindow, updater: autoUpdater })
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
@@ -816,6 +822,7 @@ if (hasSingleInstanceLock) void app.whenReady().then(async () => {
   configureAppPermissionHandlers()
   applyDesktopPreferences()
   await createWindow()
+  void autoUpdater.check().catch((error) => writeLog("updater", "startup check failed", error))
   void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
   initialServerStartup = securityReady.then(() => startServer(rendererUrl()))
   void initialServerStartup

@@ -8,11 +8,14 @@ import {
   SunIcon,
   MoonIcon,
   SystemIcon,
+  QuestionIcon,
 } from '../../../components/Icons'
 import { getProviders } from '../../../api'
 import { useServerStore, useTheme } from '../../../hooks'
 import { useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 import { serverStore } from '../../../store/serverStore'
+import { hasUpdateAvailable, updaterHasNewVersion, updaterReadyToInstall, useUpdateStore } from '../../../store/updateStore'
+import { UpdatePanel } from './UpdatePanel'
 import type { QuotaProviderResult } from '../../../../../shared/quota'
 
 function AccountIndicator({ connectionState, size = 24 }: { connectionState: string; size?: number }) {
@@ -47,6 +50,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const { activeServer } = useServerStore()
   const preferences = useDesktopPreferences()
+  const updateState = useUpdateStore()
   const [isOpen, setIsOpen] = useState(false)
   const [quotaExpanded, setQuotaExpanded] = useState(false)
   const [quotaLoading, setQuotaLoading] = useState(false)
@@ -54,11 +58,26 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set())
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [isVisible, setIsVisible] = useState(false)
+  const [updatePanelOpen, setUpdatePanelOpen] = useState(false)
+  const [updatePanelVisible, setUpdatePanelVisible] = useState(false)
+  const [updatePanelPos, setUpdatePanelPos] = useState({ top: 0, left: 0, width: 260 })
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const updateButtonRef = useRef<HTMLButtonElement>(null)
+  const updatePanelRef = useRef<HTMLDivElement>(null)
   const closeTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const updater = updateState.updater
+  const newVersionFound = updaterHasNewVersion(updateState) || hasUpdateAvailable(updateState)
+  const readyToInstall = updaterReadyToInstall(updateState)
+  const updateVersion = updater.version ?? updateState.latestRelease?.version ?? null
+  const updateTooltip = readyToInstall
+    ? t('sidebar.update.downloaded')
+    : newVersionFound
+      ? `${t('sidebar.update.available')}${updateVersion ? ` v${updateVersion}` : ''}`
+      : t('sidebar.update.title')
 
   // 菜单中连接状态显示用
   const connectionLabel = activeServer?.name || t(`sidebar.connection.${connectionState}`, {
@@ -105,6 +124,22 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     closeTimeoutIdRef.current = closeTimeoutId
   }, [])
 
+  // 打开更新面板
+  const openUpdatePanel = useCallback(() => {
+    if (!updateButtonRef.current || !containerRef.current) return
+    const buttonRect = updateButtonRef.current.getBoundingClientRect()
+    const containerRect = containerRef.current.getBoundingClientRect()
+    setUpdatePanelPos({ top: buttonRect.top, left: containerRect.left, width: containerRect.width })
+    setUpdatePanelOpen(true)
+    requestAnimationFrame(() => setUpdatePanelVisible(true))
+  }, [])
+
+  // 关闭更新面板
+  const closeUpdatePanel = useCallback(() => {
+    setUpdatePanelVisible(false)
+    closeTimeoutIdRef.current = setTimeout(() => setUpdatePanelOpen(false), 150)
+  }, [])
+
   useEffect(() => {
     void getProviders()
       .then(value => setConnectedProviders(new Set(value.connected)))
@@ -141,34 +176,48 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
 
   // 切换菜单
   const toggleMenu = useCallback(() => {
+    if (updatePanelOpen) closeUpdatePanel()
     if (isOpen) closeMenu()
     else openMenu()
-  }, [isOpen, openMenu, closeMenu])
+  }, [isOpen, openMenu, closeMenu, updatePanelOpen, closeUpdatePanel])
+
+  // 切换更新面板
+  const toggleUpdatePanel = useCallback(() => {
+    if (isOpen) closeMenu()
+    if (updatePanelOpen) closeUpdatePanel()
+    else openUpdatePanel()
+  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, openUpdatePanel])
 
   // 点击外部关闭
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen && !updatePanelOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node
       if (buttonRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
+      if (updateButtonRef.current?.contains(target)) return
+      if (updatePanelRef.current?.contains(target)) return
       closeMenu()
+      closeUpdatePanel()
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, closeMenu])
+  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
 
   // ESC 关闭
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen && !updatePanelOpen) return
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeMenu()
+      if (e.key === 'Escape') {
+        closeMenu()
+        closeUpdatePanel()
+      }
     }
     document.addEventListener('keydown', handleEsc)
     return () => document.removeEventListener('keydown', handleEsc)
-  }, [isOpen, closeMenu])
+  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
 
   // 侧边栏状态变化时关闭
   useEffect(() => {
@@ -180,11 +229,14 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     if (showLabelsChanged && isOpen) {
       frameId = requestAnimationFrame(() => closeMenu())
     }
+    if (showLabelsChanged && updatePanelOpen) {
+      frameId = requestAnimationFrame(() => closeUpdatePanel())
+    }
 
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId)
     }
-  }, [showLabels, isOpen, closeMenu])
+  }, [showLabels, isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
 
   // 清理 closeTimeout 防止内存泄漏
   useEffect(() => {
@@ -351,33 +403,64 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   return (
     <div className="shrink-0 pb-[var(--safe-area-inset-bottom)]">
       <div ref={containerRef} className="flex flex-col gap-0.5 mx-2 py-2">
-        {/* 状态/设置触发按钮 */}
-        <button
-          ref={buttonRef}
-          onClick={toggleMenu}
-          className={`
-            h-8 flex items-center rounded-lg transition-all duration-300 group overflow-hidden
-            ${isOpen ? 'bg-bg-200 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200'}
-          `}
-          style={{
-            width: showLabels ? '100%' : 32,
-            paddingLeft: showLabels ? 6 : 4, // 收起时为了对齐中心线(16px)，24px圆环需要4px padding (4+12=16)
-            paddingRight: showLabels ? 8 : 4,
-          }}
-          title={connectionLabel}
-        >
-          <AccountIndicator connectionState={connectionState} size={24} />
-
-          <span
-            className="ml-2 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-300"
-            style={{ opacity: showLabels ? 1 : 0 }}
+        <div className="flex items-stretch gap-1">
+          {/* 状态/设置触发按钮 */}
+          <button
+            ref={buttonRef}
+            onClick={toggleMenu}
+            className={`
+              h-8 min-w-0 flex-1 flex items-center rounded-lg transition-all duration-300 group overflow-hidden
+              ${isOpen ? 'bg-bg-200 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200'}
+            `}
+            style={{
+              paddingLeft: showLabels ? 6 : 4, // 收起时为了对齐中心线(16px)，24px圆环需要4px padding (4+12=16)
+              paddingRight: showLabels ? 8 : 4,
+            }}
+            title={connectionLabel}
           >
-            <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{connectionLabel}</span>
-          </span>
-        </button>
+            <AccountIndicator connectionState={connectionState} size={24} />
+
+            <span
+              className="ml-2 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-300"
+              style={{ opacity: showLabels ? 1 : 0 }}
+            >
+              <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{connectionLabel}</span>
+            </span>
+          </button>
+
+          {/* 更新状态入口 */}
+          {showLabels && (
+            <button
+              ref={updateButtonRef}
+              type="button"
+              onClick={toggleUpdatePanel}
+              aria-label={updateTooltip}
+              title={updateTooltip}
+              className={`
+                relative h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-all duration-300
+                ${updatePanelOpen ? 'bg-bg-200 text-text-100' : 'hover:bg-bg-200 hover:text-text-100'}
+                ${readyToInstall ? 'text-success-100' : 'text-text-400'}
+              `}
+            >
+              <QuestionIcon size={16} />
+              {!readyToInstall && newVersionFound && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-danger-100 ring-2 ring-bg-100" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {floatingMenu}
+
+      {updatePanelOpen && (
+        <UpdatePanel
+          ref={updatePanelRef}
+          position={updatePanelPos}
+          visible={updatePanelVisible}
+          onClose={closeUpdatePanel}
+        />
+      )}
     </div>
   )
 }

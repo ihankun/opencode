@@ -214,6 +214,7 @@ export const StopIcon = ({ size = 16, ...props }: IconProps) => (
 
 export const SpinnerIcon = wrap(LoaderCircle)
 export const QuestionIcon = wrap(CircleHelp)
+export const XIcon = wrap(X)
 export const PathAutoIcon = wrap(Sun)
 export const PathUnixIcon = wrap(Slash)
 
