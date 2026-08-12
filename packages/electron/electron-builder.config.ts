@@ -6,19 +6,24 @@ const config: Configuration = {
   directories: {
     output: "release",
   },
-  files: ["out/**/*", "assets/**/*", "package.json"],
+  files: ["out/**/*", "assets/**/*", "package.json", "!out/main/chunks/**"],
   extraResources: [
     {
       from: "../sandbox-runtime",
       to: "sandbox-runtime",
       filter: ["LICENSE", "UPSTREAM.md", "vendor/seccomp/**/*", "vendor/srt-win/**/*"],
     },
+    {
+      from: "out/daemon",
+      to: ".",
+      filter: ["opencode-server-bin*", "*.wasm"],
+    },
   ],
   protocols: {
     name: "OpenCodex",
     schemes: ["opencodex"],
   },
-  asarUnpack: ["out/main/chunks/*.wasm", "node_modules/@lydell/node-pty-*/**/*"],
+  asarUnpack: ["node_modules/@lydell/node-pty-*/**/*"],
   mac: {
     icon: "assets/icon.icns",
     target: ["dmg", "zip"],

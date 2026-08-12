@@ -319,6 +319,8 @@ async function createWindow() {
   })
   createdWindow.webContents.once("did-finish-load", () => {
     writeLog("startup", "renderer did-finish-load", { elapsedMs: Math.round(performance.now() - startupStartedAt) })
+    // 并行启动后服务端可能已在 renderer 注册监听前就绪，补发一次当前状态避免丢失
+    if (server) createdWindow.webContents.send("server:updated", currentServerState())
   })
   createdWindow.webContents.on("did-start-loading", () => {
     deepLinkRendererReady = false
@@ -762,7 +764,9 @@ app.on("before-quit", (event) => {
   isQuitting = true
   isStoppingForQuit = true
   draftsStore.flush()
-  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => {
+  // 常驻 daemon 不随 app 退出：保留后台服务，下次启动直接复用实现秒开。
+  // （dev 回退的 utilityProcess sidecar 会随 app 退出自动清理）
+  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(() => {
     draftsStore.close()
     app.exit(0)
   })
@@ -813,10 +817,12 @@ if (hasSingleInstanceLock) void app.whenReady().then(async () => {
   })
   configureAppPermissionHandlers()
   applyDesktopPreferences()
-  await createWindow()
-  void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
+  // 并行启动窗口和服务端：让 sidecar 就绪耗时被 renderer 加载掩盖
+  const windowCreated = createWindow()
   initialServerStartup = securityReady.then(() => startServer(rendererUrl()))
   void initialServerStartup
+  await windowCreated
+  void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
 }).catch((error: unknown) => {
   writeLog("main", "startup failed", error)
 })
