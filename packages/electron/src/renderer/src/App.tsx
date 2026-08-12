@@ -245,6 +245,11 @@ function App() {
   const navRestoringRef = useRef(false)
   const prevUtilityPageRef = useRef<MainUtilityPage | null>(null)
 
+  // 同步未读数到主进程，用于 Dock/菜单栏角标
+  useEffect(() => {
+    window.customOpenCode?.setBadgeCount(unreadNotificationCount)?.catch(() => undefined)
+  }, [unreadNotificationCount])
+
   useEffect(() => {
     const cleanup = initNotificationSound()
     return cleanup

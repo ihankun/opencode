@@ -1195,7 +1195,7 @@ function TurnChangesPopover({ fileDetails }: { fileDetails: TurnChangeFile[] }) 
       {pathTooltip && typeof document !== 'undefined'
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[200] max-w-[80vw] truncate rounded-md border border-border-200/70 bg-bg-100/98 px-2.5 py-1 font-mono text-[length:var(--fs-xs)] text-text-200 shadow-lg"
+              className="pointer-events-none fixed z-[200] max-w-[80vw] whitespace-pre-wrap break-all rounded-md border border-border-200/70 bg-bg-100/98 px-2.5 py-1 font-mono text-[length:var(--fs-xs)] text-text-200 shadow-lg"
               style={{ left: pathTooltip.x + 10, top: pathTooltip.y - 10, transform: 'translateY(-100%)' }}
             >
               {pathTooltip.path}

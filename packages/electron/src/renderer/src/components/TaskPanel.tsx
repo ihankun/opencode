@@ -14,12 +14,13 @@ import { Cron } from 'croner'
 
 type Task = Awaited<ReturnType<typeof window.customOpenCode.listTasks>>[number]
 type TaskInput = Parameters<typeof window.customOpenCode.createTask>[0]
-type TaskRun = Awaited<ReturnType<typeof window.customOpenCode.listTaskRuns>>[number]
+type TaskRun = Awaited<ReturnType<typeof window.customOpenCode.listTaskRunPage>>['data'][number]
 type TaskSettings = Awaited<ReturnType<typeof window.customOpenCode.taskSettings>>
 type Frequency = 'daily' | 'weekdays' | 'weekly' | 'advanced'
 type TaskTemplate = { id: string; name: string; input: TaskInput }
 const taskTemplateStorageKey = 'opencodex.automation.templates.v1'
 const handledRunStorageKey = 'opencodex.automation.handled-runs.v1'
+const TASK_RUN_PAGE_SIZE = 50
 
 const weekdays = [
   ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun'],
@@ -31,6 +32,11 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
   const { servers, activeServer } = useServerStore()
   const [tasks, setTasks] = useState<Task[]>([])
   const [runs, setRuns] = useState<TaskRun[]>([])
+  const [runTotal, setRunTotal] = useState(0)
+  const [runHasMore, setRunHasMore] = useState(false)
+  const [runLoadingMore, setRunLoadingMore] = useState(false)
+  const [runLogs, setRunLogs] = useState<Record<string, string>>({})
+  const [runLogLoadingID, setRunLogLoadingID] = useState<string | null>(null)
   const [view, setView] = useState<'tasks' | 'attention' | 'runs' | 'artifacts'>('tasks')
   const [handledRunIDs, setHandledRunIDs] = useState<string[]>(() => readStringList(handledRunStorageKey))
   const [loading, setLoading] = useState(true)
@@ -49,9 +55,16 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [nextTasks, nextRuns, nextSettings] = await Promise.all([window.customOpenCode.listTasks(), window.customOpenCode.listTaskRuns(), window.customOpenCode.taskSettings()])
+      const [nextTasks, nextRunPage, nextSettings] = await Promise.all([
+        window.customOpenCode.listTasks(),
+        window.customOpenCode.listTaskRunPage({ limit: TASK_RUN_PAGE_SIZE, offset: 0 }),
+        window.customOpenCode.taskSettings(),
+      ])
       setTasks(nextTasks)
-      setRuns(nextRuns)
+      setRuns(nextRunPage.data)
+      setRunTotal(nextRunPage.total)
+      setRunHasMore(nextRunPage.hasMore)
+      setRunLogs({})
       setSettings(nextSettings)
       setError('')
     } catch (cause) {
@@ -61,13 +74,61 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
     }
   }, [t])
 
+  const loadMoreRuns = useCallback(async () => {
+    if (runLoadingMore || !runHasMore) return
+    setRunLoadingMore(true)
+    try {
+      const page = await window.customOpenCode.listTaskRunPage({ limit: TASK_RUN_PAGE_SIZE, offset: runs.length })
+      setRuns(current => {
+        const existing = new Set(current.map(run => run.id))
+        return [...current, ...page.data.filter(run => !existing.has(run.id))]
+      })
+      setRunTotal(page.total)
+      setRunHasMore(page.hasMore)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('taskPanel.loadFailed'))
+    } finally {
+      setRunLoadingMore(false)
+    }
+  }, [runHasMore, runLoadingMore, runs.length, t])
+
+  const loadRunLog = useCallback(async (runID: string) => {
+    if (Object.prototype.hasOwnProperty.call(runLogs, runID)) return runLogs[runID]
+    setRunLogLoadingID(runID)
+    try {
+      const log = await window.customOpenCode.taskRunLog(runID)
+      const value = log ?? ''
+      setRunLogs(current => ({ ...current, [runID]: value }))
+      return value
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('taskPanel.loadFailed'))
+      return ''
+    } finally {
+      setRunLogLoadingID(current => current === runID ? null : current)
+    }
+  }, [runLogs, t])
+
+  const clearRunLog = useCallback((runID: string) => {
+    setRunLogs(current => {
+      if (!Object.prototype.hasOwnProperty.call(current, runID)) return current
+      const next = { ...current }
+      delete next[runID]
+      return next
+    })
+  }, [])
+
+  const exportRunLog = useCallback(async (runID: string, fallback = '') => {
+    const log = await loadRunLog(runID)
+    saveData(new TextEncoder().encode(log || fallback), `automation-${runID}.log`, 'text/plain;charset=utf-8')
+  }, [loadRunLog])
+
   useEffect(() => {
     void load()
     return window.customOpenCode.onTasksChanged(() => void load())
   }, [load, t])
   const visible = useMemo(() => tasks.filter(task => filter === 'all' || (filter === 'enabled' ? task.enabled : !task.enabled)), [filter, tasks])
   const attentionRuns = useMemo(() => runs.filter(run => ['failed', 'timed_out', 'blocked', 'recovering'].includes(run.status) && !handledRunIDs.includes(run.id)), [handledRunIDs, runs])
-  const artifacts = useMemo(() => collectAutomationArtifacts(runs), [runs])
+  const artifacts = useMemo(() => collectAutomationArtifacts(runs, runLogs), [runLogs, runs])
   const directories = useMemo(() => Array.from(new Map([
     ...(currentDirectory ? [{ path: currentDirectory, name: savedDirectories.find(item => item.path === currentDirectory)?.name ?? currentDirectory }] : []),
     ...(pathInfo?.directory ? [{ path: pathInfo.directory, name: savedDirectories.find(item => item.path === pathInfo.directory)?.name ?? pathInfo.directory }] : []),
@@ -153,10 +214,10 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
         </div>
       </div>
       <div role="tablist" aria-label={t('taskPanel.title')} className="flex shrink-0 gap-1 border-b border-border-200/40 px-6 py-2">
-        {([['tasks', t('taskPanel.taskList'), tasks.length], ['attention', '需要处理', attentionRuns.length], ['runs', t('taskPanel.runHistory'), runs.length], ['artifacts', t('taskPanel.artifacts'), artifacts.length]] as const).map(item => <button role="tab" aria-selected={view === item[0]} key={item[0]} onClick={() => setView(item[0])} className={`rounded-md px-3 py-1.5 text-[length:var(--fs-sm)] transition-colors ${view === item[0] ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{item[1]}<span className={`ml-1.5 text-[length:var(--fs-xs)] ${item[0] === 'attention' && item[2] > 0 ? 'text-danger-100' : 'text-text-500'}`}>{item[2]}</span></button>)}
+         {([['tasks', t('taskPanel.taskList'), tasks.length], ['attention', '需要处理', attentionRuns.length], ['runs', t('taskPanel.runHistory'), runTotal], ['artifacts', t('taskPanel.artifacts'), artifacts.length]] as const).map(item => <button role="tab" aria-selected={view === item[0]} key={item[0]} onClick={() => setView(item[0])} className={`rounded-md px-3 py-1.5 text-[length:var(--fs-sm)] transition-colors ${view === item[0] ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{item[1]}<span className={`ml-1.5 text-[length:var(--fs-xs)] ${item[0] === 'attention' && item[2] > 0 ? 'text-danger-100' : 'text-text-500'}`}>{item[2]}</span></button>)}
       </div>
       <div className="flex-1 overflow-auto px-6 py-5">
-        {view === 'artifacts' ? <AutomationArtifacts artifacts={artifacts} /> : view === 'runs' ? <TaskRunList runs={runs} loading={loading} onOpenSession={onOpenSession} onChanged={load} /> : view === 'attention' ? <div><div className="mb-3 flex items-center justify-between"><p className="text-[length:var(--fs-sm)] text-text-400">集中处理失败、超时、阻塞和恢复中的后台任务。</p><button disabled={!attentionRuns.length} onClick={() => { const next = [...new Set([...handledRunIDs, ...attentionRuns.map(run => run.id)])]; setHandledRunIDs(next); localStorage.setItem(handledRunStorageKey, JSON.stringify(next.slice(-2000))) }} className="rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] text-text-300 hover:bg-bg-200 disabled:opacity-40">全部标记为已处理</button></div><TaskRunList runs={attentionRuns} loading={loading} onOpenSession={onOpenSession} onChanged={load} /></div> : <>
+         {view === 'artifacts' ? <><AutomationArtifacts artifacts={artifacts} /><RunHistoryLoadMore hasMore={runHasMore} loading={runLoadingMore} onLoadMore={loadMoreRuns} /></> : view === 'runs' ? <TaskRunList runs={runs} loading={loading} onOpenSession={onOpenSession} onChanged={load} runLogs={runLogs} runLogLoadingID={runLogLoadingID} onLoadLog={loadRunLog} onClearLog={clearRunLog} onExportLog={exportRunLog} hasMore={runHasMore} loadingMore={runLoadingMore} onLoadMore={loadMoreRuns} /> : view === 'attention' ? <div><div className="mb-3 flex items-center justify-between"><p className="text-[length:var(--fs-sm)] text-text-400">集中处理失败、超时、阻塞和恢复中的后台任务。</p><button disabled={!attentionRuns.length} onClick={() => { const next = [...new Set([...handledRunIDs, ...attentionRuns.map(run => run.id)])]; setHandledRunIDs(next); localStorage.setItem(handledRunStorageKey, JSON.stringify(next.slice(-2000))) }} className="rounded-lg px-3 py-1.5 text-[length:var(--fs-sm)] text-text-300 hover:bg-bg-200 disabled:opacity-40">全部标记为已处理</button></div><TaskRunList runs={attentionRuns} loading={loading} onOpenSession={onOpenSession} onChanged={load} runLogs={runLogs} runLogLoadingID={runLogLoadingID} onLoadLog={loadRunLog} onClearLog={clearRunLog} onExportLog={exportRunLog} hasMore={runHasMore} loadingMore={runLoadingMore} onLoadMore={loadMoreRuns} /></div> : <>
         <details className="mb-4 rounded-lg border border-border-200/50 bg-bg-200/20 px-3 py-2 text-[length:var(--fs-xs)] text-text-300"><summary className="cursor-pointer select-none">{t('taskPanel.schedulerSettings')}</summary><div className="mt-3 grid grid-cols-4 gap-3"><label>{t('taskPanel.globalConcurrency')}<input type="number" min={1} max={20} value={settings.maxConcurrency} onChange={event => setSettings(current => ({ ...current, maxConcurrency: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.retentionDays')}<input type="number" min={1} max={365} value={settings.historyRetentionDays} onChange={event => setSettings(current => ({ ...current, historyRetentionDays: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.maxHistory')}<input type="number" min={100} max={10000} value={settings.maxHistory} onChange={event => setSettings(current => ({ ...current, maxHistory: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label><label>{t('taskPanel.webhookPort')}<input type="number" min={1024} max={65535} value={settings.webhookPort} onChange={event => setSettings(current => ({ ...current, webhookPort: Number(event.target.value) }))} onBlur={() => void window.customOpenCode.updateTaskSettings(settings).then(setSettings).catch(cause => setError(cause instanceof Error ? cause.message : t('taskPanel.saveFailed')))} className="mt-1 h-8 w-full rounded border border-border-200 bg-bg-100 px-2" /></label></div></details>
         <div role="group" aria-label={t('taskPanel.taskFilter')} className="mb-5 flex gap-1 rounded-lg bg-bg-200/50 p-1 w-fit">
           {([['all', t('taskPanel.all')], ['enabled', t('taskPanel.enabled')], ['paused', t('taskPanel.paused')]] as const).map(item => (
@@ -210,12 +271,13 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
 
 type AutomationArtifact = { id: string; runID: string; taskTitle: string; type: 'log' | 'image' | 'video' | 'pull-request' | 'link'; value: string; createdAt: number }
 
-function collectAutomationArtifacts(runs: TaskRun[]): AutomationArtifact[] {
+function collectAutomationArtifacts(runs: TaskRun[], runLogs: Record<string, string>): AutomationArtifact[] {
   return runs.flatMap(run => {
-    const text = `${run.log}\n${run.error ?? ''}`
+    const log = runLogs[run.id] ?? run.logPreview
+    const text = `${log}\n${run.error ?? ''}`
     const links = [...new Set(text.match(/https?:\/\/[^\s<>'"\])]+/g) ?? [])]
     return [
-      ...(run.log || run.error ? [{ id: `${run.id}:log`, runID: run.id, taskTitle: run.taskTitle, type: 'log' as const, value: run.log || run.error || '', createdAt: run.createdAt }] : []),
+      ...(log || run.error ? [{ id: `${run.id}:log`, runID: run.id, taskTitle: run.taskTitle, type: 'log' as const, value: log || run.error || '', createdAt: run.createdAt }] : []),
       ...links.map((value, index) => ({ id: `${run.id}:url:${index}`, runID: run.id, taskTitle: run.taskTitle, type: classifyArtifact(value), value, createdAt: run.createdAt })),
     ]
   }).toSorted((left, right) => right.createdAt - left.createdAt)
@@ -235,14 +297,48 @@ function AutomationArtifacts({ artifacts }: { artifacts: AutomationArtifact[] })
   return <div><div className="mb-4 flex items-center justify-between gap-3"><div className="flex gap-1">{(['all', 'log', 'image', 'video', 'pull-request', 'link'] as const).map(type => <button key={type} onClick={() => setFilter(type)} className={`rounded-md px-2.5 py-1.5 text-[length:var(--fs-xs)] ${filter === type ? 'bg-bg-200 text-text-100' : 'text-text-400 hover:text-text-200'}`}>{type}</button>)}</div><Button size="sm" variant="ghost" disabled={!artifacts.length} onClick={() => saveData(new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), artifacts }, null, 2)), 'automation-artifacts.json', 'application/json')}>{t('taskPanel.exportManifest')}</Button></div>{visible.length === 0 ? <div className="rounded-xl border border-dashed border-border-200 py-20 text-center text-[length:var(--fs-sm)] text-text-400">{t('taskPanel.noArtifacts')}</div> : <div className="grid gap-2 md:grid-cols-2">{visible.map(artifact => <div key={artifact.id} className="rounded-xl border border-border-200/60 bg-bg-100 p-3"><div className="flex items-center justify-between"><span className="rounded bg-bg-200 px-2 py-0.5 text-[length:var(--fs-xxs)] text-text-300">{artifact.type}</span><span className="text-[length:var(--fs-xxs)] text-text-500">{new Date(artifact.createdAt).toLocaleString()}</span></div><div className="mt-2 truncate text-[length:var(--fs-sm)] font-medium text-text-200">{artifact.taskTitle}</div>{artifact.type === 'image' ? <img src={artifact.value} className="mt-2 max-h-44 w-full rounded-lg object-contain bg-bg-200" /> : artifact.type === 'video' ? <video src={artifact.value} controls className="mt-2 max-h-44 w-full rounded-lg bg-black" /> : <div className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[length:var(--fs-xxs)] text-text-400">{artifact.value}</div>}<div className="mt-2 flex justify-end">{artifact.type === 'log' ? <Button size="sm" variant="ghost" onClick={() => saveData(new TextEncoder().encode(artifact.value), `automation-${artifact.runID}.log`, 'text/plain')}>{t('taskPanel.exportLog')}</Button> : <Button size="sm" variant="ghost" onClick={() => void window.customOpenCode.openExternalUrl(artifact.value)}>{t('taskPanel.openArtifact')}</Button>}</div></div>)}</div>}</div>
 }
 
-function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRun[]; loading: boolean; onOpenSession: (sessionID: string, directory: string) => void; onChanged: () => Promise<void> }) {
+function RunHistoryLoadMore({ hasMore, loading, onLoadMore }: { hasMore: boolean; loading: boolean; onLoadMore: () => Promise<void> }) {
+  if (!hasMore) return null
+  return <div className="flex justify-center py-4"><Button size="sm" variant="ghost" disabled={loading} onClick={() => void onLoadMore()}>{loading ? '加载中...' : '加载更多记录'}</Button></div>
+}
+
+function TaskRunList({
+  runs,
+  loading,
+  onOpenSession,
+  onChanged,
+  runLogs,
+  runLogLoadingID,
+  onLoadLog,
+  onClearLog,
+  onExportLog,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: {
+  runs: TaskRun[]
+  loading: boolean
+  onOpenSession: (sessionID: string, directory: string) => void
+  onChanged: () => Promise<void>
+  runLogs: Record<string, string>
+  runLogLoadingID: string | null
+  onLoadLog: (runID: string) => Promise<string>
+  onClearLog: (runID: string) => void
+  onExportLog: (runID: string, fallback?: string) => Promise<void>
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => Promise<void>
+}) {
   const { t } = useTranslation(['components'])
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | 'active' | 'success' | 'error'>('all')
   const [busy, setBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
-  const searchIndex = useMemo(() => new Map(runs.map(run => [run.id, `${run.taskTitle} ${run.prompt} ${run.directory} ${run.modelProviderID} ${run.modelID} ${run.log}`.toLowerCase()])), [runs])
+  const searchIndex = useMemo(() => {
+    if (!deferredSearch) return null
+    return new Map(runs.map(run => [run.id, `${run.taskTitle} ${run.prompt} ${run.directory} ${run.modelProviderID} ${run.modelID} ${run.logPreview} ${runLogs[run.id] ?? ''}`.toLowerCase()]))
+  }, [deferredSearch, runLogs, runs])
   const perform = async (id: string, action: () => Promise<unknown>) => {
     setBusy(id)
     setActionError('')
@@ -260,7 +356,7 @@ function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRu
     if (status === 'active' && !active) return false
     if (status === 'success' && run.status !== 'completed') return false
     if (status === 'error' && !['failed', 'timed_out', 'cancelled', 'blocked'].includes(run.status)) return false
-    return !deferredSearch || searchIndex.get(run.id)?.includes(deferredSearch) === true
+    return !deferredSearch || searchIndex?.get(run.id)?.includes(deferredSearch) === true
   }), [deferredSearch, runs, searchIndex, status])
   const groups = useMemo(() => Array.from(filtered.reduce((result, run) => {
     const group = result.get(run.taskID) ?? { title: run.taskTitle, runs: [] as TaskRun[] }
@@ -279,6 +375,7 @@ function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRu
       <div className="overflow-hidden rounded-xl border border-border-200/60 bg-bg-100">{group.runs.map((run, index) => {
         const active = run.status === 'queued' || run.status === 'running' || run.status === 'submitted' || run.status === 'recovering'
         const canOpen = !run.sessionID.startsWith('pending:') && serverStore.getServers().some(server => server.id === run.serverId)
+        const log = runLogs[run.id] ?? run.logPreview
         return <div key={run.id} className={index > 0 ? 'border-t border-border-200/45' : ''} style={{ contentVisibility: 'auto', containIntrinsicSize: '92px' }}>
           <div className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-200/35">
             <span className={`h-2 w-2 shrink-0 rounded-full ${run.status === 'failed' || run.status === 'timed_out' || run.status === 'blocked' ? 'bg-danger-100' : active ? 'bg-warning-100' : run.status === 'cancelled' ? 'bg-text-500' : 'bg-success-100'}`} />
@@ -286,12 +383,13 @@ function TaskRunList({ runs, loading, onOpenSession, onChanged }: { runs: TaskRu
               <div className="flex items-center gap-2"><span className="truncate text-[length:var(--fs-sm)] font-medium text-text-100">{run.prompt}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[length:var(--fs-xxs)] ${run.status === 'failed' || run.status === 'timed_out' || run.status === 'blocked' ? 'bg-danger-100/10 text-danger-100' : active ? 'bg-warning-100/10 text-warning-100' : run.status === 'cancelled' ? 'bg-bg-200 text-text-400' : 'bg-success-100/10 text-success-100'}`}>{runStatusLabel(run.status, t)}</span></div>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[length:var(--fs-xs)] text-text-400"><span>{new Date(run.createdAt).toLocaleString()}</span><span>{run.serverName}</span><span>{run.executionDirectory || run.directory || t('taskPanel.global')}</span><span>{run.executionMode === 'worktree' ? 'Worktree' : t('taskPanel.currentDirectory')}{run.branch ? ` · ${run.branch}` : ''}</span><span>{t('taskPanel.attempt', { count: run.attempt })}</span><span>{run.modelProviderID}/{run.modelID}</span></div>{run.error && <div className="mt-1 text-[length:var(--fs-xs)] text-danger-100">{run.error}</div>}
             </button>
-            {active ? <button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.cancelTaskRun(run.id))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-danger-100 hover:bg-danger-100/10 disabled:opacity-50">{t('taskPanel.stop')}</button> : <><button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.runTask(run.taskID))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 disabled:opacity-50">{t('taskPanel.runAgain')}</button><button type="button" onClick={() => { saveData(new TextEncoder().encode(run.log || run.error || ''), `automation-${run.id}.log`, 'text/plain;charset=utf-8') }} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200">{t('taskPanel.exportLog')}</button><button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.setTaskRunArchived(run.sessionID, true))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-400 hover:bg-bg-200 disabled:opacity-50">{t('taskPanel.archive')}</button></>}
+             {active ? <button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.cancelTaskRun(run.id))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-danger-100 hover:bg-danger-100/10 disabled:opacity-50">{t('taskPanel.stop')}</button> : <><button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.runTask(run.taskID))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 disabled:opacity-50">{t('taskPanel.runAgain')}</button><button type="button" onClick={() => void onExportLog(run.id, run.error ?? '')} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200">{t('taskPanel.exportLog')}</button><button type="button" disabled={busy === run.id} onClick={() => void perform(run.id, () => window.customOpenCode.setTaskRunArchived(run.sessionID, true))} className="rounded-md px-2 py-1 text-[length:var(--fs-xs)] text-text-400 hover:bg-bg-200 disabled:opacity-50">{t('taskPanel.archive')}</button></>}
           </div>
-          {run.log ? <details className="border-t border-border-200/30 bg-bg-200/15 px-4 py-2"><summary className="cursor-pointer text-[length:var(--fs-xs)] text-text-400">{t('taskPanel.runLog')}</summary><pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-[length:var(--fs-xxs)] leading-5 text-text-300">{run.log}</pre></details> : null}
+           {log ? <details className="border-t border-border-200/30 bg-bg-200/15 px-4 py-2" onToggle={event => { if (event.currentTarget.open) void onLoadLog(run.id); else onClearLog(run.id) }}><summary className="cursor-pointer text-[length:var(--fs-xs)] text-text-400">{t('taskPanel.runLog')}</summary>{runLogLoadingID === run.id ? <div className="mt-2 text-[length:var(--fs-xxs)] text-text-400">加载日志中...</div> : <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-[length:var(--fs-xxs)] leading-5 text-text-300">{log}</pre>}</details> : null}
         </div>
       })}</div>
     </section>)}</div>
+    <RunHistoryLoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
   </div>
 }
 

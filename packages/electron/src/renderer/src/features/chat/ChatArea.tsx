@@ -256,10 +256,10 @@ export const ChatArea = memo(
       )
       // 发送后 agent 尚未产出可见回复时显示"正在处理"：
       // 最后一条仍是已完成的历史 assistant 回复（SSE 尚未回显新用户消息）或用户消息时均显示，
-      // 仅当最后一条变为正在流式输出的 assistant 回复（开始回复）即隐藏
-      const lastMessage = messages[messages.length - 1]
+      // 空 assistant 消息不会进入 visibleMessages，只有首个可渲染 part 到达后才隐藏
+      const lastVisibleMessage = visibleMessages[visibleMessages.length - 1]
       const showProcessing =
-        isStreaming && !(lastMessage?.info.role === 'assistant' && lastMessage.info.time.completed == null)
+        isStreaming && !(lastVisibleMessage?.info.role === 'assistant' && lastVisibleMessage.info.time.completed == null)
 
       const activePages = pageRecords ?? pages
 

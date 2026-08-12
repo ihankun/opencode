@@ -240,6 +240,16 @@ export type CustomOpenCodeScheduledTaskRun = {
   completedAt: number | null
 }
 
+export type CustomOpenCodeScheduledTaskRunSummary = Omit<CustomOpenCodeScheduledTaskRun, "log"> & {
+  logPreview: string
+}
+
+export type CustomOpenCodeScheduledTaskRunPage = {
+  data: CustomOpenCodeScheduledTaskRunSummary[]
+  total: number
+  hasMore: boolean
+}
+
 export type CustomOpenCodeScheduledTaskSettings = { maxConcurrency: number; historyRetentionDays: number; maxHistory: number; webhookPort: number }
 
 export type CustomOpenCodeSecurityConfig = {
@@ -318,7 +328,9 @@ export type CustomOpenCodeApi = {
   removeExpertKit(id: string, force?: boolean): Promise<void>
   installPlugin(spec: string): Promise<CustomOpenCodePluginInstallResult>
   listTasks(): Promise<CustomOpenCodeScheduledTask[]>
-  listTaskRuns(taskID?: string): Promise<CustomOpenCodeScheduledTaskRun[]>
+  listTaskRuns(taskID?: string): Promise<CustomOpenCodeScheduledTaskRunSummary[]>
+  listTaskRunPage(input?: { taskID?: string; limit?: number; offset?: number }): Promise<CustomOpenCodeScheduledTaskRunPage>
+  taskRunLog(id: string): Promise<string | null>
   taskSettings(): Promise<CustomOpenCodeScheduledTaskSettings>
   updateTaskSettings(input: CustomOpenCodeScheduledTaskSettings): Promise<CustomOpenCodeScheduledTaskSettings>
   setTaskRunArchived(sessionID: string, archived: boolean): Promise<void>
@@ -334,8 +346,8 @@ export type CustomOpenCodeApi = {
   deleteSkill(location: string): Promise<CustomOpenCodeSkillDeleteResult>
   writeProjectFile(directory: string, path: string, content: string): Promise<{ ok: boolean }>
   removeAgentConfig(input: { scope: "global" | "project"; directory?: string; name: string }): Promise<{ changed: boolean; file: string }>
-  notificationHistoryList(): Promise<Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>>
-  notificationHistoryReplaceAll(notifications: Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; timestamp: number; read: boolean }>): Promise<boolean>
+  notificationHistoryList(): Promise<Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; requestId?: string; timestamp: number; read: boolean }>>
+  notificationHistoryReplaceAll(notifications: Array<{ id: string; type: string; title: string; body: string; sessionId: string; directory?: string; requestId?: string; timestamp: number; read: boolean }>): Promise<boolean>
   openExternalUrl(url: string): Promise<boolean>
   openInternalUrl(url: string): Promise<boolean>
   openLocalFileUrl(url: string): Promise<boolean>
@@ -384,6 +396,7 @@ export type CustomOpenCodeApi = {
   windowIsMaximized(): Promise<boolean>
   windowSetTheme(theme: "system" | "light" | "dark"): Promise<void>
   onWindowMaximizeChange(callback: (isMaximized: boolean) => void): () => void
+  setBadgeCount(count: number): Promise<void>
 }
 
 const api: CustomOpenCodeApi = {
@@ -436,6 +449,8 @@ const api: CustomOpenCodeApi = {
   installPlugin: (spec) => ipcRenderer.invoke("plugin:install", spec),
   listTasks: () => ipcRenderer.invoke("task:list"),
   listTaskRuns: (taskID) => ipcRenderer.invoke("task:run-list", taskID),
+  listTaskRunPage: (input) => ipcRenderer.invoke("task:run-page", input),
+  taskRunLog: (id) => ipcRenderer.invoke("task:run-log", id),
   taskSettings: () => ipcRenderer.invoke("task:settings"),
   updateTaskSettings: (input) => ipcRenderer.invoke("task:settings-update", input),
   setTaskRunArchived: (sessionID, archived) => ipcRenderer.invoke("task:run-archive", sessionID, archived),
@@ -508,6 +523,7 @@ const api: CustomOpenCodeApi = {
     ipcRenderer.on("window:maximize-change", listener)
     return () => ipcRenderer.removeListener("window:maximize-change", listener)
   },
+  setBadgeCount: (count) => ipcRenderer.invoke("badge:set-count", count),
 }
 
 contextBridge.exposeInMainWorld("customOpenCode", api)

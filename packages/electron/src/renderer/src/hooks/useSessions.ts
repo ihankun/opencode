@@ -53,9 +53,28 @@ interface UseSessionsResult {
 }
 
 const sessionListCache = new Map<string, ApiSession[]>()
+const MAX_SESSION_LIST_CACHE_ENTRIES = 32
 
 function sessionCacheKey(serverId: string, directory: string | undefined, rootsOnly: boolean, search: string, global: boolean) {
   return `${serverId}\0${global ? 'global' : 'project'}\0${directory ?? ''}\0${rootsOnly ? 'roots' : 'all'}\0${search}`
+}
+
+function getCachedSessionList(key: string) {
+  const value = sessionListCache.get(key)
+  if (value === undefined) return
+  sessionListCache.delete(key)
+  sessionListCache.set(key, value)
+  return value
+}
+
+function cacheSessionList(key: string, value: ApiSession[]) {
+  sessionListCache.delete(key)
+  sessionListCache.set(key, value)
+  while (sessionListCache.size > MAX_SESSION_LIST_CACHE_ENTRIES) {
+    const oldest = sessionListCache.keys().next().value
+    if (oldest === undefined) break
+    sessionListCache.delete(oldest)
+  }
 }
 
 export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult {
@@ -129,7 +148,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
         }
 
         const nextSessions = data.filter(session => !isScheduledTaskSession(session))
-        sessionListCache.set(sessionCacheKey(requestServerId, normalizedDirectory, rootsOnly, queryParams.search ?? '', global), nextSessions)
+        cacheSessionList(sessionCacheKey(requestServerId, normalizedDirectory, rootsOnly, queryParams.search ?? '', global), nextSessions)
         setSessions(prev => (areSessionListsSame(prev, nextSessions) ? prev : nextSessions))
         hasLoadedSessionsRef.current = true
         setHasMore(data.length >= currentLimitRef.current)
@@ -278,7 +297,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsResult
       serverIdRef.current = serverId
       requestIdRef.current++
       currentLimitRef.current = pageSize
-      const cached = sessionListCache.get(sessionCacheKey(serverId, normalizedDirectory, rootsOnly, searchRef.current, global))
+      const cached = getCachedSessionList(sessionCacheKey(serverId, normalizedDirectory, rootsOnly, searchRef.current, global))
       hasLoadedSessionsRef.current = cached !== undefined
       setIsLoading(cached === undefined)
       setSessions(cached ?? [])

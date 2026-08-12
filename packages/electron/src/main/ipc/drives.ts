@@ -1,7 +1,9 @@
 import { ipcMain } from "electron"
+import type { AssertIpcSender } from "./shared"
 
-export function registerDrivesIpc() {
-  ipcMain.handle("drives:list", async () => {
+export function registerDrivesIpc(input: { assertSender: AssertIpcSender }) {
+  ipcMain.handle("drives:list", async (event) => {
+    input.assertSender(event)
     if (process.platform !== "win32") return []
     const { execSync } = await import("node:child_process")
     try {

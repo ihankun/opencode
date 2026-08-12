@@ -26,7 +26,9 @@ import { SessionListCacheStore } from "./sessionListCache"
 import { deepLinkUrlsFromArgv, parseDeepLink } from "./deepLinks"
 import { createDesktopDraftStore } from "./draft-store"
 import { openExternalURL, openLocalFileURL } from "./external-url"
+import { assertBrowserTarget, isLocalPreviewHost } from "./browserNetworkPolicy"
 import { registerBrowserIpc } from "./ipc/browser"
+import { registerBadgeIpc } from "./ipc/badge"
 import { registerCredentialsIpc } from "./ipc/credentials"
 import { registerDeepLinkIpc } from "./ipc/deepLinks"
 import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
@@ -64,10 +66,12 @@ let internalBrowserWindow: BrowserWindow | undefined
 let openCodeGoLoginWindow: BrowserWindow | undefined
 let openCodeGoLoginWait: Promise<OpenCodeGoLoginResult> | undefined
 const internalBrowserPartition = "persist:opencodex-browser"
+let internalBrowserNetworkPolicyConfigured = false
 let server: SidecarHandle | undefined
 let initialServerStartup: Promise<void> | undefined
 let serverError: string | undefined
 let tray: Tray | undefined
+let badgeCount = 0
 let isQuitting = false
 let isStoppingForQuit = false
 let desktopPreferencesStore: DesktopPreferencesStore
@@ -463,6 +467,14 @@ function applyDesktopPreferences() {
   showDockIcon()
 }
 
+function updateBadge(count: number) {
+  if (count === badgeCount) return
+  badgeCount = count
+  if (process.platform !== "darwin") return
+  if (count > 0) app.dock?.setBadge(count > 99 ? "99+" : String(count))
+  else app.dock?.setBadge("")
+}
+
 async function startServer(url: string) {
   const startedAt = performance.now()
   try {
@@ -557,12 +569,14 @@ const rendererSettingsStore = new RendererSettingsStore(join(app.getPath("userDa
 const draftsStore = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
 initLogging()
 writeLog("main", "app boot", { userData: app.getPath("userData"), keychain: usesMockKeychain ? "mock" : "system" })
-registerWindowIpc({ getWindow: () => mainWindow })
+registerWindowIpc({ assertSender: assertMainWindow, getWindow: () => mainWindow })
+registerBadgeIpc({ assertSender: assertMainWindow, updateBadge })
 registerCredentialsIpc({
   assertSender: assertMainWindow,
   createPullRequest: createHostedPullRequest,
 })
 registerDesktopPreferencesIpc({
+  assertSender: assertMainWindow,
   current: () => desktopPreferencesStore.current(),
   save: async (value) => {
     const backgroundSubagents = desktopPreferences.backgroundSubagents
@@ -595,6 +609,7 @@ registerRendererSettingsIpc({
   store: rendererSettingsStore,
 })
 registerImBridgeIpc({
+  assertSender: assertMainWindow,
   getServerUrl: () => server?.state.url,
   service: imBridgeService,
 })
@@ -649,6 +664,7 @@ registerDraftsIpc({
   drafts: draftsStore,
 })
 registerDesktopIntegrationIpc({
+  assertSender: assertMainWindow,
   capturePreview,
   discoverPreviewPorts,
   listLocationApps: locationApps,
@@ -678,10 +694,12 @@ registerNotificationHistoryIpc({
   replaceAll: (notifications) => getNotificationDatabase().replaceAll(notifications as StoredNotification[]),
 })
 registerDiagnosticsIpc({
+  assertSender: assertMainWindow,
   exportLogs: exportDebugLogs,
   getDiagnostics: readDiagnostics,
 })
 registerTaskIpc({
+  assertSender: assertMainWindow,
   scheduler: taskScheduler,
   ensureReady: ensureTaskSchedulerStarted,
   notifyChanged: notifyTasksChanged,
@@ -691,7 +709,7 @@ registerSpeechModelIpc({
   ready: () => speechModelReady,
   service: speechModelService,
 })
-registerDrivesIpc()
+registerDrivesIpc({ assertSender: assertMainWindow })
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
@@ -2162,20 +2180,7 @@ function normalizeGitRemoteUrl(value: string) {
 }
 
 async function openInternalUrl(rawUrl: string) {
-  const url = new URL(rawUrl)
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP(S) URLs can be opened")
-  if (url.username || url.password) throw new Error("URLs with embedded credentials are not allowed")
-  const blockedMetadataHosts = [
-    "169.254.169.254",
-    "metadata.google.internal",
-    "100.100.100.200",
-    "metadata.tencentyun.com",
-    "169.254.170.2",
-    "fd00:ec2::254",
-  ]
-  if (blockedMetadataHosts.includes(url.hostname.toLowerCase())) {
-    throw new Error("Cloud metadata endpoints are blocked")
-  }
+  const url = await assertBrowserTarget(rawUrl)
 
   if (!internalBrowserWindow || internalBrowserWindow.isDestroyed()) {
     internalBrowserWindow = new BrowserWindow({
@@ -2195,6 +2200,7 @@ async function openInternalUrl(rawUrl: string) {
         partition: internalBrowserPartition,
       },
     })
+    configureInternalBrowserNetworkPolicy(internalBrowserWindow.webContents.session)
     internalBrowserWindow.webContents.session.setPermissionCheckHandler(() => false)
     internalBrowserWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     internalBrowserWindow.on("closed", () => {
@@ -2221,6 +2227,39 @@ async function openInternalUrl(rawUrl: string) {
   internalBrowserWindow.show()
   internalBrowserWindow.focus()
   return true
+}
+
+function configureInternalBrowserNetworkPolicy(browserSession: Electron.Session) {
+  if (internalBrowserNetworkPolicyConfigured) return
+  internalBrowserNetworkPolicyConfigured = true
+  const localPreviewContents = new Set<number>()
+  browserSession.webRequest.onBeforeRequest({ urls: ["http://*/*", "https://*/*"] }, (details, callback) => {
+    const webContentsId = details.webContentsId ?? -1
+    const isMainFrame = details.resourceType === "mainFrame"
+    const allowLocalPreview = isMainFrame || (webContentsId > 0 && localPreviewContents.has(webContentsId))
+    void assertBrowserTarget(details.url, allowLocalPreview).then(
+      () => {
+        if (isMainFrame) {
+          const host = new URL(details.url).hostname
+          if (webContentsId > 0 && isLocalPreviewHost(host)) {
+            localPreviewContents.add(webContentsId)
+            while (localPreviewContents.size > 32) {
+              const oldest = localPreviewContents.values().next().value
+              if (oldest === undefined) break
+              localPreviewContents.delete(oldest)
+            }
+          } else {
+            localPreviewContents.delete(webContentsId)
+          }
+        }
+        callback({})
+      },
+      (error) => {
+        writeLog("security", "blocked internal browser request", { url: details.url, error })
+        callback({ cancel: true })
+      },
+    )
+  })
 }
 
 function loginOpenCodeGoQuota(force: boolean) {
@@ -2251,6 +2290,7 @@ function loginOpenCodeGoQuota(force: boolean) {
   })
   openCodeGoLoginWindow = loginWindow
   const browserSession = loginWindow.webContents.session
+  configureInternalBrowserNetworkPolicy(browserSession)
   browserSession.setPermissionCheckHandler(() => false)
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
 

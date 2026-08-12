@@ -7,6 +7,7 @@ export type StoredNotification = {
   body: string
   sessionId: string
   directory?: string
+  requestId?: string
   timestamp: number
   read: boolean
 }
@@ -25,6 +26,7 @@ function mapRow(
     body: String(row.body ?? ""),
     sessionId: String(row.session_id ?? ""),
     directory: row.directory ? String(row.directory) : undefined,
+    requestId: row.request_id ? String(row.request_id) : undefined,
     timestamp: Number(row.timestamp ?? 0),
     read: Number(row.read ?? 0) === 1,
   }
@@ -36,8 +38,13 @@ export function createNotificationDatabase(filename: string) {
     "PRAGMA journal_mode = WAL; " +
       "CREATE TABLE IF NOT EXISTS notification (" +
       "id TEXT PRIMARY KEY, type TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, " +
-      "session_id TEXT NOT NULL, directory TEXT, timestamp INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);",
+      "session_id TEXT NOT NULL, directory TEXT, request_id TEXT, timestamp INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);",
   )
+  try {
+    native.exec("ALTER TABLE notification ADD COLUMN request_id TEXT")
+  } catch {
+    // 老库迁移：列已存在时忽略
+  }
 
   return {
     list(): StoredNotification[] {
@@ -49,7 +56,7 @@ export function createNotificationDatabase(filename: string) {
       try {
         native.prepare("DELETE FROM notification").run()
         const insert = native.prepare(
-          "INSERT INTO notification (id, type, title, body, session_id, directory, timestamp, read) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO notification (id, type, title, body, session_id, directory, request_id, timestamp, read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         for (const notification of notifications.slice(0, MAX_NOTIFICATIONS)) {
           insert.run(
@@ -59,6 +66,7 @@ export function createNotificationDatabase(filename: string) {
             notification.body,
             notification.sessionId ?? "",
             notification.directory ?? null,
+            notification.requestId ?? null,
             notification.timestamp,
             notification.read ? 1 : 0,
           )
