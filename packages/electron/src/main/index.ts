@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, dialog, nativeImage, Notification, protocol, session, shell, systemPreferences } from "electron"
+import { mkdirSync } from "node:fs"
 import { access, chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
@@ -561,6 +562,7 @@ app.commandLine.appendSwitch("enable-javascript-call-stack")
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
+mkdirSync(app.getPath("userData"), { recursive: true })
 desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
 speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
 projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
