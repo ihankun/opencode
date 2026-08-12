@@ -110,6 +110,7 @@
     "noGitHint": "初始化后就可以跟踪会话变更和本轮变更",
     "initGit": "初始化 Git 仓库",
     "initializingGit": "初始化中...",
+    "multiRepoHint": "已聚合子目录中的 {{count}} 个 Git 仓库",
     "fileCount_other": "{{count}} 个文件",
     "fileCountCompact": "{{count}}f",
     "gitScope": "Git 变更",

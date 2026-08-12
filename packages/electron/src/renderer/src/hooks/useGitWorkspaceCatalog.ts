@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getCurrentProject, listWorktrees } from '../api'
+import { getCurrentProject, listSubRepos, listWorktrees } from '../api'
 import { subscribeToEvents } from '../api/events'
 import { serverStore } from '../store/serverStore'
 import { normalizeToForwardSlash } from '../utils'
@@ -7,7 +7,7 @@ import { normalizeToForwardSlash } from '../utils'
 export interface GitWorkspaceMeta {
   isGit: boolean
   rootDirectory: string
-  // root workspace 放第一位，后面才是 sandbox worktree
+  // root workspace 放第一位，后面才是 sandbox worktree（或聚合的子仓库）
   workspaces: string[]
 }
 
@@ -62,6 +62,7 @@ export function useGitWorkspaceCatalog(directories: string[]) {
       const rootDirectories = new Set<string>()
       const directoryToRoot = new Map<string, string>()
       const nextCatalog: GitWorkspaceCatalog = new Map()
+      const nonGitDirectories: string[] = []
       const previousWorkspacesByRoot = new Map<string, string[]>()
 
       for (const [directory, meta] of previousCatalog) {
@@ -93,6 +94,32 @@ export function useGitWorkspaceCatalog(directories: string[]) {
           const rootDirectory = normalizeToForwardSlash(project.worktree)
           rootDirectories.add(rootDirectory)
           directoryToRoot.set(directory, rootDirectory)
+        } else {
+          nonGitDirectories.push(directory)
+        }
+      }
+
+      // 非 git 目录：向下扫描其直接子目录中的 git 仓库，聚合成一个工作区
+      const subRepoResults = await Promise.allSettled(
+        nonGitDirectories.map(async directory => ({
+          directory,
+          repos: await listSubRepos(directory),
+        })),
+      )
+
+      if (!mountedRef.current || version !== versionRef.current) return
+
+      for (const result of subRepoResults) {
+        if (result.status !== 'fulfilled') continue
+        const { directory, repos } = result.value
+        const normalizedRepos = repos.map(repo => normalizeToForwardSlash(repo))
+
+        if (normalizedRepos.length > 0) {
+          nextCatalog.set(directory, {
+            isGit: true,
+            rootDirectory: directory,
+            workspaces: [directory, ...normalizedRepos],
+          })
         } else {
           nextCatalog.set(directory, {
             isGit: false,

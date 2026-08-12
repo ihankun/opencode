@@ -15,6 +15,15 @@ const UpdatePayload = Schema.Struct({
   commands: Schema.optional(Project.Info.fields.commands),
 })
 
+const SubRepo = Schema.Struct({
+  worktree: Schema.String,
+}).annotate({ identifier: "SubRepo" })
+
+const SubRepos = Schema.Struct({
+  directory: Schema.String,
+  repos: Schema.Array(SubRepo),
+}).annotate({ identifier: "SubRepos" })
+
 export const ProjectApi = HttpApi.make("project")
   .add(
     HttpApiGroup.make("project")
@@ -71,6 +80,17 @@ export const ProjectApi = HttpApi.make("project")
             identifier: "project.directories",
             summary: "List project directories",
             description: "List known local absolute directories for a project.",
+          }),
+        ),
+        HttpApiEndpoint.get("subrepos", `${root}/subrepos`, {
+          query: WorkspaceRoutingQuery,
+          success: described(SubRepos, "Git repositories inside a non-git directory"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "project.subrepos",
+            summary: "Discover nested git repositories",
+            description:
+              "When the current directory is not itself a git repository, list git repositories found in its immediate subdirectories.",
           }),
         ),
       )

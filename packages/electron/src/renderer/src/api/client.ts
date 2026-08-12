@@ -144,6 +144,15 @@ export async function initGitProject(directory?: string): Promise<ApiProject> {
 }
 
 /**
+ * 获取非 git 目录下直接子目录中的 git 仓库（worktree 绝对路径列表）
+ */
+export async function listSubRepos(directory?: string): Promise<string[]> {
+  const sdk = getSDKClient()
+  const result = unwrap(await sdk.project.subrepos({ directory: formatPathForApi(directory) }))
+  return result.repos.map(repo => repo.worktree)
+}
+
+/**
  * 更新项目
  */
 export async function updateProject(
