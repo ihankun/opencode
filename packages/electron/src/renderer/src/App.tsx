@@ -1260,12 +1260,11 @@ function App() {
       <InternalDragLayer />
       <ChatViewportProvider value={chatViewport}>
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          <div
+            className="relative flex min-h-0 flex-1 overflow-hidden"
+            style={utilityPage === 'settings' ? { display: 'none' } : undefined}
+          >
           {isMobilePanelLayout ? (
-            utilityPage === 'settings' ? (
-              <Suspense fallback={null}>
-                <SettingsPage onBack={closeSettingsPage} />
-              </Suspense>
-            ) : (
             <>
               <div
                 ref={mobilePagerRef}
@@ -1305,7 +1304,7 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
-                    activeUtilityPage={utilityPage}
+                    activeUtilityPage={utilityPage === 'settings' ? null : utilityPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     mobileInline
@@ -1382,15 +1381,11 @@ function App() {
                 </section>
               </div>
 
-              {!utilityPage && <BottomPanel directory={focusedDirectory} />}
+              {utilityPage !== 'tasks' && utilityPage !== 'plugins' && (
+                <BottomPanel directory={focusedDirectory} />
+              )}
             </>
-            )
           ) : (
-            utilityPage === 'settings' ? (
-              <Suspense fallback={null}>
-                <SettingsPage onBack={closeSettingsPage} />
-              </Suspense>
-            ) : (
             <>
               {sidebarExpanded && (
                 <Sidebar
@@ -1404,7 +1399,7 @@ function App() {
                   onOpenSearch={() => setSessionSearchOpen(true)}
                   onOpenPlugins={openPluginPage}
                   onOpenTasks={openTaskPage}
-                  activeUtilityPage={utilityPage}
+                  activeUtilityPage={utilityPage === 'settings' ? null : utilityPage}
                   projectDialogOpen={projectDialogOpen}
                   onProjectDialogClose={closeProjectDialog}
                 />
@@ -1427,7 +1422,7 @@ function App() {
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
-                    activeUtilityPage={utilityPage}
+                    activeUtilityPage={utilityPage === 'settings' ? null : utilityPage}
                     projectDialogOpen={projectDialogOpen}
                     onProjectDialogClose={closeProjectDialog}
                     previewMode
@@ -1441,7 +1436,7 @@ function App() {
                   className="flex-1 flex flex-col min-w-0 overflow-hidden"
                   style={{ minWidth: `${CHAT_SURFACE_MIN_WIDTH}px` }}
                 >
-                  {utilityPage ? (
+                  {utilityPage === 'tasks' || utilityPage === 'plugins' ? (
                     utilityPageContent
                   ) : (
                     <>
@@ -1458,10 +1453,17 @@ function App() {
                   )}
                 </div>
 
-                {!utilityPage && <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />}
+                {utilityPage !== 'tasks' && utilityPage !== 'plugins' && (
+                  <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />
+                )}
               </div>
             </>
-            )
+          )}
+          </div>
+          {utilityPage === 'settings' && (
+            <Suspense fallback={null}>
+              <SettingsPage onBack={closeSettingsPage} />
+            </Suspense>
           )}
           <ToastContainer onOpenAbout={openAboutSettings} />
         </div>

@@ -79,7 +79,7 @@ export function ElectronWindowsTitlebar({
       className="electron-windows-titlebar window-drag-region relative flex shrink-0 items-center"
       style={{ height: DESKTOP_TITLEBAR_HEIGHT, zIndex: DESKTOP_TITLEBAR_Z_INDEX }}
     >
-      <div className="flex items-center gap-0.5 pl-3">
+      <div className="flex items-center gap-2 pl-3">
         <button
           type="button"
           onPointerEnter={onOpenSidebarPreview}
