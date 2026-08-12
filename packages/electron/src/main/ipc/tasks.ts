@@ -17,7 +17,26 @@ export function registerTaskIpc(input: {
   ipcMain.handle("task:run-list", async (event, taskID: unknown) => {
     input.assertSender(event)
     await input.ensureReady()
-    return input.scheduler.listRuns(typeof taskID === "string" && taskID ? taskID : undefined)
+    return input.scheduler.listRunSummaries(typeof taskID === "string" && taskID ? taskID : undefined, 10_000, 0, false).data
+  })
+
+  ipcMain.handle("task:run-page", async (event, value: unknown) => {
+    input.assertSender(event)
+    await input.ensureReady()
+    const options = isRecord(value) ? value : {}
+    return input.scheduler.listRunSummaries(
+      typeof options.taskID === "string" && options.taskID ? options.taskID : undefined,
+      typeof options.limit === "number" ? options.limit : undefined,
+      typeof options.offset === "number" ? options.offset : undefined,
+      true,
+    )
+  })
+
+  ipcMain.handle("task:run-log", async (event, id: unknown) => {
+    input.assertSender(event)
+    await input.ensureReady()
+    if (typeof id !== "string" || !id) throw new Error("Scheduled task run ID is required")
+    return input.scheduler.getRunLog(id)
   })
 
   ipcMain.handle("task:settings", async (event) => {
@@ -91,4 +110,8 @@ export function registerTaskIpc(input: {
     input.notifyChanged()
     return run
   })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
 }

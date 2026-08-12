@@ -82,6 +82,16 @@ export type ScheduledTaskRun = {
   completedAt: number | null
 }
 
+export type ScheduledTaskRunSummary = Omit<ScheduledTaskRun, "log"> & {
+  logPreview: string
+}
+
+export type ScheduledTaskRunPage = {
+  data: ScheduledTaskRunSummary[]
+  total: number
+  hasMore: boolean
+}
+
 export type ScheduledTaskSettings = {
   maxConcurrency: number
   historyRetentionDays: number
@@ -123,6 +133,36 @@ type TaskInput = Pick<
 
 type ServerState = { url: string; username?: string; password?: string }
 type AttemptResult = { ok: true; runID: string } | { ok: false; runID: string; message: string; retryable: boolean; cancelled: boolean }
+
+const RUN_PAGE_DEFAULT_LIMIT = 50
+const RUN_PAGE_MAX_LIMIT = 100
+const RUN_SUMMARY_MAX_LIMIT = 10_000
+const RUN_LOG_PREVIEW_LENGTH = 8_000
+const RUN_SUMMARY_COLUMNS = [
+  "id",
+  "task_id",
+  "task_title",
+  "prompt",
+  "session_id",
+  "server_id",
+  "server_name",
+  "server_url",
+  "directory",
+  "execution_directory",
+  "execution_mode",
+  "worktree_directory",
+  "branch",
+  "permission_profile",
+  "attempt",
+  "model_provider_id",
+  "model_id",
+  "variant",
+  "status",
+  "error",
+  "updated_at",
+  "created_at",
+  "completed_at",
+].join(", ")
 
 export class TaskScheduler {
   private database?: DatabaseSync
@@ -221,6 +261,38 @@ export class TaskScheduler {
     return rows.map((row) => this.readRun(row))
   }
 
+  listRunSummaries(
+    taskID?: string,
+    limit = RUN_PAGE_DEFAULT_LIMIT,
+    offset = 0,
+    includePreview = true,
+  ): ScheduledTaskRunPage {
+    const maxLimit = includePreview ? RUN_PAGE_MAX_LIMIT : RUN_SUMMARY_MAX_LIMIT
+    const normalizedLimit = Number.isInteger(limit)
+      ? Math.min(maxLimit, Math.max(1, limit))
+      : RUN_PAGE_DEFAULT_LIMIT
+    const normalizedOffset = Number.isInteger(offset) ? Math.max(0, offset) : 0
+    const where = taskID ? "task_id = ? AND archived = 0" : "archived = 0"
+    const params = taskID ? [taskID] : []
+    const totalRow = this.db().prepare(`SELECT COUNT(*) AS count FROM scheduled_task_run WHERE ${where}`).get(...params) as { count?: number } | undefined
+    const preview = includePreview ? `, substr(log, -${RUN_LOG_PREVIEW_LENGTH}) AS log_preview` : ", '' AS log_preview"
+    const rows = this.db().prepare(
+      `SELECT ${RUN_SUMMARY_COLUMNS}${preview} FROM scheduled_task_run WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    ).all(...params, normalizedLimit, normalizedOffset) as Array<Record<string, unknown>>
+    const total = Number(totalRow?.count ?? 0)
+    return {
+      data: rows.map((row) => this.readRunSummary(row)),
+      total,
+      hasMore: normalizedOffset + rows.length < total,
+    }
+  }
+
+  getRunLog(id: string) {
+    const row = this.db().prepare("SELECT log FROM scheduled_task_run WHERE id = ?").get(id) as { log?: unknown } | undefined
+    if (!row) throw new Error("Scheduled task run not found")
+    return typeof row.log === "string" ? row.log : ""
+  }
+
   private readRun(row: Record<string, unknown>): ScheduledTaskRun {
     return {
       id: String(row.id),
@@ -250,6 +322,14 @@ export class TaskScheduler {
     }
   }
 
+  private readRunSummary(row: Record<string, unknown>): ScheduledTaskRunSummary {
+    const { log: _log, ...summary } = this.readRun(row)
+    return {
+      ...summary,
+      logPreview: typeof row.log_preview === "string" ? row.log_preview : "",
+    }
+  }
+
   setRunArchived(sessionID: string, archived: boolean) {
     this.db().prepare("UPDATE scheduled_task_run SET archived = ? WHERE session_id = ?").run(Number(archived), sessionID)
   }
@@ -273,7 +353,7 @@ export class TaskScheduler {
   }
 
   async cancelTask(id: string) {
-    const runs = this.listRuns(id).filter((run) => isActiveStatus(run.status))
+    const runs = this.listRunSummaries(id, RUN_SUMMARY_MAX_LIMIT, 0, false).data.filter((run) => isActiveStatus(run.status))
     await Promise.all(runs.map((run) => this.cancelRun(run.id)))
     return this.get(id)
   }
@@ -965,7 +1045,7 @@ export class TaskScheduler {
   }
 
   private async recoverInterruptedRuns() {
-    const runs = this.listRuns().filter((run) => isActiveStatus(run.status))
+    const runs = this.listRunSummaries(undefined, RUN_SUMMARY_MAX_LIMIT, 0, false).data.filter((run) => isActiveStatus(run.status))
     await Promise.all(runs.map(async (run) => {
       if (run.status === "queued") {
         void this.launch(this.get(run.taskID), run.id)
