@@ -27,6 +27,7 @@ const config: Configuration = {
   mac: {
     icon: "assets/icon.icns",
     target: ["dmg", "zip"],
+    artifactName: "${productName}-${version}-${arch}.${ext}",
     category: "public.app-category.developer-tools",
     identity: process.env.CSC_IDENTITY ?? "-",
     entitlements: "build/entitlements.mac.plist",
@@ -42,7 +43,7 @@ const config: Configuration = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
   },
   nsis: {
-    artifactName: "${productName} Setup ${version}.${ext}",
+    artifactName: "${productName}-Setup-${version}.${ext}",
     oneClick: false,
     allowToChangeInstallationDirectory: true,
   },
