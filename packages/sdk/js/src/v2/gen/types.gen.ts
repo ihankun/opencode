@@ -2523,6 +2523,15 @@ export type ProjectNotFoundError = {
   message: string
 }
 
+export type SubRepo = {
+  worktree: string
+}
+
+export type SubRepos = {
+  directory: string
+  repos: Array<SubRepo>
+}
+
 export type PtyNotFoundError = {
   _tag: "PtyNotFoundError"
   ptyID: string
@@ -10190,6 +10199,34 @@ export type ProjectDirectoriesResponses = {
 }
 
 export type ProjectDirectoriesResponse = ProjectDirectoriesResponses[keyof ProjectDirectoriesResponses]
+
+export type ProjectSubreposData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/subrepos"
+}
+
+export type ProjectSubreposErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProjectSubreposError = ProjectSubreposErrors[keyof ProjectSubreposErrors]
+
+export type ProjectSubreposResponses = {
+  /**
+   * Git repositories inside a non-git directory
+   */
+  200: SubRepos
+}
+
+export type ProjectSubreposResponse = ProjectSubreposResponses[keyof ProjectSubreposResponses]
 
 export type ExperimentalProjectCopyGenerateNameData = {
   body?: {

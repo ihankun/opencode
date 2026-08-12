@@ -10,14 +10,14 @@ import { RetryIcon, ChevronRightIcon, MaximizeIcon, ClockIcon, GitBranchIcon, Gi
 import { getMaterialIconUrl } from '../utils/materialIcons'
 import { DiffViewer, useDiffViewerData, type DiffLineSelection, type ViewMode } from './DiffViewer'
 import { ViewModeSwitch } from './FullscreenViewer'
-import { getCurrentProject, initGitProject } from '../api/client'
+import { getCurrentProject, initGitProject, listSubRepos } from '../api/client'
 import { getLastTurnDiff, getSessionDiff } from '../api/session'
 import { commitVcsChanges, discardVcsFiles, getVcsDiff, getVcsHistory, getVcsInfo, pushVcsBranch, runVcsOperation, stageVcsFiles, unstageVcsFiles } from '../api/vcs'
 import type { VcsHistoryItem } from '../api/vcs'
 import type { ApiProject, FileDiff, VcsDiffMode, VcsInfo } from '../api/types'
 import { detectLanguage } from '../utils/languageUtils'
 import { extractContentFromUnifiedDiff } from '../utils/diffUtils'
-import { sessionErrorHandler } from '../utils'
+import { sessionErrorHandler, normalizeToForwardSlash } from '../utils'
 import { PreviewTabsBar, type PreviewTabsBarItem } from './PreviewTabsBar'
 import { useVerticalSplitResize } from '../hooks/useVerticalSplitResize'
 import { Button, Dialog, DropdownMenu } from './ui'
@@ -88,6 +88,8 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
 
   const [project, setProject] = useState<ApiProject | null>(null)
   const [vcsInfo, setVcsInfo] = useState<VcsInfo | null>(null)
+  // 当前目录本身不是 git 仓库时，直接子目录中发现并聚合的 git 仓库 worktree 列表
+  const [subRepos, setSubRepos] = useState<string[]>([])
   const [projectLoading, setProjectLoading] = useState(false)
   const [initializingGit, setInitializingGit] = useState(false)
   const [loadingModes, setLoadingModes] = useState({ git: false, branch: false, session: false, turn: false })
@@ -132,13 +134,14 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   )
   const changeOptions = useMemo<ChangeMode[]>(() => {
     const options: ChangeMode[] = []
-    if (project?.vcs) options.push('turn', 'git')
+    const hasGit = Boolean(project?.vcs) || subRepos.length > 0
+    if (hasGit) options.push('turn', 'git')
     if (project?.vcs && vcsInfo?.branch && vcsInfo?.default_branch && vcsInfo.branch !== vcsInfo.default_branch) {
       options.push('branch')
     }
-    if (project?.vcs) options.push('session')
+    if (hasGit) options.push('session')
     return options
-  }, [project?.vcs, vcsInfo?.branch, vcsInfo?.default_branch])
+  }, [project?.vcs, subRepos.length, vcsInfo?.branch, vcsInfo?.default_branch])
   const preferredChangeMode = useMemo(() => getDefaultChangeMode(changeOptions), [changeOptions])
   const changeModeMeta = useMemo(
     () => ({
@@ -176,6 +179,26 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
             : turnDiffs,
     [branchDiffs, changeMode, gitDiffs, sessionDiffs, turnDiffs],
   )
+  // 聚合场景（当前目录非 git，含多个子仓库）的 git 模式下，按子仓库前缀分组 diffs
+  const subRepoGroups = useMemo(() => {
+    if (!(subRepos.length > 0 && !project?.vcs) || changeMode !== 'git') return []
+    const prefixToDir = new Map(subRepos.map(repo => [getSubRepoPrefix(directory ?? '', repo), repo]))
+    const prefixes = Array.from(prefixToDir.keys())
+    const byPrefix = new Map<string, FileDiff[]>()
+    for (const diff of diffs) {
+      const prefix = matchSubRepoPrefix(prefixes, diff.file) ?? ''
+      const list = byPrefix.get(prefix) ?? []
+      list.push(diff)
+      byPrefix.set(prefix, list)
+    }
+    return Array.from(byPrefix.entries())
+      .map(([prefix, groupDiffs]) => ({
+        prefix,
+        directory: prefix ? prefixToDir.get(prefix)! : (directory ?? ''),
+        diffs: groupDiffs,
+      }))
+      .sort((a, b) => a.prefix.localeCompare(b.prefix))
+  }, [changeMode, diffs, directory, project?.vcs, subRepos])
   const loading = projectLoading || initializingGit || loadingModes[changeMode]
 
   const focusChangeMenuOption = useCallback((mode: ChangeMode) => {
@@ -332,11 +355,15 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
       if (requestId !== projectRequestIdRef.current) return null
       setProject(nextProject)
       if (nextProject.vcs) {
+        setSubRepos([])
         const nextVcsInfo = await getVcsInfo(directory).catch(() => null)
         if (requestId !== projectRequestIdRef.current) return null
         setVcsInfo(nextVcsInfo)
       } else {
         setVcsInfo(null)
+        const repos = await listSubRepos(directory).catch(() => [])
+        if (requestId !== projectRequestIdRef.current) return null
+        setSubRepos(repos)
       }
       return nextProject
     } catch (err) {
@@ -356,7 +383,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   const loadDiffMode = useCallback(
     async (mode: ChangeMode, options?: { force?: boolean; project?: ApiProject | null }) => {
       const currentProject = options?.project ?? project
-      if (!sessionId || !currentProject?.vcs) return
+      if (!sessionId || (!currentProject?.vcs && subRepos.length === 0)) return
       if (!options?.force && loadedModes[mode]) return
 
       const requestId = ++diffRequestIdRef.current[mode]
@@ -366,7 +393,11 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
       try {
         let data: FileDiff[]
         if (mode === 'git' || mode === 'branch') {
-          data = await getVcsDiff(mode as VcsDiffMode, directory)
+          if (mode === 'branch' || currentProject?.vcs) {
+            data = await getVcsDiff(mode as VcsDiffMode, directory)
+          } else {
+            data = await loadAggregatedGitDiffs(subRepos, directory)
+          }
         } else if (mode === 'session') {
           data = await getSessionDiff(sessionId, directory)
         } else {
@@ -396,7 +427,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
         }
       }
     },
-    [directory, loadedModes, project, sessionId, t],
+    [directory, loadedModes, project, sessionId, subRepos, t],
   )
 
   useEffect(() => {
@@ -408,6 +439,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
     }
     setProject(null)
     setVcsInfo(null)
+    setSubRepos([])
     setGitDiffs([])
     setBranchDiffs([])
     setSessionDiffs([])
@@ -432,10 +464,10 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   }, [changeMode, changeOptions, preferredChangeMode, setChangeMode])
 
   useEffect(() => {
-    if (!project?.vcs) return
+    if (!project?.vcs && subRepos.length === 0) return
     if (!changeOptions.includes(changeMode)) return
     void loadDiffMode(changeMode)
-  }, [changeMode, changeOptions, loadDiffMode, project?.vcs])
+  }, [changeMode, changeOptions, loadDiffMode, project?.vcs, subRepos.length])
 
   useEffect(() => {
     setExpandedDirs(collectExpandedDirPaths(buildChangesTree(diffs)))
@@ -454,9 +486,9 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   // 刷新
   const handleRefresh = useCallback(async () => {
     const nextProject = await loadProjectState()
-    if (!nextProject?.vcs) return
+    if (!nextProject?.vcs && subRepos.length === 0) return
     await loadDiffMode(changeMode, { force: true, project: nextProject })
-  }, [changeMode, loadDiffMode, loadProjectState])
+  }, [changeMode, loadDiffMode, loadProjectState, subRepos.length])
 
   const handleInitGit = useCallback(async () => {
     setInitializingGit(true)
@@ -585,6 +617,50 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   )
   const showPreview = !loading && selectedDiff !== null && !(error && diffs.length === 0)
 
+  // 文件列表行（flat 视图单行渲染，聚合分组和普通列表共用）
+  const renderFileRow = (diff: FileDiff) => {
+    const fileStatus = getFileStatus(diff)
+    return (
+      <button
+        key={diff.file}
+        onClick={() => handleSelectFile(diff.file)}
+        className={`
+          w-full min-w-0 flex items-center gap-2 px-3 py-1 text-left
+          hover:bg-bg-200/50 transition-colors text-[length:var(--fs-sm)]
+          text-text-300
+        `}
+      >
+        {changeMode === 'git' && (
+          <input
+            type="checkbox"
+            checked={checkedFiles.has(diff.file)}
+            onChange={() => handleToggleFileCheck(diff.file)}
+            onClick={event => event.stopPropagation()}
+            aria-label={t('sessionChanges.selectFile')}
+            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent-main-100"
+          />
+        )}
+        <img
+          src={getMaterialIconUrl(diff.file, 'file')}
+          alt=""
+          width={16}
+          height={16}
+          className="shrink-0"
+          loading="lazy"
+          decoding="async"
+          onError={e => {
+            e.currentTarget.style.visibility = 'hidden'
+          }}
+        />
+        <span className={`flex-1 min-w-0 font-mono truncate ${FILE_STATUS_COLOR[fileStatus]}`}>{diff.file}</span>
+        <div className="flex items-center gap-2 text-[length:var(--fs-xxs)] font-mono shrink-0">
+          {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
+          {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
+        </div>
+      </button>
+    )
+  }
+
   if (projectLoading && !project) {
     return <div className="p-4 text-center text-text-400 text-[length:var(--fs-sm)]">{t('sessionChanges.loadingChanges')}</div>
   }
@@ -593,7 +669,7 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
     return <div className="p-4 text-center text-danger-100 text-[length:var(--fs-sm)]">{error}</div>
   }
 
-  if (!project?.vcs) {
+  if (!project?.vcs && subRepos.length === 0) {
     return (
       <div className="h-full flex items-center justify-center p-4">
         <div className="max-w-xs text-center space-y-3">
@@ -855,6 +931,13 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
           <div className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-border-200/30" />
         </div>
 
+        {subRepos.length > 0 && !project?.vcs && (
+          <div className="flex items-center gap-1.5 border-b border-border-200/30 bg-bg-200/30 px-3 py-1 text-[length:var(--fs-xs)] text-text-400">
+            <GitBranchIcon size={12} className="shrink-0" />
+            <span className="min-w-0 truncate">{t('sessionChanges.multiRepoHint', { count: subRepos.length })}</span>
+          </div>
+        )}
+
         {changeMode === 'git' && (
           <GitActions
             files={diffs.map(diff => diff.file)}
@@ -862,6 +945,8 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
             selectedFile={selectedFile}
             directory={directory}
             vcsInfo={vcsInfo}
+            subRepoDirs={subRepos}
+            aggregated={subRepos.length > 0 && !project?.vcs}
             containerRef={containerRef}
             onChanged={handleRefresh}
             onError={setError}
@@ -892,52 +977,32 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
                       onToggleDir={handleToggleDir}
                     />
                   ))
-                : // Flat list view
-                  diffs.map(diff => {
-                    const fileStatus = getFileStatus(diff)
-
-                    return (
-                      <button
-                        key={diff.file}
-                        onClick={() => handleSelectFile(diff.file)}
-                        className={`
-                       w-full min-w-0 flex items-center gap-2 px-3 py-1 text-left
-                       hover:bg-bg-200/50 transition-colors text-[length:var(--fs-sm)]
-                       text-text-300
-                     `}
-                      >
-                        {changeMode === 'git' && (
-                          <input
-                            type="checkbox"
-                            checked={checkedFiles.has(diff.file)}
-                            onChange={() => handleToggleFileCheck(diff.file)}
-                            onClick={event => event.stopPropagation()}
-                            aria-label={t('sessionChanges.selectFile')}
-                            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent-main-100"
-                          />
-                        )}
-                        <img
-                          src={getMaterialIconUrl(diff.file, 'file')}
-                          alt=""
-                          width={16}
-                          height={16}
-                          className="shrink-0"
-                          loading="lazy"
-                          decoding="async"
-                          onError={e => {
-                            e.currentTarget.style.visibility = 'hidden'
-                          }}
-                        />
-                        <span className={`flex-1 min-w-0 font-mono truncate ${FILE_STATUS_COLOR[fileStatus]}`}>
-                          {diff.file}
-                        </span>
-                        <div className="flex items-center gap-2 text-[length:var(--fs-xxs)] font-mono shrink-0">
-                          {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
-                          {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
-                        </div>
-                      </button>
-                    )
-                  })}
+                : // Flat list view（聚合场景按子仓库分组）
+                  subRepoGroups.length > 0
+                    ? subRepoGroups.map(group => {
+                        const groupAdditions = group.diffs.reduce((sum, diff) => sum + diff.additions, 0)
+                        const groupDeletions = group.diffs.reduce((sum, diff) => sum + diff.deletions, 0)
+                        return (
+                          <div key={group.directory}>
+                            <div className="sticky top-0 z-[1] flex items-center gap-1.5 border-b border-border-200/30 bg-bg-000/95 px-3 py-1.5">
+                              <GitBranchIcon size={10} className="shrink-0 text-text-400" />
+                              <span className="min-w-0 flex-1 truncate text-[length:var(--fs-xxs)] font-medium text-text-200">
+                                {group.prefix}
+                              </span>
+                              <span className="shrink-0 font-mono text-[length:var(--fs-xxs)] tabular-nums text-text-400">
+                                <span className="text-success-100">+{groupAdditions}</span>
+                                <span className="text-danger-100"> -{groupDeletions}</span>
+                                <span className="text-text-500">
+                                  {' · '}
+                                  {t('sessionChanges.fileCountCompact', { count: group.diffs.length })}
+                                </span>
+                              </span>
+                            </div>
+                            {group.diffs.map(diff => renderFileRow(diff))}
+                          </div>
+                        )
+                      })
+                    : diffs.map(diff => renderFileRow(diff))}
             </div>
           )}
         </div>
@@ -982,12 +1047,69 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
 
 const COMMIT_MESSAGE_KEY = 'opencode-commit-message'
 
+// ============================================
+// Aggregated Repos Helpers
+// 当前目录非 git 仓库时，将直接子目录中的 git 仓库聚合展示
+// ============================================
+
+function getSubRepoPrefix(directory: string, repo: string): string {
+  const base = normalizeToForwardSlash(directory)
+  const normalized = normalizeToForwardSlash(repo)
+  if (normalized === base) return ''
+  if (normalized.startsWith(`${base}/`)) return normalized.slice(base.length + 1)
+  return normalized.split('/').filter(Boolean).pop() ?? normalized
+}
+
+// 在给定前缀集合中匹配文件所属子仓库的最长前缀（前缀可能是多段路径）
+function matchSubRepoPrefix(prefixes: string[], file: string): string | undefined {
+  return prefixes
+    .filter(prefix => file === prefix || file.startsWith(`${prefix}/`))
+    .sort((a, b) => b.length - a.length)[0]
+}
+
+async function loadAggregatedGitDiffs(subRepos: string[], directory: string | undefined): Promise<FileDiff[]> {
+  if (!directory || subRepos.length === 0) return []
+  const results = await Promise.all(subRepos.map(repo => getVcsDiff('git', repo)))
+  return results.flatMap((diffs, index) => {
+    const prefix = getSubRepoPrefix(directory, subRepos[index])
+    return diffs.map(diff => ({ ...diff, file: `${prefix}/${diff.file}` }))
+  })
+}
+
+/**
+ * 将带子仓库前缀的文件路径分组到各自的 git 仓库目录（聚合场景）
+ * 非聚合场景返回 { directory: files } 单组
+ */
+function groupFilesByRepo(
+  files: string[],
+  directory: string | undefined,
+  subRepoDirs: string[],
+): Map<string, string[]> {
+  const groups = new Map<string, string[]>()
+  const baseDir = directory ?? ''
+  if (subRepoDirs.length === 0) {
+    groups.set(baseDir, [...files])
+    return groups
+  }
+  const prefixToDir = new Map(subRepoDirs.map(repo => [getSubRepoPrefix(baseDir, repo), repo]))
+  const prefixes = Array.from(prefixToDir.keys())
+  for (const file of files) {
+    const prefix = matchSubRepoPrefix(prefixes, file)
+    const repoDir = prefix ? prefixToDir.get(prefix)! : baseDir
+    const repoFile = prefix ? file.slice(prefix.length + 1) : file
+    groups.set(repoDir, [...(groups.get(repoDir) ?? []), repoFile])
+  }
+  return groups
+}
+
 function GitActions({
   files,
   checkedFiles,
   selectedFile,
   directory,
   vcsInfo,
+  subRepoDirs,
+  aggregated,
   containerRef,
   onChanged,
   onError,
@@ -997,6 +1119,8 @@ function GitActions({
   selectedFile: string | null
   directory?: string
   vcsInfo: VcsInfo | null
+  subRepoDirs: string[]
+  aggregated: boolean
   containerRef: React.RefObject<HTMLDivElement | null>
   onChanged: () => Promise<void>
   onError: (message: string | null) => void
@@ -1065,6 +1189,21 @@ function GitActions({
     [directory, onChanged, onError, t],
   )
 
+  // 聚合场景下将目标文件按所属 git 仓库分组后逐个执行操作
+  const dispatchFileAction = useCallback(
+    (name: string, targetFiles: string[], operation: (files: string[], directory: string) => Promise<string>) => {
+      return run(name, async () => {
+        const groups = groupFilesByRepo(targetFiles, directory, subRepoDirs)
+        const outputs: string[] = []
+        for (const [repoDir, repoFiles] of groups) {
+          outputs.push(await operation(repoFiles, repoDir))
+        }
+        return outputs.join('\n')
+      })
+    },
+    [directory, run, subRepoDirs],
+  )
+
   const menuItemClass = 'flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[length:var(--fs-sm)] text-text-200 hover:bg-bg-200/60 hover:text-text-100 disabled:opacity-40 disabled:cursor-not-allowed'
   const selected = selectedFile ? [selectedFile] : []
   const pullRequestUrl = createPullRequestUrl(vcsInfo?.remote_url, vcsInfo?.branch, vcsInfo?.default_branch)
@@ -1082,7 +1221,7 @@ function GitActions({
             setCommitError(null)
             setCommitOpen(true)
           }}
-          disabled={action !== null || !mutationsSupported}
+          disabled={action !== null || !mutationsSupported || (aggregated && checkedFiles.size === 0)}
           title={t('sessionChanges.commit')}
           aria-label={t('sessionChanges.commit')}
           className={toolbarIconButtonClass}
@@ -1093,7 +1232,7 @@ function GitActions({
         <button
           type="button"
           onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}
-          disabled={action !== null || !advancedSupported}
+          disabled={action !== null || !advancedSupported || aggregated}
           title={t('sessionChanges.pull')}
           aria-label={t('sessionChanges.pull')}
           className={toolbarIconButtonClass}
@@ -1106,7 +1245,7 @@ function GitActions({
             setIsOpen(false)
             setPushOpen(true)
           }}
-          disabled={action !== null || !mutationsSupported}
+          disabled={action !== null || !mutationsSupported || aggregated}
           title={t('sessionChanges.push')}
           aria-label={t('sessionChanges.push')}
           className={toolbarIconButtonClass}
@@ -1138,37 +1277,37 @@ function GitActions({
         constrainToRef={containerRef}
       >
         <div ref={menuRef} role="menu" aria-label={t('sessionChanges.gitActions')} className="space-y-px">
-          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void run('stage', () => stageVcsFiles(selected, directory))}>
+          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void dispatchFileAction('stage', selected, (files, dir) => stageVcsFiles(files, dir))}>
             {t('sessionChanges.stageSelected')}
           </button>
-          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void run('stage', () => stageVcsFiles(files, directory))}>
+          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void dispatchFileAction('stage', files, (files, dir) => stageVcsFiles(files, dir))}>
             {t('sessionChanges.stageAll')}
           </button>
-          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void run('unstage', () => unstageVcsFiles(selected, directory))}>
+          <button type="button" role="menuitem" disabled={!selectedFile} className={menuItemClass} onClick={() => void dispatchFileAction('unstage', selected, (files, dir) => unstageVcsFiles(files, dir))}>
             {t('sessionChanges.unstageSelected')}
           </button>
-          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void run('unstage', () => unstageVcsFiles(files, directory))}>
+          <button type="button" role="menuitem" disabled={files.length === 0} className={menuItemClass} onClick={() => void dispatchFileAction('unstage', files, (files, dir) => unstageVcsFiles(files, dir))}>
             {t('sessionChanges.unstageAll')}
           </button>
           <div className="my-1 h-px bg-border-200/50" />
-          <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setCommitError(null); setCommitOpen(true) }}>
+          <button type="button" role="menuitem" disabled={aggregated && checkedFiles.size === 0} className={menuItemClass} onClick={() => { setIsOpen(false); setCommitError(null); setCommitOpen(true) }}>
             {t('sessionChanges.commit')}
           </button>
-          <button type="button" role="menuitem" className={`${menuItemClass} !text-danger-100`} onClick={() => { setIsOpen(false); setUndoCommitOpen(true) }}>
+          <button type="button" role="menuitem" disabled={aggregated} className={`${menuItemClass} !text-danger-100`} onClick={() => { setIsOpen(false); setUndoCommitOpen(true) }}>
             {t('sessionChanges.undoCommit')}
           </button>
-          <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setPushOpen(true) }}>
+          <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => { setIsOpen(false); setPushOpen(true) }}>
             {t('sessionChanges.push')}
           </button>
           {advancedSupported ? <>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('fetch', () => runVcsOperation('fetch', undefined, directory))}>{t('sessionChanges.fetch')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}>{t('sessionChanges.pull')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stash', () => runVcsOperation('stash', undefined, directory))}>{t('sessionChanges.stash')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => void run('stashPop', () => runVcsOperation('stash-pop', undefined, directory))}>{t('sessionChanges.stashPop')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('create-branch') }}>{t('sessionChanges.createBranch')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('merge') }}>{t('sessionChanges.mergeBranch')}</button>
-            <button type="button" role="menuitem" className={`${menuItemClass} !text-danger-100`} onClick={() => void run('mergeAbort', () => runVcsOperation('merge-abort', undefined, directory))}>{t('sessionChanges.mergeAbort')}</button>
-            <button type="button" role="menuitem" className={menuItemClass} onClick={() => { setIsOpen(false); void getVcsHistory(directory).then(setHistory).catch(error => onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))) }}>{t('sessionChanges.history')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => void run('fetch', () => runVcsOperation('fetch', undefined, directory))}>{t('sessionChanges.fetch')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => void run('pull', () => runVcsOperation('pull', undefined, directory))}>{t('sessionChanges.pull')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => void run('stash', () => runVcsOperation('stash', undefined, directory))}>{t('sessionChanges.stash')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => void run('stashPop', () => runVcsOperation('stash-pop', undefined, directory))}>{t('sessionChanges.stashPop')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('create-branch') }}>{t('sessionChanges.createBranch')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => { setIsOpen(false); setOperationArgument(''); setOperationDialog('merge') }}>{t('sessionChanges.mergeBranch')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={`${menuItemClass} !text-danger-100`} onClick={() => void run('mergeAbort', () => runVcsOperation('merge-abort', undefined, directory))}>{t('sessionChanges.mergeAbort')}</button>
+            <button type="button" role="menuitem" disabled={aggregated} className={menuItemClass} onClick={() => { setIsOpen(false); void getVcsHistory(directory).then(setHistory).catch(error => onError(error instanceof Error ? error.message : t('sessionChanges.gitActionFailed'))) }}>{t('sessionChanges.history')}</button>
           </> : null}
           <button
             type="button"
@@ -1209,11 +1348,15 @@ function GitActions({
             void run(
               'commit',
               async () => {
-                const filesToStage = [...checkedFiles]
-                if (filesToStage.length > 0) {
-                  await stageVcsFiles(filesToStage, directory)
+                const groups = groupFilesByRepo([...checkedFiles], directory, subRepoDirs)
+                const outputs: string[] = []
+                for (const [repoDir, filesToStage] of groups) {
+                  if (filesToStage.length > 0) {
+                    await stageVcsFiles(filesToStage, repoDir)
+                  }
+                  outputs.push(await commitVcsChanges(commitMessage, repoDir))
                 }
-                return commitVcsChanges(commitMessage, directory)
+                return outputs.join('\n')
               },
               setCommitError,
             ).then(success => {
@@ -1318,7 +1461,7 @@ function GitActions({
         onClose={() => setDiscardFiles([])}
         onConfirm={() => {
           const selectedFiles = discardFiles
-          void run('discard', () => discardVcsFiles(selectedFiles, directory)).then(success => {
+          void dispatchFileAction('discard', selectedFiles, (files, dir) => discardVcsFiles(files, dir)).then(success => {
             if (success) setDiscardFiles([])
           })
         }}

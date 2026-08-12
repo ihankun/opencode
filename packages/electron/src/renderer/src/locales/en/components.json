@@ -110,6 +110,7 @@
     "noGitHint": "Initialize Git to start tracking session and current-turn changes",
     "initGit": "Initialize Git repository",
     "initializingGit": "Initializing...",
+    "multiRepoHint": "Aggregating {{count}} git repositories found in subdirectories",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
     "fileCountCompact": "{{count}}f",

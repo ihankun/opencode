@@ -1,8 +1,11 @@
 import * as InstanceState from "@/effect/instance-state"
 import { Project } from "@/project/project"
 import { ProjectV2 } from "@opencode-ai/core/project"
+import { FSUtil } from "@opencode-ai/core/fs-util"
+import { Git } from "@/git"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
+import path from "path"
 import { InstanceHttpApi } from "../api"
 import { ProjectNotFoundError } from "../errors"
 import { markInstanceForReload } from "../lifecycle"
@@ -53,11 +56,41 @@ export const projectHandlers = HttpApiBuilder.group(InstanceHttpApi, "project", 
       project.directories({ projectID: ctx.params.projectID }),
     )
 
+    const subrepos = Effect.fn("ProjectHttpApi.subrepos")(function* () {
+      const ctx = yield* InstanceState.context
+      if (ctx.project.vcs === "git") return { directory: ctx.directory, repos: [] }
+
+      const fs = yield* FSUtil.Service
+      const git = yield* Git.Service
+      const rootReal = yield* fs.resolve(ctx.directory).pipe(Effect.catch(() => Effect.succeed(ctx.directory)))
+      const entries = yield* fs.readDirectoryEntries(ctx.directory).pipe(Effect.catch(() => Effect.succeed([])))
+      const discovered = yield* Effect.forEach(
+        entries.filter((entry) => entry.type === "directory"),
+        (entry) =>
+          Effect.gen(function* () {
+            const sub = path.join(ctx.directory, entry.name)
+            const dotgit = yield* fs.existsSafe(path.join(sub, ".git"))
+            if (!dotgit) return undefined
+            const result = yield* git.run(["rev-parse", "--show-toplevel"], { cwd: sub })
+            if (result.exitCode !== 0) return undefined
+            const worktree = result.text().trim()
+            if (!worktree || !FSUtil.contains(rootReal, worktree)) return undefined
+            return { worktree }
+          }),
+        { concurrency: "unbounded" },
+      )
+      return {
+        directory: ctx.directory,
+        repos: discovered.filter((repo): repo is { worktree: string } => repo !== undefined),
+      }
+    })
+
     return handlers
       .handle("list", list)
       .handle("current", current)
       .handle("initGit", initGit)
       .handle("update", update)
       .handle("directories", directories)
+      .handle("subrepos", subrepos)
   }),
 )
