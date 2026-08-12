@@ -565,11 +565,11 @@ export function ServersSettings() {
   } = useServerStore()
   const { navigateHome, sessionId: routeSessionId } = useRouter()
   const orderedServers = useMemo(() => {
-    if (!activeServer) return servers
-    const active = servers.find(s => s.id === activeServer.id)
-    if (!active) return servers
-    return [active, ...servers.filter(s => s.id !== active.id)]
-  }, [servers, activeServer])
+    // 固定排列：默认（本机）服务器始终在最上面，其余按添加顺序，切换服务器时位置不跳动
+    const defaultServer = servers.find(s => s.isDefault)
+    if (!defaultServer) return servers
+    return [defaultServer, ...servers.filter(s => !s.isDefault)]
+  }, [servers])
 
   useEffect(() => {
     checkAllHealth()
@@ -594,8 +594,8 @@ export function ServersSettings() {
         messageStore.clearSession(routeSessionId)
       }
 
-      setActiveServer(id) // 内部触发 serverChangeListeners → reconnectSSE()
-      navigateHome()
+      setActiveServer(id) // 内部触发 serverChangeListeners → 整体刷新
+      navigateHome(null) // 丢弃旧服务器的目录，由刷新流程恢复新服务器的目录
     },
     [activeServer?.id, checkHealth, routeSessionId, setActiveServer, navigateHome, t],
   )

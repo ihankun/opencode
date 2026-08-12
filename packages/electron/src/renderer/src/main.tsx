@@ -63,12 +63,28 @@ if (document.readyState === 'loading') {
 }
 
 // 注册 active server 入口变化 → 只中止受影响服务器请求，并保留其他服务器的客户端缓存
-let previousActiveServerId = serverStore.getActiveServerId()
 serverStore.onServerChange((serverId, reason) => {
-  const invalidatedServerId = reason === 'server-switch' ? previousActiveServerId : serverId
-  abortInFlightApiRequests('Server endpoint changed', invalidatedServerId)
-  if (reason !== 'server-switch') invalidateSDKClient(serverId)
-  previousActiveServerId = serverId
+  // 切换服务器：把该服务器上次使用的目录恢复进 URL，然后整体刷新，
+  // 确保会话列表、供应商信息等全部按新服务器重新加载
+  if (reason === 'server-switch') {
+    void (async () => {
+      if (typeof window.customOpenCode?.cachedSessions === 'function') {
+        const cached = await window.customOpenCode.cachedSessions(serverId).catch(() => undefined)
+        if (cached?.directory && serverStore.getActiveServerId() === serverId) {
+          const encoded = encodeURIComponent(cached.directory)
+          const sessionMatch = window.location.hash.match(/^#\/session\/([^?]*)/)
+          window.location.hash = sessionMatch
+            ? `#/session/${sessionMatch[1]}?dir=${encoded}`
+            : `#/?dir=${encoded}`
+        }
+      }
+      window.location.reload()
+    })()
+    return
+  }
+
+  abortInFlightApiRequests('Server endpoint changed', serverId)
+  invalidateSDKClient(serverId)
   // 1. 清空内存中的 session/消息数据
   messageStore.clearAll()
   childSessionStore.clearAll()
@@ -106,7 +122,10 @@ async function initializeElectronService() {
         : undefined,
     })
     applyLocalServiceUrl(state.server.url)
-    serverStore.setActiveServer('local')
+    // 只在使用本地服务器时才激活它，避免刷新后把用户切换到的远程服务器拉回本地
+    if (serverStore.getActiveServerId() === 'local') {
+      serverStore.setActiveServer('local')
+    }
   }
 
   window.customOpenCode.onServerUpdated(applyServer)
