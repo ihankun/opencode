@@ -462,7 +462,7 @@
     },
     "packages/electron": {
       "name": "opencodex",
-      "version": "1.16.7",
+      "version": "1.16.9",
       "dependencies": {
         "@codemirror/commands": "^6.10.3",
         "@codemirror/search": "^6.7.0",
