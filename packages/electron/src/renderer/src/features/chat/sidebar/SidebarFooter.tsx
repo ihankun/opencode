@@ -410,7 +410,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
             onClick={toggleMenu}
             className={`
               h-8 min-w-0 flex-1 flex items-center rounded-lg transition-all duration-300 group overflow-hidden
-              ${isOpen ? 'bg-bg-200 text-text-100' : 'text-text-300 hover:text-text-100 hover:bg-bg-200'}
+              ${isOpen ? 'bg-bg-200 text-text-100 shadow-sm' : 'text-text-300 hover:text-text-100 sidebar-hover-row'}
             `}
             style={{
               paddingLeft: showLabels ? 6 : 4, // 收起时为了对齐中心线(16px)，24px圆环需要4px padding (4+12=16)
@@ -438,7 +438,7 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
               title={updateTooltip}
               className={`
                 relative h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-all duration-300
-                ${updatePanelOpen ? 'bg-bg-200 text-text-100' : 'hover:bg-bg-200 hover:text-text-100'}
+                ${updatePanelOpen ? 'bg-bg-200 text-text-100 shadow-sm' : 'sidebar-hover-row hover:text-text-100'}
                 ${readyToInstall ? 'text-success-100' : 'text-text-400'}
               `}
             >

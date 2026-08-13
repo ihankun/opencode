@@ -258,7 +258,7 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 }
 
 .electron-sidebar-toggle:hover {
-  background: hsl(var(--bg-200) / 0.7);
+  background: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
   color: hsl(var(--text-100));
 }
 
@@ -331,11 +331,14 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   pointer-events: auto;
   app-region: no-drag;
   -webkit-app-region: no-drag;
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .electron-sidebar-search:hover {
-  background: hsl(var(--bg-200) / 0.7);
+  background: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
   color: hsl(var(--text-100));
 }
 
@@ -368,11 +371,14 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   pointer-events: auto;
   app-region: no-drag;
   -webkit-app-region: no-drag;
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .electron-notification-toggle:hover {
-  background: hsl(var(--bg-200) / 0.7);
+  background: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
   color: hsl(var(--text-100));
 }
 
@@ -427,11 +433,14 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   background: transparent;
   color: hsl(var(--text-400));
   cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .electron-history-navigation button:hover:not(:disabled) {
-  background: hsl(var(--bg-200) / 0.7);
+  background: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
   color: hsl(var(--text-100));
 }
 
