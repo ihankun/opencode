@@ -31,6 +31,7 @@ import {
   composerDraftStore,
   layoutStore,
   paneLayoutStore,
+  updateStore,
   useLayoutStore,
   usePaneController,
   usePaneControllers,
@@ -253,6 +254,11 @@ function App() {
   useEffect(() => {
     const cleanup = initNotificationSound()
     return cleanup
+  }, [])
+
+  // 启动时自动检查更新
+  useEffect(() => {
+    void updateStore.checkForUpdates()
   }, [])
 
   useViewportHeight()

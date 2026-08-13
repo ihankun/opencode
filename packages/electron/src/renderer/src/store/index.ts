@@ -105,6 +105,8 @@ export {
   compareVersions,
   hasUpdateAvailable,
   shouldShowUpdateToast,
+  updaterHasNewVersion,
+  updaterReadyToInstall,
   exportUpdateSettingsBackup,
   importUpdateSettingsBackup,
 } from './updateStore'

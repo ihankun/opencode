@@ -201,7 +201,7 @@ export const eucalyptusTheme: ThemePreset = {
 }
 
 // 默认主题 ID
-export const DEFAULT_THEME_ID = 'eucalyptus'
+export const DEFAULT_THEME_ID = 'codex'
 
 // ============================================
 // Claude 主题 - 暖调橙色品牌风格

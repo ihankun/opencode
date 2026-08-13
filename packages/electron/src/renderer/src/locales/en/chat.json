@@ -396,6 +396,20 @@
       "unknown": "Unknown"
     },
     "settings": "Settings",
+    "update": {
+      "title": "Software Update",
+      "checking": "Checking for updates…",
+      "available": "New version available",
+      "newVersion": "New version",
+      "downloading": "Downloading update {{percent}}%",
+      "downloaded": "Update downloaded, click to restart and install",
+      "error": "Update check failed: {{error}}",
+      "retry": "Retry",
+      "restartAndInstall": "Restart & Install",
+      "viewReleasePage": "View release page",
+      "releaseNotes": "Release Notes",
+      "upToDate": "You are on the latest version"
+    },
     "noProjectFoldersYet": "No project folders yet",
     "addProjectDesc": "Add a project to browse recent chats by folder.",
     "deleteChat": "Archive Chat",

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, dialog, nativeImage, Notification, protocol, session, shell, systemPreferences } from "electron"
+import { mkdirSync } from "node:fs"
 import { access, chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { isIP } from "node:net"
@@ -51,9 +52,11 @@ import { registerServerIpc } from "./ipc/server"
 import { registerSkillsIpc } from "./ipc/skills"
 import { registerSpeechModelIpc } from "./ipc/speechModel"
 import { registerTaskIpc } from "./ipc/tasks"
+import { registerUpdaterIpc } from "./ipc/updater"
 import { registerWindowIpc } from "./ipc/window"
 import { updateOpenCodeGoQuotaConfig } from "./quota/index.ts"
 import { RendererSettingsStore } from "./rendererSettings"
+import { createAutoUpdater } from "./updater"
 import type { CustomOpenCodeDeepLink } from "../shared/deepLinks"
 import type { OpenCodeGoLoginResult } from "../shared/quota.ts"
 import {
@@ -563,6 +566,7 @@ app.commandLine.appendSwitch("enable-javascript-call-stack")
 app.setName("OpenCodex")
 app.setAppUserModelId(appId)
 app.setPath("userData", userDataRoot())
+mkdirSync(app.getPath("userData"), { recursive: true })
 desktopPreferencesStore = new DesktopPreferencesStore(join(app.getPath("userData"), "desktop-preferences.json"))
 speechModelService = new SpeechModelService(join(app.getPath("userData"), "speech-model.json"))
 projectsStore = new ProjectsStore(join(app.getPath("userData"), "projects.json"))
@@ -712,6 +716,10 @@ registerSpeechModelIpc({
   service: speechModelService,
 })
 registerDrivesIpc({ assertSender: assertMainWindow })
+const autoUpdater = createAutoUpdater((state) => {
+  BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("updater:state", state))
+})
+registerUpdaterIpc({ assertSender: assertMainWindow, updater: autoUpdater })
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
@@ -817,12 +825,16 @@ if (hasSingleInstanceLock) void app.whenReady().then(async () => {
   })
   configureAppPermissionHandlers()
   applyDesktopPreferences()
+  await createWindow()
+  void autoUpdater.check().catch((error) => writeLog("updater", "startup check failed", error))
+  void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
   // 并行启动窗口和服务端：让 sidecar 就绪耗时被 renderer 加载掩盖
   const windowCreated = createWindow()
   initialServerStartup = securityReady.then(() => startServer(rendererUrl()))
   void initialServerStartup
   await windowCreated
   void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
+  void autoUpdater.check().catch((error) => writeLog("updater", "startup check failed", error))
 }).catch((error: unknown) => {
   writeLog("main", "startup failed", error)
 })

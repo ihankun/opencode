@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { UpdaterState } from '../../../shared/updater'
 
 export interface UpdateRelease {
   version: string
@@ -6,6 +7,7 @@ export interface UpdateRelease {
   url: string
   publishedAt: string | null
   name: string | null
+  body: string | null
 }
 
 export interface UpdateState {
@@ -16,6 +18,7 @@ export interface UpdateState {
   hiddenToastVersion: string | null
   checking: boolean
   error: string | null
+  updater: UpdaterState
 }
 
 interface PersistedUpdateState {
@@ -36,6 +39,16 @@ const STORAGE_KEY = 'opencode:update-check'
 const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000
 export const RELEASES_API_URL = 'https://api.github.com/repos/ihankun/opencodex/releases/latest'
 export const RELEASES_PAGE_URL = 'https://github.com/ihankun/opencodex/releases/latest'
+
+const IDLE_UPDATER_STATE: UpdaterState = {
+  supported: false,
+  status: 'idle',
+  version: null,
+  releaseName: null,
+  releaseNotes: null,
+  progress: null,
+  error: null,
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -122,6 +135,7 @@ function parseRelease(payload: unknown): UpdateRelease {
     url: htmlUrl,
     publishedAt: typeof payload.published_at === 'string' ? payload.published_at : null,
     name: typeof payload.name === 'string' ? payload.name : null,
+    body: typeof payload.body === 'string' ? payload.body : null,
   }
 }
 
@@ -148,7 +162,28 @@ export class UpdateStore {
       hiddenToastVersion: null,
       checking: false,
       error: null,
+      updater: IDLE_UPDATER_STATE,
     }
+    this.initUpdaterBridge()
+  }
+
+  private initUpdaterBridge(): void {
+    if (typeof window === 'undefined') return
+    const api = window.customOpenCode
+    if (!api?.onUpdaterStateChanged) return
+    api.onUpdaterStateChanged(updater => this.applyUpdaterState(updater))
+    void api
+      .updaterState()
+      .then(updater => this.applyUpdaterState(updater))
+      .catch(() => undefined)
+  }
+
+  private applyUpdaterState(updater: UpdaterState): void {
+    this.state = {
+      ...this.state,
+      updater,
+    }
+    this.notify()
   }
 
   subscribe = (callback: Subscriber): (() => void) => {
@@ -189,6 +224,8 @@ export class UpdateStore {
       !force && typeof this.state.lastCheckedAt === 'number' && now - this.state.lastCheckedAt < CHECK_INTERVAL_MS
 
     if (isFresh) return
+
+    void window.customOpenCode?.updaterCheck()
 
     this.state = {
       ...this.state,
@@ -241,6 +278,22 @@ export class UpdateStore {
       hiddenToastVersion: this.state.latestRelease.version,
     })
   }
+
+  retryUpdaterCheck(): void {
+    void window.customOpenCode?.updaterCheck()
+  }
+
+  installUpdate(): void {
+    void window.customOpenCode?.updaterInstall()
+  }
+}
+
+export function updaterHasNewVersion(state: UpdateState): boolean {
+  return state.updater.status === 'available' || state.updater.status === 'downloading' || state.updater.status === 'downloaded'
+}
+
+export function updaterReadyToInstall(state: UpdateState): boolean {
+  return state.updater.status === 'downloaded'
 }
 
 export const updateStore = new UpdateStore()
