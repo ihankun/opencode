@@ -221,8 +221,8 @@ class ThemeStore {
   private listeners = new Set<() => void>()
 
   constructor() {
-    const savedPreset = localStorage.getItem(STORAGE_KEY_PRESET) || DEFAULT_THEME_ID
-    const normalizedPreset = getThemePreset(savedPreset) ? savedPreset : DEFAULT_THEME_ID
+    // 主题预设固定为 codex，忽略本地保存的预设
+    const normalizedPreset = DEFAULT_THEME_ID
     const savedMode = (localStorage.getItem(STORAGE_KEY_COLOR_MODE) as ColorMode) || 'system'
     const savedCSS = localStorage.getItem(STORAGE_KEY_CUSTOM_CSS) || ''
     const customCSSSnippets = parseCustomCSSSnippets(localStorage.getItem(STORAGE_KEY_CUSTOM_CSS_SNIPPETS))
@@ -394,9 +394,10 @@ class ThemeStore {
   // ---- Mutations ----
 
   setPreset(id: string) {
-    if (this.state.presetId === id) return
-    this.state = { ...this.state, presetId: id }
-    localStorage.setItem(STORAGE_KEY_PRESET, id)
+    // 主题固定为 codex，忽略传入的预设
+    if (this.state.presetId === DEFAULT_THEME_ID && id === DEFAULT_THEME_ID) return
+    this.state = { ...this.state, presetId: DEFAULT_THEME_ID }
+    localStorage.setItem(STORAGE_KEY_PRESET, DEFAULT_THEME_ID)
     this.applyTheme()
     this.emit()
   }
@@ -784,8 +785,8 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
       : null
 
   return {
-    presetId:
-      typeof parsed?.presetId === 'string' && getThemePreset(parsed.presetId) ? parsed.presetId : DEFAULT_THEME_ID,
+    // 主题固定为 codex
+    presetId: DEFAULT_THEME_ID,
     colorMode: parsed?.colorMode === 'light' || parsed?.colorMode === 'dark' ? parsed.colorMode : 'system',
     customCSS: typeof parsed?.customCSS === 'string' ? parsed.customCSS : '',
     customCSSSnippets,
