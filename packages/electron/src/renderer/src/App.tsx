@@ -1265,7 +1265,7 @@ function App() {
       ) : null}
       <InternalDragLayer />
       <ChatViewportProvider value={chatViewport}>
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className={`relative flex min-h-0 flex-1 ${isMobilePanelLayout ? 'overflow-hidden' : ''}`}>
           <div
             className="relative flex min-h-0 flex-1 overflow-hidden"
             style={utilityPage === 'settings' ? { display: 'none' } : undefined}
@@ -1436,10 +1436,10 @@ function App() {
                 </div>
               )}
 
-              <div className="chat-surface flex-1 flex min-w-0 h-full overflow-hidden">
+              <div className="chat-surface flex-1 flex min-w-0 h-full">
                 <div
                   ref={surfaceRef}
-                  className="flex-1 flex flex-col min-w-0 overflow-hidden"
+                  className="chat-surface-card flex-1 flex flex-col min-w-0 overflow-hidden"
                   style={{ minWidth: `${CHAT_SURFACE_MIN_WIDTH}px` }}
                 >
                   {utilityPage === 'tasks' || utilityPage === 'plugins' ? (
