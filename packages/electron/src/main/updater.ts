@@ -14,8 +14,8 @@ export interface AutoUpdaterHandle {
 }
 
 export function createAutoUpdater(emit: (state: UpdaterState) => void): AutoUpdaterHandle {
-  // 仅打包后的 Windows NSIS 安装版支持自动更新；portable 与开发模式不启用
-  const supported = app.isPackaged && process.platform === "win32" && !process.env.PORTABLE_EXECUTABLE_DIR
+  // 仅打包后的 Windows NSIS 安装版与 macOS 应用支持自动更新；Windows portable 与开发模式不启用
+  const supported = app.isPackaged && (process.platform === "win32" || process.platform === "darwin") && !process.env.PORTABLE_EXECUTABLE_DIR
   let state: UpdaterState = {
     supported,
     status: "idle",
