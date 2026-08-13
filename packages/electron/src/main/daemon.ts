@@ -22,16 +22,22 @@ const DAEMON_PORT_START = 45210
 const DAEMON_PORT_COUNT = 10
 const DAEMON_READY_TIMEOUT = 30_000
 const DAEMON_HEALTH_CHECK_INTERVAL = 100
+/**
+ * daemon 启动参数版本：spawn 的 cwd/env 等影响 server 行为（如 /path 的默认目录）。
+ * 主进程调整启动参数时必须递增此版本，否则旧 daemon 会被复用而继续使用旧参数。
+ */
+const DAEMON_LAUNCH_VERSION = 1
 
 type DaemonIdentity = {
   url: string
   pid: number
   startedAt: number
   binaryFingerprint: string
+  launchVersion?: number
 }
 
 export function daemonBinaryPath(): string | undefined {
-  const name = process.platform === "win32" ? "opencode-server-bin.exe" : "opencode-server-bin"
+  const name = process.platform === "win32" ? "OpenCodex Server.exe" : "OpenCodex Server"
   if (app.isPackaged) {
     const bundled = join(process.resourcesPath, name)
     return existsSync(bundled) ? bundled : undefined
@@ -50,7 +56,12 @@ export async function startDaemon(options: {
 
   const fingerprint = binaryFingerprint(binaryPath)
   const existing = readIdentity(options.userDataPath)
-  if (existing && existing.binaryFingerprint === fingerprint && (await isServerHealthy(existing.url))) {
+  if (
+    existing &&
+    existing.launchVersion === DAEMON_LAUNCH_VERSION &&
+    existing.binaryFingerprint === fingerprint &&
+    (await isServerHealthy(existing.url))
+  ) {
     writeLog("server", "reusing existing opencode daemon", { url: existing.url, pid: existing.pid })
     return daemonHandle(existing)
   }
@@ -67,7 +78,7 @@ export async function startDaemon(options: {
     cors: options.cors,
     secureEnvironment: options.secureEnvironment,
   })
-  const identity: DaemonIdentity = { url, pid, startedAt: Date.now(), binaryFingerprint: fingerprint }
+  const identity: DaemonIdentity = { url, pid, startedAt: Date.now(), binaryFingerprint: fingerprint, launchVersion: DAEMON_LAUNCH_VERSION }
   writeIdentity(options.userDataPath, identity)
   writeLog("server", "opencode daemon ready", { url, pid })
   return daemonHandle(identity)
@@ -98,6 +109,10 @@ async function spawnDaemon(options: {
   const port = await findFreePort(DAEMON_PORT_START, DAEMON_PORT_COUNT)
   const logsDir = join(options.userDataPath, "logs")
   mkdirSync(logsDir, { recursive: true })
+  // 工作目录必须与旧 sidecar 一致（userData/workspace）：
+  // server 的 /path 默认目录基于 cwd，UI 未选项目时的会话列表按它过滤
+  const workspacePath = join(options.userDataPath, "workspace")
+  mkdirSync(workspacePath, { recursive: true })
   const logFd = openSync(join(logsDir, "server.log"), "a")
   const env = {
     ...process.env,
@@ -116,7 +131,7 @@ async function spawnDaemon(options: {
     detached: true,
     stdio: ["ignore", logFd, logFd],
     env,
-    cwd: options.userDataPath,
+    cwd: workspacePath,
   })
   child.on("error", (error) => writeLog("server", "opencode daemon spawn failed", error))
   child.unref()

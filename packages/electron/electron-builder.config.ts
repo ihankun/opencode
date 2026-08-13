@@ -21,7 +21,7 @@ const config: Configuration = {
     {
       from: "out/daemon",
       to: ".",
-      filter: ["opencode-server-bin*", "*.wasm"],
+      filter: ["OpenCodex Server*", "*.wasm"],
     },
   ],
   protocols: {

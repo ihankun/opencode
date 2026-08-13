@@ -89,7 +89,7 @@ const daemonTarget =
     : process.platform === "win32"
       ? process.arch === "arm64" ? "bun-windows-arm64" : "bun-windows-x64"
       : process.arch === "arm64" ? "bun-linux-arm64" : "bun-linux-x64")
-const daemonOut = join(daemonOutDir, process.platform === "win32" ? "opencode-server-bin.exe" : "opencode-server-bin")
+const daemonOut = join(daemonOutDir, process.platform === "win32" ? "OpenCodex Server.exe" : "OpenCodex Server")
 const serverDistDir = join(opencodeDir, "dist", "node")
 const nodeBundle = join(serverDistDir, "node.js")
 const sourcesLatest = await latestSourceMtime()

@@ -542,7 +542,8 @@ async function restartServer() {
 }
 
 function allowedOrigins(url: string) {
-  const defaults = ["opencodex://renderer", "http://localhost:46237", "http://127.0.0.1:46237"]
+  // "null"：生产 renderer 从 file:// 加载时浏览器 origin 为 null，CORS 必须放行
+  const defaults = ["null", "opencodex://renderer", "http://localhost:46237", "http://127.0.0.1:46237"]
   try {
     const origin = new URL(url).origin
     if (origin === "null") return defaults
