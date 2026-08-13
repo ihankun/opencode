@@ -764,9 +764,9 @@ app.on("before-quit", (event) => {
   isQuitting = true
   isStoppingForQuit = true
   draftsStore.flush()
-  // 常驻 daemon 不随 app 退出：保留后台服务，下次启动直接复用实现秒开。
-  // （dev 回退的 utilityProcess sidecar 会随 app 退出自动清理）
-  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(() => {
+  // 退出时清理 daemon：避免常驻进程长期占用内存（~1GB）。
+  // daemon 的指纹/复用逻辑仍保留：app 崩溃或未清理残留时，下次启动可复用
+  void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => {
     draftsStore.close()
     app.exit(0)
   })
