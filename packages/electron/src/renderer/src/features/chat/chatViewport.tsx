@@ -34,9 +34,10 @@ function getResponsiveSidebarMaxWidth(viewportWidth: number, preferTouchUi: bool
 }
 
 function getResponsiveSidebarDefaultWidth(viewportWidth: number, preferTouchUi: boolean) {
-  return viewportWidth < SMALL_DESKTOP_BREAKPOINT
-    ? Math.floor(viewportWidth * (preferTouchUi ? 0.34 : 0.3))
-    : SIDEBAR_DEFAULT_WIDTH
+  if (viewportWidth < SMALL_DESKTOP_BREAKPOINT) {
+    return Math.floor(viewportWidth * (preferTouchUi ? 0.34 : 0.3))
+  }
+  return document.documentElement.dataset.platform === 'windows' ? 270 : SIDEBAR_DEFAULT_WIDTH
 }
 
 function getResponsiveRightPanelMaxWidth(viewportWidth: number, preferTouchUi: boolean) {

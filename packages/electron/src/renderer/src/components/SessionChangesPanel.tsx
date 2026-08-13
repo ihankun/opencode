@@ -621,6 +621,8 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
   // 文件列表行（flat 视图单行渲染，聚合分组和普通列表共用）
   const renderFileRow = (diff: FileDiff) => {
     const fileStatus = getFileStatus(diff)
+    const fileName = diff.file.split(/[/\\]/).pop() || diff.file
+    const filePath = diff.file.slice(0, diff.file.length - fileName.length).replace(/[/\\]+$/, '')
     return (
       <button
         key={diff.file}
@@ -653,7 +655,15 @@ export const SessionChangesPanel = memo(function SessionChangesPanel({
             e.currentTarget.style.visibility = 'hidden'
           }}
         />
-        <span className={`flex-1 min-w-0 font-mono truncate ${FILE_STATUS_COLOR[fileStatus]}`}>{diff.file}</span>
+        <span className={`flex-1 min-w-0 font-mono flex items-baseline gap-1.5 ${FILE_STATUS_COLOR[fileStatus]}`}>
+          <span className="min-w-0 max-w-[60%] truncate">{fileName}</span>
+          <span
+            className="min-w-0 flex-1 truncate text-text-500"
+            title={diff.file}
+          >
+            {filePath ? `${filePath}/` : ''}
+          </span>
+        </span>
         <div className="flex items-center gap-2 text-[length:var(--fs-xxs)] font-mono shrink-0">
           {diff.additions > 0 && <span className="text-success-100">+{diff.additions}</span>}
           {diff.deletions > 0 && <span className="text-danger-100">-{diff.deletions}</span>}
