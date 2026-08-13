@@ -11,24 +11,19 @@ const config: Configuration = {
     owner: "ihankun",
     repo: "opencodex",
   },
-  files: ["out/**/*", "assets/**/*", "package.json", "!out/main/chunks/**"],
+  files: ["out/**/*", "assets/**/*", "package.json"],
   extraResources: [
     {
       from: "../sandbox-runtime",
       to: "sandbox-runtime",
       filter: ["LICENSE", "UPSTREAM.md", "vendor/seccomp/**/*", "vendor/srt-win/**/*"],
     },
-    {
-      from: "out/daemon",
-      to: ".",
-      filter: ["OpenCodex Server*", "*.wasm"],
-    },
   ],
   protocols: {
     name: "OpenCodex",
     schemes: ["opencodex"],
   },
-  asarUnpack: ["node_modules/@lydell/node-pty-*/**/*"],
+  asarUnpack: ["out/main/chunks/*.wasm", "node_modules/@lydell/node-pty-*/**/*"],
   mac: {
     icon: "assets/icon.icns",
     target: ["dmg", "zip"],

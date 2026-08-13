@@ -773,8 +773,6 @@ app.on("before-quit", (event) => {
   isQuitting = true
   isStoppingForQuit = true
   draftsStore.flush()
-  // 退出时清理 daemon：避免常驻进程长期占用内存（~1GB）。
-  // daemon 的指纹/复用逻辑仍保留：app 崩溃或未清理残留时，下次启动可复用
   void Promise.all([taskScheduler.stop(), imBridgeService.stop()]).then(stopServer).finally(() => {
     draftsStore.close()
     app.exit(0)
@@ -826,9 +824,6 @@ if (hasSingleInstanceLock) void app.whenReady().then(async () => {
   })
   configureAppPermissionHandlers()
   applyDesktopPreferences()
-  await createWindow()
-  void autoUpdater.check().catch((error) => writeLog("updater", "startup check failed", error))
-  void ensureTaskSchedulerStarted().catch((error) => writeLog("scheduler", "failed to initialize", error))
   // 并行启动窗口和服务端：让 sidecar 就绪耗时被 renderer 加载掩盖
   const windowCreated = createWindow()
   initialServerStartup = securityReady.then(() => startServer(rendererUrl()))

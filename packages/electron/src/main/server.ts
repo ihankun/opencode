@@ -3,7 +3,6 @@ import { dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { app, utilityProcess } from "electron"
 import type { Details } from "electron"
-import { daemonBinaryPath, startDaemon } from "./daemon"
 import { writeLog } from "./logging"
 
 type SidecarMessage =
@@ -27,12 +26,6 @@ const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
 export async function spawnServer(userDataPath: string, cors: string[], secureEnvironment: Record<string, string> = {}): Promise<SidecarHandle> {
-  // 常驻 daemon 模式：原生二进制，仅复用自己启动的实例（见 daemon.ts）
-  if (daemonBinaryPath()) {
-    writeLog("server", "using opencode daemon mode", { userDataPath })
-    return startDaemon({ userDataPath, cors, secureEnvironment })
-  }
-  // 回退：utilityProcess 加载 JS bundle（未编译 daemon 二进制时，如纯 dev 环境）
   // Port 0 keeps 4096 as the preferred address, then lets the server fall back
   // to an OS-assigned free port when another OpenCodex instance is running.
   const port = 0
