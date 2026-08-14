@@ -835,7 +835,7 @@ export const ModelSelector = memo(
           className="group flex items-center gap-2 px-2 py-1.5 text-text-200 rounded-lg hover:bg-bg-200 hover:text-text-100 transition-all duration-150 active:scale-95 cursor-pointer text-[length:var(--fs-base)]"
           title={displayName}
         >
-          <span className="font-medium truncate max-w-[240px]">{displayName}</span>
+          <span className="font-medium truncate min-w-0 max-w-[360px]">{displayName}</span>
           <div className={`opacity-50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
             <ChevronDownIcon size={16} />
           </div>
@@ -858,7 +858,7 @@ export const ModelSelector = memo(
           className="flex items-center gap-1.5 px-2 py-1.5 text-[length:var(--fs-base)] rounded-lg transition-all duration-150 hover:bg-bg-200 active:scale-95 cursor-pointer min-w-0 overflow-hidden w-full"
           title={selectedModel?.name || t('modelSelector.selectModel')}
         >
-          <span className="text-[length:var(--fs-sm)] text-text-300 truncate">{displayName}</span>
+          <span className="text-[length:var(--fs-sm)] text-text-300 truncate min-w-0">{displayName}</span>
           <span className={`text-text-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
             <ChevronDownIcon size={16} />
           </span>

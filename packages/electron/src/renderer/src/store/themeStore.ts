@@ -108,7 +108,6 @@ const DEFAULT_STEP_FINISH_DISPLAY: StepFinishDisplay = {
 
 const DEFAULT_FILE_CHANGE_INDICATOR_SCOPE: FileChangeIndicatorScope = 'latestTurn'
 
-const DEFAULT_DESCRIPTIVE_TOOL_STEPS = true
 const DEFAULT_CODE_WORD_WRAP = false
 const DEFAULT_UI_FONT_SCALE = 0
 const DEFAULT_CODE_FONT_SCALE = 0
@@ -136,8 +135,6 @@ export interface ThemeState {
   stepFinishDisplay: StepFinishDisplay
   /** 文件变更指示器统计范围 */
   fileChangeIndicatorScope: FileChangeIndicatorScope
-  /** 是否启用带工具描述的 steps 摘要 */
-  descriptiveToolSteps: boolean
   /** 代码块/diff 自动换行 */
   codeWordWrap: boolean
   /** UI 字号偏移 (px)，0 = 基准 */
@@ -172,7 +169,6 @@ const STORAGE_KEY_ACTIVE_CUSTOM_CSS_SNIPPET_ID = 'theme-active-custom-css-snippe
 const STORAGE_KEY_ENTER_KEY_BEHAVIOR = 'enter-key-behavior'
 const STORAGE_KEY_STEP_FINISH_DISPLAY = 'step-finish-display'
 const STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE = 'file-change-indicator-scope'
-const STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS = 'descriptive-tool-steps'
 const STORAGE_KEY_CODE_WORD_WRAP = 'code-word-wrap'
 const STORAGE_KEY_FONT_SCALE = 'font-scale'
 const STORAGE_KEY_CODE_FONT_SCALE = 'code-font-scale'
@@ -245,10 +241,6 @@ class ThemeStore {
     const fileChangeIndicatorScope: FileChangeIndicatorScope =
       savedFileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE
 
-    const savedDescriptiveToolSteps = localStorage.getItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS)
-    const descriptiveToolSteps =
-      savedDescriptiveToolSteps === null ? DEFAULT_DESCRIPTIVE_TOOL_STEPS : savedDescriptiveToolSteps === 'true'
-
     const savedCodeWordWrap = localStorage.getItem(STORAGE_KEY_CODE_WORD_WRAP)
     const codeWordWrap = savedCodeWordWrap === 'true' ? true : DEFAULT_CODE_WORD_WRAP
 
@@ -291,7 +283,6 @@ class ThemeStore {
       enterKeyBehavior,
       stepFinishDisplay,
       fileChangeIndicatorScope,
-      descriptiveToolSteps,
       codeWordWrap,
       uiFontScale,
       codeFontScale,
@@ -333,9 +324,6 @@ class ThemeStore {
   }
   get fileChangeIndicatorScope() {
     return this.state.fileChangeIndicatorScope
-  }
-  get descriptiveToolSteps() {
-    return this.state.descriptiveToolSteps
   }
   get codeWordWrap() {
     return this.state.codeWordWrap
@@ -506,13 +494,6 @@ class ThemeStore {
     this.emit()
   }
 
-  setDescriptiveToolSteps(enabled: boolean) {
-    if (this.state.descriptiveToolSteps === enabled) return
-    this.state = { ...this.state, descriptiveToolSteps: enabled }
-    localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(enabled))
-    this.emit()
-  }
-
   setCodeWordWrap(enabled: boolean) {
     if (this.state.codeWordWrap === enabled) return
     this.state = { ...this.state, codeWordWrap: enabled }
@@ -543,11 +524,8 @@ class ThemeStore {
     this.state = {
       ...this.state,
       immersiveMode: enabled,
-      // 联动一个子功能
-      descriptiveToolSteps: enabled,
     }
     localStorage.setItem(STORAGE_KEY_IMMERSIVE_MODE, String(enabled))
-    localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(enabled))
     this.emit()
   }
 
@@ -798,8 +776,6 @@ function normalizeThemeBackup(raw: unknown): ThemeBackup {
         : DEFAULT_STEP_FINISH_DISPLAY,
     fileChangeIndicatorScope:
       parsed?.fileChangeIndicatorScope === 'session' ? 'session' : DEFAULT_FILE_CHANGE_INDICATOR_SCOPE,
-    descriptiveToolSteps:
-      typeof parsed?.descriptiveToolSteps === 'boolean' ? parsed.descriptiveToolSteps : DEFAULT_DESCRIPTIVE_TOOL_STEPS,
     codeWordWrap: typeof parsed?.codeWordWrap === 'boolean' ? parsed.codeWordWrap : DEFAULT_CODE_WORD_WRAP,
     uiFontScale: clampFontScale(typeof parsed?.uiFontScale === 'number' ? parsed.uiFontScale : DEFAULT_UI_FONT_SCALE),
     codeFontScale: clampFontScale(
@@ -849,7 +825,6 @@ export function importThemeBackup(raw: unknown): void {
   localStorage.setItem(STORAGE_KEY_ENTER_KEY_BEHAVIOR, backup.enterKeyBehavior)
   localStorage.setItem(STORAGE_KEY_STEP_FINISH_DISPLAY, JSON.stringify(backup.stepFinishDisplay))
   localStorage.setItem(STORAGE_KEY_FILE_CHANGE_INDICATOR_SCOPE, backup.fileChangeIndicatorScope)
-  localStorage.setItem(STORAGE_KEY_DESCRIPTIVE_TOOL_STEPS, String(backup.descriptiveToolSteps))
   localStorage.setItem(STORAGE_KEY_CODE_WORD_WRAP, String(backup.codeWordWrap))
   localStorage.setItem(STORAGE_KEY_FONT_SCALE, String(backup.uiFontScale))
   localStorage.setItem(STORAGE_KEY_CODE_FONT_SCALE, String(backup.codeFontScale))

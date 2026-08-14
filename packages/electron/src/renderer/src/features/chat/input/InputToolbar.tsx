@@ -712,11 +712,11 @@ export function InputToolbar({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-1 min-w-0">
+      <div className="flex items-center gap-1 min-w-0 overflow-hidden">
         <ContextUsageIndicator stats={contextStats} hasMessages={hasMessages} />
         {voiceSupported && <button type="button" onClick={onVoiceToggle} disabled={controlsDisabled || voiceTranscribing} aria-pressed={voiceListening} aria-label={t(voiceTranscribing ? 'inputToolbar.transcribingVoice' : voiceListening ? 'inputToolbar.stopVoice' : 'inputToolbar.startVoice')} title={t(voiceTranscribing ? 'inputToolbar.transcribingVoice' : voiceListening ? 'inputToolbar.stopVoice' : 'inputToolbar.startVoice')} className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-60 ${voiceListening ? 'bg-danger-100/10 text-danger-100' : voiceTranscribing ? 'text-accent-main-100' : 'text-text-400 hover:bg-bg-200 hover:text-text-100'}`}><MicrophoneIcon size={15} className={voiceTranscribing ? 'animate-pulse' : undefined} />{voiceListening && <span className="absolute right-1 top-1 h-1.5 w-1.5 animate-pulse rounded-full bg-danger-100" />}</button>}
         {onModelChange && (
-          <div className="min-w-0 max-w-[180px]">
+          <div className="min-w-0 flex-1 max-w-[340px]">
             <ModelSelector
               ref={modelSelectorRef}
               models={models}
@@ -757,7 +757,7 @@ export function InputToolbar({
               <span className="text-text-400 shrink-0">
                 <ThinkingIcon />
               </span>
-              <span className="text-[length:var(--fs-sm)] text-text-300 truncate">
+              <span className="text-[length:var(--fs-sm)] text-text-300 truncate min-w-0">
                 {selectedVariantLabel}
               </span>
               <span className="text-text-400 shrink-0">

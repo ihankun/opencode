@@ -4,11 +4,13 @@ import { CheckIcon, ChevronDownIcon, CogIcon } from '../../../components/Icons'
 import { uiErrorHandler } from '../../../utils'
 import { desktopPreferencesStore, useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 import { LocationAppIcon, type LocationApp } from '../../chat/LocationAppIcon'
+import { getDesktopPlatform } from '../../../utils/platform'
 import { SettingRow, SettingsSection, Toggle } from './SettingsUI'
 
 export function GeneralSettings() {
   const { t } = useTranslation(['settings'])
   const preferences = useDesktopPreferences()
+  const isMac = getDesktopPlatform() === 'macos'
   const [locationApps, setLocationApps] = useState<LocationApp[]>([])
   const [loadingApps, setLoadingApps] = useState(true)
   const [targetMenuOpen, setTargetMenuOpen] = useState(false)
@@ -112,29 +114,33 @@ export function GeneralSettings() {
         </div>
       </SettingRow>
 
-      <SettingRow
-        label={t('general.showMenuBarIcon')}
-        description={t('general.showMenuBarIconDesc')}
-        onClick={() => update({ showMenuBarIcon: !preferences.showMenuBarIcon })}
-      >
-        <Toggle
-          enabled={preferences.showMenuBarIcon}
-          onChange={() => update({ showMenuBarIcon: !preferences.showMenuBarIcon })}
-          ariaLabel={t('general.showMenuBarIcon')}
-        />
-      </SettingRow>
+      {isMac && (
+        <SettingRow
+          label={t('general.showMenuBarIcon')}
+          description={t('general.showMenuBarIconDesc')}
+          onClick={() => update({ showMenuBarIcon: !preferences.showMenuBarIcon })}
+        >
+          <Toggle
+            enabled={preferences.showMenuBarIcon}
+            onChange={() => update({ showMenuBarIcon: !preferences.showMenuBarIcon })}
+            ariaLabel={t('general.showMenuBarIcon')}
+          />
+        </SettingRow>
+      )}
 
-      <SettingRow
-        label={t('general.hideDockOnClose')}
-        description={t('general.hideDockOnCloseDesc')}
-        onClick={() => update({ hideDockOnClose: !preferences.hideDockOnClose })}
-      >
-        <Toggle
-          enabled={preferences.hideDockOnClose}
-          onChange={() => update({ hideDockOnClose: !preferences.hideDockOnClose })}
-          ariaLabel={t('general.hideDockOnClose')}
-        />
-      </SettingRow>
+      {isMac && (
+        <SettingRow
+          label={t('general.hideDockOnClose')}
+          description={t('general.hideDockOnCloseDesc')}
+          onClick={() => update({ hideDockOnClose: !preferences.hideDockOnClose })}
+        >
+          <Toggle
+            enabled={preferences.hideDockOnClose}
+            onChange={() => update({ hideDockOnClose: !preferences.hideDockOnClose })}
+            ariaLabel={t('general.hideDockOnClose')}
+          />
+        </SettingRow>
+      )}
     </SettingsSection>
   )
 }

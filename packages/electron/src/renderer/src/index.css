@@ -1883,16 +1883,16 @@ input[data-provider-search-input]:focus-visible {
 
 /* Sidebar footer popover: higher opacity so background text doesn't bleed through */
 :root[data-glass] .sidebar-footer-popover {
-  background-color: hsl(var(--bg-100) / 0.92);
+  background-color: hsl(var(--bg-100) / 0.96);
 }
 
 :root[data-theme-preset='codex'][data-mode='dark'][data-glass] .sidebar-footer-popover {
-  background-color: hsl(0 0% 18% / 0.85);
+  background-color: hsl(0 0% 18% / 0.94);
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme-preset='codex']:not([data-mode])[data-glass] .sidebar-footer-popover {
-    background-color: hsl(0 0% 18% / 0.85);
+    background-color: hsl(0 0% 18% / 0.94);
   }
 }
 

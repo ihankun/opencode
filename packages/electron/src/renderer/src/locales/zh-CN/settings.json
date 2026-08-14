@@ -75,7 +75,7 @@
     "desktopBehavior": "桌面行为",
     "defaultFileOpenTarget": "默认文件打开目标",
     "defaultFileOpenTargetDesc": "设置项目顶部“打开位置”按钮默认使用的应用；留空时沿用原有的自动选择规则。",
-    "automaticOpenTarget": "自动选择（沿用现有规则）",
+    "automaticOpenTarget": "自动选择",
     "loadingOpenTargets": "正在获取可用应用…",
     "showMenuBarIcon": "在菜单栏中显示",
     "showMenuBarIconDesc": "在系统菜单栏或托盘中保留 OpenCodex 图标，关闭主窗口后仍可从这里重新打开。",
@@ -373,8 +373,6 @@
     "browserOpenModeDesc": "控制登录授权、MCP 认证和终端链接使用应用内窗口还是系统默认浏览器",
     "browserOpenInternal": "内部浏览器",
     "browserOpenSystem": "系统默认浏览器",
-    "descriptiveToolSteps": "描述型步骤",
-    "descriptiveToolStepsDesc": "把普通 steps 计数改成带工具描述的摘要，并让单工具调用也显示步骤描述",
     "stepFinishInfo": "Step 完成信息",
     "agent": "Agent",
     "showAgent": "显示 Agent 名称",
@@ -397,9 +395,7 @@
     "behavior": "Agent 行为",
     "behaviorDesc": "权限放行和消息排队行为",
     "backgroundSubagents": "开启后台子任务",
-    "backgroundSubagentsDesc": "允许 Agent 异步启动后台 Subagent。修改后会自动重启内置本地服务；远程服务器需要单独配置环境变量。",
-    "toolInteraction": "工具交互",
-    "toolInteractionDesc": "控制工具请求和工具输出在对话中的交互方式"
+    "backgroundSubagentsDesc": "允许 Agent 异步启动后台 Subagent。修改后会自动重启内置本地服务；远程服务器需要单独配置环境变量。"
   },
   "models": {
     "visibility": "模型可见性",

@@ -75,7 +75,7 @@
     "desktopBehavior": "Desktop behavior",
     "defaultFileOpenTarget": "Default file open target",
     "defaultFileOpenTargetDesc": "Choose the app used by the project header’s Open Location button. Leave it automatic to keep the existing selection rules.",
-    "automaticOpenTarget": "Automatic (keep existing rules)",
+    "automaticOpenTarget": "Automatic",
     "loadingOpenTargets": "Loading available apps…",
     "showMenuBarIcon": "Show in menu bar",
     "showMenuBarIconDesc": "Keep an OpenCodex icon in the system menu bar or tray so the app can be reopened after its main window closes.",
@@ -373,8 +373,6 @@
     "browserOpenModeDesc": "Choose whether login authorization, MCP auth, and terminal links open inside the app or in the system default browser",
     "browserOpenInternal": "Internal Browser",
     "browserOpenSystem": "System Browser",
-    "descriptiveToolSteps": "Descriptive Steps",
-    "descriptiveToolStepsDesc": "Replace plain step counts with tool-aware summaries and show a steps line even for single tool calls",
     "stepFinishInfo": "Step Finish Info",
     "agent": "Agent",
     "showAgent": "Show agent name",
@@ -397,9 +395,7 @@
     "behavior": "Agent Behavior",
     "behaviorDesc": "Permission approval and queued message behavior",
     "backgroundSubagents": "Enable background subtasks",
-    "backgroundSubagentsDesc": "Allow agents to launch asynchronous background subagents. Changing this restarts the built-in local service; remote servers require their own environment setting.",
-    "toolInteraction": "Tool Interaction",
-    "toolInteractionDesc": "How tool requests and tool output behave inside conversations"
+    "backgroundSubagentsDesc": "Allow agents to launch asynchronous background subagents. Changing this restarts the built-in local service; remote servers require their own environment setting."
   },
   "models": {
     "visibility": "Model Visibility",

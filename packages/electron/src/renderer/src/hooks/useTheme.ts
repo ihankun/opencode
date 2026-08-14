@@ -191,12 +191,6 @@ export function useTheme() {
     themeStore.setFileChangeIndicatorScope(scope)
   }, [])
 
-  // ---- Descriptive Tool Steps ----
-
-  const setDescriptiveToolSteps = useCallback((enabled: boolean) => {
-    themeStore.setDescriptiveToolSteps(enabled)
-  }, [])
-
   // ---- Code Word Wrap ----
 
   const setCodeWordWrap = useCallback((enabled: boolean) => {
@@ -263,10 +257,6 @@ export function useTheme() {
     setStepFinishDisplay,
     fileChangeIndicatorScope: state.fileChangeIndicatorScope,
     setFileChangeIndicatorScope,
-
-    // 带工具描述的 steps 摘要
-    descriptiveToolSteps: state.descriptiveToolSteps,
-    setDescriptiveToolSteps,
 
     // 代码块 / diff 自动换行
     codeWordWrap: state.codeWordWrap,

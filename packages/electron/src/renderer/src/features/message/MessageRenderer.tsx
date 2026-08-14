@@ -630,8 +630,9 @@ const ToolGroup = memo(function ToolGroup({
   descriptiveTools = false,
 }: ToolGroupProps) {
   const { t } = useTranslation('message')
-  const { descriptiveToolSteps, immersiveMode } = useTheme()
-  const descriptive = descriptiveTools || descriptiveToolSteps
+  const { immersiveMode } = useTheme()
+  // 描述型步骤已强制开启（原 descriptiveToolSteps 配置已移除）
+  const descriptive = true
 
   const doneCount = parts.filter(p => p.state.status === 'completed').length
   const totalCount = parts.length

@@ -43,7 +43,6 @@ export function AgentSettings() {
   const { t } = useTranslation(['settings'])
   const [approvePendingOnFullAuto, setApprovePendingOnFullAuto] = useState(autoApproveStore.approvePendingOnFullAuto)
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
-  const [descriptiveToolSteps, setDescriptiveToolSteps] = useState(themeStore.descriptiveToolSteps)
   const desktopPreferences = useDesktopPreferences()
 
   const handleApprovePendingOnFullAutoToggle = () => {
@@ -56,12 +55,6 @@ export function AgentSettings() {
     const next = !queueFollowupMessages
     setQueueFollowupMessages(next)
     themeStore.setQueueFollowupMessages(next)
-  }
-
-  const handleDescriptiveToolStepsToggle = () => {
-    const next = !descriptiveToolSteps
-    setDescriptiveToolSteps(next)
-    themeStore.setDescriptiveToolSteps(next)
   }
 
   const handleBackgroundSubagentsToggle = () => {
@@ -102,18 +95,6 @@ export function AgentSettings() {
             onChange={handleBackgroundSubagentsToggle}
             ariaLabel={t('agent.backgroundSubagents')}
           />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection title={t('agent.toolInteraction')}>
-        <p className="text-[length:var(--fs-sm)] text-text-400">{t('agent.toolInteractionDesc')}</p>
-
-        <SettingRow
-          label={t('chat.descriptiveToolSteps')}
-          description={t('chat.descriptiveToolStepsDesc')}
-          onClick={handleDescriptiveToolStepsToggle}
-        >
-          <Toggle enabled={descriptiveToolSteps} onChange={handleDescriptiveToolStepsToggle} />
         </SettingRow>
       </SettingsSection>
     </div>

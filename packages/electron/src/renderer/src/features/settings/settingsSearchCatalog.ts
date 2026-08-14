@@ -37,7 +37,7 @@ export const SETTINGS_SEARCH_DEFINITIONS: SettingsSearchDefinition[] = [
   ...definitions('providers', ['tabs.providers']),
   ...definitions('models', ['models.visibility']),
   ...definitions('speechModel', ['speechModel.provider', 'speechModel.baseUrl', 'speechModel.model', 'speechModel.language', 'speechModel.apiKey']),
-  ...definitions('agent', ['agent.behavior', 'agent.backgroundSubagents', 'agent.toolInteraction', 'chat.approvePendingOnFullAuto', 'chat.queueFollowupMessages', 'chat.descriptiveToolSteps', 'chat.processCollapse']),
+  ...definitions('agent', ['agent.behavior', 'agent.backgroundSubagents', 'chat.approvePendingOnFullAuto', 'chat.queueFollowupMessages', 'chat.processCollapse']),
   ...definitions('chat', ['chat.pathsFormatting', 'chat.conversationExperience', 'chat.stepFinishInfo', 'chat.enterKeyBehavior', 'chat.actionsOnLatestAssistantOnly', 'chat.desktopCollapsedInputDock']),
   ...definitions('workspace', ['workspace.layout', 'workspace.terminal', 'workspace.sidebar', 'appearance.wakeLock', 'appearance.codeWordWrap', 'workspace.manualTerminalTitles', 'workspace.terminalCopyOnSelect', 'workspace.terminalRightClickPaste', 'appearance.showChildSessions']),
   ...definitions('appearance', ['appearance.display', 'appearance.colorMode', 'appearance.glassEffect', 'appearance.uiFontScale', 'appearance.codeFontScale', 'appearance.language', 'appearance.codeBlockThemes', 'appearance.codeBlockThemeLight', 'appearance.codeBlockThemeDark']),
