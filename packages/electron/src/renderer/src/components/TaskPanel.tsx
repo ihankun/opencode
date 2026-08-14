@@ -195,7 +195,6 @@ export const TaskPanel = memo(function TaskPanel({ onOpenSession }: { onOpenSess
       <div className="window-drag-region flex h-14 shrink-0 items-center justify-between border-b border-border-200/50 px-6">
         <div>
           <h1 className="text-[length:var(--fs-lg)] font-semibold text-text-100">{t('taskPanel.title')}</h1>
-          <p className="text-[length:var(--fs-xs)] text-text-400">{t('taskPanel.subtitle')}</p>
         </div>
         <div className="flex gap-1.5">
           <input ref={importInput} type="file" accept="application/json,.json" className="hidden" onChange={event => { const file = event.target.files?.[0]; if (file) void importTasks(file) }} />

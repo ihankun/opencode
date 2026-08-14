@@ -27,7 +27,8 @@ const definitions = (tab: SettingsTab, labelKeys: string[]): SettingsSearchDefin
   labelKeys.map(labelKey => ({ tab, labelKey }))
 
 export const SETTINGS_SEARCH_DEFINITIONS: SettingsSearchDefinition[] = [
-  ...definitions('general', ['general.defaultFileOpenTarget', 'general.showMenuBarIcon', 'general.hideDockOnClose', 'general.quotaDisplay']),
+  ...definitions('general', ['general.defaultFileOpenTarget', 'general.showMenuBarIcon', 'general.hideDockOnClose']),
+  ...definitions('quota', ['general.quotaDisplay']),
   ...definitions('servers', ['servers.connections']),
   ...definitions('hosting', ['servers.hosting.title']),
   ...definitions('imBotService', ['imBot.serviceTitle']),

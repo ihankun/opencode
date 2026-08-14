@@ -12,6 +12,8 @@
   "tabs": {
     "general": "General",
     "generalDesc": "File opening, menu bar, and Dock behavior",
+    "quota": "Quota Display",
+    "quotaDesc": "Control which model providers show quota information",
     "servers": "Servers",
     "serversDesc": "Backend connections and fast active endpoint switching",
     "hosting": "Code Hosting",
@@ -66,7 +68,8 @@
     "advanced": "Advanced Settings",
     "general": "General Settings",
     "archived": "Archive",
-    "security": "Security Settings"
+    "security": "Security Settings",
+    "help": "Help"
   },
   "general": {
     "desktopBehavior": "Desktop behavior",

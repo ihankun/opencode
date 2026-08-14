@@ -12,6 +12,8 @@
   "tabs": {
     "general": "常规",
     "generalDesc": "文件打开方式、菜单栏和 Dock 行为",
+    "quota": "余量显示",
+    "quotaDesc": "控制哪些模型供应商显示余量信息",
     "servers": "服务器",
     "serversDesc": "后端连接和快速切换活跃端点",
     "hosting": "代码托管",
@@ -66,7 +68,8 @@
     "advanced": "高级设置",
     "general": "常规设置",
     "archived": "归档列表",
-    "security": "安全设置"
+    "security": "安全设置",
+    "help": "帮助"
   },
   "general": {
     "desktopBehavior": "桌面行为",

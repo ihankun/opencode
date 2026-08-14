@@ -20,6 +20,7 @@ import {
   MicrophoneIcon,
   FileIcon,
   DownloadIcon,
+  GaugeIcon,
 } from '../../components/Icons'
 import { useIsMobile } from '../../hooks'
 import { useChatViewport } from '../chat/chatViewport'
@@ -49,6 +50,7 @@ const ImBotServiceSettings = lazy(() => import('./components/ImBotServiceSetting
 const ImBotConfigSettings = lazy(() => import('./components/ImBotConfigSettings').then(module => ({ default: module.ImBotConfigSettings })))
 const ImBotLogsSettings = lazy(() => import('./components/ImBotLogsSettings').then(module => ({ default: module.ImBotLogsSettings })))
 const GeneralSettings = lazy(() => import('./components/GeneralSettings').then(module => ({ default: module.GeneralSettings })))
+const QuotaSettings = lazy(() => import('./components/QuotaSettings').then(module => ({ default: module.QuotaSettings })))
 const SpeechModelSettings = lazy(() => import('./components/SpeechModelSettings').then(module => ({ default: module.SpeechModelSettings })))
 
 // ============================================
@@ -57,6 +59,7 @@ const SpeechModelSettings = lazy(() => import('./components/SpeechModelSettings'
 
 export type SettingsTab =
   | 'general'
+  | 'quota'
   | 'agent'
   | 'appearance'
   | 'chat'
@@ -86,6 +89,7 @@ export type SettingsTab =
 
 const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   general: <CogIcon size={15} />,
+  quota: <GaugeIcon size={15} />,
   servers: <GlobeIcon size={15} />,
   hosting: <GitBranchIcon size={15} />,
   agent: <AgentIcon size={15} />,
@@ -111,10 +115,10 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
 }
 
 const TAB_IDS: SettingsTab[] = [
-  'general',
   'appearance',
+  'general',
+  'quota',
   'notifications',
-  'keybindings',
   'servers',
   'providers',
   'models',
@@ -133,11 +137,13 @@ const TAB_IDS: SettingsTab[] = [
   'imBotConfig',
   'imBotLogs',
   'archived',
+  'keybindings',
   'about',
 ]
 
 const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   general: 'tabs.general',
+  quota: 'tabs.quota',
   servers: 'tabs.servers',
   hosting: 'tabs.hosting',
   agent: 'tabs.agent',
@@ -164,6 +170,7 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
 
 const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   general: 'tabs.generalDesc',
+  quota: 'tabs.quotaDesc',
   servers: 'tabs.serversDesc',
   hosting: 'tabs.hostingDesc',
   agent: 'tabs.agentDesc',
@@ -189,14 +196,14 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
 }
 
 const GROUP_DEFS: { labelKey?: string; tabs: SettingsTab[] }[] = [
-  { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
+  { labelKey: 'groups.general', tabs: ['appearance', 'general', 'quota', 'notifications'] },
   { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models', 'speechModel'] },
   { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
   { labelKey: 'groups.advanced', tabs: ['hosting', 'hooks'] },
   { labelKey: 'groups.security', tabs: ['security', 'logs', 'backup', 'config'] },
   { labelKey: 'groups.imBot', tabs: ['imBotService', 'imBotConfig', 'imBotLogs'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
-  { tabs: ['about'] },
+  { labelKey: 'groups.help', tabs: ['keybindings', 'about'] },
 ]
 
 // ============================================
@@ -209,6 +216,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
     switch (tab) {
     case 'general':
       return <GeneralSettings />
+    case 'quota':
+      return <QuotaSettings />
     case 'agent':
       return <AgentSettings />
     case 'appearance':
@@ -435,7 +444,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               <ChevronLeftIcon size={18} />
               <span className="text-[length:var(--fs-sm)]">{t('backToWorkspace')}</span>
             </button>
-            <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{t('title')}</div>
+            <div className="text-[length:var(--fs-lg)] font-semibold text-text-100">{t('title')}</div>
             <div className="w-9" aria-hidden="true" />
           </div>
           <div className="px-4 pb-2">{search}</div>
@@ -552,14 +561,10 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
 
       {/* Right Content */}
       <div className="settings-content-surface flex-1 min-w-0 flex flex-col">
-        {/* macOS 红绿灯/标题栏安全高度（与主界面 chat header 一致） */}
-        {!(isElectron() && getDesktopPlatform() === 'windows') && (
-          <div className="mobile-safe-topbar-10 window-drag-region shrink-0" />
-        )}
         {/* Content Header - sticky at top */}
-        <div className="shrink-0 border-b border-border-100/60 px-5 xl:px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="window-drag-region shrink-0 border-b border-border-100/60 px-5 xl:px-6 py-3.5 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-[length:var(--fs-heading-3)] font-semibold text-text-100">{activeTabMeta.label}</div>
+            <div className="text-[length:var(--fs-lg)] font-semibold text-text-100">{activeTabMeta.label}</div>
             <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 leading-relaxed truncate">
               {activeTabMeta.description}
             </div>

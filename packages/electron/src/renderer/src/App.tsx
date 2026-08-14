@@ -740,7 +740,7 @@ function App() {
     openUtilityPage('settings')
   }, [openUtilityPage])
   const openSettings = useCallback(() => {
-    openSettingsTab('servers')
+    openSettingsTab('appearance')
   }, [openSettingsTab])
   const openProviderSettings = useCallback(() => {
     openSettingsTab('providers')
@@ -1189,10 +1189,7 @@ function App() {
           <div className="flex h-full min-h-0 flex-col">
             <div className="window-drag-region shrink-0 border-b border-border-200/60 px-5 pb-3 pt-2.5">
               <div className="mb-2">
-                <div>
-                  <div className="text-[length:var(--fs-md)] font-semibold text-text-100">{t('components:extensionHub.title')}</div>
-                  <div className="mt-0.5 text-[length:var(--fs-xs)] text-text-400">{t(`components:extensionHub.${extensionPageTab}Description`)}</div>
-                </div>
+                <div className="text-[length:var(--fs-lg)] font-semibold text-text-100">{t('components:extensionHub.title')}</div>
               </div>
               <div role="tablist" aria-label={t('components:extensionHub.title')} className="scrollbar-none flex items-center gap-1 overflow-x-auto">
                 {([
