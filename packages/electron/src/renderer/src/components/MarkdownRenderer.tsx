@@ -61,7 +61,16 @@ type StreamdownBridgeProps = {
 // the workspace. Isolate that type-only mismatch at the dependency boundary.
 const StreamdownComponent = Streamdown as unknown as ComponentType<StreamdownBridgeProps>
 
-const markdownMath = createMathPlugin({ singleDollarTextMath: true })
+const markdownMathPlugin = createMathPlugin({ singleDollarTextMath: true })
+// @streamdown/math 不透传 KaTeX strict 选项；中文出现在 $...$ 内会触发
+// strict "warn" 的 unicodeTextInMathMode 警告刷屏，这里静默为正常文本渲染。
+const markdownMath = {
+  ...markdownMathPlugin,
+  rehypePlugin: (() => {
+    const plugin = markdownMathPlugin.rehypePlugin as readonly [unknown, Record<string, unknown>]
+    return [plugin[0], { ...plugin[1], strict: "ignore" }]
+  })(),
+} as unknown as PluginConfig
 const MERMAID_MIN_SCALE = 0.5
 const MERMAID_MAX_SCALE = 3
 const MERMAID_SCALE_STEP = 0.15

@@ -71,7 +71,7 @@ export interface AutomationBackup {
 export interface OpenCodeConfigBackup {
   global: Config
   projectState: ProjectState
-  openCodeGoWorkspaceId: string
+  openCodeGoHasApiKey: boolean
   projects: Array<{
     directory: string
     config: Config
@@ -261,7 +261,7 @@ export async function exportSettingsBackup(): Promise<{ fileName: string; data: 
       openCode: {
         global: sanitizeOpenCodeConfig(globalConfig),
         projectState,
-        openCodeGoWorkspaceId: openCodeGoQuota.workspaceId,
+        openCodeGoHasApiKey: openCodeGoQuota.hasApiKey,
         projects: projectConfigs,
       },
       automations: {
@@ -381,7 +381,6 @@ async function importOpenCodeConfig(backup: OpenCodeConfigBackup) {
     updateGlobalConfig(backup.global),
     window.customOpenCode.updateProjectDirectories('local', backup.projectState.directories),
     window.customOpenCode.updateRecentProjects('local', backup.projectState.recentProjects),
-    window.customOpenCode.updateOpenCodeGoQuotaConfig({ workspaceId: backup.openCodeGoWorkspaceId }),
     ...backup.projects.map(item => updateConfig(item.config, item.directory)),
   ])
 }

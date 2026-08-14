@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { parseOpenCodeGoDashboard, queryProviderQuotas } from "./quota/index.ts"
+import { parseOpenCodeGoUsage, queryProviderQuotas } from "./quota/index.ts"
 
 test("quota query rejects remote credential lookup without querying a provider", async () => {
   const results = await queryProviderQuotas("/unused", {
@@ -30,40 +30,46 @@ test("quota query reports unsupported and missing credentials without network re
   }
 })
 
-test("OpenCode Go parser reads all SolidJS usage windows in either field order", () => {
-  const parsed = parseOpenCodeGoDashboard(`
-    rollingUsage:$R[1]={usagePercent:12.5,resetInSec:7200}
-    weeklyUsage:$R[2]={resetInSec:345600,usagePercent:36}
-    monthlyUsage:$R[3]={usagePercent:64,resetInSec:1728000}
-  `)
-  assert.deepEqual(parsed, {
-    rolling: { usagePercent: 12.5, resetInSec: 7200 },
-    weekly: { usagePercent: 36, resetInSec: 345600 },
-    monthly: { usagePercent: 64, resetInSec: 1728000 },
+test("OpenCode Go usage parser reads all official usage windows", () => {
+  const rows = parseOpenCodeGoUsage({
+    usage: {
+      rolling: { percent: 12.5, resetsAt: "2026-08-14T12:00:00.000Z" },
+      weekly: { percent: 36, resetsAt: "2026-08-16T00:00:00.000Z" },
+      monthly: { percent: 64, resetsAt: "2026-09-01T00:00:00.000Z" },
+    },
   })
+  assert.deepEqual(rows, [
+    {
+      label: "5小时",
+      kind: "percent",
+      percentRemaining: 88,
+      resetAt: "2026-08-14T12:00:00.000Z",
+    },
+    {
+      label: "1周",
+      kind: "percent",
+      percentRemaining: 64,
+      resetAt: "2026-08-16T00:00:00.000Z",
+    },
+    {
+      label: "1月",
+      kind: "percent",
+      percentRemaining: 36,
+      resetAt: "2026-09-01T00:00:00.000Z",
+    },
+  ])
 })
 
-test("OpenCode Go parser falls back to data-slot dashboard markup", () => {
-  const parsed = parseOpenCodeGoDashboard(`
-    <div data-slot="usage-item">
-      <span data-slot="usage-label">Rolling Usage</span>
-      <span data-slot="usage-value">18.5% used</span>
-      <span data-slot="reset-time">Resets in 1 hour 30 minutes</span>
-    </div>
-    <div data-slot="usage-item">
-      <span data-slot="usage-label">Weekly Usage</span>
-      <span data-slot="usage-value">42% used</span>
-      <span data-slot="reset-now">Reset now</span>
-    </div>
-    <div data-slot="usage-item">
-      <span data-slot="usage-label">Monthly Usage</span>
-      <span data-slot="usage-value">73% used</span>
-      <span data-slot="reset-time">Resets in 6 days 2 hours</span>
-    </div>
-  `)
-  assert.deepEqual(parsed, {
-    rolling: { usagePercent: 18.5, resetInSec: 5400 },
-    weekly: { usagePercent: 42, resetInSec: 0 },
-    monthly: { usagePercent: 73, resetInSec: 525600 },
+test("OpenCode Go usage parser skips missing windows and clamps percentages", () => {
+  const rows = parseOpenCodeGoUsage({
+    usage: {
+      rolling: { percent: 120, resetsAt: "2026-08-14T12:00:00.000Z" },
+      weekly: { percent: -5 },
+      monthly: { resetsAt: "2026-09-01T00:00:00.000Z" },
+    },
   })
+  assert.deepEqual(rows, [
+    { label: "5小时", kind: "percent", percentRemaining: 0, resetAt: "2026-08-14T12:00:00.000Z" },
+    { label: "1周", kind: "percent", percentRemaining: 100 },
+  ])
 })

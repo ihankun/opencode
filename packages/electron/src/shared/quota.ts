@@ -27,20 +27,14 @@ export type QuotaQueryInput = {
 }
 
 export type OpenCodeGoQuotaConfig = {
-  workspaceId: string
-  hasAuthCookie: boolean
-  source: "none" | "environment" | "secure-storage" | "config-file"
+  hasApiKey: boolean
+  source: "none" | "auth-file" | "environment" | "secure-storage" | "config-file"
 }
 
 export type OpenCodeGoQuotaConfigUpdate = {
-  workspaceId: string
-  authCookie?: string
-  clearAuthCookie?: boolean
+  apiKey?: string
+  clearApiKey?: boolean
 }
-
-export type OpenCodeGoLoginResult =
-  | { status: "success"; config: OpenCodeGoQuotaConfig }
-  | { status: "cancelled" }
 
 export const QUOTA_PROVIDER_ALIASES: ReadonlyArray<{
   id: string

@@ -600,54 +600,18 @@ async function queryXai(providerId: string, token?: string) {
 type OpenCodeGoConfigResolution =
   | {
       state: "configured"
-      workspaceId: string
-      authCookie: string
+      apiKey: string
       source: OpenCodeGoQuotaConfig["source"]
-    }
-  | {
-      state: "incomplete"
-      workspaceId: string
-      authCookie?: string
-      hasAuthCookie: boolean
-      source: OpenCodeGoQuotaConfig["source"]
-      missing: "workspaceId" | "authCookie"
     }
   | { state: "none" }
 
 const OPENCODE_GO_CREDENTIAL_ID = "quota.opencode-go"
-const SCRAPED_NUMBER_PATTERN = String.raw`(-?\d+(?:\.\d+)?)`
-const OPENCODE_GO_SSR_PATTERNS = {
-  rolling: [
-    new RegExp(String.raw`rollingUsage:\$R\[\d+\]=\{[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-    new RegExp(String.raw`rollingUsage:\$R\[\d+\]=\{[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-  ],
-  weekly: [
-    new RegExp(String.raw`weeklyUsage:\$R\[\d+\]=\{[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-    new RegExp(String.raw`weeklyUsage:\$R\[\d+\]=\{[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-  ],
-  monthly: [
-    new RegExp(String.raw`monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-    new RegExp(String.raw`monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:${SCRAPED_NUMBER_PATTERN}[^}]*usagePercent:${SCRAPED_NUMBER_PATTERN}[^}]*\}`),
-  ],
-} as const
 
 export async function getOpenCodeGoQuotaConfig(userDataPath: string): Promise<OpenCodeGoQuotaConfig> {
   const config = await resolveOpenCodeGoConfig(userDataPath)
-  if (config.state === "configured") {
-    return {
-      workspaceId: config.workspaceId,
-      hasAuthCookie: true,
-      source: config.source,
-    }
-  }
-  if (config.state === "incomplete") {
-    return {
-      workspaceId: config.workspaceId,
-      hasAuthCookie: config.hasAuthCookie,
-      source: config.source,
-    }
-  }
-  return { workspaceId: "", hasAuthCookie: false, source: "none" }
+  return config.state === "configured"
+    ? { hasApiKey: true, source: config.source }
+    : { hasApiKey: false, source: "none" }
 }
 
 export async function updateOpenCodeGoQuotaConfig(
@@ -656,63 +620,31 @@ export async function updateOpenCodeGoQuotaConfig(
 ): Promise<OpenCodeGoQuotaConfig> {
   const { setSecureCredential } = await import("../credentials.ts")
   const existing = await resolveOpenCodeGoConfig(userDataPath)
-  const workspaceId = input.workspaceId.trim()
-  const existingAuthCookie = existing.state === "configured" || existing.state === "incomplete"
-    ? existing.authCookie ?? ""
-    : ""
-  const authCookie = input.clearAuthCookie
+  const existingKey = existing.state === "configured" ? existing.apiKey : ""
+  const apiKey = input.clearApiKey
     ? ""
-    : normalizeAuthCookie(input.authCookie) ?? existingAuthCookie
-  await setSecureCredential(
-    OPENCODE_GO_CREDENTIAL_ID,
-    workspaceId || authCookie ? { workspaceId, authCookie } : null,
-  )
+    : normalizeApiKey(input.apiKey) ?? existingKey
+  await setSecureCredential(OPENCODE_GO_CREDENTIAL_ID, apiKey ? { apiKey } : null)
   return getOpenCodeGoQuotaConfig(userDataPath)
 }
 
 async function resolveOpenCodeGoConfig(userDataPath: string): Promise<OpenCodeGoConfigResolution> {
-  const envWorkspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim() ?? ""
-  const envAuthCookie = normalizeAuthCookie(process.env.OPENCODE_GO_AUTH_COOKIE) ?? ""
-  if (envWorkspaceId || envAuthCookie) {
-    if (envWorkspaceId && envAuthCookie) {
-      return {
-        state: "configured",
-        workspaceId: envWorkspaceId,
-        authCookie: envAuthCookie,
-        source: "environment",
-      }
-    }
-    return {
-      state: "incomplete",
-      workspaceId: envWorkspaceId,
-      ...(envAuthCookie ? { authCookie: envAuthCookie } : {}),
-      hasAuthCookie: Boolean(envAuthCookie),
-      source: "environment",
-      missing: envWorkspaceId ? "authCookie" : "workspaceId",
-    }
+  const auth = await readAuth(join(userDataPath, "data", "opencode", "auth.json"))
+  const authApiKey = apiKey(authEntry(auth, AUTH_KEYS["opencode-go"] ?? []))
+  if (authApiKey) {
+    return { state: "configured", apiKey: authApiKey, source: "auth-file" }
+  }
+
+  const envApiKey = normalizeApiKey(process.env.OPENCODE_GO_API_KEY)
+  if (envApiKey) {
+    return { state: "configured", apiKey: envApiKey, source: "environment" }
   }
 
   const { getSecureCredential } = await import("../credentials.ts")
   const secure = await getSecureCredential(OPENCODE_GO_CREDENTIAL_ID)
-  const secureWorkspaceId = secure?.workspaceId?.trim() ?? ""
-  const secureAuthCookie = normalizeAuthCookie(secure?.authCookie) ?? ""
-  if (secureWorkspaceId || secureAuthCookie) {
-    if (secureWorkspaceId && secureAuthCookie) {
-      return {
-        state: "configured",
-        workspaceId: secureWorkspaceId,
-        authCookie: secureAuthCookie,
-        source: "secure-storage",
-      }
-    }
-    return {
-      state: "incomplete",
-      workspaceId: secureWorkspaceId,
-      ...(secureAuthCookie ? { authCookie: secureAuthCookie } : {}),
-      hasAuthCookie: Boolean(secureAuthCookie),
-      source: "secure-storage",
-      missing: secureWorkspaceId ? "authCookie" : "workspaceId",
-    }
+  const secureApiKey = normalizeApiKey(secure?.apiKey)
+  if (secureApiKey) {
+    return { state: "configured", apiKey: secureApiKey, source: "secure-storage" }
   }
 
   for (const path of openCodeGoConfigCandidates(userDataPath)) {
@@ -720,23 +652,9 @@ async function resolveOpenCodeGoConfig(userDataPath: string): Promise<OpenCodeGo
       .then(content => record(JSON.parse(content) as unknown))
       .catch(() => undefined)
     if (!loaded) continue
-    const workspaceId = text(loaded.workspaceId) ?? ""
-    const authCookie = normalizeAuthCookie(loaded.authCookie) ?? ""
-    if (workspaceId && authCookie) {
-      return {
-        state: "configured",
-        workspaceId,
-        authCookie,
-        source: "config-file",
-      }
-    }
-    return {
-      state: "incomplete",
-      workspaceId,
-      ...(authCookie ? { authCookie } : {}),
-      hasAuthCookie: Boolean(authCookie),
-      source: "config-file",
-      missing: workspaceId ? "authCookie" : "workspaceId",
+    const apiKey = normalizeApiKey(loaded.apiKey)
+    if (apiKey) {
+      return { state: "configured", apiKey, source: "config-file" }
     }
   }
   return { state: "none" }
@@ -755,7 +673,7 @@ function openCodeGoConfigCandidates(userDataPath: string) {
   return [...new Set(configDirs)].map(directory => join(directory, "opencode-quota", "opencode-go.json"))
 }
 
-function normalizeAuthCookie(value: unknown) {
+function normalizeApiKey(value: unknown) {
   const raw = text(value)
   if (!raw) return
   const cookie = raw.split(";").map(item => item.trim()).find(item => item.startsWith("auth="))
@@ -765,118 +683,44 @@ function normalizeAuthCookie(value: unknown) {
 async function queryOpenCodeGo(providerId: string, userDataPath: string) {
   const config = await resolveOpenCodeGoConfig(userDataPath)
   if (config.state === "none") {
-    return failed(providerId, "请先配置 OpenCode Go 工作区 ID 和 auth Cookie")
-  }
-  if (config.state === "incomplete") {
-    return failed(providerId, config.missing === "workspaceId" ? "请配置 OpenCode Go 工作区 ID" : "请配置 OpenCode Go auth Cookie")
+    return failed(providerId, "请先配置 OpenCode Go API Key")
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-  try {
-    const response = await fetch(`https://opencode.ai/workspace/${encodeURIComponent(config.workspaceId)}/go`, {
-      method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0",
-        Accept: "text/html",
-        Cookie: `auth=${config.authCookie}`,
-      },
-    })
-    if (response.status >= 300 && response.status < 400) return failed(providerId, "OpenCode Go 登录状态已失效")
-    if (!response.ok) return failed(providerId, `OpenCode Go Dashboard 返回 HTTP ${response.status}`)
-    const windows = parseOpenCodeGoDashboard(await response.text())
-    const rows = [
-      windows.rolling ? openCodeGoRow("5小时", windows.rolling) : undefined,
-      windows.weekly ? openCodeGoRow("1周", windows.weekly) : undefined,
-      windows.monthly ? openCodeGoRow("1月", windows.monthly) : undefined,
-    ].filter((value): value is QuotaRow => Boolean(value))
-    return rows.length
-      ? result(providerId, "ok", rows)
-      : failed(providerId, "无法解析 OpenCode Go Dashboard 的余量信息")
-  } catch (error) {
-    return failed(providerId, safeError(error))
-  } finally {
-    clearTimeout(timeout)
+  const response = await requestJson("https://opencode.ai/zen/go/v1/usage", {
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "x-api-key": config.apiKey,
+      Accept: "application/json",
+    },
+  }, config.apiKey)
+  if (!response.ok) {
+    return failed(providerId, /HTTP 401|HTTP 403/.test(response.error) ? "OpenCode Go API Key 无效" : response.error)
   }
+  const rows = parseOpenCodeGoUsage(response.body)
+  return rows.length
+    ? result(providerId, "ok", rows)
+    : failed(providerId, "OpenCode Go 没有返回可显示的余量信息")
 }
 
-type OpenCodeGoWindow = {
-  usagePercent: number
-  resetInSec: number
+export function parseOpenCodeGoUsage(body: unknown): QuotaRow[] {
+  const usage = record(record(body)?.usage)
+  if (!usage) return []
+  return [
+    openCodeGoRow("5小时", record(usage.rolling)),
+    openCodeGoRow("1周", record(usage.weekly)),
+    openCodeGoRow("1月", record(usage.monthly)),
+  ].filter((value): value is QuotaRow => Boolean(value))
 }
 
-export function parseOpenCodeGoDashboard(html: string) {
-  const ssr = {
-    rolling: parseOpenCodeGoSsrWindow(html, OPENCODE_GO_SSR_PATTERNS.rolling),
-    weekly: parseOpenCodeGoSsrWindow(html, OPENCODE_GO_SSR_PATTERNS.weekly),
-    monthly: parseOpenCodeGoSsrWindow(html, OPENCODE_GO_SSR_PATTERNS.monthly),
-  }
-  if (ssr.rolling || ssr.weekly || ssr.monthly) return ssr
-  return parseOpenCodeGoDataSlots(html)
-}
-
-function parseOpenCodeGoSsrWindow(
-  html: string,
-  patterns: readonly [RegExp, RegExp],
-): OpenCodeGoWindow | undefined {
-  const percentFirst = patterns[0].exec(html)
-  if (percentFirst) {
-    const usagePercent = Number(percentFirst[1])
-    const resetInSec = Number(percentFirst[2])
-    if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) return { usagePercent, resetInSec }
-  }
-  const resetFirst = patterns[1].exec(html)
-  if (!resetFirst) return
-  const resetInSec = Number(resetFirst[1])
-  const usagePercent = Number(resetFirst[2])
-  return Number.isFinite(usagePercent) && Number.isFinite(resetInSec) ? { usagePercent, resetInSec } : undefined
-}
-
-function parseOpenCodeGoDataSlots(html: string): Partial<Record<"rolling" | "weekly" | "monthly", OpenCodeGoWindow>> {
-  return html.split(/data-slot="usage-item"/).slice(1).reduce<Partial<Record<"rolling" | "weekly" | "monthly", OpenCodeGoWindow>>>((result, content) => {
-    const label = content.match(/data-slot="usage-label">([^<]+)</)?.[1]?.trim().toLowerCase()
-    const usagePercent = Number(content.match(/data-slot="usage-value">[^0-9]*(\d+(?:\.\d+)?)/)?.[1])
-    const reset = content.match(/data-slot="(reset-time|reset-now)">([\s\S]*?)<\/span>/)
-    if (!label || !Number.isFinite(usagePercent) || !reset) return result
-    const resetInSec = reset[1] === "reset-now"
-      ? 0
-      : parseOpenCodeGoDuration(reset[2]
-          .replace(/<!--\$-->/g, "")
-          .replace(/<!--\/-->/g, "")
-          .replace(/Resets?\s*in\s*/i, "")
-          .trim())
-    if (resetInSec === undefined) return result
-    const key = label.includes("rolling") ? "rolling" : label.includes("weekly") ? "weekly" : label.includes("monthly") ? "monthly" : undefined
-    if (key) result[key] = { usagePercent, resetInSec }
-    return result
-  }, {})
-}
-
-function parseOpenCodeGoDuration(value: string) {
-  const normalized = value.toLowerCase().trim().replace(/\s+/g, " ")
-  if (["reset-now", "reset now", "now", "resets now"].includes(normalized)) return 0
-  const units = [
-    { pattern: /(\d+(?:\.\d+)?)\s*days?/, seconds: 86_400 },
-    { pattern: /(\d+(?:\.\d+)?)\s*hours?/, seconds: 3_600 },
-    { pattern: /(\d+(?:\.\d+)?)\s*minutes?/, seconds: 60 },
-    { pattern: /(\d+(?:\.\d+)?)\s*seconds?/, seconds: 1 },
-  ]
-  const matches = units.flatMap(unit => {
-    const match = normalized.match(unit.pattern)
-    return match ? [Number(match[1]) * unit.seconds] : []
-  })
-  return matches.length ? matches.reduce((total, seconds) => total + seconds, 0) : undefined
-}
-
-function openCodeGoRow(label: string, window: OpenCodeGoWindow): QuotaRow {
-  const resetInSec = Math.max(0, window.resetInSec)
+function openCodeGoRow(label: string, window: Record<string, unknown> | undefined): QuotaRow | undefined {
+  const percent = finite(window?.percent)
+  if (percent === undefined) return
+  const resetAt = iso(window?.resetsAt)
   return {
     label,
     kind: "percent",
-    percentRemaining: clamp(100 - Math.max(0, window.usagePercent)),
-    resetAt: new Date(Date.now() + resetInSec * 1_000).toISOString(),
+    percentRemaining: clamp(100 - Math.max(0, percent)),
+    ...(resetAt ? { resetAt } : {}),
   }
 }
 

@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from "electron"
 import type { ImBridgeConfig, ImBridgeState } from "../shared/imBridge"
 import type { DesktopPreferences } from "../shared/desktopPreferences"
 import type {
-  OpenCodeGoLoginResult,
   OpenCodeGoQuotaConfig,
   OpenCodeGoQuotaConfigUpdate,
   QuotaProviderResult,
@@ -372,7 +371,6 @@ export type CustomOpenCodeApi = {
   queryQuota(input: QuotaQueryInput): Promise<QuotaProviderResult[]>
   openCodeGoQuotaConfig(): Promise<OpenCodeGoQuotaConfig>
   updateOpenCodeGoQuotaConfig(input: OpenCodeGoQuotaConfigUpdate): Promise<OpenCodeGoQuotaConfig>
-  loginOpenCodeGoQuota(input?: { force?: boolean }): Promise<OpenCodeGoLoginResult>
   waitConsoleLogin(login: CustomOpenCodeConsoleLoginStart): Promise<CustomOpenCodeConsoleLoginResult>
   notificationPermission(): Promise<CustomOpenCodeNotificationPermission>
   sendNotification(input: {
@@ -500,7 +498,6 @@ const api: CustomOpenCodeApi = {
   queryQuota: (input) => ipcRenderer.invoke("quota:query", input),
   openCodeGoQuotaConfig: () => ipcRenderer.invoke("quota:opencode-go-config"),
   updateOpenCodeGoQuotaConfig: (input) => ipcRenderer.invoke("quota:opencode-go-config-set", input),
-  loginOpenCodeGoQuota: (input) => ipcRenderer.invoke("quota:opencode-go-login", input),
   waitConsoleLogin: (login) => ipcRenderer.invoke("console:login-wait", login),
   notificationPermission: () => ipcRenderer.invoke("notification:permission"),
   sendNotification: (input) => ipcRenderer.invoke("notification:send", input),

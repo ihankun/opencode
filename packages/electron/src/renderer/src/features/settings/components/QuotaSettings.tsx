@@ -5,7 +5,7 @@ import { GripVerticalIcon } from '../../../components/Icons'
 import { useServerStore } from '../../../hooks'
 import { uiErrorHandler } from '../../../utils'
 import { desktopPreferencesStore, useDesktopPreferences } from '../../../store/desktopPreferencesStore'
-import { SettingRow, SettingsSection, Toggle } from './SettingsUI'
+import { SettingsSection, Toggle } from './SettingsUI'
 import { canonicalQuotaProviderId, supportsQuotaProvider, type OpenCodeGoQuotaConfig } from '../../../../../shared/quota'
 import type { Provider } from '@opencode-ai/sdk/v2/client'
 
@@ -17,10 +17,8 @@ export function QuotaSettings() {
   const [loading, setLoading] = useState(true)
   const [draggingId, setDraggingId] = useState<string>()
   const [openCodeGoConfig, setOpenCodeGoConfig] = useState<OpenCodeGoQuotaConfig>()
-  const [openCodeGoWorkspaceId, setOpenCodeGoWorkspaceId] = useState('')
-  const [openCodeGoAuthCookie, setOpenCodeGoAuthCookie] = useState('')
+  const [openCodeGoApiKey, setOpenCodeGoApiKey] = useState('')
   const [openCodeGoSaving, setOpenCodeGoSaving] = useState(false)
-  const [openCodeGoLoggingIn, setOpenCodeGoLoggingIn] = useState(false)
   const [openCodeGoNotice, setOpenCodeGoNotice] = useState<{ kind: 'success' | 'error'; message: string }>()
 
   useEffect(() => {
@@ -36,10 +34,7 @@ export function QuotaSettings() {
   useEffect(() => {
     if (!window.customOpenCode?.openCodeGoQuotaConfig) return
     void window.customOpenCode.openCodeGoQuotaConfig()
-      .then(config => {
-        setOpenCodeGoConfig(config)
-        setOpenCodeGoWorkspaceId(config.workspaceId)
-      })
+      .then(config => setOpenCodeGoConfig(config))
       .catch(error => uiErrorHandler('load OpenCode Go quota config', error))
   }, [])
 
@@ -92,24 +87,18 @@ export function QuotaSettings() {
 
   const saveOpenCodeGoConfig = () => {
     if (!window.customOpenCode?.updateOpenCodeGoQuotaConfig) return
-    if (!openCodeGoWorkspaceId.trim()) {
-      setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoWorkspaceRequired') })
-      return
-    }
-    if (!openCodeGoAuthCookie.trim() && !openCodeGoConfig?.hasAuthCookie) {
-      setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoCookieRequired') })
+    if (!openCodeGoApiKey.trim()) {
+      setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoApiKeyRequired') })
       return
     }
     setOpenCodeGoSaving(true)
     setOpenCodeGoNotice(undefined)
     void window.customOpenCode.updateOpenCodeGoQuotaConfig({
-      workspaceId: openCodeGoWorkspaceId,
-      ...(openCodeGoAuthCookie.trim() ? { authCookie: openCodeGoAuthCookie } : {}),
+      apiKey: openCodeGoApiKey,
     })
       .then(config => {
         setOpenCodeGoConfig(config)
-        setOpenCodeGoWorkspaceId(config.workspaceId)
-        setOpenCodeGoAuthCookie('')
+        setOpenCodeGoApiKey('')
         setOpenCodeGoNotice({ kind: 'success', message: t('general.openCodeGoSaved') })
       })
       .catch(error => {
@@ -119,45 +108,20 @@ export function QuotaSettings() {
       .finally(() => setOpenCodeGoSaving(false))
   }
 
-  const loginOpenCodeGo = () => {
-    if (!window.customOpenCode?.loginOpenCodeGoQuota) return
-    setOpenCodeGoLoggingIn(true)
-    setOpenCodeGoNotice(undefined)
-    void window.customOpenCode.loginOpenCodeGoQuota({
-      force: openCodeGoConfig?.hasAuthCookie === true,
-    })
-      .then(result => {
-        if (result.status === 'cancelled') {
-          setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoLoginCancelled') })
-          return
-        }
-        setOpenCodeGoConfig(result.config)
-        setOpenCodeGoWorkspaceId(result.config.workspaceId)
-        setOpenCodeGoAuthCookie('')
-        setOpenCodeGoNotice({ kind: 'success', message: t('general.openCodeGoLoginSuccess') })
-      })
-      .catch(error => {
-        uiErrorHandler('login to OpenCode Go for quota', error)
-        setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoLoginFailed') })
-      })
-      .finally(() => setOpenCodeGoLoggingIn(false))
-  }
-
-  const clearOpenCodeGoCookie = () => {
+  const clearOpenCodeGoApiKey = () => {
     if (!window.customOpenCode?.updateOpenCodeGoQuotaConfig) return
     setOpenCodeGoSaving(true)
     setOpenCodeGoNotice(undefined)
     void window.customOpenCode.updateOpenCodeGoQuotaConfig({
-      workspaceId: openCodeGoWorkspaceId,
-      clearAuthCookie: true,
+      clearApiKey: true,
     })
       .then(config => {
         setOpenCodeGoConfig(config)
-        setOpenCodeGoAuthCookie('')
-        setOpenCodeGoNotice({ kind: 'success', message: t('general.openCodeGoCookieCleared') })
+        setOpenCodeGoApiKey('')
+        setOpenCodeGoNotice({ kind: 'success', message: t('general.openCodeGoDisconnected') })
       })
       .catch(error => {
-        uiErrorHandler('clear OpenCode Go quota cookie', error)
+        uiErrorHandler('clear OpenCode Go quota API key', error)
         setOpenCodeGoNotice({ kind: 'error', message: t('general.openCodeGoSaveFailed') })
       })
       .finally(() => setOpenCodeGoSaving(false))
@@ -232,7 +196,7 @@ export function QuotaSettings() {
                     </span>
                   )}
                 </div>
-                {openCodeGo && (
+                {openCodeGo && openCodeGoConfig?.source !== 'auth-file' && (
                   <div className="mx-3 mb-3 rounded-lg border border-border-200/45 bg-bg-100/45 p-3">
                     <div className="text-[length:var(--fs-sm)] font-medium text-text-100">
                       {t('general.openCodeGoSetup')}
@@ -240,88 +204,62 @@ export function QuotaSettings() {
                     <p className="mt-1 text-[length:var(--fs-xs)] leading-relaxed text-text-400">
                       {t('general.openCodeGoSetupDesc')}
                     </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={!localServer || openCodeGoManagedByEnvironment || openCodeGoLoggingIn}
-                        onClick={loginOpenCodeGo}
-                        className="h-8 rounded-lg bg-accent-main-100 px-3 text-[length:var(--fs-xs)] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {openCodeGoLoggingIn
-                          ? t('general.openCodeGoWaitingForLogin')
-                          : openCodeGoConfig?.hasAuthCookie
-                            ? t('general.openCodeGoRelogin')
-                            : t('general.openCodeGoLogin')}
-                      </button>
-                      {openCodeGoConfig?.source === 'secure-storage' && openCodeGoConfig.hasAuthCookie && (
-                        <button
-                          type="button"
-                          disabled={openCodeGoSaving || openCodeGoLoggingIn}
-                          onClick={clearOpenCodeGoCookie}
-                          className="h-8 rounded-lg border border-border-200 px-3 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {t('general.openCodeGoDisconnect')}
-                        </button>
-                      )}
-                      {openCodeGoNotice && (
-                        <span className={`text-[length:var(--fs-xs)] ${openCodeGoNotice.kind === 'error' ? 'text-danger-100' : 'text-success-100'}`}>
-                          {openCodeGoNotice.message}
+                    {openCodeGoConfig?.hasApiKey && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[length:var(--fs-xs)] text-text-400">
+                          {t('general.openCodeGoConnected')}
                         </span>
-                      )}
-                    </div>
-                    {openCodeGoConfig?.hasAuthCookie && openCodeGoConfig.workspaceId && (
-                      <p className="mt-2 text-[length:var(--fs-xs)] text-text-400">
-                        {t('general.openCodeGoConnectedWorkspace', { workspaceId: openCodeGoConfig.workspaceId })}
-                      </p>
+                        {openCodeGoConfig.source === 'secure-storage' && (
+                          <button
+                            type="button"
+                            disabled={openCodeGoSaving}
+                            onClick={clearOpenCodeGoApiKey}
+                            className="h-8 rounded-lg border border-border-200 px-3 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {t('general.openCodeGoDisconnect')}
+                          </button>
+                        )}
+                        {openCodeGoNotice && (
+                          <span className={`text-[length:var(--fs-xs)] ${openCodeGoNotice.kind === 'error' ? 'text-danger-100' : 'text-success-100'}`}>
+                            {openCodeGoNotice.message}
+                          </span>
+                        )}
+                      </div>
                     )}
                     {!openCodeGoManagedByEnvironment && (
-                      <details className="mt-3 border-t border-border-200/35 pt-2">
-                        <summary className="cursor-pointer select-none text-[length:var(--fs-xs)] text-text-400 hover:text-text-200">
-                          {t('general.openCodeGoManualSetup')}
-                        </summary>
-                        <p className="mt-2 text-[length:var(--fs-xs)] leading-relaxed text-text-500">
-                          {t('general.openCodeGoManualSetupDesc')}
-                        </p>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <label className="grid gap-1.5 text-[length:var(--fs-xs)] text-text-300">
-                            <span>{t('general.openCodeGoWorkspaceId')}</span>
-                            <input
-                              value={openCodeGoWorkspaceId}
-                              disabled={!localServer}
-                              onChange={event => {
-                                setOpenCodeGoWorkspaceId(event.target.value)
-                                setOpenCodeGoNotice(undefined)
-                              }}
-                              placeholder={t('general.openCodeGoWorkspaceIdPlaceholder')}
-                              className="h-9 rounded-lg border border-border-200 bg-bg-000 px-2.5 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-500 focus:border-accent-main-100 disabled:cursor-not-allowed disabled:opacity-55"
-                            />
-                          </label>
-                          <label className="grid gap-1.5 text-[length:var(--fs-xs)] text-text-300">
-                            <span>{t('general.openCodeGoAuthCookie')}</span>
-                            <input
-                              type="password"
-                              value={openCodeGoAuthCookie}
-                              disabled={!localServer}
-                              onChange={event => {
-                                setOpenCodeGoAuthCookie(event.target.value)
-                                setOpenCodeGoNotice(undefined)
-                              }}
-                              placeholder={openCodeGoConfig?.hasAuthCookie
-                                ? t('general.openCodeGoAuthCookieSaved')
-                                : t('general.openCodeGoAuthCookiePlaceholder')}
-                              className="h-9 rounded-lg border border-border-200 bg-bg-000 px-2.5 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-500 focus:border-accent-main-100 disabled:cursor-not-allowed disabled:opacity-55"
-                            />
-                          </label>
+                      <div className="mt-3 flex flex-col gap-2 border-t border-border-200/35 pt-2">
+                        <label className="grid gap-1.5 text-[length:var(--fs-xs)] text-text-300">
+                          <span>{t('general.openCodeGoApiKey')}</span>
+                          <input
+                            type="password"
+                            value={openCodeGoApiKey}
+                            disabled={!localServer}
+                            onChange={event => {
+                              setOpenCodeGoApiKey(event.target.value)
+                              setOpenCodeGoNotice(undefined)
+                            }}
+                            placeholder={openCodeGoConfig?.hasApiKey
+                              ? t('general.openCodeGoApiKeySaved')
+                              : t('general.openCodeGoApiKeyPlaceholder')}
+                            className="h-9 rounded-lg border border-border-200 bg-bg-000 px-2.5 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-500 focus:border-accent-main-100 disabled:cursor-not-allowed disabled:opacity-55"
+                          />
+                        </label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={!localServer || openCodeGoSaving}
+                            onClick={saveOpenCodeGoConfig}
+                            className="h-8 rounded-lg border border-border-200 px-3 text-[length:var(--fs-xs)] font-medium text-text-200 hover:bg-bg-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {openCodeGoSaving ? t('general.openCodeGoSaving') : t('general.openCodeGoSave')}
+                          </button>
+                          {!openCodeGoConfig?.hasApiKey && openCodeGoNotice && (
+                            <span className={`text-[length:var(--fs-xs)] ${openCodeGoNotice.kind === 'error' ? 'text-danger-100' : 'text-success-100'}`}>
+                              {openCodeGoNotice.message}
+                            </span>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          disabled={!localServer || openCodeGoSaving || openCodeGoLoggingIn}
-                          onClick={saveOpenCodeGoConfig}
-                          className="mt-3 h-8 rounded-lg border border-border-200 px-3 text-[length:var(--fs-xs)] font-medium text-text-200 hover:bg-bg-200 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {openCodeGoSaving ? t('general.openCodeGoSaving') : t('general.openCodeGoSaveManual')}
-                        </button>
-                      </details>
+                      </div>
                     )}
                     {!localServer && (
                       <p className="mt-2 text-[length:var(--fs-xs)] text-danger-100">

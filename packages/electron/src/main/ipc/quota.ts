@@ -4,13 +4,11 @@ import {
   queryProviderQuotas,
   updateOpenCodeGoQuotaConfig,
 } from "../quota/index.ts"
-import type { OpenCodeGoLoginResult, OpenCodeGoQuotaConfigUpdate, QuotaQueryInput } from "../../shared/quota.ts"
+import type { OpenCodeGoQuotaConfigUpdate, QuotaQueryInput } from "../../shared/quota.ts"
 import type { AssertIpcSender } from "./shared"
 
 export function registerQuotaIpc(input: {
   assertSender: AssertIpcSender
-  clearBrowserAuth: () => Promise<void>
-  login: (force: boolean) => Promise<OpenCodeGoLoginResult>
   userDataPath: string
 }) {
   ipcMain.handle("quota:query", (event, value: unknown) => {
@@ -32,30 +30,19 @@ export function registerQuotaIpc(input: {
 
   ipcMain.handle("quota:opencode-go-config-set", async (event, value: unknown) => {
     input.assertSender(event)
-    if (!isRecord(value) || typeof value.workspaceId !== "string") {
+    if (!isRecord(value)) {
       throw new Error("Invalid OpenCode Go quota config")
     }
-    if (value.authCookie !== undefined && typeof value.authCookie !== "string") {
-      throw new Error("Invalid OpenCode Go auth cookie")
+    if (value.apiKey !== undefined && typeof value.apiKey !== "string") {
+      throw new Error("Invalid OpenCode Go API key")
     }
-    if (value.clearAuthCookie !== undefined && typeof value.clearAuthCookie !== "boolean") {
-      throw new Error("Invalid OpenCode Go auth cookie action")
+    if (value.clearApiKey !== undefined && typeof value.clearApiKey !== "boolean") {
+      throw new Error("Invalid OpenCode Go API key action")
     }
-    if (value.clearAuthCookie === true) await input.clearBrowserAuth()
     return updateOpenCodeGoQuotaConfig(input.userDataPath, {
-      workspaceId: value.workspaceId,
-      ...(typeof value.authCookie === "string" ? { authCookie: value.authCookie } : {}),
-      ...(value.clearAuthCookie === true ? { clearAuthCookie: true } : {}),
+      ...(typeof value.apiKey === "string" ? { apiKey: value.apiKey } : {}),
+      ...(value.clearApiKey === true ? { clearApiKey: true } : {}),
     } satisfies OpenCodeGoQuotaConfigUpdate)
-  })
-
-  ipcMain.handle("quota:opencode-go-login", (event, value: unknown) => {
-    input.assertSender(event)
-    if (value !== undefined && !isRecord(value)) throw new Error("Invalid OpenCode Go login options")
-    if (isRecord(value) && value.force !== undefined && typeof value.force !== "boolean") {
-      throw new Error("Invalid OpenCode Go login mode")
-    }
-    return input.login(isRecord(value) && value.force === true)
   })
 }
 
