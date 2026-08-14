@@ -45,7 +45,9 @@ const ArchivedSessionsSettings = lazy(() => import('./components/ArchivedSession
 const SecuritySettings = lazy(() => import('./components/SecuritySettings').then(module => ({ default: module.SecuritySettings })))
 const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
-const ImBotSettings = lazy(() => import('./components/ImBotSettings').then(module => ({ default: module.ImBotSettings })))
+const ImBotServiceSettings = lazy(() => import('./components/ImBotServiceSettings').then(module => ({ default: module.ImBotServiceSettings })))
+const ImBotConfigSettings = lazy(() => import('./components/ImBotConfigSettings').then(module => ({ default: module.ImBotConfigSettings })))
+const ImBotLogsSettings = lazy(() => import('./components/ImBotLogsSettings').then(module => ({ default: module.ImBotLogsSettings })))
 const GeneralSettings = lazy(() => import('./components/GeneralSettings').then(module => ({ default: module.GeneralSettings })))
 const SpeechModelSettings = lazy(() => import('./components/SpeechModelSettings').then(module => ({ default: module.SpeechModelSettings })))
 
@@ -71,7 +73,9 @@ export type SettingsTab =
   | 'security'
   | 'memory'
   | 'hooks'
-  | 'imBot'
+  | 'imBotService'
+  | 'imBotConfig'
+  | 'imBotLogs'
   | 'logs'
   | 'backup'
   | 'about'
@@ -99,12 +103,18 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   security: <ShieldIcon size={15} />,
   memory: <AgentIcon size={15} />,
   hooks: <PlugIcon size={15} />,
-  imBot: <MessageSquareIcon size={15} />,
+  imBotService: <MessageSquareIcon size={15} />,
+  imBotConfig: <CogIcon size={15} />,
+  imBotLogs: <FileIcon size={15} />,
   logs: <FileIcon size={15} />,
   backup: <DownloadIcon size={15} />,
 }
 
 const TAB_IDS: SettingsTab[] = [
+  'general',
+  'appearance',
+  'notifications',
+  'keybindings',
   'servers',
   'providers',
   'models',
@@ -114,17 +124,15 @@ const TAB_IDS: SettingsTab[] = [
   'workspace',
   'memory',
   'hosting',
-  'imBot',
   'hooks',
-  'general',
-  'appearance',
-  'notifications',
-  'keybindings',
-  'archived',
   'security',
   'logs',
   'backup',
   'config',
+  'imBotService',
+  'imBotConfig',
+  'imBotLogs',
+  'archived',
   'about',
 ]
 
@@ -147,7 +155,9 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.security',
   memory: 'tabs.memory',
   hooks: 'tabs.hooks',
-  imBot: 'tabs.imBot',
+  imBotService: 'tabs.imBotService',
+  imBotConfig: 'tabs.imBotConfig',
+  imBotLogs: 'tabs.imBotLogs',
   logs: 'tabs.logs',
   backup: 'tabs.backup',
 }
@@ -171,18 +181,22 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.securityDesc',
   memory: 'tabs.memoryDesc',
   hooks: 'tabs.hooksDesc',
-  imBot: 'tabs.imBotDesc',
+  imBotService: 'tabs.imBotServiceDesc',
+  imBotConfig: 'tabs.imBotConfigDesc',
+  imBotLogs: 'tabs.imBotLogsDesc',
   logs: 'tabs.logsDesc',
   backup: 'tabs.backupDesc',
 }
 
-const GROUP_DEFS: { labelKey: string; tabs: SettingsTab[] }[] = [
+const GROUP_DEFS: { labelKey?: string; tabs: SettingsTab[] }[] = [
+  { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
   { labelKey: 'groups.basic', tabs: ['servers', 'providers', 'models', 'speechModel'] },
   { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
-  { labelKey: 'groups.advanced', tabs: ['hosting', 'imBot', 'hooks'] },
-  { labelKey: 'groups.general', tabs: ['general', 'appearance', 'notifications', 'keybindings'] },
+  { labelKey: 'groups.advanced', tabs: ['hosting', 'hooks'] },
+  { labelKey: 'groups.security', tabs: ['security', 'logs', 'backup', 'config'] },
+  { labelKey: 'groups.imBot', tabs: ['imBotService', 'imBotConfig', 'imBotLogs'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
-  { labelKey: 'groups.security', tabs: ['security', 'logs', 'backup', 'config', 'about'] },
+  { tabs: ['about'] },
 ]
 
 // ============================================
@@ -227,8 +241,12 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <MemorySettings />
     case 'hooks':
       return <HooksSettings />
-    case 'imBot':
-      return <ImBotSettings />
+    case 'imBotService':
+      return <ImBotServiceSettings />
+    case 'imBotConfig':
+      return <ImBotConfigSettings />
+    case 'imBotLogs':
+      return <ImBotLogsSettings />
     case 'logs':
       return <LogsSettings />
     case 'backup':
@@ -269,7 +287,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
   const groupedTabs = useMemo(
     () =>
       GROUP_DEFS.map(group => ({
-        label: t(group.labelKey),
+        label: group.labelKey ? t(group.labelKey) : '',
         tabs: group.tabs
           .map(id => visibleTabs.find(vt => vt.id === id))
           .filter((vt): vt is (typeof visibleTabs)[number] => !!vt),
@@ -490,20 +508,19 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
         <div className="shrink-0 px-2 xl:px-2.5 pb-3">
           <div className="px-2.5 xl:px-3">{backButton}</div>
         </div>
+        {/* 搜索框 - 固定不随滚动 */}
+        <div className="shrink-0 px-2 xl:px-2.5 pb-4">
+          <div className="px-2.5 xl:px-3">{search}</div>
+        </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-none px-2 xl:px-2.5 pb-4">
-          <div className="px-2.5 xl:px-3 mb-3">
-            <div className="text-[length:var(--fs-base)] font-semibold text-text-100">{t('title')}</div>
-            <div className="text-[length:var(--fs-xs)] text-text-400 mt-0.5 leading-relaxed hidden xl:block">
-              {t('subtitle')}
-            </div>
-          </div>
-          <div className="px-2.5 xl:px-3 mb-4">{search}</div>
           <div className="space-y-3">
             {groupedTabs.map(group => (
-              <div key={group.label}>
-                <div className="px-2.5 xl:px-3 mb-1.5 text-[length:var(--fs-xxs)] font-semibold uppercase tracking-wider text-text-400/90">
-                  {group.label}
-                </div>
+              <div key={group.tabs[0].id}>
+                {group.label && (
+                  <div className="px-2.5 xl:px-3 mb-1.5 text-[length:var(--fs-xxs)] font-semibold uppercase tracking-wider text-text-400/90">
+                    {group.label}
+                  </div>
+                )}
                 <div className="space-y-0.5">
                   {group.tabs.map(vt => (
                     <button
@@ -529,10 +546,6 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="mt-auto pt-3 px-2.5 xl:px-3 text-[length:var(--fs-xxs)] text-text-400">
-            {t('version', { version: __APP_VERSION__ })}
           </div>
         </div>
       </nav>

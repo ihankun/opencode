@@ -394,6 +394,20 @@
       "unknown": "未知状态"
     },
     "settings": "设置",
+    "imBot": {
+      "title": "IM 机器人",
+      "serviceRunning": "服务运行中",
+      "serviceStarting": "服务启动中",
+      "config": "配置",
+      "logs": "日志",
+      "noConnectedPlatforms": "暂无已连接平台",
+      "status": {
+        "connected": "已连接",
+        "connecting": "连接中",
+        "failed": "连接失败",
+        "disabled": "未启用"
+      }
+    },
     "update": {
       "title": "软件更新",
       "checking": "正在检查更新…",

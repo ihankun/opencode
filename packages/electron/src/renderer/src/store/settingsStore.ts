@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react'
 import type { SettingsTab } from '../features/settings/SettingsDialog'
 
-let tab: SettingsTab = 'servers'
+let tab: SettingsTab = 'general'
 const listeners = new Set<() => void>()
 
 function getTab() {

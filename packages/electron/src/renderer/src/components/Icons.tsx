@@ -98,6 +98,7 @@ import {
   MoreHorizontal,
   Mic,
   Gauge,
+  Smartphone,
 } from 'lucide-react'
 
 export interface IconProps extends SVGProps<SVGSVGElement> {
@@ -247,3 +248,4 @@ export const GripVerticalIcon = wrap(GripVertical)
 export const AppWindowIcon = wrap(AppWindow)
 export const LogOutIcon = wrap(LogOut)
 export const GaugeIcon = wrap(Gauge)
+export const SmartphoneIcon = wrap(Smartphone)

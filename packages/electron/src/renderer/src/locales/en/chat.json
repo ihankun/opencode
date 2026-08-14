@@ -396,6 +396,20 @@
       "unknown": "Unknown"
     },
     "settings": "Settings",
+    "imBot": {
+      "title": "IM Bot",
+      "serviceRunning": "Service running",
+      "serviceStarting": "Service starting",
+      "config": "Configure",
+      "logs": "Logs",
+      "noConnectedPlatforms": "No connected platforms yet",
+      "status": {
+        "connected": "Connected",
+        "connecting": "Connecting",
+        "failed": "Failed",
+        "disabled": "Disabled"
+      }
+    },
     "update": {
       "title": "Software Update",
       "checking": "Checking for updates…",

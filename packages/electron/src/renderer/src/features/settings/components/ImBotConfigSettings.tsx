@@ -1,33 +1,17 @@
-import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
 import { useDirectory, useModels, useServerStore } from '../../../hooks'
-import type { ImBridgeConfig, ImBridgeState } from '../../../../../shared/imBridge'
 import { SettingsCard, Toggle } from './SettingsUI'
+import { useImBridgeData } from './imBotShared'
 
 const inputClass = 'h-8 w-full rounded-md border border-border-200 bg-bg-000 px-2.5 text-[length:var(--fs-sm)] text-text-100 outline-none placeholder:text-text-400 focus:border-accent-main-100/60 focus:ring-1 focus:ring-accent-main-100/20'
 
-export function ImBotSettings() {
+export function ImBotConfigSettings() {
   const { t } = useTranslation(['settings', 'common'])
   const { servers } = useServerStore()
   const { currentDirectory } = useDirectory()
-  const [config, setConfig] = useState<ImBridgeConfig>()
-  const [state, setState] = useState<ImBridgeState>({ status: 'stopped', logs: [] })
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  const available = typeof window.customOpenCode?.imBridgeConfig === 'function'
+  const { available, config, message, busy, setConfig, setMessage, setBusy } = useImBridgeData()
   const { models, isLoading: modelsLoading, error: modelsError } = useModels(config?.serverId)
-
-  useEffect(() => {
-    if (!available) return
-    void Promise.all([window.customOpenCode.imBridgeConfig(), window.customOpenCode.imBridgeState()])
-      .then(([nextConfig, nextState]) => {
-        setConfig(nextConfig)
-        setState(nextState)
-      })
-      .catch(error => setMessage(error instanceof Error ? error.message : String(error)))
-    return window.customOpenCode.onImBridgeStateChanged(setState)
-  }, [available])
 
   if (!available) {
     return <SettingsCard title={t('imBot.title')} description={t('imBot.desktopOnly')}><div /></SettingsCard>
@@ -40,7 +24,7 @@ export function ImBotSettings() {
     try {
       const saved = await window.customOpenCode.updateImBridgeConfig(config)
       setConfig(saved)
-      if (restart) setState(await window.customOpenCode.restartImBridge())
+      if (restart) await window.customOpenCode.restartImBridge()
       setMessage(t(restart ? 'imBot.savedAndRestarted' : 'imBot.saved'))
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
@@ -49,46 +33,8 @@ export function ImBotSettings() {
     }
   }
 
-  const changeState = async (action: 'start' | 'stop' | 'restart') => {
-    setBusy(true)
-    setMessage('')
-    try {
-      await window.customOpenCode.updateImBridgeConfig(config)
-      const next = action === 'start'
-        ? await window.customOpenCode.startImBridge()
-        : action === 'stop'
-          ? await window.customOpenCode.stopImBridge()
-          : await window.customOpenCode.restartImBridge()
-      setState(next)
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const statusClass = state.status === 'running' ? 'text-success-100' : state.status === 'error' ? 'text-danger-100' : state.status === 'starting' ? 'text-warning-100' : 'text-text-400'
-
   return (
     <div className="space-y-4">
-      <SettingsCard
-        title={t('imBot.serviceTitle')}
-        description={t('imBot.serviceDescription')}
-        actions={<span className={`text-[length:var(--fs-xs)] font-medium ${statusClass}`}>{t(`imBot.status.${state.status}`)}{state.pid ? ` · PID ${state.pid}` : ''}</span>}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          {state.status === 'running' || state.status === 'starting'
-            ? <Button size="sm" variant="danger" disabled={busy} onClick={() => void changeState('stop')}>{t('imBot.stop')}</Button>
-            : <Button size="sm" disabled={busy} onClick={() => void changeState('start')}>{t('imBot.start')}</Button>}
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void changeState('restart')}>{t('imBot.restart')}</Button>
-          <label className="ml-auto flex items-center gap-2 text-[length:var(--fs-xs)] text-text-300">
-            {t('imBot.autoStart')}
-            <Toggle enabled={config.autoStart} onChange={() => setConfig(current => current && ({ ...current, autoStart: !current.autoStart }))} />
-          </label>
-        </div>
-        {state.error ? <p className="mt-2 text-[length:var(--fs-xs)] text-danger-100">{state.error}</p> : null}
-      </SettingsCard>
-
       <SettingsCard title={t('imBot.connectionTitle')} description={t('imBot.connectionDescription')}>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field label={t('imBot.server')}>
@@ -175,10 +121,6 @@ export function ImBotSettings() {
           </ChannelCard>
         </div>
         <p className="mt-3 text-[length:var(--fs-xs)] leading-relaxed text-warning-100">{t('imBot.securityWarning')}</p>
-      </SettingsCard>
-
-      <SettingsCard title={t('imBot.logsTitle')} description={t('imBot.logsDescription')}>
-        <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-bg-000 p-3 font-mono text-[length:var(--fs-xs)] leading-relaxed text-text-300">{state.logs.length ? state.logs.join('\n') : t('imBot.noLogs')}</pre>
       </SettingsCard>
 
       <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border-200/60 bg-bg-000/90 py-3 backdrop-blur">

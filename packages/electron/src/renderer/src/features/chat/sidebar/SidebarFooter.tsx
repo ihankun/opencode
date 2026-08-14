@@ -9,6 +9,7 @@ import {
   MoonIcon,
   SystemIcon,
   QuestionIcon,
+  SmartphoneIcon,
 } from '../../../components/Icons'
 import { getProviders } from '../../../api'
 import { useServerStore, useTheme } from '../../../hooks'
@@ -16,6 +17,8 @@ import { useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 import { serverStore } from '../../../store/serverStore'
 import { hasUpdateAvailable, updaterHasNewVersion, updaterReadyToInstall, useUpdateStore } from '../../../store/updateStore'
 import { UpdatePanel } from './UpdatePanel'
+import { ImBridgePanel } from './ImBridgePanel'
+import { useImBridgeData } from '../../settings/components/imBotShared'
 import type { QuotaProviderResult } from '../../../../../shared/quota'
 
 function AccountIndicator({ connectionState, size = 24 }: { connectionState: string; size?: number }) {
@@ -43,9 +46,10 @@ export interface SidebarFooterProps {
   showLabels: boolean
   connectionState: string
   onOpenSettings?: () => void
+  onOpenImBotSettings?: (tab: 'service' | 'config' | 'logs') => void
 }
 
-export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: SidebarFooterProps) {
+export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onOpenImBotSettings }: SidebarFooterProps) {
   const { t, i18n } = useTranslation(['chat', 'common'])
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const { activeServer } = useServerStore()
@@ -61,12 +65,18 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const [updatePanelOpen, setUpdatePanelOpen] = useState(false)
   const [updatePanelVisible, setUpdatePanelVisible] = useState(false)
   const [updatePanelPos, setUpdatePanelPos] = useState({ top: 0, left: 0, width: 260 })
+  const [imPanelOpen, setImPanelOpen] = useState(false)
+  const [imPanelVisible, setImPanelVisible] = useState(false)
+  const [imPanelPos, setImPanelPos] = useState({ top: 0, left: 0, width: 260 })
+  const imBridge = useImBridgeData({ refreshConfigOnEvent: true })
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const updateButtonRef = useRef<HTMLButtonElement>(null)
   const updatePanelRef = useRef<HTMLDivElement>(null)
+  const imButtonRef = useRef<HTMLButtonElement>(null)
+  const imPanelRef = useRef<HTMLDivElement>(null)
   const closeTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updater = updateState.updater
@@ -140,6 +150,24 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     closeTimeoutIdRef.current = setTimeout(() => setUpdatePanelOpen(false), 150)
   }, [])
 
+  // 打开 IM 机器人面板
+  const openImPanel = useCallback(() => {
+    if (!imButtonRef.current || !containerRef.current) return
+    const buttonRect = imButtonRef.current.getBoundingClientRect()
+    const containerRect = containerRef.current.getBoundingClientRect()
+    setImPanelPos({ top: buttonRect.top, left: containerRect.left, width: containerRect.width })
+    setImPanelOpen(true)
+    requestAnimationFrame(() => setImPanelVisible(true))
+    // 打开时再拉一次最新配置，避免运行中空闲时显示过期状态
+    void window.customOpenCode.imBridgeConfig?.().then(imBridge.setConfig).catch(() => undefined)
+  }, [imBridge.setConfig])
+
+  // 关闭 IM 机器人面板
+  const closeImPanel = useCallback(() => {
+    setImPanelVisible(false)
+    closeTimeoutIdRef.current = setTimeout(() => setImPanelOpen(false), 150)
+  }, [])
+
   useEffect(() => {
     void getProviders()
       .then(value => setConnectedProviders(new Set(value.connected)))
@@ -177,20 +205,30 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   // 切换菜单
   const toggleMenu = useCallback(() => {
     if (updatePanelOpen) closeUpdatePanel()
+    if (imPanelOpen) closeImPanel()
     if (isOpen) closeMenu()
     else openMenu()
-  }, [isOpen, openMenu, closeMenu, updatePanelOpen, closeUpdatePanel])
+  }, [isOpen, openMenu, closeMenu, updatePanelOpen, closeUpdatePanel, imPanelOpen, closeImPanel])
 
   // 切换更新面板
   const toggleUpdatePanel = useCallback(() => {
     if (isOpen) closeMenu()
+    if (imPanelOpen) closeImPanel()
     if (updatePanelOpen) closeUpdatePanel()
     else openUpdatePanel()
-  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, openUpdatePanel])
+  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, imPanelOpen, closeImPanel, openUpdatePanel])
+
+  // 切换 IM 机器人面板
+  const toggleImPanel = useCallback(() => {
+    if (isOpen) closeMenu()
+    if (updatePanelOpen) closeUpdatePanel()
+    if (imPanelOpen) closeImPanel()
+    else openImPanel()
+  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, imPanelOpen, closeImPanel, openImPanel])
 
   // 点击外部关闭
   useEffect(() => {
-    if (!isOpen && !updatePanelOpen) return
+    if (!isOpen && !updatePanelOpen && !imPanelOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node
@@ -198,26 +236,30 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
       if (menuRef.current?.contains(target)) return
       if (updateButtonRef.current?.contains(target)) return
       if (updatePanelRef.current?.contains(target)) return
+      if (imButtonRef.current?.contains(target)) return
+      if (imPanelRef.current?.contains(target)) return
       closeMenu()
       closeUpdatePanel()
+      closeImPanel()
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [isOpen, updatePanelOpen, imPanelOpen, closeMenu, closeUpdatePanel, closeImPanel])
 
   // ESC 关闭
   useEffect(() => {
-    if (!isOpen && !updatePanelOpen) return
+    if (!isOpen && !updatePanelOpen && !imPanelOpen) return
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         closeMenu()
         closeUpdatePanel()
+        closeImPanel()
       }
     }
     document.addEventListener('keydown', handleEsc)
     return () => document.removeEventListener('keydown', handleEsc)
-  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [isOpen, updatePanelOpen, imPanelOpen, closeMenu, closeUpdatePanel, closeImPanel])
 
   // 侧边栏状态变化时关闭
   useEffect(() => {
@@ -232,11 +274,14 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     if (showLabelsChanged && updatePanelOpen) {
       frameId = requestAnimationFrame(() => closeUpdatePanel())
     }
+    if (showLabelsChanged && imPanelOpen) {
+      frameId = requestAnimationFrame(() => closeImPanel())
+    }
 
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId)
     }
-  }, [showLabels, isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [showLabels, isOpen, updatePanelOpen, imPanelOpen, closeMenu, closeUpdatePanel, closeImPanel])
 
   // 清理 closeTimeout 防止内存泄漏
   useEffect(() => {
@@ -428,6 +473,33 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
             </span>
           </button>
 
+          {/* IM 机器人入口 */}
+          {showLabels && imBridge.available && (
+            <button
+              ref={imButtonRef}
+              type="button"
+              onClick={() => {
+                if (imBridge.state.status === 'running' || imBridge.state.status === 'starting') toggleImPanel()
+                else onOpenImBotSettings?.('service')
+              }}
+              aria-label={t('sidebar.imBot.title')}
+              title={t('sidebar.imBot.title')}
+              className={`
+                relative h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-all duration-300
+                ${imPanelOpen ? 'bg-bg-200 text-text-100 shadow-sm' : 'sidebar-hover-row hover:text-text-100'}
+                ${
+                  imBridge.state.status === 'running'
+                    ? 'text-success-100'
+                    : imBridge.state.status === 'error'
+                      ? 'text-danger-100'
+                      : 'text-text-400'
+                }
+              `}
+            >
+              <SmartphoneIcon size={16} />
+            </button>
+          )}
+
           {/* 更新状态入口 */}
           {showLabels && (
             <button
@@ -459,6 +531,25 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
           position={updatePanelPos}
           visible={updatePanelVisible}
           onClose={closeUpdatePanel}
+        />
+      )}
+
+      {imPanelOpen && (
+        <ImBridgePanel
+          ref={imPanelRef}
+          position={imPanelPos}
+          visible={imPanelVisible}
+          onClose={closeImPanel}
+          config={imBridge.config}
+          state={imBridge.state}
+          onOpenConfig={() => {
+            closeImPanel()
+            onOpenImBotSettings?.('config')
+          }}
+          onOpenLogs={() => {
+            closeImPanel()
+            onOpenImBotSettings?.('logs')
+          }}
         />
       )}
     </div>
