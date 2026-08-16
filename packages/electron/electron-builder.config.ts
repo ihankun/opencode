@@ -18,6 +18,10 @@ const config: Configuration = {
       to: "sandbox-runtime",
       filter: ["LICENSE", "UPSTREAM.md", "vendor/seccomp/**/*", "vendor/srt-win/**/*"],
     },
+    {
+      from: ".models-cache/api.json",
+      to: "models/api.json",
+    },
   ],
   protocols: {
     name: "OpenCodex",

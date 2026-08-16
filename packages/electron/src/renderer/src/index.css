@@ -469,10 +469,26 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
 
 html[data-platform='windows'][data-theme-preset='codex'] .electron-windows-titlebar {
   background-color: hsl(var(--sidebar-bg));
+  background-image: linear-gradient(
+    to right,
+    transparent 0 var(--sidebar-width, 288px),
+    hsl(var(--text-400) / 0.18) var(--sidebar-width, 288px) 100%
+  );
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: bottom;
 }
 
 html.electron-app[data-theme-preset='codex'][data-glass] .electron-windows-titlebar {
   background-color: hsl(var(--sidebar-bg));
+  background-image: linear-gradient(
+    to right,
+    transparent 0 var(--sidebar-width, 288px),
+    hsl(var(--text-400) / 0.18) var(--sidebar-width, 288px) 100%
+  );
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: bottom;
 }
 
 .electron-windows-titlebar-btn {
@@ -975,27 +991,6 @@ html.electron-app[data-theme-preset='codex'][data-platform="linux"][data-glass] 
     );
 }
 
-/* Windows: chat 区卡片化 — 左上圆角 + 阴影投影到侧边栏，营造凸出感
- * 侧边栏 border-r 去掉，避免与卡片边缘叠成双线；拖拽调宽热区（z-50）不受影响 */
-html[data-platform='windows'] .sidebar-surface {
-  border-right: none;
-}
-
-html[data-platform='windows'] .chat-surface {
-  background-image: linear-gradient(
-    to right,
-    hsl(var(--sidebar-bg)) 0 20px,
-    hsl(var(--chat-bg)) 20px 100%
-  );
-}
-
-html[data-platform='windows'] .chat-surface-card {
-  position: relative;
-  z-index: 1;
-  margin-left: 8px;
-  border-radius: 12px 0 0 0;
-  box-shadow: -6px 0 16px hsl(0 0% 0% / 0.14);
-}
 
 :root[data-theme-preset='codex'][data-mode='light'][data-glass] .sidebar-surface {
   background-color: hsl(var(--sidebar-bg) / 0.42);
@@ -1035,15 +1030,15 @@ html[data-platform='windows'] .chat-surface-card {
   backdrop-filter: blur(40px) saturate(180%);
 }
 
-/* Windows + glass: light mode uses a pale gray sidebar/titlebar background.
+/* Windows + glass: light mode uses a pale blue sidebar/titlebar background.
  * --sidebar-bg 同时驱动 .sidebar-surface 与 .electron-windows-titlebar 背景。 */
 :root:root[data-theme-preset='codex'][data-platform='windows'][data-glass][data-mode='light'] {
-  --sidebar-bg: 0 0% 96%;
+  --sidebar-bg: 210 24% 95%;
 }
 
 @media (prefers-color-scheme: light) {
   :root:root[data-theme-preset='codex'][data-platform='windows'][data-glass]:not([data-mode]) {
-    --sidebar-bg: 0 0% 96%;
+    --sidebar-bg: 210 24% 95%;
   }
 }
 

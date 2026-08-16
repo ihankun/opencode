@@ -411,7 +411,10 @@ function showWindow() {
 function createTray() {
   if (tray) return
 
-  const image = nativeImage.createFromPath(iconPath("generated/opencode-trayTemplate.png"))
+  const image =
+    process.platform === "darwin"
+      ? nativeImage.createFromPath(iconPath("generated/opencode-trayTemplate.png"))
+      : nativeImage.createFromPath(iconPath("opencode-icon.png"))
   if (process.platform === "darwin") image.setTemplateImage(true)
 
   tray = new Tray(image)

@@ -42,13 +42,19 @@ async function writeIco() {
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true })
-      // Convert RGBA → BGRA
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i]
-        data[i] = data[i + 2]     // B → R position
-        data[i + 2] = r           // R → B position
+      // ICO stores DIB bottom-up; sharp raw output is top-down, so flip rows vertically
+      const flipped = Buffer.alloc(data.length)
+      const rowBytes = size * 4
+      for (let row = 0; row < size; row++) {
+        data.copy(flipped, (size - 1 - row) * rowBytes, row * rowBytes, (row + 1) * rowBytes)
       }
-      return { size, data }
+      // Convert RGBA → BGRA
+      for (let i = 0; i < flipped.length; i += 4) {
+        const r = flipped[i]
+        flipped[i] = flipped[i + 2]     // B → R position
+        flipped[i + 2] = r              // R → B position
+      }
+      return { size, data: flipped }
     })
   )
 
