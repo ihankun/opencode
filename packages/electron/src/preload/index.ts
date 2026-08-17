@@ -388,6 +388,7 @@ export type CustomOpenCodeApi = {
   exportDebugLogs(): Promise<string>
   diagnostics(): Promise<CustomOpenCodeDiagnostics>
   listDrives(): Promise<string[]>
+  selectDirectory(defaultPath?: string): Promise<string | null>
   // Window controls
   windowMinimize(): Promise<void>
   windowMaximize(): Promise<void>
@@ -515,6 +516,7 @@ const api: CustomOpenCodeApi = {
   exportDebugLogs: () => ipcRenderer.invoke("logging:export"),
   diagnostics: () => ipcRenderer.invoke("diagnostics:get"),
   listDrives: () => ipcRenderer.invoke("drives:list"),
+  selectDirectory: (defaultPath) => ipcRenderer.invoke("dialog:select-directory", defaultPath),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke("window:minimize"),
   windowMaximize: () => ipcRenderer.invoke("window:maximize"),

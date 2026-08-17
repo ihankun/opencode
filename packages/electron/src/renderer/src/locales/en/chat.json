@@ -59,6 +59,7 @@
     "selectDirectory": "Select directory...",
     "current": "(current)",
     "enterCustomPath": "Enter custom path...",
+    "browseDirectory": "Browse folders...",
     "startConversation": "Start Conversation",
     "orJustType": "Or just type a message below to start with the current directory"
   },

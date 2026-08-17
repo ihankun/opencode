@@ -4,6 +4,7 @@ import { MessageSquareIcon, FolderIcon, ChevronDownIcon, NewChatIcon } from '../
 import { getPath, type ApiProject, type ApiPath } from '../../api'
 import { serverStore } from '../../store/serverStore'
 import { handleError } from '../../utils'
+import { isElectron } from '../../utils/platform'
 
 interface EmptyStateProps {
   currentProject: ApiProject | null
@@ -89,6 +90,21 @@ export function EmptyState({ currentProject, projects, onStartChat }: EmptyState
     setIsCustomMode(true)
     setIsDropdownOpen(false)
     setCustomPath(currentDirectory)
+  }
+
+  // 使用系统原生目录选择器
+  const handleBrowseDirectory = async () => {
+    if (!isElectron() || typeof window.customOpenCode?.selectDirectory !== 'function') return
+    try {
+      const selected = await window.customOpenCode.selectDirectory(customPath || currentDirectory || undefined)
+      if (selected) {
+        setCustomPath(selected)
+        setIsDropdownOpen(false)
+        setIsCustomMode(true)
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   // 其他可选目录（排除当前的）
@@ -196,6 +212,15 @@ export function EmptyState({ currentProject, projects, onStartChat }: EmptyState
                         <NewChatIcon className="w-4 h-4 flex-shrink-0" />
                         <span>{t('emptyState.enterCustomPath')}</span>
                       </button>
+                      {isElectron() && typeof window.customOpenCode?.selectDirectory === 'function' && (
+                        <button
+                          onClick={() => void handleBrowseDirectory()}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg-200/50 transition-colors text-[length:var(--fs-base)] text-text-400"
+                        >
+                          <FolderIcon className="w-4 h-4 flex-shrink-0" />
+                          <span>{t('emptyState.browseDirectory')}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

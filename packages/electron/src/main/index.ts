@@ -33,6 +33,7 @@ import { registerBadgeIpc } from "./ipc/badge"
 import { registerCredentialsIpc } from "./ipc/credentials"
 import { registerDeepLinkIpc } from "./ipc/deepLinks"
 import { registerDesktopIntegrationIpc } from "./ipc/desktopIntegration"
+import { registerDialogIpc } from "./ipc/dialog"
 import { registerDiagnosticsIpc } from "./ipc/diagnostics"
 import { registerDraftsIpc } from "./ipc/drafts"
 import { registerDrivesIpc } from "./ipc/drives"
@@ -714,6 +715,7 @@ registerSpeechModelIpc({
   service: speechModelService,
 })
 registerDrivesIpc({ assertSender: assertMainWindow })
+registerDialogIpc({ assertSender: assertMainWindow })
 const autoUpdater = createAutoUpdater((state) => {
   BrowserWindow.getAllWindows().forEach((window) => window.webContents.send("updater:state", state))
 })

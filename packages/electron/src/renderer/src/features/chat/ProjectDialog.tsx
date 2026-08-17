@@ -63,6 +63,9 @@ function getFilterText(path: string): string {
 export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: ProjectDialogProps) {
   const { t } = useTranslation(['chat', 'common'])
   const { savedDirectories, recentProjects } = useDirectory()
+  // 原生目录选择（Electron 环境直接调用系统资源管理器）
+  const nativeSelectSupported = isElectron() && typeof window.customOpenCode?.selectDirectory === 'function'
+
   // State
   const [inputValue, setInputValue] = useState('')
   const [items, setItems] = useState<FileItem[]>([])
@@ -147,6 +150,43 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
       clearTimeout(timer)
     }
   }, [isOpen, initialPath])
+
+  // ==========================================
+  // Native directory picker (Electron)
+  // ==========================================
+
+  useEffect(() => {
+    if (!isOpen || !nativeSelectSupported) return
+
+    let cancelled = false
+
+    const openNativePicker = async () => {
+      let defaultPath = initialPath
+      if (!defaultPath) {
+        try {
+          const p = await getPath()
+          defaultPath = p.home
+        } catch {
+          /* ignore */
+        }
+      }
+      if (cancelled) return
+      const selected = await window.customOpenCode.selectDirectory(defaultPath || undefined)
+      if (cancelled) return
+      if (selected) {
+        onSelect(selected)
+      }
+      onClose()
+    }
+
+    void openNativePicker().catch(() => {
+      if (cancelled) return
+      onClose()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, nativeSelectSupported, initialPath, onSelect, onClose])
 
   // ==========================================
   // Load Windows Drives
@@ -335,6 +375,9 @@ export function ProjectDialog({ isOpen, onClose, onSelect, initialPath = '' }: P
   // ==========================================
   // Render
   // ==========================================
+
+  // Electron 环境使用系统原生目录选择器,不再渲染自研弹窗
+  if (nativeSelectSupported) return null
 
   return (
     <Dialog

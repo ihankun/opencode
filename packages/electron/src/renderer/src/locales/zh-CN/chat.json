@@ -59,6 +59,7 @@
     "selectDirectory": "选择目录...",
     "current": "（当前）",
     "enterCustomPath": "输入自定义路径...",
+    "browseDirectory": "浏览文件夹...",
     "startConversation": "开始对话",
     "orJustType": "或在下方直接输入消息，使用当前目录开始"
   },
