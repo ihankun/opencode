@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/Button'
-import { ExternalLinkIcon, RetryIcon } from '../../../components/Icons'
+import { DownloadIcon, ExternalLinkIcon, RetryIcon } from '../../../components/Icons'
 import { hasUpdateAvailable, RELEASES_PAGE_URL, updateStore, useUpdateStore } from '../../../store/updateStore'
 import { openUrl } from '../../../utils/browserOpen'
 import { SettingsCard, SettingsSection } from './SettingsUI'
@@ -11,6 +11,8 @@ export function AboutSettings() {
   const updateState = useUpdateStore()
   const latestRelease = updateState.latestRelease
   const updateAvailable = hasUpdateAvailable(updateState)
+  const updater = updateState.updater
+  const updaterAvailable = updater.status === 'available'
 
   useEffect(() => {
     void updateStore.checkForUpdates()
@@ -18,6 +20,10 @@ export function AboutSettings() {
 
   const handleCheckForUpdates = useCallback(() => {
     void updateStore.checkForUpdates({ force: true })
+  }, [])
+
+  const handleDownloadUpdate = useCallback(() => {
+    updateStore.downloadUpdate()
   }, [])
 
   const handleOpenRelease = useCallback((url: string) => {
@@ -50,15 +56,21 @@ export function AboutSettings() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-200/50 bg-bg-000/35 px-3 py-2.5">
             <div className="min-w-0">
               <div className="text-[length:var(--fs-sm)] text-text-200">
-                {updateState.checking
-                  ? t('about.statusChecking')
-                  : updateState.error
-                    ? t('about.statusError', { error: updateState.error })
-                    : updateAvailable
-                      ? t('about.statusUpdateAvailable', { version: latestRelease?.version })
-                      : updateState.lastCheckedAt
-                        ? t('about.statusUpToDate')
-                        : t('about.statusIdle')}
+                {updater.status === 'downloading'
+                  ? t('about.statusDownloading', { percent: Math.round(updater.progress?.percent ?? 0) })
+                  : updater.status === 'downloaded'
+                    ? t('about.statusDownloaded')
+                    : updater.status === 'available'
+                      ? t('about.statusUpdateAvailable', { version: updater.version })
+                      : updateState.checking
+                        ? t('about.statusChecking')
+                        : updateState.error
+                          ? t('about.statusError', { error: updateState.error })
+                          : updateAvailable
+                            ? t('about.statusUpdateAvailable', { version: latestRelease?.version })
+                            : updateState.lastCheckedAt
+                              ? t('about.statusUpToDate')
+                              : t('about.statusIdle')}
               </div>
               {latestRelease?.publishedAt && (
                 <div className="mt-1 text-[length:var(--fs-xs)] text-text-400">
@@ -72,7 +84,19 @@ export function AboutSettings() {
                 {!updateState.checking && <RetryIcon size={12} />}
                 {t('about.checkNow')}
               </Button>
-              {updateAvailable && latestRelease && (
+              {updater.status === 'downloaded' && (
+                <Button size="sm" onClick={() => updateStore.installUpdate()}>
+                  <DownloadIcon size={12} />
+                  {t('about.restartAndInstall')}
+                </Button>
+              )}
+              {updater.status === 'available' && (
+                <Button size="sm" onClick={handleDownloadUpdate}>
+                  <DownloadIcon size={12} />
+                  {t('about.downloadUpdate')}
+                </Button>
+              )}
+              {!updaterAvailable && updateAvailable && latestRelease && (
                 <Button size="sm" onClick={() => handleOpenRelease(latestRelease.url)}>
                   <ExternalLinkIcon size={12} />
                   {t('about.viewUpdate')}

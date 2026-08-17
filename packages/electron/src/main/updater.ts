@@ -2,7 +2,8 @@ import { app, net } from "electron"
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { createReadStream, createWriteStream, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs"
-import path from "node:path"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import path, { dirname } from "node:path"
 import pkg from "electron-updater"
 import type { UpdateInfo } from "electron-updater"
 import type { UpdaterState } from "../shared/updater"
@@ -12,10 +13,12 @@ const { autoUpdater } = pkg
 const MIN_CHECK_INTERVAL_MS = 10_000
 const RELEASES_API_URL = "https://api.github.com/repos/ihankun/opencodex/releases/latest"
 const MAC_UPDATE_CACHE_DIR = "update-cache"
+const UPDATE_APPROVAL_FILE = "update-download-approval.json"
 
 export interface AutoUpdaterHandle {
   state(): UpdaterState
   check(): Promise<void>
+  download(): Promise<void>
   install(): void
 }
 
@@ -59,25 +62,47 @@ export function createAutoUpdater(emit: (state: UpdaterState) => void): AutoUpda
   let checking = false
   let lastCheckAt = 0
   let macUpdate: MacUpdate | null = null
+  let approvedVersion: string | null = null
 
   const setState = (patch: Partial<UpdaterState>) => {
     state = { ...state, ...patch }
     emit(state)
   }
 
+  const startDownload = async () => {
+    if (isWindows) {
+      await autoUpdater.downloadUpdate()
+      return
+    }
+    if (!macUpdate) return
+    const downloadPath = await downloadMacUpdate(macUpdate, setState)
+    macUpdate = { ...macUpdate, downloadPath }
+    setState({
+      status: "downloaded",
+      version: macUpdate.version,
+      releaseName: macUpdate.releaseName,
+      releaseNotes: macUpdate.releaseNotes,
+      progress: null,
+      error: null,
+    })
+  }
+
   if (supported && isWindows) {
-    autoUpdater.autoDownload = true
+    autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.on("checking-for-update", () => setState({ status: "checking", error: null }))
-    autoUpdater.on("update-available", (info) =>
+    autoUpdater.on("update-available", (info) => {
       setState({
         status: "available",
         version: info.version,
         releaseName: info.releaseName ?? null,
         releaseNotes: extractReleaseNotes(info),
         error: null,
-      }),
-    )
+      })
+      if (approvedVersion && normalizeVersion(approvedVersion) === normalizeVersion(info.version)) {
+        void autoUpdater.downloadUpdate().catch((error) => setState({ status: "error", error: error instanceof Error ? error.message : String(error) }))
+      }
+    })
     autoUpdater.on("update-not-available", () => setState({ status: "not-available", error: null }))
     autoUpdater.on("download-progress", (progress) =>
       setState({
@@ -102,19 +127,9 @@ export function createAutoUpdater(emit: (state: UpdaterState) => void): AutoUpda
     const update = await checkForMacUpdate(setState)
     if (!update) return
     macUpdate = update
-    const download = async () => {
-      const downloadPath = await downloadMacUpdate(update, setState)
-      macUpdate = { ...update, downloadPath }
-      setState({
-        status: "downloaded",
-        version: update.version,
-        releaseName: update.releaseName,
-        releaseNotes: update.releaseNotes,
-        progress: null,
-        error: null,
-      })
+    if (approvedVersion && normalizeVersion(approvedVersion) === normalizeVersion(update.version)) {
+      await startDownload()
     }
-    void download().catch((error) => setState({ status: "error", error: error instanceof Error ? error.message : String(error) }))
   }
 
   return {
@@ -126,12 +141,25 @@ export function createAutoUpdater(emit: (state: UpdaterState) => void): AutoUpda
       lastCheckAt = now
       checking = true
       try {
+        approvedVersion = await loadApprovedVersion()
         if (isWindows) await autoUpdater.checkForUpdates()
         else await checkMac()
       } catch (error) {
         setState({ status: "error", error: error instanceof Error ? error.message : String(error) })
       } finally {
         checking = false
+      }
+    },
+    download: async () => {
+      if (!supported || checking) return
+      const version = state.version
+      if (!version) return
+      try {
+        approvedVersion = version
+        await saveApprovedVersion(version)
+        await startDownload()
+      } catch (error) {
+        setState({ status: "error", error: error instanceof Error ? error.message : String(error) })
       }
     },
     install: () => {
@@ -143,6 +171,24 @@ export function createAutoUpdater(emit: (state: UpdaterState) => void): AutoUpda
       installMacUpdate(macUpdate)
     },
   }
+}
+
+async function loadApprovedVersion(): Promise<string | null> {
+  try {
+    const file = path.join(app.getPath("userData"), UPDATE_APPROVAL_FILE)
+    const content = await readFile(file, "utf8")
+    const parsed: unknown = JSON.parse(content)
+    const version = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).approvedVersion : null
+    return typeof version === "string" && version ? version : null
+  } catch {
+    return null
+  }
+}
+
+async function saveApprovedVersion(version: string): Promise<void> {
+  const file = path.join(app.getPath("userData"), UPDATE_APPROVAL_FILE)
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, JSON.stringify({ approvedVersion: version }, null, 2) + "\n", { mode: 0o600 })
 }
 
 function normalizeVersion(version: string): string {

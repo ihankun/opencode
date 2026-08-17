@@ -419,6 +419,7 @@
       "downloaded": "Update downloaded, click to restart and install",
       "error": "Update check failed: {{error}}",
       "retry": "Retry",
+      "download": "Download Update",
       "restartAndInstall": "Restart & Install",
       "viewReleasePage": "View release page",
       "releaseNotes": "Release Notes",

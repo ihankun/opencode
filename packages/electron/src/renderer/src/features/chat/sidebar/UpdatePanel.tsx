@@ -129,6 +129,12 @@ export function UpdatePanel({
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          {updater.status === 'available' && version && (
+            <Button size="sm" onClick={() => updateStore.downloadUpdate()}>
+              <DownloadIcon size={12} />
+              {t('sidebar.update.download')}
+            </Button>
+          )}
           {updater.status === 'downloaded' && (
             <Button size="sm" onClick={() => updateStore.installUpdate()}>
               <DownloadIcon size={12} />

@@ -11,6 +11,10 @@ export function registerUpdaterIpc(input: { assertSender: AssertIpcSender; updat
     input.assertSender(event)
     return input.updater.check()
   })
+  ipcMain.handle("updater:download", (event) => {
+    input.assertSender(event)
+    return input.updater.download()
+  })
   ipcMain.handle("updater:install", (event) => {
     input.assertSender(event)
     input.updater.install()

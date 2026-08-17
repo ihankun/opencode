@@ -417,6 +417,7 @@
       "downloaded": "更新已下载完成，点击按钮重启安装",
       "error": "检查更新失败：{{error}}",
       "retry": "重试",
+      "download": "下载更新",
       "restartAndInstall": "重启并安装",
       "viewReleasePage": "查看发布页面",
       "releaseNotes": "更新说明",

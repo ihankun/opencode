@@ -283,6 +283,10 @@ export class UpdateStore {
     void window.customOpenCode?.updaterCheck()
   }
 
+  downloadUpdate(): void {
+    void window.customOpenCode?.updaterDownload()
+  }
+
   installUpdate(): void {
     void window.customOpenCode?.updaterInstall()
   }

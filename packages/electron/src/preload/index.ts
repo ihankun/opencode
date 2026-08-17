@@ -398,6 +398,7 @@ export type CustomOpenCodeApi = {
   setBadgeCount(count: number): Promise<void>
   updaterState(): Promise<UpdaterState>
   updaterCheck(): Promise<void>
+  updaterDownload(): Promise<void>
   updaterInstall(): Promise<void>
   onUpdaterStateChanged(callback: (state: UpdaterState) => void): () => void
 }
@@ -528,6 +529,7 @@ const api: CustomOpenCodeApi = {
   setBadgeCount: (count) => ipcRenderer.invoke("badge:set-count", count),
   updaterState: () => ipcRenderer.invoke("updater:get-state"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  updaterDownload: () => ipcRenderer.invoke("updater:download"),
   updaterInstall: () => ipcRenderer.invoke("updater:install"),
   onUpdaterStateChanged(callback) {
     const listener = (_event: unknown, state: UpdaterState) => callback(state)
