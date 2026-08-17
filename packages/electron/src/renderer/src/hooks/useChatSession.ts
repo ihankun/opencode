@@ -1167,7 +1167,7 @@ export function useChatSession({
 
   // New session
   const handleNewSession = useCallback(() => {
-    navigateHome(null)
+    navigateHome()
     handleNewChat()
   }, [navigateHome, handleNewChat])
 

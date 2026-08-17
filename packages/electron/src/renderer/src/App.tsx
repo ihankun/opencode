@@ -368,7 +368,7 @@ function App() {
     const paneId = paneLayout.focusedPaneId ?? paneLayoutStore.getFocusedPaneId()
     if (!paneId) return
     setUtilityPage(null)
-    navigatePaneHome(paneId, null)
+    navigatePaneHome(paneId)
   }, [paneLayout.focusedPaneId, navigatePaneHome])
 
   const handleEnterSplitMode = useCallback(() => {

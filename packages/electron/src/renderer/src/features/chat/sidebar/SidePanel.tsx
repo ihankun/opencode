@@ -50,7 +50,8 @@ import {
   type ApiSession,
   type ConnectionInfo,
 } from '../../../api'
-import { areSessionListsSame, getDirectoryName, isSameDirectory, normalizeToForwardSlash } from '../../../utils'
+import { areSessionListsSame, getDirectoryName, isSameDirectory, normalizeToForwardSlash, serverStorage } from '../../../utils'
+import { STORAGE_KEY_EXPANDED_PROJECTS, STORAGE_KEY_EXPANDED_CONVERSATIONS } from '../../../constants/storage'
 import { clearSessionRuntimeState } from '../../../utils/sessionLifecycle'
 import { uiErrorHandler } from '../../../utils'
 import { isElectron, getDesktopPlatform } from '../../../utils/platform'
@@ -320,11 +321,23 @@ export function SidePanel({
   } | null>(null)
   const projectContextMenuRef = useRef<HTMLDivElement>(null)
   const [sidebarTab, setSidebarTab] = useState<'recents' | 'active'>('recents')
-  const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
+  const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>(() =>
+    serverStorage.getJSON<string[]>(STORAGE_KEY_EXPANDED_PROJECTS) ?? [],
+  )
   const [expandedProjectSessionIds, setExpandedProjectSessionIds] = useState<string[]>([])
-  const [expandedConversations, setExpandedConversations] = useState(false)
+  const [expandedConversations, setExpandedConversations] = useState(() =>
+    serverStorage.get(STORAGE_KEY_EXPANDED_CONVERSATIONS) === 'true',
+  )
 
   const CONVERSATION_PREVIEW_LIMIT = 10
+
+  useEffect(() => {
+    serverStorage.setJSON(STORAGE_KEY_EXPANDED_PROJECTS, expandedProjectIds)
+  }, [expandedProjectIds])
+
+  useEffect(() => {
+    serverStorage.set(STORAGE_KEY_EXPANDED_CONVERSATIONS, String(expandedConversations))
+  }, [expandedConversations])
 
   useEffect(() => {
     setExpandedProjectSessionIds(prev => collapsedProjectSessionPreviews(prev, expandedProjectIds))
@@ -505,10 +518,14 @@ export function SidePanel({
     )
     if (directories.length === 0) return
 
-    directories
-      .filter(directory => !savedDirectories.some(saved => isSameDirectory(saved.path, directory)))
-      .forEach(directory => addDirectory(directory, { select: false }))
-    setExpandedProjectIds(prev => Array.from(new Set([...prev, ...directories])))
+    // 只在目录首次出现（尚未在项目列表中）时自动展开，避免覆盖用户手动折叠的状态
+    const newDirectories = directories.filter(
+      directory => !savedDirectories.some(saved => isSameDirectory(saved.path, directory)),
+    )
+    if (newDirectories.length === 0) return
+
+    newDirectories.forEach(directory => addDirectory(directory, { select: false }))
+    setExpandedProjectIds(prev => Array.from(new Set([...prev, ...newDirectories])))
   }, [addDirectory, externalChannelSessions, savedDirectories])
 
   const pinnedEntries = useSyncExternalStore(

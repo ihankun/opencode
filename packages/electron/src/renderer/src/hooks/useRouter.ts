@@ -69,6 +69,17 @@ function ensureSnapshot(): RouteState {
   }
   if (routeSnapshot === null) {
     routeSnapshot = parseHash()
+    // URL 中没有目录时,从上次记忆的目录恢复(仅首页,不覆盖会话路由)
+    if (!routeSnapshot.sessionId && !routeSnapshot.directory) {
+      const lastDirectory = serverStorage.get(STORAGE_KEY_LAST_DIRECTORY)
+      if (lastDirectory) {
+        const directory = normalizeToForwardSlash(lastDirectory) || undefined
+        routeSnapshot = { sessionId: null, directory }
+        if (directory) {
+          window.history.replaceState(null, '', buildHash(null, directory))
+        }
+      }
+    }
   }
   return routeSnapshot
 }

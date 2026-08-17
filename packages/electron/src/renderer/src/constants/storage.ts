@@ -25,3 +25,9 @@ export const STORAGE_KEY_BROWSER_OPEN_MODE = 'browser-open-mode'
 
 /** 最近一次成功登录的 Console 账号邮箱 */
 export const STORAGE_KEY_CONSOLE_ACCOUNT_EMAIL = 'console-account-email'
+
+/** 侧边栏项目文件夹展开状态 */
+export const STORAGE_KEY_EXPANDED_PROJECTS = 'expanded-projects'
+
+/** 侧边栏对话列表展开状态 */
+export const STORAGE_KEY_EXPANDED_CONVERSATIONS = 'expanded-conversations'
