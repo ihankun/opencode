@@ -131,6 +131,9 @@ function createEnv(secureEnvironment: Record<string, string>) {
   if (process.platform === "linux") delete env.LD_PRELOAD
   env.OPENCODE_SERVER_MODULE = serverModuleUrl()
   env.OPENCODE_SANDBOX_RUNTIME_ROOT = sandboxRuntimeRoot()
+  env.OPENCODE_MODELS_PATH = app.isPackaged
+    ? join(process.resourcesPath, "models", "api.json")
+    : join(app.getAppPath(), ".models-cache", "api.json")
   Object.assign(env, secureEnvironment)
   return env
 }

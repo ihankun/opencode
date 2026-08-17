@@ -18,6 +18,10 @@ const config: Configuration = {
       to: "sandbox-runtime",
       filter: ["LICENSE", "UPSTREAM.md", "vendor/seccomp/**/*", "vendor/srt-win/**/*"],
     },
+    {
+      from: ".models-cache/api.json",
+      to: "models/api.json",
+    },
   ],
   protocols: {
     name: "OpenCodex",
@@ -46,6 +50,8 @@ const config: Configuration = {
     artifactName: "${productName}-Setup-${version}.${ext}",
     oneClick: false,
     allowToChangeInstallationDirectory: true,
+    // 安装时自动装 srt-win 沙箱的钩子，暂注释：srt-win 在部分环境（火绒等）会被拦截导致安装卡死
+    // include: "build/nsis-sandbox.nsh",
   },
   linux: {
     icon: "assets/opencode-icon.png",
