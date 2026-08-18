@@ -529,13 +529,12 @@ export function Header({
           {projectLocation && (
             <div ref={locationMenuRef} className="relative">
               <div className="flex items-center group rounded-lg border border-transparent bg-transparent p-0.5 transition-all duration-200 hover:border-border-200/50 hover:bg-bg-200/50">
+                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="shrink-0 rounded-md p-1 text-text-400 transition-all opacity-0 group-hover:opacity-100 hover:bg-bg-300/50 hover:text-text-100">
+                  <ChevronDownIcon size={12} />
+                </button>
                 <button type="button" onClick={() => void openSelectedLocation()} className="inline-flex items-center px-2 py-1.5 text-[length:var(--fs-base)] font-medium text-text-200 transition-colors hover:text-text-100">
                   {selectedLocationAppDetails && <LocationAppIcon app={selectedLocationAppDetails} className="mr-1.5 size-4 object-contain" />}
                   {t('header.openLocation')}
-                </button>
-                <div className="mx-0.5 h-3 w-[1.5px] shrink-0 bg-border-200/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="shrink-0 rounded-md p-1 text-text-400 transition-all opacity-0 group-hover:opacity-100 hover:bg-bg-300/50 hover:text-text-100">
-                  <ChevronDownIcon size={12} />
                 </button>
               </div>
               {locationMenuOpen && (
