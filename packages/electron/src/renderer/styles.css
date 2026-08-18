@@ -545,8 +545,8 @@ h1 {
 .conversation {
   position: absolute;
   top: 82px;
-  left: max(36px, calc(50% - 392px));
-  right: max(36px, calc(50% - 392px));
+  left: max(60px, calc(50% - 392px));
+  right: max(60px, calc(50% - 392px));
   bottom: calc(50% + 116px);
   display: grid;
   align-content: end;

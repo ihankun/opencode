@@ -533,8 +533,8 @@ export function Header({
                   {selectedLocationAppDetails && <LocationAppIcon app={selectedLocationAppDetails} className="mr-1.5 size-4 object-contain" />}
                   {t('header.openLocation')}
                 </button>
-                <div className="mx-0.5 h-3 w-[1.5px] shrink-0 bg-border-200/50" />
-                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="shrink-0 rounded-md p-1 text-text-400 transition-colors hover:bg-bg-300/50 hover:text-text-100">
+                <div className="mx-0.5 h-3 w-[1.5px] shrink-0 bg-border-200/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <button type="button" onClick={() => void toggleLocationMenu()} aria-label={t('header.selectLocationApp')} className="shrink-0 rounded-md p-1 text-text-400 transition-all opacity-0 group-hover:opacity-100 hover:bg-bg-300/50 hover:text-text-100">
                   <ChevronDownIcon size={12} />
                 </button>
               </div>

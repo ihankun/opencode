@@ -847,7 +847,7 @@ export const ChatPane = memo(function ChatPane({
         </div>
       )}
 
-      <div className="absolute top-0 left-0 right-0" style={{ bottom: inputBoxHeight || undefined }}>
+      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 36) }}>
         <InlineToolRequestContext.Provider value={inlineToolRequestCtx}>
           <ErrorBoundary onOpenSettings={onOpenSettings}>
             <ChatArea
