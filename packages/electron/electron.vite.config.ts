@@ -42,10 +42,6 @@ export default defineConfig({
               JSON.stringify(nodePtyPkg),
             ),
           )
-          await writeFile(
-            "./out/main/chunks/opencode-server.js.map",
-            await readFile(`${OPENCODE_SERVER_DIST}/node.js.map`),
-          )
           for (const file of await readdir(OPENCODE_SERVER_DIST)) {
             if (!file.endsWith(".wasm")) continue
             await writeFile(`./out/main/chunks/${file}`, await readFile(`${OPENCODE_SERVER_DIST}/${file}`))
