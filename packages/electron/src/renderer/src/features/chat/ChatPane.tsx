@@ -847,7 +847,7 @@ export const ChatPane = memo(function ChatPane({
         </div>
       )}
 
-      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 36) }}>
+      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 20) }}>
         <InlineToolRequestContext.Provider value={inlineToolRequestCtx}>
           <ErrorBoundary onOpenSettings={onOpenSettings}>
             <ChatArea
@@ -891,6 +891,10 @@ export const ChatPane = memo(function ChatPane({
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
+        <div
+          className="absolute bottom-full left-0 right-0 h-10 bg-gradient-to-t from-[hsl(var(--chat-bg))] to-transparent pointer-events-none"
+          aria-hidden="true"
+        />
         {modelRecovery && (
           <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">
             <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-warning-100/30 bg-bg-000/95 px-3 py-2.5 shadow-lg backdrop-blur-md">
@@ -954,7 +958,7 @@ export const ChatPane = memo(function ChatPane({
           </div>
         )}
         {latestTurnOverview && (
-          <div className="mx-auto mb-2 flex max-w-[95%] justify-center px-4 xl:max-w-7xl">
+          <div className="mx-auto mb-2 flex max-w-[min(92%,68rem)] justify-center px-4 lg:px-6">
             <div
               className="pointer-events-auto inline-flex cursor-default items-center gap-2 rounded-xl border border-border-200/60 bg-bg-000/95 px-3 py-2 text-[length:var(--fs-sm)] text-text-300 shadow-lg backdrop-blur-md transition-colors hover:border-accent-main-100/35 hover:bg-bg-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main-100/35"
               tabIndex={latestTurnOverview.todoProgress ? 0 : undefined}

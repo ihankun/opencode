@@ -2122,7 +2122,7 @@ function InputBoxComponent({
         {isStreaming ? t('inputBox.sending') : ''}
       </span>
       <div
-        className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out max-w-[95%] xl:max-w-7xl ${isCompact ? 'px-2' : 'px-4'}`}
+        className={`mx-auto pointer-events-auto transition-[max-width] duration-300 ease-in-out max-w-[min(92%,68rem)] ${isCompact ? 'px-4' : 'px-4 lg:px-6'}`}
         style={{ paddingBottom: bottomDockPadding }}
       >
         {homeMode && (
