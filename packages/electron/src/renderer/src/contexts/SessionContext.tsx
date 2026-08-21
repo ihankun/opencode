@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react"
 import {
   getSessions,
   createSession as apiCreateSession,
@@ -7,22 +7,22 @@ import {
   isScheduledTaskSession,
   type ApiSession,
   type SessionListParams,
-} from '../api'
-import { todoStore } from '../store/todoStore'
-import { serverStore } from '../store/serverStore'
-import { pinnedSessionsStore } from '../store/pinnedSessionsStore'
-import { executionTargetStore } from '../store/executionTargetStore'
-import type { ExecutionTarget } from '../types/executionTarget'
-import { useDirectory } from './useDirectory'
+} from "../api"
+import { todoStore } from "../store/todoStore"
+import { serverStore } from "../store/serverStore"
+import { pinnedSessionsStore } from "../store/pinnedSessionsStore"
+import { executionTargetStore } from "../store/executionTargetStore"
+import type { ExecutionTarget } from "../types/executionTarget"
+import { useDirectory } from "./useDirectory"
 import {
   areSessionListsSame,
   sessionErrorHandler,
   normalizeToForwardSlash,
   isSameDirectory,
   autoDetectPathStyle,
-} from '../utils'
-import { clearSessionRuntimeState } from '../utils/sessionLifecycle'
-import { SessionContext, type SessionContextValue } from './SessionContext.shared'
+} from "../utils"
+import { clearSessionRuntimeState } from "../utils/sessionLifecycle"
+import { SessionContext, type SessionContextValue } from "./SessionContext.shared"
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { currentDirectory, pathInfo } = useDirectory()
@@ -31,7 +31,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState("")
   const [activeServerId, setActiveServerId] = useState(() => serverStore.getActiveServerId())
 
   const requestIdRef = useRef(0)
@@ -52,7 +52,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const fetchSessionsRef = useRef<
     (params?: SessionListParams & { append?: boolean; retryAttempt?: number }) => Promise<void>
   >(() => Promise.resolve())
-  const currentLimitRef = useRef(30) // 当前 limit，loadMore 时递增
+  const currentLimitRef = useRef(200) // 初始 limit 足够覆盖大部分目录的会话
   const effectiveDirectory = useMemo(
     () => normalizeToForwardSlash(currentDirectory || pathInfo?.directory) || undefined,
     [currentDirectory, pathInfo?.directory],
@@ -67,7 +67,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [search])
 
   const restoreCachedSessions = useCallback(async (directory: string | undefined, serverId: string) => {
-    if (typeof window.customOpenCode?.cachedSessions !== 'function') return
+    if (typeof window.customOpenCode?.cachedSessions !== "function") return
     const cacheRequestId = ++cacheRequestIdRef.current
     const cached = await window.customOpenCode.cachedSessions(serverId, directory).catch(() => undefined)
     if (!cached || cacheRequestId !== cacheRequestIdRef.current) return
@@ -78,9 +78,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     loadedDirectoryRef.current = cached.directory
     loadedServerIdRef.current = serverId
-    loadedSearchRef.current = ''
+    loadedSearchRef.current = ""
     hasLoadedSessionsRef.current = true
-    setSessions(prev => (areSessionListsSame(prev, cached.sessions) ? prev : cached.sessions))
+    setSessions((prev) => (areSessionListsSame(prev, cached.sessions) ? prev : cached.sessions))
     setHasMore(cached.sessions.length >= currentLimitRef.current)
     setIsLoading(false)
   }, [])
@@ -111,10 +111,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           search: search || undefined,
           ...queryParams,
         })
-        const data = sessionData.filter(session => !isScheduledTaskSession(session) && !scheduledSessionIdsRef.current.has(session.id))
+        console.log("[SessionContext] fetchSessions:", {
+          limit: currentLimitRef.current,
+          dir: targetDir,
+          count: sessionData.length,
+          bugCount: sessionData.filter((s) => s.title?.includes("BUG_2026082100228")).length,
+        })
+        // engineer API 排序不稳定（新会话可能排末尾），前端按 updated desc 兜底
+        const data = sessionData
+          .filter((session) => !isScheduledTaskSession(session) && !scheduledSessionIdsRef.current.has(session.id))
+          .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
 
         if (requestId !== requestIdRef.current || serverStore.getActiveServerId() !== targetServerId) return
 
+        console.log(
+          "[SessionContext] passed requestId check, data count:",
+          data.length,
+          "first 3:",
+          data.slice(0, 3).map((s) => s.title),
+        )
         // 自动检测路径风格（从后端返回的 directory 字段）
         if (data.length > 0 && data[0].directory) {
           autoDetectPathStyle(data[0].directory)
@@ -125,14 +140,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         loadedSearchRef.current = search
         if (append) {
           // 去重：过滤掉已存在的 session
-          setSessions(prev => {
-            const existingIds = new Set(prev.map(s => s.id))
-            const newSessions = data.filter(s => !existingIds.has(s.id))
+          setSessions((prev) => {
+            const existingIds = new Set(prev.map((s) => s.id))
+            const newSessions = data.filter((s) => !existingIds.has(s.id))
             if (newSessions.length === 0) return prev
             return [...prev, ...newSessions]
           })
         } else {
-          setSessions(prev => (areSessionListsSame(prev, data) ? prev : data))
+          setSessions((prev) => (areSessionListsSame(prev, data) ? prev : data))
         }
         hasLoadedSessionsRef.current = true
         setHasMore(sessionData.length >= currentLimitRef.current)
@@ -149,7 +164,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             setHasMore(false)
           }
         }
-        sessionErrorHandler('fetch sessions', e)
+        sessionErrorHandler("fetch sessions", e)
       } finally {
         if (requestId === requestIdRef.current) {
           isFetchingRef.current = false
@@ -187,7 +202,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
 
     // 切换目录或搜索时重置 limit
-    currentLimitRef.current = 30
+    currentLimitRef.current = 200
 
     searchTimerRef.current = window.setTimeout(
       () => {
@@ -205,7 +220,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // 订阅 SSE 事件，实时更新 session 列表
   useEffect(() => {
     const unsubscribe = subscribeToEvents({
-      onSessionCreated: session => {
+      onSessionCreated: (session) => {
         if (isScheduledTaskSession(session) || scheduledSessionIdsRef.current.has(session.id)) return
         // 忽略子 session（有 parentID 的是子 agent 创建的）
         if (session.parentID) return
@@ -218,20 +233,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        setSessions(prev => {
-          if (prev.some(s => s.id === session.id)) return prev
+        setSessions((prev) => {
+          if (prev.some((s) => s.id === session.id)) return prev
           return [session, ...prev]
         })
       },
-      onSessionUpdated: session => {
+      onSessionUpdated: (session) => {
         if (isScheduledTaskSession(session) || scheduledSessionIdsRef.current.has(session.id)) {
-          if (typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(session.id, Boolean(session.time.archived))
-          setSessions(prev => prev.filter(item => item.id !== session.id))
+          if (typeof window.customOpenCode?.setTaskRunArchived === "function")
+            void window.customOpenCode.setTaskRunArchived(session.id, Boolean(session.time.archived))
+          setSessions((prev) => prev.filter((item) => item.id !== session.id))
           return
         }
         if (session.parentID) return
         if (session.time.archived) {
-          setSessions(prev => prev.filter(item => item.id !== session.id))
+          setSessions((prev) => prev.filter((item) => item.id !== session.id))
           return
         }
 
@@ -239,37 +255,41 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           if (matchesCurrentDirectory(session)) {
             fetchSessionsRef.current()
           } else {
-            setSessions(prev => prev.filter(s => s.id !== session.id))
+            setSessions((prev) => prev.filter((s) => s.id !== session.id))
           }
           return
         }
 
-        setSessions(prev => {
-          const index = prev.findIndex(s => s.id === session.id)
+        setSessions((prev) => {
+          const index = prev.findIndex((s) => s.id === session.id)
 
           if (!matchesCurrentDirectory(session)) {
-            return index === -1 ? prev : prev.filter(s => s.id !== session.id)
+            return index === -1 ? prev : prev.filter((s) => s.id !== session.id)
           }
 
           if (index === -1) {
             return [session, ...prev]
           }
 
-          const updated = prev.filter(s => s.id !== session.id)
+          const updated = prev.filter((s) => s.id !== session.id)
           return [session, ...updated]
         })
       },
-      onTodoUpdated: data => {
+      onTodoUpdated: (data) => {
         // 更新 todoStore
         todoStore.setTodos(data.sessionID, data.todos)
       },
-      onSessionDeleted: sessionId => {
-        if (scheduledSessionIdsRef.current.has(sessionId) && typeof window.customOpenCode?.setTaskRunArchived === 'function') void window.customOpenCode.setTaskRunArchived(sessionId, true)
+      onSessionDeleted: (sessionId) => {
+        if (
+          scheduledSessionIdsRef.current.has(sessionId) &&
+          typeof window.customOpenCode?.setTaskRunArchived === "function"
+        )
+          void window.customOpenCode.setTaskRunArchived(sessionId, true)
         clearSessionRuntimeState(sessionId)
-        setSessions(prev => prev.filter(s => s.id !== sessionId))
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId))
       },
-      onReconnected: reason => {
-        if (reason === 'server-switch') return
+      onReconnected: (reason) => {
+        if (reason === "server-switch") return
         if (isFetchingRef.current) {
           queuedReconnectRefreshRef.current = true
           return
@@ -282,22 +302,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [matchesCurrentDirectory])
 
   useEffect(() => {
-    if (typeof window.customOpenCode?.listTaskRuns !== 'function') return
-    const refreshScheduledSessions = () => void window.customOpenCode.listTaskRuns().then(runs => {
-      scheduledSessionIdsRef.current = new Set(runs.map(run => run.sessionID))
-      setSessions(prev => {
-        const filtered = prev.filter(session => !scheduledSessionIdsRef.current.has(session.id))
-        return filtered.length === prev.length ? prev : filtered
+    if (typeof window.customOpenCode?.listTaskRuns !== "function") return
+    const refreshScheduledSessions = () =>
+      void window.customOpenCode.listTaskRuns().then((runs) => {
+        scheduledSessionIdsRef.current = new Set(runs.map((run) => run.sessionID))
+        setSessions((prev) => {
+          const filtered = prev.filter((session) => !scheduledSessionIdsRef.current.has(session.id))
+          return filtered.length === prev.length ? prev : filtered
+        })
       })
-    })
     refreshScheduledSessions()
     return window.customOpenCode.onTasksChanged(refreshScheduledSessions)
   }, [])
 
   useEffect(() => {
     return serverStore.onServerChange((serverId, reason) => {
-      currentLimitRef.current = 30
-      if (reason === 'server-switch') {
+      currentLimitRef.current = 200
+      if (reason === "server-switch") {
         cacheRequestIdRef.current += 1
         loadedDirectoryRef.current = undefined
         loadedServerIdRef.current = undefined
@@ -318,11 +339,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (search || loadedSearchRef.current) return
     if (!effectiveDirectory || loadedServerIdRef.current !== activeServerId) return
     if (!loadedDirectoryRef.current || !isSameDirectory(loadedDirectoryRef.current, effectiveDirectory)) return
-    if (typeof window.customOpenCode?.updateCachedSessions !== 'function') return
+    if (typeof window.customOpenCode?.updateCachedSessions !== "function") return
     if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current)
     cacheWriteTimerRef.current = window.setTimeout(() => {
       cacheWriteTimerRef.current = null
-      void window.customOpenCode.updateCachedSessions(activeServerId, effectiveDirectory, sessions).catch(() => undefined)
+      void window.customOpenCode
+        .updateCachedSessions(activeServerId, effectiveDirectory, sessions)
+        .catch(() => undefined)
     }, 150)
     return () => {
       if (!cacheWriteTimerRef.current) return
@@ -341,7 +364,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     try {
       // 跟官方 webui 一样，递增 limit 重新请求整个列表
-      currentLimitRef.current += 15
+      currentLimitRef.current += 100
       setIsLoadingMore(true)
       await fetchSessions()
     } finally {
@@ -354,7 +377,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (title?: string, target?: ExecutionTarget) => {
       // 使用正斜杠格式传给后端
       if (target && target.serverId !== serverStore.getActiveServerId()) {
-        throw new Error('The selected execution server changed before the task was created')
+        throw new Error("The selected execution server changed before the task was created")
       }
       const targetDir = target?.directory || effectiveDirectory
 
@@ -372,11 +395,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const targetDir = effectiveDirectory
       await apiArchiveSession(id, targetDir)
-      if (typeof window.customOpenCode?.setTaskRunArchived === 'function') await window.customOpenCode.setTaskRunArchived(id, true)
+      if (typeof window.customOpenCode?.setTaskRunArchived === "function")
+        await window.customOpenCode.setTaskRunArchived(id, true)
       pinnedSessionsStore.unpin(id)
       executionTargetStore.removeSession(serverStore.getActiveServerId(), id)
       clearSessionRuntimeState(id)
-      setSessions(prev => prev.filter(s => s.id !== id))
+      setSessions((prev) => prev.filter((s) => s.id !== id))
     },
     [effectiveDirectory],
   )
