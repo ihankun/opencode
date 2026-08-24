@@ -15,10 +15,6 @@ import type {
 } from "./types"
 import { EventTypes } from "../types/api/event"
 
-// TEMP DIAG: 排查打包后 SSE 静默失败。打包后 SSE_DEBUG 被 vite 静态消除，
-// 这里用运行时常量强制开启 SSE 日志。排查完删除此常量并把 SSE_DEBUG 换回 import.meta.env.DEV。
-const SSE_DEBUG = true
-
 // ============================================
 // Connection State
 // ============================================
@@ -106,7 +102,7 @@ function finalizeConnectionAttempt(generation: number): boolean {
 function broadcastReconnected(reason: "network" | "server-switch") {
   const now = Date.now()
   if (reason !== "server-switch" && now - lastReconnectedBroadcast < RECONNECTED_COOLDOWN) {
-    if (SSE_DEBUG) {
+    if (import.meta.env.DEV) {
       console.warn("[SSE] onReconnected skipped (cooldown)")
     }
     return
@@ -141,7 +137,7 @@ function scheduleReconnect() {
   const delays = isInBackground ? BACKGROUND_RECONNECT_DELAYS : RECONNECT_DELAYS
   const delay = delays[Math.min(attempt, delays.length - 1)]
 
-  if (SSE_DEBUG) {
+  if (import.meta.env.DEV) {
     console.warn(`[SSE] Reconnecting in ${delay}ms (attempt ${attempt + 1}, background: ${isInBackground})...`)
   }
 
@@ -161,7 +157,7 @@ function connectSingleton() {
     const staleTimeout = isInBackground ? BACKGROUND_HEARTBEAT_TIMEOUT : HEARTBEAT_TIMEOUT
     if (timeSinceLastEvent > staleTimeout) {
       // 太久没收到事件，连接可能已死，强制断开再重连
-      if (SSE_DEBUG) {
+      if (import.meta.env.DEV) {
         console.log(
           `[SSE] connectSingleton: state=connected but stale (${Math.round(timeSinceLastEvent / 1000)}s), forcing disconnect`,
         )
@@ -180,7 +176,7 @@ function connectSingleton() {
   isConnecting = true
 
   updateConnectionState({ state: "connecting" })
-  if (SSE_DEBUG) {
+  if (import.meta.env.DEV) {
     console.warn("[SSE] Connecting singleton...")
   }
 
@@ -225,7 +221,7 @@ function connectViaBrowser() {
         error: undefined,
       })
       resetHeartbeat()
-      if (SSE_DEBUG) {
+      if (import.meta.env.DEV) {
         console.warn("[SSE] Singleton connected")
       }
 
@@ -257,7 +253,7 @@ function connectViaBrowser() {
         }
 
         if (done) {
-          if (SSE_DEBUG) {
+          if (import.meta.env.DEV) {
             console.warn("[SSE] Stream ended, reconnecting...")
           }
           updateConnectionState({ state: "disconnected" })
@@ -284,7 +280,7 @@ function connectViaBrowser() {
         return
       }
       // SSE stream error - logged for debugging
-      if (SSE_DEBUG) {
+      if (import.meta.env.DEV) {
         console.warn("[SSE] Event stream error:", error)
       }
       updateConnectionState({
@@ -304,7 +300,7 @@ function parseGlobalEvent(raw: string): GlobalEvent | null {
     const parsed: unknown = JSON.parse(raw)
     return isGlobalEvent(parsed) ? parsed : null
   } catch (error) {
-    if (SSE_DEBUG) {
+    if (import.meta.env.DEV) {
       console.warn("[SSE] Failed to parse event:", error, raw)
     }
     return null
@@ -346,7 +342,7 @@ function startBackgroundKeepalive() {
     const timeSinceLastEvent = now - connectionInfo.lastEventTime
     const timeout = BACKGROUND_HEARTBEAT_TIMEOUT
 
-    if (SSE_DEBUG) {
+    if (import.meta.env.DEV) {
       console.log(
         `[SSE] Background keepalive check: last event ${Math.round(timeSinceLastEvent / 1000)}s ago, state=${connectionInfo.state}`,
       )
@@ -408,7 +404,7 @@ function handleVisibilityChange() {
     isInBackground = false
     stopBackgroundKeepalive()
 
-    if (SSE_DEBUG) {
+    if (import.meta.env.DEV) {
       console.log(
         `[SSE] Page became visible, state=${connectionInfo.state}, lastEvent=${Math.round((Date.now() - connectionInfo.lastEventTime) / 1000)}s ago`,
       )
@@ -418,7 +414,7 @@ function handleVisibilityChange() {
 
     if (connectionInfo.state !== "connected") {
       // 明确断连，立即重连
-      if (SSE_DEBUG) {
+      if (import.meta.env.DEV) {
         console.warn("[SSE] Page visible: not connected, forcing reconnect...")
       }
       forceReconnectNow()
@@ -441,7 +437,7 @@ function handleVisibilityChange() {
     // 页面进入后台
     isInBackground = true
 
-    if (SSE_DEBUG) {
+    if (import.meta.env.DEV) {
       console.warn("[SSE] Page entering background, switching to background mode")
     }
 
@@ -476,7 +472,7 @@ function forceReconnectNow() {
 }
 
 function handleOnline() {
-  if (SSE_DEBUG) {
+  if (import.meta.env.DEV) {
     console.warn("[SSE] Network online, forcing reconnect...")
   }
   if (connectionInfo.state !== "connected" && allSubscribers.size > 0) {
@@ -485,7 +481,7 @@ function handleOnline() {
 }
 
 function handleOffline() {
-  if (SSE_DEBUG) {
+  if (import.meta.env.DEV) {
     console.warn("[SSE] Network offline")
   }
   // 标记为断连，但不尝试重连（没网重连也没用）
@@ -661,7 +657,7 @@ function normalizeSessionError(properties: unknown): SessionErrorPayload {
 export function reconnectSSE() {
   if (allSubscribers.size === 0) return // 没有订阅者不需要重连
 
-  if (SSE_DEBUG) {
+  if (import.meta.env.DEV) {
     console.warn("[SSE] reconnectSSE() called, forcing reconnect to new server...")
   }
 

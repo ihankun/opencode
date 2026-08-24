@@ -1031,7 +1031,7 @@ export function SidePanel({
               return [
                 result.value.project.id,
                 {
-                  sessions: result.value.sessions,
+                  sessions: [...result.value.sessions].sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0)),
                   isLoading: false,
                 },
               ]
