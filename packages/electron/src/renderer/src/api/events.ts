@@ -2,9 +2,9 @@
 // Global Event Subscription (SSE) - Singleton Pattern
 // ============================================
 
-import { getApiBaseUrl, getAuthHeader } from './http'
-import { createSseTextParser } from './sse'
-import { normalizeTodoItems } from './todo'
+import { getApiBaseUrl, getAuthHeader } from "./http"
+import { createSseTextParser } from "./sse"
+import { normalizeTodoItems } from "./todo"
 import type {
   ApiMessage,
   EventCallbacks,
@@ -12,14 +12,18 @@ import type {
   ServerConnectedPayload,
   SessionErrorPayload,
   TodoUpdatedPayload,
-} from './types'
-import { EventTypes } from '../types/api/event'
+} from "./types"
+import { EventTypes } from "../types/api/event"
+
+// TEMP DIAG: 排查打包后 SSE 静默失败。打包后 SSE_DEBUG 被 vite 静态消除，
+// 这里用运行时常量强制开启 SSE 日志。排查完删除此常量并把 SSE_DEBUG 换回 import.meta.env.DEV。
+const SSE_DEBUG = true
 
 // ============================================
 // Connection State
 // ============================================
 
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
+export type ConnectionState = "connecting" | "connected" | "disconnected" | "error"
 
 export interface ConnectionInfo {
   state: ConnectionState
@@ -30,7 +34,7 @@ export interface ConnectionInfo {
 
 // 全局连接状态（可以被外部订阅）
 let connectionInfo: ConnectionInfo = {
-  state: 'disconnected',
+  state: "disconnected",
   lastEventTime: 0,
   reconnectAttempt: 0,
 }
@@ -39,7 +43,7 @@ const connectionListeners = new Set<(info: ConnectionInfo) => void>()
 
 function updateConnectionState(update: Partial<ConnectionInfo>) {
   connectionInfo = { ...connectionInfo, ...update }
-  connectionListeners.forEach(fn => {
+  connectionListeners.forEach((fn) => {
     fn(connectionInfo)
   })
 }
@@ -99,16 +103,16 @@ function finalizeConnectionAttempt(generation: number): boolean {
 /**
  * 广播 onReconnected，带 cooldown 防止 SSE 快速重连时密集触发数据拉取
  */
-function broadcastReconnected(reason: 'network' | 'server-switch') {
+function broadcastReconnected(reason: "network" | "server-switch") {
   const now = Date.now()
-  if (reason !== 'server-switch' && now - lastReconnectedBroadcast < RECONNECTED_COOLDOWN) {
-    if (import.meta.env.DEV) {
-      console.log('[SSE] onReconnected skipped (cooldown)')
+  if (reason !== "server-switch" && now - lastReconnectedBroadcast < RECONNECTED_COOLDOWN) {
+    if (SSE_DEBUG) {
+      console.warn("[SSE] onReconnected skipped (cooldown)")
     }
     return
   }
   lastReconnectedBroadcast = now
-  allSubscribers.forEach(cb => {
+  allSubscribers.forEach((cb) => {
     cb.onReconnected?.(reason)
   })
 }
@@ -123,7 +127,7 @@ function resetHeartbeat() {
 
   heartbeatTimer = setTimeout(() => {
     console.warn(`[SSE] No events received for ${timeout / 1000}s, reconnecting...`)
-    updateConnectionState({ state: 'disconnected', error: 'Heartbeat timeout' })
+    updateConnectionState({ state: "disconnected", error: "Heartbeat timeout" })
     scheduleReconnect()
   }, timeout)
 }
@@ -137,8 +141,8 @@ function scheduleReconnect() {
   const delays = isInBackground ? BACKGROUND_RECONNECT_DELAYS : RECONNECT_DELAYS
   const delay = delays[Math.min(attempt, delays.length - 1)]
 
-  if (import.meta.env.DEV) {
-    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${attempt + 1}, background: ${isInBackground})...`)
+  if (SSE_DEBUG) {
+    console.warn(`[SSE] Reconnecting in ${delay}ms (attempt ${attempt + 1}, background: ${isInBackground})...`)
   }
 
   reconnectTimer = setTimeout(() => {
@@ -151,13 +155,13 @@ function connectSingleton() {
   if (isConnecting || allSubscribers.size === 0) return
 
   // 如果状态声称 connected，验证连接是否真的活着
-  if (connectionInfo.state === 'connected') {
+  if (connectionInfo.state === "connected") {
     const timeSinceLastEvent = Date.now() - connectionInfo.lastEventTime
     // 后台时使用更宽松的超时判断
     const staleTimeout = isInBackground ? BACKGROUND_HEARTBEAT_TIMEOUT : HEARTBEAT_TIMEOUT
     if (timeSinceLastEvent > staleTimeout) {
       // 太久没收到事件，连接可能已死，强制断开再重连
-      if (import.meta.env.DEV) {
+      if (SSE_DEBUG) {
         console.log(
           `[SSE] connectSingleton: state=connected but stale (${Math.round(timeSinceLastEvent / 1000)}s), forcing disconnect`,
         )
@@ -167,7 +171,7 @@ function connectSingleton() {
         singletonController.abort()
         singletonController = null
       }
-      updateConnectionState({ state: 'disconnected' })
+      updateConnectionState({ state: "disconnected" })
     } else {
       return // 连接确实还活着
     }
@@ -175,9 +179,9 @@ function connectSingleton() {
 
   isConnecting = true
 
-  updateConnectionState({ state: 'connecting' })
-  if (import.meta.env.DEV) {
-    console.log('[SSE] Connecting singleton...')
+  updateConnectionState({ state: "connecting" })
+  if (SSE_DEBUG) {
+    console.warn("[SSE] Connecting singleton...")
   }
 
   // 注册生命周期监听器（首次连接时）
@@ -199,11 +203,11 @@ function connectViaBrowser() {
   fetch(`${getApiBaseUrl()}/global/event`, {
     signal: singletonController.signal,
     headers: {
-      Accept: 'text/event-stream',
+      Accept: "text/event-stream",
       ...getAuthHeader(),
     },
   })
-    .then(async response => {
+    .then(async (response) => {
       if (myGeneration !== connectionGeneration) {
         await response.body?.cancel?.().catch(() => {})
         return
@@ -216,24 +220,24 @@ function connectViaBrowser() {
       }
 
       updateConnectionState({
-        state: 'connected',
+        state: "connected",
         reconnectAttempt: 0,
         error: undefined,
       })
       resetHeartbeat()
-      if (import.meta.env.DEV) {
-        console.log('[SSE] Singleton connected')
+      if (SSE_DEBUG) {
+        console.warn("[SSE] Singleton connected")
       }
 
       // 每次连接成功都通知订阅者刷新数据
       // 覆盖场景：首次连接（先开 UI 后开 server）、网络重连、服务器切换
-      const reason = isServerSwitch ? ('server-switch' as const) : ('network' as const)
+      const reason = isServerSwitch ? ("server-switch" as const) : ("network" as const)
       isServerSwitch = false
       broadcastReconnected(reason)
 
       const reader = response.body?.getReader()
       if (!reader) {
-        throw new Error('No response body')
+        throw new Error("No response body")
       }
 
       const decoder = new TextDecoder()
@@ -253,10 +257,10 @@ function connectViaBrowser() {
         }
 
         if (done) {
-          if (import.meta.env.DEV) {
-            console.log('[SSE] Stream ended, reconnecting...')
+          if (SSE_DEBUG) {
+            console.warn("[SSE] Stream ended, reconnecting...")
           }
-          updateConnectionState({ state: 'disconnected' })
+          updateConnectionState({ state: "disconnected" })
           scheduleReconnect()
           break
         }
@@ -271,24 +275,24 @@ function connectViaBrowser() {
         }
       }
     })
-    .catch(error => {
+    .catch((error) => {
       if (!finalizeConnectionAttempt(myGeneration)) {
         return
       }
 
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         return
       }
       // SSE stream error - logged for debugging
-      if (import.meta.env.DEV) {
-        console.warn('[SSE] Event stream error:', error)
+      if (SSE_DEBUG) {
+        console.warn("[SSE] Event stream error:", error)
       }
       updateConnectionState({
-        state: 'error',
-        error: error.message || 'Connection failed',
+        state: "error",
+        error: error.message || "Connection failed",
       })
       // 通知所有订阅者出错
-      allSubscribers.forEach(cb => {
+      allSubscribers.forEach((cb) => {
         cb.onError?.(error)
       })
       scheduleReconnect()
@@ -300,8 +304,8 @@ function parseGlobalEvent(raw: string): GlobalEvent | null {
     const parsed: unknown = JSON.parse(raw)
     return isGlobalEvent(parsed) ? parsed : null
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('[SSE] Failed to parse event:', error, raw)
+    if (SSE_DEBUG) {
+      console.warn("[SSE] Failed to parse event:", error, raw)
     }
     return null
   }
@@ -309,14 +313,14 @@ function parseGlobalEvent(raw: string): GlobalEvent | null {
 
 function isGlobalEvent(value: unknown): value is GlobalEvent {
   if (!isRecord(value)) return false
-  if (typeof value.directory !== 'string') return false
+  if (typeof value.directory !== "string") return false
   if (!isRecord(value.payload)) return false
-  if (typeof value.payload.type !== 'string') return false
-  return 'properties' in value.payload
+  if (typeof value.payload.type !== "string") return false
+  return "properties" in value.payload
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object'
+  return !!value && typeof value === "object"
 }
 
 function getMessageInfo(properties: unknown): ApiMessage | undefined {
@@ -342,15 +346,15 @@ function startBackgroundKeepalive() {
     const timeSinceLastEvent = now - connectionInfo.lastEventTime
     const timeout = BACKGROUND_HEARTBEAT_TIMEOUT
 
-    if (import.meta.env.DEV) {
+    if (SSE_DEBUG) {
       console.log(
         `[SSE] Background keepalive check: last event ${Math.round(timeSinceLastEvent / 1000)}s ago, state=${connectionInfo.state}`,
       )
     }
 
-    if (connectionInfo.state === 'connected' && timeSinceLastEvent > timeout) {
+    if (connectionInfo.state === "connected" && timeSinceLastEvent > timeout) {
       // 连接声称是 connected，但已经太久没收到事件了 — 连接可能已经静默断开
-      console.warn('[SSE] Background keepalive: connection appears dead, forcing reconnect')
+      console.warn("[SSE] Background keepalive: connection appears dead, forcing reconnect")
 
       // 断开旧连接
       if (singletonController) {
@@ -360,12 +364,12 @@ function startBackgroundKeepalive() {
       isConnecting = false
       connectionGeneration++
 
-      updateConnectionState({ state: 'disconnected', error: 'Background keepalive timeout' })
+      updateConnectionState({ state: "disconnected", error: "Background keepalive timeout" })
       scheduleReconnect()
-    } else if (connectionInfo.state === 'disconnected' || connectionInfo.state === 'error') {
+    } else if (connectionInfo.state === "disconnected" || connectionInfo.state === "error") {
       // 已知断连状态，但可能 reconnectTimer 被后台冻结了 — 主动触发重连
       if (!reconnectTimer && !isConnecting) {
-        console.warn('[SSE] Background keepalive: detected stale disconnect, forcing reconnect')
+        console.warn("[SSE] Background keepalive: detected stale disconnect, forcing reconnect")
         updateConnectionState({ reconnectAttempt: 0 })
         connectSingleton()
       }
@@ -391,7 +395,7 @@ function disconnectSingleton() {
   }
 
   isConnecting = false
-  updateConnectionState({ state: 'disconnected' })
+  updateConnectionState({ state: "disconnected" })
 }
 
 // ============================================
@@ -399,12 +403,12 @@ function disconnectSingleton() {
 // ============================================
 
 function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') {
+  if (document.visibilityState === "visible") {
     // 页面恢复前台
     isInBackground = false
     stopBackgroundKeepalive()
 
-    if (import.meta.env.DEV) {
+    if (SSE_DEBUG) {
       console.log(
         `[SSE] Page became visible, state=${connectionInfo.state}, lastEvent=${Math.round((Date.now() - connectionInfo.lastEventTime) / 1000)}s ago`,
       )
@@ -412,10 +416,10 @@ function handleVisibilityChange() {
 
     if (allSubscribers.size === 0) return
 
-    if (connectionInfo.state !== 'connected') {
+    if (connectionInfo.state !== "connected") {
       // 明确断连，立即重连
-      if (import.meta.env.DEV) {
-        console.log('[SSE] Page visible: not connected, forcing reconnect...')
+      if (SSE_DEBUG) {
+        console.warn("[SSE] Page visible: not connected, forcing reconnect...")
       }
       forceReconnectNow()
     } else {
@@ -437,8 +441,8 @@ function handleVisibilityChange() {
     // 页面进入后台
     isInBackground = true
 
-    if (import.meta.env.DEV) {
-      console.log('[SSE] Page entering background, switching to background mode')
+    if (SSE_DEBUG) {
+      console.warn("[SSE] Page entering background, switching to background mode")
     }
 
     // 不再清除心跳！保持心跳运行，但切换为后台模式（更长超时）
@@ -472,20 +476,20 @@ function forceReconnectNow() {
 }
 
 function handleOnline() {
-  if (import.meta.env.DEV) {
-    console.log('[SSE] Network online, forcing reconnect...')
+  if (SSE_DEBUG) {
+    console.warn("[SSE] Network online, forcing reconnect...")
   }
-  if (connectionInfo.state !== 'connected' && allSubscribers.size > 0) {
+  if (connectionInfo.state !== "connected" && allSubscribers.size > 0) {
     forceReconnectNow()
   }
 }
 
 function handleOffline() {
-  if (import.meta.env.DEV) {
-    console.log('[SSE] Network offline')
+  if (SSE_DEBUG) {
+    console.warn("[SSE] Network offline")
   }
   // 标记为断连，但不尝试重连（没网重连也没用）
-  if (connectionInfo.state === 'connected' || connectionInfo.state === 'connecting') {
+  if (connectionInfo.state === "connected" || connectionInfo.state === "connecting") {
     connectionGeneration++
     if (singletonController) {
       singletonController.abort()
@@ -495,7 +499,7 @@ function handleOffline() {
     if (heartbeatTimer) clearTimeout(heartbeatTimer)
     if (reconnectTimer) clearTimeout(reconnectTimer)
     stopBackgroundKeepalive()
-    updateConnectionState({ state: 'disconnected', error: 'Network offline' })
+    updateConnectionState({ state: "disconnected", error: "Network offline" })
   }
 }
 
@@ -503,29 +507,29 @@ function registerLifecycleListeners() {
   if (lifecycleListenersRegistered) return
   lifecycleListenersRegistered = true
 
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('online', handleOnline)
-  window.addEventListener('offline', handleOffline)
+  document.addEventListener("visibilitychange", handleVisibilityChange)
+  window.addEventListener("online", handleOnline)
+  window.addEventListener("offline", handleOffline)
 }
 
 function unregisterLifecycleListeners() {
   if (!lifecycleListenersRegistered) return
   lifecycleListenersRegistered = false
 
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  window.removeEventListener('online', handleOnline)
-  window.removeEventListener('offline', handleOffline)
+  document.removeEventListener("visibilitychange", handleVisibilityChange)
+  window.removeEventListener("online", handleOnline)
+  window.removeEventListener("offline", handleOffline)
 }
 
 // 广播事件给所有订阅者
 function broadcastEvent(globalEvent: GlobalEvent) {
   // 广播给所有订阅者
-  allSubscribers.forEach(callbacks => {
+  allSubscribers.forEach((callbacks) => {
     handleEventForSubscriber(globalEvent.payload, callbacks)
   })
 }
 
-function handleEventForSubscriber(payload: GlobalEvent['payload'], callbacks: EventCallbacks) {
+function handleEventForSubscriber(payload: GlobalEvent["payload"], callbacks: EventCallbacks) {
   switch (payload.type) {
     case EventTypes.MESSAGE_UPDATED: {
       const message = getMessageInfo(payload.properties)
@@ -617,12 +621,12 @@ function normalizeServerConnected(properties: unknown): ServerConnectedPayload {
 
 function normalizeSessionError(properties: unknown): SessionErrorPayload {
   if (!isRecord(properties)) {
-    return { sessionID: '', name: 'UnknownError', data: properties }
+    return { sessionID: "", name: "UnknownError", data: properties }
   }
 
-  const sessionID = typeof properties.sessionID === 'string' ? properties.sessionID : ''
+  const sessionID = typeof properties.sessionID === "string" ? properties.sessionID : ""
 
-  if (typeof properties.name === 'string') {
+  if (typeof properties.name === "string") {
     return {
       sessionID,
       name: properties.name,
@@ -634,14 +638,14 @@ function normalizeSessionError(properties: unknown): SessionErrorPayload {
   if (isRecord(sdkError)) {
     return {
       sessionID,
-      name: typeof sdkError.name === 'string' ? sdkError.name : 'UnknownError',
-      data: 'data' in sdkError ? sdkError.data : sdkError,
+      name: typeof sdkError.name === "string" ? sdkError.name : "UnknownError",
+      data: "data" in sdkError ? sdkError.data : sdkError,
     }
   }
 
   return {
     sessionID,
-    name: 'UnknownError',
+    name: "UnknownError",
     data: sdkError,
   }
 }
@@ -657,8 +661,8 @@ function normalizeSessionError(properties: unknown): SessionErrorPayload {
 export function reconnectSSE() {
   if (allSubscribers.size === 0) return // 没有订阅者不需要重连
 
-  if (import.meta.env.DEV) {
-    console.log('[SSE] reconnectSSE() called, forcing reconnect to new server...')
+  if (SSE_DEBUG) {
+    console.warn("[SSE] reconnectSSE() called, forcing reconnect to new server...")
   }
 
   // 断开现有连接
@@ -681,7 +685,7 @@ export function reconnectSSE() {
 
   // 重置重连计数
   updateConnectionState({
-    state: 'disconnected',
+    state: "disconnected",
     reconnectAttempt: 0,
     error: undefined,
   })
@@ -692,7 +696,7 @@ export function reconnectSSE() {
 
 export function disconnectSSE(error?: string) {
   disconnectSingleton()
-  updateConnectionState({ state: error ? 'error' : 'disconnected', error, reconnectAttempt: 0 })
+  updateConnectionState({ state: error ? "error" : "disconnected", error, reconnectAttempt: 0 })
 }
 
 /**
