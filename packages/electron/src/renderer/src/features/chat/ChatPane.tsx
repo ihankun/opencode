@@ -887,15 +887,6 @@ export const ChatPane = memo(function ChatPane({
         onScrollToMessageId={handleOutlineScrollToMessage}
       />
 
-      {/* Bottom fade — 消息滚动到输入区上方时逐渐消失。
-          FloatingActions 用 absolute bottom-full 浮在 contentWrapRef 上方，
-          这部分溢出高度不被 inputBoxHeight 包含，所以渐变额外加 64px 覆盖 FloatingActions 区域 */}
-      <div
-        className="absolute bottom-0 left-0 right-0 z-[5] pointer-events-none bg-gradient-to-t from-[hsl(var(--chat-bg))] to-transparent"
-        style={{ height: (inputBoxHeight || 0) + 64 }}
-        aria-hidden="true"
-      />
-
       <div
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
