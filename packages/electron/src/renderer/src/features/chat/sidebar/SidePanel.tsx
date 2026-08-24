@@ -1720,7 +1720,7 @@ export function SidePanel({
                         session,
                       ]),
                     ).values(),
-                  ),
+                  ).sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0)),
                 }
                 const isProjectSessionListExpanded = Boolean(search) || expandedProjectSessionIds.includes(project.id)
                 const visibleProjectSessions = projectSessionsForDisplay(
