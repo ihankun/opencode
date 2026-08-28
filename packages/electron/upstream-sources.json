@@ -2,20 +2,6 @@
   "schemaVersion": 1,
   "sources": [
     {
-      "id": "desktop-ui",
-      "repository": "lehhair/OpenCodeUI",
-      "tracking": "release",
-      "pinned": "v0.6.34",
-      "localPath": "packages/electron/src/renderer"
-    },
-    {
-      "id": "im-bridge",
-      "repository": "ET06731/opencode-im-bridge",
-      "tracking": "release",
-      "pinned": "v0.46.0",
-      "localPath": "packages/electron/vendor/opencode-im-bridge"
-    },
-    {
       "id": "sandbox-runtime",
       "repository": "anthropic-experimental/sandbox-runtime",
       "tracking": "commit",

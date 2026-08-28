@@ -2,6 +2,8 @@
 
 OpenCodex vendors upstream source when local product or security changes are expected. Do not replace these directories with npm dependencies.
 
+As of 2026-08-28, the Electron renderer (`packages/electron/src/renderer`, from `lehhair/OpenCodeUI`) and the IM bridge (`packages/electron/vendor/opencode-im-bridge`, from `ET06731/opencode-im-bridge`) are no longer tracked upstream and are maintained in-tree. Only `sandbox-runtime` remains tracked below.
+
 The machine-readable source list is [`packages/electron/upstream-sources.json`](../packages/electron/upstream-sources.json). Run the following command to check for new upstream releases or commits:
 
 ```sh
