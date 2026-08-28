@@ -395,7 +395,9 @@
     "behavior": "Agent 行为",
     "behaviorDesc": "权限放行和消息排队行为",
     "backgroundSubagents": "开启后台子任务",
-    "backgroundSubagentsDesc": "允许 Agent 异步启动后台 Subagent。修改后会自动重启内置本地服务；远程服务器需要单独配置环境变量。"
+    "backgroundSubagentsDesc": "允许 Agent 异步启动后台 Subagent。修改后会自动重启内置本地服务；远程服务器需要单独配置环境变量。",
+    "questionAutoContinue": "提问自动继续",
+    "questionAutoContinueDesc": "开启后，助手提问若 5 分钟内未作答，将自动跳过该提问让助手继续工作。"
   },
   "models": {
     "visibility": "模型可见性",

@@ -324,7 +324,7 @@ const UserMessageView = memo(function UserMessageView({
           <CollapsibleUserText
             text={messageText}
             collapseEnabled
-            renderMarkdown
+            renderMarkdown={false}
             messageId={info.id}
           />
         )}

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { app, utilityProcess } from "electron"
@@ -24,6 +24,35 @@ export type SidecarHandle = {
 const SIDECAR_SERVICE_NAME = "opencodex server"
 const SIDECAR_READY_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
+const MODELS_CACHE_URL = "https://models.dev/api.json"
+const MODELS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24小时
+
+async function updateModelsCache(runtimeCachePath: string): Promise<void> {
+  try {
+    if (existsSync(runtimeCachePath)) {
+      const stat = statSync(runtimeCachePath)
+      const age = Date.now() - stat.mtimeMs
+      if (age < MODELS_CACHE_MAX_AGE_MS) {
+        writeLog("server", "models cache is fresh, skipping update", { age: Math.round(age / 1000) })
+        return
+      }
+    }
+
+    writeLog("server", "updating models cache from remote")
+    const response = await fetch(MODELS_CACHE_URL)
+    if (!response.ok) {
+      writeLog("server", "failed to fetch models cache", { status: response.status })
+      return
+    }
+
+    const data = await response.text()
+    mkdirSync(dirname(runtimeCachePath), { recursive: true })
+    writeFileSync(runtimeCachePath, data)
+    writeLog("server", "models cache updated successfully")
+  } catch (error) {
+    writeLog("server", "error updating models cache", { error: error instanceof Error ? error.message : String(error) })
+  }
+}
 
 export async function spawnServer(userDataPath: string, cors: string[], secureEnvironment: Record<string, string> = {}): Promise<SidecarHandle> {
   // Port 0 keeps 4096 as the preferred address, then lets the server fall back
@@ -31,10 +60,15 @@ export async function spawnServer(userDataPath: string, cors: string[], secureEn
   const port = 0
   const workspacePath = join(userDataPath, "workspace")
   mkdirSync(workspacePath, { recursive: true })
+  
+  // 更新模型缓存（如果需要）
+  const runtimeCachePath = join(userDataPath, "models-cache", "api.json")
+  await updateModelsCache(runtimeCachePath)
+  
   writeLog("server", "spawning opencode sidecar", { cors, port, workspacePath })
   const child = utilityProcess.fork(join(dirname(fileURLToPath(import.meta.url)), "sidecar.js"), [], {
     cwd: workspacePath,
-    env: createEnv(secureEnvironment),
+    env: createEnv(secureEnvironment, userDataPath),
     serviceName: SIDECAR_SERVICE_NAME,
     stdio: "pipe",
   })
@@ -123,7 +157,7 @@ export async function spawnServer(userDataPath: string, cors: string[], secureEn
   }
 }
 
-function createEnv(secureEnvironment: Record<string, string>) {
+function createEnv(secureEnvironment: Record<string, string>, userDataPath: string) {
   const env = Object.fromEntries(
     Object.entries(process.env).flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),
   )
@@ -131,9 +165,13 @@ function createEnv(secureEnvironment: Record<string, string>) {
   if (process.platform === "linux") delete env.LD_PRELOAD
   env.OPENCODE_SERVER_MODULE = serverModuleUrl()
   env.OPENCODE_SANDBOX_RUNTIME_ROOT = sandboxRuntimeRoot()
-  env.OPENCODE_MODELS_PATH = app.isPackaged
+
+  const bundledModelsPath = app.isPackaged
     ? join(process.resourcesPath, "models", "api.json")
     : join(app.getAppPath(), ".models-cache", "api.json")
+  const runtimeModelsPath = join(userDataPath, "models-cache", "api.json")
+  env.OPENCODE_MODELS_PATH = existsSync(runtimeModelsPath) ? runtimeModelsPath : bundledModelsPath
+
   Object.assign(env, secureEnvironment)
   return env
 }

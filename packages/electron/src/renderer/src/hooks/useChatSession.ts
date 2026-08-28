@@ -23,6 +23,7 @@ import { usePermissions, usePermissionHandler, useMessageAnimation, useDirectory
 import { useNotification } from './useNotification'
 import { notificationEventSettingsStore } from '../store/notificationEventSettingsStore'
 import { notificationStore } from '../store/notificationStore'
+import { questionAutoContinueStore, QUESTION_AUTO_CONTINUE_TIMEOUT_MS } from '../store/questionAutoContinueStore'
 import {
   sendMessageAsync,
   getCurrentProject,
@@ -283,6 +284,24 @@ export function useChatSession({
   // but the server may have already processed the request (lost response).
   const autoRetriedIdsRef = useRef(new Set<string>())
 
+  // “提问自动继续”计时器：开启后助手提问 5 分钟未作答则自动 reject 让助手继续
+  const questionAutoContinueTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+
+  const clearQuestionAutoContinueTimer = useCallback((requestId: string) => {
+    const timer = questionAutoContinueTimers.current.get(requestId)
+    if (timer === undefined) return
+    clearTimeout(timer)
+    questionAutoContinueTimers.current.delete(requestId)
+  }, [])
+
+  // 卸载时清理所有“提问自动继续”计时器，避免对已结束的提问误触发 reject
+  useEffect(() => {
+    return () => {
+      questionAutoContinueTimers.current.forEach(timer => clearTimeout(timer))
+      questionAutoContinueTimers.current.clear()
+    }
+  }, [])
+
   // Message animations
   const { registerMessage, registerInputBox, animateUndo, animateRedo } = useMessageAnimation()
 
@@ -404,6 +423,16 @@ export function useChatSession({
           return [...prev, request]
         })
 
+        // 开启“提问自动继续”时，若 5 分钟内用户未作答，自动 reject 让助手继续
+        if (questionAutoContinueStore.enabled) {
+          clearQuestionAutoContinueTimer(request.id)
+          const timer = setTimeout(() => {
+            questionAutoContinueTimers.current.delete(request.id)
+            void handleQuestionReject(request.id, effectiveDirectory)
+          }, QUESTION_AUTO_CONTINUE_TIMEOUT_MS)
+          questionAutoContinueTimers.current.set(request.id, timer)
+        }
+
         // 页面不在前台时通知用户有问题等待回答
         if (notificationEventSettingsStore.isSystemEnabled('question')) {
           sendNotification(
@@ -418,9 +447,11 @@ export function useChatSession({
         // 应用内 toast 已在 useGlobalEvents 中统一处理
       },
       onQuestionReplied: (data: { sessionID: string; requestID: string }) => {
+        clearQuestionAutoContinueTimer(data.requestID)
         setPendingQuestionRequests(prev => prev.filter(r => r.id !== data.requestID))
       },
       onQuestionRejected: (data: { sessionID: string; requestID: string }) => {
+        clearQuestionAutoContinueTimer(data.requestID)
         setPendingQuestionRequests(prev => prev.filter(r => r.id !== data.requestID))
       },
       onScrollRequest: () => {
@@ -487,6 +518,8 @@ export function useChatSession({
       loadSession,
       refreshPendingRequests,
       refetchModels,
+      handleQuestionReject,
+      clearQuestionAutoContinueTimer,
     ],
   )
 

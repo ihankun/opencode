@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { autoApproveStore } from '../../../store'
 import { themeStore } from '../../../store/themeStore'
+import { questionAutoContinueStore } from '../../../store/questionAutoContinueStore'
 import { Toggle, SettingRow, SettingsSection } from './SettingsUI'
 import { getConfig, getGlobalConfig, updateConfig, updateGlobalConfig } from '../../../api/config'
 import { notifyAgentsChanged, removeAgent } from '../../../api/agent'
@@ -43,6 +44,7 @@ export function AgentSettings() {
   const { t } = useTranslation(['settings'])
   const [approvePendingOnFullAuto, setApprovePendingOnFullAuto] = useState(autoApproveStore.approvePendingOnFullAuto)
   const [queueFollowupMessages, setQueueFollowupMessages] = useState(themeStore.queueFollowupMessages)
+  const [questionAutoContinue, setQuestionAutoContinue] = useState(questionAutoContinueStore.enabled)
   const desktopPreferences = useDesktopPreferences()
 
   const handleApprovePendingOnFullAutoToggle = () => {
@@ -55,6 +57,12 @@ export function AgentSettings() {
     const next = !queueFollowupMessages
     setQueueFollowupMessages(next)
     themeStore.setQueueFollowupMessages(next)
+  }
+
+  const handleQuestionAutoContinueToggle = () => {
+    const next = !questionAutoContinue
+    setQuestionAutoContinue(next)
+    questionAutoContinueStore.setEnabled(next)
   }
 
   const handleBackgroundSubagentsToggle = () => {
@@ -94,6 +102,18 @@ export function AgentSettings() {
             enabled={desktopPreferences.backgroundSubagents}
             onChange={handleBackgroundSubagentsToggle}
             ariaLabel={t('agent.backgroundSubagents')}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label={t('agent.questionAutoContinue')}
+          description={t('agent.questionAutoContinueDesc')}
+          onClick={handleQuestionAutoContinueToggle}
+        >
+          <Toggle
+            enabled={questionAutoContinue}
+            onChange={handleQuestionAutoContinueToggle}
+            ariaLabel={t('agent.questionAutoContinue')}
           />
         </SettingRow>
       </SettingsSection>

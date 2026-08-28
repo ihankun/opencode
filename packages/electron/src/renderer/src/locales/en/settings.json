@@ -395,7 +395,9 @@
     "behavior": "Agent Behavior",
     "behaviorDesc": "Permission approval and queued message behavior",
     "backgroundSubagents": "Enable background subtasks",
-    "backgroundSubagentsDesc": "Allow agents to launch asynchronous background subagents. Changing this restarts the built-in local service; remote servers require their own environment setting."
+    "backgroundSubagentsDesc": "Allow agents to launch asynchronous background subagents. Changing this restarts the built-in local service; remote servers require their own environment setting.",
+    "questionAutoContinue": "Auto-continue on question",
+    "questionAutoContinueDesc": "When enabled, if a question from the assistant is left unanswered for 5 minutes, it is automatically skipped so the assistant can continue."
   },
   "models": {
     "visibility": "Model Visibility",
