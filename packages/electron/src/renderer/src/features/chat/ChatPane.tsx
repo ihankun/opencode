@@ -847,8 +847,8 @@ export const ChatPane = memo(function ChatPane({
         </div>
       )}
 
-      {/* 视口底边伸进输入框玻璃 44px：让消息回底时探进上方渐变模糊带（h-14=56px）约 30px，
-          文字在带内虚化淡出；44px 位于玻璃高度内，会被玻璃遮挡，不会露出内容边缘 */}
+      {/* 视口底边伸进输入框玻璃 44px：让回底的消息探进输入框上缘的渐变模糊层，
+          文字在层内虚化淡出；44px 位于玻璃高度内，会被玻璃遮挡，不会露出内容边缘 */}
       <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 44) }}>
         <InlineToolRequestContext.Provider value={inlineToolRequestCtx}>
           <ErrorBoundary onOpenSettings={onOpenSettings}>
@@ -893,44 +893,22 @@ export const ChatPane = memo(function ChatPane({
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
-        {/* 输入区底衬：视口向玻璃下探 44px，概览胶囊等在流悬浮条不占满宽度时，
-            未虚化的内容会从悬浮条两侧露出（上面虚化、贴着输入框反而清晰）。
-            这层铺满 wrapper 把露出的内容压进模糊；玻璃、胶囊、FloatingActions
-            都绘制在本层之上，不受影响。zIndex -1 使其位于本 stacking context 最底。 */}
+        {/* 输入区渐变模糊：只覆盖输入框正上方一条（悬浮条行 + 顶部 40px 渐变过渡）。
+            单层结构，mask 和底色渐变都用像素色标锚定在图层顶边（transparent 0 → 全强度 40px），
+            无论 wrapper 内悬浮条多高，过渡带始终是顶部 40px，不与其他层叠放、无接缝。
+            玻璃、胶囊、FloatingActions 都绘制在本层之上；概览胶囊两侧露出的
+            下探内容也处于本层模糊内。zIndex -1 使其位于本 stacking context 最底。 */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 backdrop-blur-md"
-          style={{ backgroundColor: 'hsl(var(--chat-bg) / 0.7)', zIndex: -1 }}
+          className="pointer-events-none absolute inset-x-0 bottom-0 backdrop-blur-md"
+          style={{
+            top: -40,
+            zIndex: -1,
+            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 40px)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
+            maskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
+          }}
         />
-        {/* 输入区上方的渐变模糊带：消息滚入输入框附近时逐渐虚化、淡出。
-            必须挂在 wrapper 顶边（bottom-full）而不是输入框或滚动容器内部：
-            - 随 wrapper 内任何在流悬浮条（概览胶囊等）一起移动；
-            - FloatingActions 等绝对定位工具栏出现时本层不受影响（工具栏后绘制，浮在本层之上）；
-            - 放进滚动容器会被 contain-content 破坏 backdrop-filter 的采样。
-            纯视觉层且 absolute 定位，不影响 ResizeObserver 测得的 wrapper 高度。 */}
-        <div aria-hidden className="absolute inset-x-0 bottom-full h-14">
-          <div
-            className="absolute inset-0 backdrop-blur-[3px]"
-            style={{
-              WebkitMaskImage: 'linear-gradient(to top, black, transparent)',
-              maskImage: 'linear-gradient(to top, black, transparent)',
-            }}
-          />
-          <div
-            className="absolute inset-x-0 bottom-0 h-2/3 backdrop-blur-md"
-            style={{
-              WebkitMaskImage: 'linear-gradient(to top, black, transparent 90%)',
-              maskImage: 'linear-gradient(to top, black, transparent 90%)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                'linear-gradient(to top, hsl(var(--chat-bg) / 0.75), hsl(var(--chat-bg) / 0.25) 45%, hsl(var(--chat-bg) / 0) 100%)',
-            }}
-          />
-        </div>
         {modelRecovery && (
           <div className="absolute bottom-full inset-x-0 z-20 flex justify-center px-4 pb-3 pointer-events-none">
             <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-warning-100/30 bg-bg-000/95 px-3 py-2.5 shadow-lg backdrop-blur-md">
