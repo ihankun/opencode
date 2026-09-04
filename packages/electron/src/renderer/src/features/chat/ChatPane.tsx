@@ -899,20 +899,22 @@ export const ChatPane = memo(function ChatPane({
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
-        {/* 输入区渐变模糊（输入框后面的底衬）：覆盖玻璃顶边到窗口底边。
-            文字下滚穿过输入框时在这层内渐隐消失；玻璃、胶囊、FloatingActions
-            都绘制在本层之上。不再在悬浮条行上方铺模糊带，避免遮挡消息正文。
-            mask 与底色渐变的 24px 过渡从层顶（玻璃顶边）用像素色标锚定，无接缝；
-            层顶随玻璃位置动态偏移（glassTopOffset）。zIndex -1 位于本 stacking context 最底。 */}
+        {/* 输入框上缘的滚动渐隐带：仅当不在底部（内容正滑向输入框）时显示，消息经过
+            玻璃顶边前在这里渐隐，玻璃实心/毛玻璃均可见；回到底部时整带隐藏，
+            不遮挡最后一条消息。锚定玻璃顶边（glassTopOffset），40px 像素色标
+            从带顶过渡到玻璃边，无接缝。zIndex -1 位于本 stacking context 最底。 */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 backdrop-blur-md"
+          className={`pointer-events-none absolute inset-x-0 backdrop-blur-md transition-opacity duration-150 ${
+            isAtBottom ? 'opacity-0' : 'opacity-100'
+          }`}
           style={{
-            top: glassTopOffset,
+            top: glassTopOffset - 40,
+            bottom: glassTopOffset,
             zIndex: -1,
-            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 24px)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 24px)',
-            maskImage: 'linear-gradient(to bottom, transparent 0px, black 24px)',
+            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.7) 40px)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
+            maskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
           }}
         />
         {modelRecovery && (
