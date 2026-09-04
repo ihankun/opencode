@@ -149,10 +149,7 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
   )
 
   return (
-    // 流式「正在思考」行处于消息流最底端，视口底边深探 72px 时它会陷进输入框玻璃
-    // 后面；mb-14 把它拉回玻璃上方（24px spacer + 32px 模糊前过渡 + 余量），完成
-    // 后移除避免留空
-    <div className={`py-1 ${isPartStreaming ? 'mb-14' : ''}`}>
+    <div className="py-1">
       {content}
       <span className="sr-only" role="status" aria-live="polite">
         {summaryText}

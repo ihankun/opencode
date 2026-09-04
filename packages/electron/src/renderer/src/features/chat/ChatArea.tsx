@@ -950,7 +950,7 @@ export const ChatArea = memo(
           >
             <div className="flex-1" />
 
-            <div className="shrink-0" style={{ height: 24 }} />
+            <div className="shrink-0" style={{ height: 48 }} />
 
             {retryStatus && (
               <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0`}>
@@ -963,7 +963,7 @@ export const ChatArea = memo(
             )}
 
             {showProcessing && !retryStatus && (
-              <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0 py-3 mb-14`}>
+              <div className={`w-full ${messageMaxWidthClass} mx-auto ${messagePaddingClass} shrink-0 py-3`}>
                 <div className="flex justify-start">
                   <div
                     role="status"

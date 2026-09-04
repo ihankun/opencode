@@ -852,10 +852,10 @@ export const ChatPane = memo(function ChatPane({
         </div>
       )}
 
-      {/* 视口底边深探 72px（消息底部内边距 + 24px spacer）：让回底时的最后一条消息
-          把尾巴真正送进输入框玻璃后面，由玻璃区内的模糊底衬承接淡出；
-          悬浮条行（概览胶囊等）上方不铺模糊带，消息正文保持清晰 */}
-      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 72) }}>
+      {/* 视口底边深探 40px + ChatArea 底部 spacer 48px：回底时消息块底边（含 hover
+          操作栏）停在玻璃顶上方 8px，文字与输入框之间留出约一行的操作空间；
+          滚动时消息仍可滑进玻璃区由渐隐带承接淡出 */}
+      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 40) }}>
         <InlineToolRequestContext.Provider value={inlineToolRequestCtx}>
           <ErrorBoundary onOpenSettings={onOpenSettings}>
             <ChatArea
