@@ -257,6 +257,7 @@ export const ChatPane = memo(function ChatPane({
   // Input Box Height
   // ============================================
   const [inputBoxHeight, setInputBoxHeight] = useState(0)
+  const [glassTopOffset, setGlassTopOffset] = useState(0)
   const inputBoxWrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -265,6 +266,10 @@ export const ChatPane = memo(function ChatPane({
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
         setInputBoxHeight(entry.contentRect.height)
+        // 玻璃顶边到 wrapper 顶边的距离（概览胶囊等在流悬浮条的高度），
+        // 用于把模糊底衬精确对齐到输入框玻璃，而不是悬浮条行
+        const glass = el.querySelector('[data-input-box]')
+        setGlassTopOffset(glass ? Math.max(0, glass.getBoundingClientRect().top - el.getBoundingClientRect().top) : 0)
       }
     })
     ro.observe(el)
@@ -847,9 +852,10 @@ export const ChatPane = memo(function ChatPane({
         </div>
       )}
 
-      {/* 视口底边伸进输入框玻璃 44px：让回底的消息探进输入框上缘的渐变模糊层，
-          文字在层内虚化淡出；44px 位于玻璃高度内，会被玻璃遮挡，不会露出内容边缘 */}
-      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 44) }}>
+      {/* 视口底边深探 72px（消息底部内边距 + 24px spacer）：让回底时的最后一条消息
+          把尾巴真正送进输入框玻璃后面，由玻璃区内的模糊底衬承接淡出；
+          悬浮条行（概览胶囊等）上方不铺模糊带，消息正文保持清晰 */}
+      <div className="absolute top-0 left-0 right-0" style={{ bottom: Math.max(0, (inputBoxHeight || 0) - 72) }}>
         <InlineToolRequestContext.Provider value={inlineToolRequestCtx}>
           <ErrorBoundary onOpenSettings={onOpenSettings}>
             <ChatArea
@@ -893,20 +899,20 @@ export const ChatPane = memo(function ChatPane({
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
-        {/* 输入区渐变模糊：只覆盖输入框正上方一条（悬浮条行 + 顶部 32px 渐变过渡）。
-            单层结构，mask 和底色渐变都用像素色标锚定在图层顶边（transparent 0 → 全强度 32px），
-            无论 wrapper 内悬浮条多高，过渡带始终是顶部 32px，不与其他层叠放、无接缝。
-            玻璃、胶囊、FloatingActions 都绘制在本层之上；概览胶囊两侧露出的
-            下探内容也处于本层模糊内。zIndex -1 使其位于本 stacking context 最底。 */}
+        {/* 输入区渐变模糊（输入框后面的底衬）：覆盖玻璃顶边到窗口底边。
+            文字下滚穿过输入框时在这层内渐隐消失；玻璃、胶囊、FloatingActions
+            都绘制在本层之上。不再在悬浮条行上方铺模糊带，避免遮挡消息正文。
+            mask 与底色渐变的 24px 过渡从层顶（玻璃顶边）用像素色标锚定，无接缝；
+            层顶随玻璃位置动态偏移（glassTopOffset）。zIndex -1 位于本 stacking context 最底。 */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 bottom-0 backdrop-blur-md"
           style={{
-            top: -32,
+            top: glassTopOffset,
             zIndex: -1,
-            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 32px)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 32px)',
-            maskImage: 'linear-gradient(to bottom, transparent 0px, black 32px)',
+            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 24px)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 24px)',
+            maskImage: 'linear-gradient(to bottom, transparent 0px, black 24px)',
           }}
         />
         {modelRecovery && (
