@@ -149,7 +149,9 @@ export const ReasoningPartView = memo(function ReasoningPartView({ part, isStrea
   )
 
   return (
-    <div className="py-1">
+    // 流式「正在思考」行处于消息流最底端，会陷进输入框上方的渐变模糊层；
+    // mb-10 把它顶出模糊区（底部 24px spacer + 32px 模糊 + 8px 余量），完成后移除避免留空
+    <div className={`py-1 ${isPartStreaming ? 'mb-10' : ''}`}>
       {content}
       <span className="sr-only" role="status" aria-live="polite">
         {summaryText}

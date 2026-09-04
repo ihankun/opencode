@@ -893,20 +893,20 @@ export const ChatPane = memo(function ChatPane({
         ref={inputBoxWrapperRef}
         className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
       >
-        {/* 输入区渐变模糊：只覆盖输入框正上方一条（悬浮条行 + 顶部 40px 渐变过渡）。
-            单层结构，mask 和底色渐变都用像素色标锚定在图层顶边（transparent 0 → 全强度 40px），
-            无论 wrapper 内悬浮条多高，过渡带始终是顶部 40px，不与其他层叠放、无接缝。
+        {/* 输入区渐变模糊：只覆盖输入框正上方一条（悬浮条行 + 顶部 32px 渐变过渡）。
+            单层结构，mask 和底色渐变都用像素色标锚定在图层顶边（transparent 0 → 全强度 32px），
+            无论 wrapper 内悬浮条多高，过渡带始终是顶部 32px，不与其他层叠放、无接缝。
             玻璃、胶囊、FloatingActions 都绘制在本层之上；概览胶囊两侧露出的
             下探内容也处于本层模糊内。zIndex -1 使其位于本 stacking context 最底。 */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 bottom-0 backdrop-blur-md"
           style={{
-            top: -40,
+            top: -32,
             zIndex: -1,
-            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 40px)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
-            maskImage: 'linear-gradient(to bottom, transparent 0px, black 40px)',
+            backgroundImage: 'linear-gradient(to bottom, transparent 0px, hsl(var(--chat-bg) / 0.65) 32px)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 32px)',
+            maskImage: 'linear-gradient(to bottom, transparent 0px, black 32px)',
           }}
         />
         {modelRecovery && (
