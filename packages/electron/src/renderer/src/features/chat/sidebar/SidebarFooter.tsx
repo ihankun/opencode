@@ -226,6 +226,14 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onO
     else openImPanel()
   }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, imPanelOpen, closeImPanel, openImPanel])
 
+  // 打开设置：顺带收起已展开的菜单/面板
+  const handleOpenSettings = useCallback(() => {
+    if (isOpen) closeMenu()
+    if (updatePanelOpen) closeUpdatePanel()
+    if (imPanelOpen) closeImPanel()
+    onOpenSettings?.()
+  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, imPanelOpen, closeImPanel, onOpenSettings])
+
   // 点击外部关闭
   useEffect(() => {
     if (!isOpen && !updatePanelOpen && !imPanelOpen) return
@@ -429,16 +437,19 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onO
               </div>
             )}
 
-            <button
-              onClick={() => {
-                closeMenu()
-                onOpenSettings?.()
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
-            >
-              <CogIcon size={14} />
-              <span>{t('sidebar.settings')}</span>
-            </button>
+            {/* 设置项仅在收起模式保留（展开模式下已独立为底部栏图标，见下方） */}
+            {!showLabels && (
+              <button
+                onClick={() => {
+                  closeMenu()
+                  onOpenSettings?.()
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[length:var(--fs-sm)] text-text-300 hover:text-text-100 hover:bg-bg-200/50 transition-colors text-left"
+              >
+                <CogIcon size={14} />
+                <span>{t('sidebar.settings')}</span>
+              </button>
+            )}
           </div>
         </div>,
         document.body,
@@ -518,6 +529,19 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onO
               {!readyToInstall && newVersionFound && (
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-danger-100 ring-2 ring-bg-100" />
               )}
+            </button>
+          )}
+
+          {/* 设置入口（原悬浮菜单内的设置项独立为图标） */}
+          {showLabels && (
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              aria-label={t('sidebar.settings')}
+              title={t('sidebar.settings')}
+              className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg sidebar-hover-row hover:text-text-100 text-text-400 transition-all duration-300"
+            >
+              <CogIcon size={16} />
             </button>
           )}
         </div>
