@@ -511,6 +511,19 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onO
             </button>
           )}
 
+          {/* 设置入口（原悬浮菜单内的设置项独立为图标） */}
+          {showLabels && (
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              aria-label={t('sidebar.settings')}
+              title={t('sidebar.settings')}
+              className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg sidebar-hover-row hover:text-text-100 text-text-400 transition-all duration-300"
+            >
+              <CogIcon size={16} />
+            </button>
+          )}
+
           {/* 更新状态入口 */}
           {showLabels && (
             <button
@@ -529,19 +542,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings, onO
               {!readyToInstall && newVersionFound && (
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-danger-100 ring-2 ring-bg-100" />
               )}
-            </button>
-          )}
-
-          {/* 设置入口（原悬浮菜单内的设置项独立为图标） */}
-          {showLabels && (
-            <button
-              type="button"
-              onClick={handleOpenSettings}
-              aria-label={t('sidebar.settings')}
-              title={t('sidebar.settings')}
-              className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg sidebar-hover-row hover:text-text-100 text-text-400 transition-all duration-300"
-            >
-              <CogIcon size={16} />
             </button>
           )}
         </div>
