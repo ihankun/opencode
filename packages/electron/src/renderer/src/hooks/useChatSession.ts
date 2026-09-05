@@ -316,6 +316,32 @@ export function useChatSession({
     [pathInfo?.directory],
   )
 
+  // 「提问自动继续」布防：以 pending 问题列表为唯一事实来源统一布防。
+  // 覆盖两类来源——SSE question.asked 新增的问题，以及应用重启/断线重连后
+  // refreshPendingRequests 恢复的挂起问题（此时 SSE 事件不会重放）。
+  // 开关状态在布防时读取：提问挂起期间切换开关不影响已布防的计时器。
+  useEffect(() => {
+    const pendingIds = new Set(pendingQuestionRequests.map(request => request.id))
+
+    // 先清掉已不在 pending 中的计时器（回复/拒绝完成后防残留误触发）
+    for (const [requestId, timer] of questionAutoContinueTimers.current) {
+      if (!pendingIds.has(requestId)) {
+        clearTimeout(timer)
+        questionAutoContinueTimers.current.delete(requestId)
+      }
+    }
+
+    if (!questionAutoContinueStore.enabled) return
+    for (const request of pendingQuestionRequests) {
+      if (questionAutoContinueTimers.current.has(request.id)) continue
+      const timer = setTimeout(() => {
+        questionAutoContinueTimers.current.delete(request.id)
+        void handleQuestionReject(request.id, effectiveDirectory)
+      }, QUESTION_AUTO_CONTINUE_TIMEOUT_MS)
+      questionAutoContinueTimers.current.set(request.id, timer)
+    }
+  }, [pendingQuestionRequests, effectiveDirectory, handleQuestionReject])
+
   const fullAutoMode = useSyncExternalStore(
     cb => autoApproveStore.onFullAutoChange(cb),
     () => autoApproveStore.getPaneFullAutoMode(paneId),
@@ -423,15 +449,8 @@ export function useChatSession({
           return [...prev, request]
         })
 
-        // 开启“提问自动继续”时，若 5 分钟内用户未作答，自动 reject 让助手继续
-        if (questionAutoContinueStore.enabled) {
-          clearQuestionAutoContinueTimer(request.id)
-          const timer = setTimeout(() => {
-            questionAutoContinueTimers.current.delete(request.id)
-            void handleQuestionReject(request.id, effectiveDirectory)
-          }, QUESTION_AUTO_CONTINUE_TIMEOUT_MS)
-          questionAutoContinueTimers.current.set(request.id, timer)
-        }
+        // 「提问自动继续」计时器统一由 pendingQuestionRequests 监听 effect 布防，
+        // 这样应用重启/重连后经 refreshPendingRequests 恢复的挂起问题同样会被布防
 
         // 页面不在前台时通知用户有问题等待回答
         if (notificationEventSettingsStore.isSystemEnabled('question')) {
