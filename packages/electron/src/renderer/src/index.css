@@ -1690,6 +1690,14 @@ textarea.question-custom-input:focus-visible {
   outline-offset: 0;
 }
 
+/* 供应商接入弹窗：聚焦反馈由外层容器/输入框自身边框变蓝提供，
+   屏蔽全局 focus-visible outline，避免输入框内部再画一圈蓝色矩形 */
+input[data-provider-connect-input]:focus,
+input[data-provider-connect-input]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
 input[data-session-search-input]:focus-visible {
   outline: none;
 }
