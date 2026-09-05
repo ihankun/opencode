@@ -305,7 +305,7 @@ function modelResponse() {
           },
           cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
           limit: { context: 32_000, output: 4_096 },
-          status: 'active',
+          status: 'beta',
           options: {},
           headers: {},
           release_date: '2026-01-01',

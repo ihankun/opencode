@@ -10,6 +10,7 @@ import {
 } from '../../../store'
 import { groupModelsByProvider, getModelKey } from '../../../utils/modelUtils'
 import { refreshProviders } from '../../../api/provider'
+import { disposeInstance } from '../../../api/global'
 import { settingsSearchInputClass, SettingsSection, Toggle } from './SettingsUI'
 
 function formatContext(limit: number): string {
@@ -34,7 +35,9 @@ export function ModelsSettings() {
     setRefreshing(true)
     setRefreshError(null)
     try {
+      // 顺序：强制刷新目录 → dispose 实例（Provider 服务用新目录重建）→ 重拉模型列表
       await refreshProviders()
+      await disposeInstance()
     } catch (error) {
       setRefreshError(t('models.refreshFailed', { error: error instanceof Error ? error.message : String(error) }))
     } finally {

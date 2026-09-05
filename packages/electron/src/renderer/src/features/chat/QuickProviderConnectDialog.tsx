@@ -146,8 +146,11 @@ export function QuickProviderConnectDialog({
     setRefreshing(true)
     setError(null)
     try {
+      // 顺序：强制刷新目录 → dispose 实例（Provider 服务用新目录重建）→ 通知父级 + 刷新前端模型列表
       await refreshProviders(directory)
+      await disposeInstance(directory)
       onProvidersChanged?.()
+      await refreshModels()
     } catch (cause) {
       setError(formatError(cause, t('providerConnect.refreshCatalogFailed')))
     } finally {
