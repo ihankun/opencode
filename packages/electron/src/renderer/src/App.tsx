@@ -748,9 +748,6 @@ function App() {
   const openAboutSettings = useCallback(() => {
     openSettingsTab('about')
   }, [openSettingsTab])
-  const openImBotSettingsTab = useCallback((tab: 'service' | 'config' | 'logs') => {
-    openSettingsTab(tab === 'service' ? 'imBotService' : tab === 'config' ? 'imBotConfig' : 'imBotLogs')
-  }, [openSettingsTab])
   const openSettingsFromOnboarding = useCallback((tab: SettingsTab) => {
     setOnboardingOpen(false)
     openSettingsTab(tab)
@@ -1307,7 +1304,6 @@ function App() {
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
-                    onOpenImBotSettings={openImBotSettingsTab}
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}
@@ -1403,7 +1399,6 @@ function App() {
                   onOpen={handleOpenSidebar}
                   onClose={handleCloseSidebar}
                   onOpenSettings={openSettings}
-                  onOpenImBotSettings={openImBotSettingsTab}
                   onOpenSearch={() => setSessionSearchOpen(true)}
                   onOpenPlugins={openPluginPage}
                   onOpenTasks={openTaskPage}
@@ -1427,7 +1422,6 @@ function App() {
                     onOpen={handleOpenSidebar}
                     onClose={handleCloseSidebar}
                     onOpenSettings={openSettings}
-                    onOpenImBotSettings={openImBotSettingsTab}
                     onOpenSearch={() => setSessionSearchOpen(true)}
                     onOpenPlugins={openPluginPage}
                     onOpenTasks={openTaskPage}

@@ -46,9 +46,6 @@ const ArchivedSessionsSettings = lazy(() => import('./components/ArchivedSession
 const SecuritySettings = lazy(() => import('./components/SecuritySettings').then(module => ({ default: module.SecuritySettings })))
 const MemorySettings = lazy(() => import('./components/MemorySettings').then(module => ({ default: module.MemorySettings })))
 const HooksSettings = lazy(() => import('./components/HooksSettings').then(module => ({ default: module.HooksSettings })))
-const ImBotServiceSettings = lazy(() => import('./components/ImBotServiceSettings').then(module => ({ default: module.ImBotServiceSettings })))
-const ImBotConfigSettings = lazy(() => import('./components/ImBotConfigSettings').then(module => ({ default: module.ImBotConfigSettings })))
-const ImBotLogsSettings = lazy(() => import('./components/ImBotLogsSettings').then(module => ({ default: module.ImBotLogsSettings })))
 const GeneralSettings = lazy(() => import('./components/GeneralSettings').then(module => ({ default: module.GeneralSettings })))
 const QuotaSettings = lazy(() => import('./components/QuotaSettings').then(module => ({ default: module.QuotaSettings })))
 const SpeechModelSettings = lazy(() => import('./components/SpeechModelSettings').then(module => ({ default: module.SpeechModelSettings })))
@@ -76,9 +73,6 @@ export type SettingsTab =
   | 'security'
   | 'memory'
   | 'hooks'
-  | 'imBotService'
-  | 'imBotConfig'
-  | 'imBotLogs'
   | 'logs'
   | 'backup'
   | 'about'
@@ -107,9 +101,6 @@ const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
   security: <ShieldIcon size={15} />,
   memory: <AgentIcon size={15} />,
   hooks: <PlugIcon size={15} />,
-  imBotService: <MessageSquareIcon size={15} />,
-  imBotConfig: <CogIcon size={15} />,
-  imBotLogs: <FileIcon size={15} />,
   logs: <FileIcon size={15} />,
   backup: <DownloadIcon size={15} />,
 }
@@ -133,9 +124,6 @@ const TAB_IDS: SettingsTab[] = [
   'logs',
   'backup',
   'config',
-  'imBotService',
-  'imBotConfig',
-  'imBotLogs',
   'archived',
   'keybindings',
   'about',
@@ -161,9 +149,6 @@ const TAB_LABEL_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.security',
   memory: 'tabs.memory',
   hooks: 'tabs.hooks',
-  imBotService: 'tabs.imBotService',
-  imBotConfig: 'tabs.imBotConfig',
-  imBotLogs: 'tabs.imBotLogs',
   logs: 'tabs.logs',
   backup: 'tabs.backup',
 }
@@ -188,9 +173,6 @@ const TAB_DESC_KEYS: Record<SettingsTab, string> = {
   security: 'tabs.securityDesc',
   memory: 'tabs.memoryDesc',
   hooks: 'tabs.hooksDesc',
-  imBotService: 'tabs.imBotServiceDesc',
-  imBotConfig: 'tabs.imBotConfigDesc',
-  imBotLogs: 'tabs.imBotLogsDesc',
   logs: 'tabs.logsDesc',
   backup: 'tabs.backupDesc',
 }
@@ -201,7 +183,6 @@ const GROUP_DEFS: { labelKey?: string; tabs: SettingsTab[] }[] = [
   { labelKey: 'groups.agent', tabs: ['agent', 'chat', 'workspace', 'memory'] },
   { labelKey: 'groups.advanced', tabs: ['hosting', 'hooks'] },
   { labelKey: 'groups.security', tabs: ['security', 'logs', 'backup', 'config'] },
-  { labelKey: 'groups.imBot', tabs: ['imBotService', 'imBotConfig', 'imBotLogs'] },
   { labelKey: 'groups.archived', tabs: ['archived'] },
   { labelKey: 'groups.help', tabs: ['keybindings', 'about'] },
 ]
@@ -250,12 +231,6 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <MemorySettings />
     case 'hooks':
       return <HooksSettings />
-    case 'imBotService':
-      return <ImBotServiceSettings />
-    case 'imBotConfig':
-      return <ImBotConfigSettings />
-    case 'imBotLogs':
-      return <ImBotLogsSettings />
     case 'logs':
       return <LogsSettings />
     case 'backup':
