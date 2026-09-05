@@ -274,7 +274,7 @@ export function QuickProviderConnectDialog({
       <div className="min-h-0">
         {!selectedProviderID ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/60 px-3 py-2 transition-colors focus-within:border-accent-main-100 focus-within:ring-1 focus-within:ring-accent-main-100/30">
+            <div className="flex items-center gap-2 rounded-xl border border-border-200/60 bg-bg-100/60 px-3 py-2 transition-colors">
               <SearchIcon size={14} className="shrink-0 text-text-400" />
               <input
                 autoFocus
@@ -364,11 +364,10 @@ export function QuickProviderConnectDialog({
             <label className="block space-y-1.5">
               <span className="text-[length:var(--fs-xs)] font-medium text-text-300">{t('providerConnect.code')}</span>
               <input
-                autoFocus
                 value={oauthCode}
                 onChange={event => setOauthCode(event.target.value)}
                 placeholder={t('providerConnect.codePlaceholder')}
-                className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 font-mono text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400 focus:border-accent-main-100/50"
+                className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 font-mono text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400"
               />
             </label>
             {error && <ErrorMessage message={error} />}
@@ -395,7 +394,7 @@ export function QuickProviderConnectDialog({
                     onChange={event =>
                       setPromptValues(current => ({ ...current, [prompt.key]: event.target.value }))
                     }
-                    className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 text-[length:var(--fs-md)] text-text-100 outline-none focus:border-accent-main-100/50"
+                    className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 text-[length:var(--fs-md)] text-text-100 outline-none"
                   >
                     {prompt.options.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -408,7 +407,7 @@ export function QuickProviderConnectDialog({
                       setPromptValues(current => ({ ...current, [prompt.key]: event.target.value }))
                     }
                     placeholder={prompt.placeholder}
-                    className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400 focus:border-accent-main-100/50"
+                    className="h-10 w-full rounded-lg border border-border-200 bg-bg-000 px-3 text-[length:var(--fs-md)] text-text-100 outline-none placeholder:text-text-400"
                   />
                 )}
               </label>
@@ -417,10 +416,9 @@ export function QuickProviderConnectDialog({
             {method.type === 'api' && (
               <label className="block space-y-1.5">
                 <span className="text-[length:var(--fs-xs)] font-medium text-text-300">{t('providerConnect.apiKey')}</span>
-                <div className="flex h-10 items-center gap-2 rounded-lg border border-border-200 bg-bg-000 px-3 focus-within:border-accent-main-100/50">
+                <div className="flex h-10 items-center gap-2 rounded-lg border border-border-200 bg-bg-000 px-3">
                   <KeyIcon size={14} className="shrink-0 text-text-400" />
                   <input
-                    autoFocus={visiblePrompts.length === 0}
                     type="password"
                     value={apiKey}
                     onChange={event => setApiKey(event.target.value)}
