@@ -55,6 +55,17 @@ export const ProviderApi = HttpApi.make("provider")
             description: "Retrieve available authentication methods for all AI providers.",
           }),
         ),
+        HttpApiEndpoint.post("refresh", `${root}/refresh`, {
+          query: WorkspaceRoutingQuery,
+          success: described(Provider.ListResult, "Refreshed list of providers"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "provider.refresh",
+            summary: "Refresh providers",
+            description:
+              "Refetch the models.dev catalog so newly released models become available, then return the updated provider list.",
+          }),
+        ),
         HttpApiEndpoint.post("authorize", `${root}/:providerID/oauth/authorize`, {
           params: { providerID: ProviderV2.ID },
           query: WorkspaceRoutingQuery,
