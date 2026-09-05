@@ -105,6 +105,11 @@ export async function startMockOpenCode(options?: {
       })
     }
     if (url.pathname === '/config/providers') return json(response, modelResponse())
+    if (url.pathname === '/provider') {
+      const model = modelResponse()
+      return json(response, { all: model.providers, connected: [], default: model.default })
+    }
+    if (url.pathname === '/provider/auth') return json(response, {})
     if (url.pathname === '/agent') {
       return json(response, [{
         name: 'build',

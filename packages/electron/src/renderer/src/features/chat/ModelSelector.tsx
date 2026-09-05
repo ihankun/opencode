@@ -928,7 +928,7 @@ export const ModelSelector = memo(
               unpinLabel={t('modelSelector.unpin')}
             />
 
-            {!searchQuery && (providersLoading || !!providerCatalog?.all.length) && (
+            {!searchQuery && (providersLoading || (providerCatalog?.all?.length ?? 0) > 0) && (
               <div className="shrink-0 border-t border-border-200/50 bg-bg-100/70 p-1.5">
                 <button
                   type="button"
