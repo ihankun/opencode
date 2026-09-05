@@ -413,7 +413,10 @@
     "providerCount": "{{count}} models",
     "setDefault": "Set as Default",
     "cancelDefault": "Clear Default",
-    "defaultTag": "Default Model"
+    "defaultTag": "Default Model",
+    "refreshCatalog": "Refresh model catalog",
+    "refreshing": "Refreshing model catalog…",
+    "refreshFailed": "Failed to refresh model catalog"
   },
   "appearance": {
     "accessibility": "Accessibility",

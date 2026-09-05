@@ -13,6 +13,12 @@ export async function getProviders(directory?: string): Promise<ProviderListResu
   return unwrap(await sdk.provider.list({ directory: formatPathForApi(directory) }))
 }
 
+/** 强制服务端重新拉取 models.dev 目录，并返回更新后的供应商列表 */
+export async function refreshProviders(directory?: string): Promise<ProviderListResult> {
+  const sdk = getSDKClient()
+  return unwrap(await sdk.provider.refresh({ directory: formatPathForApi(directory) }))
+}
+
 export async function getProviderAuthMethods(directory?: string): Promise<Record<string, ProviderAuthMethod[]>> {
   const sdk = getSDKClient()
   return unwrap(await sdk.provider.auth({ directory: formatPathForApi(directory) }))

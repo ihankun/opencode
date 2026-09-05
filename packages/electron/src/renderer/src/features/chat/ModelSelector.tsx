@@ -588,8 +588,7 @@ export const ModelSelector = memo(
       return () => clearTimeout(timerId)
     }, [isOpen, focusItemAtInteractiveIndex])
 
-    useEffect(() => {
-      if (!isOpen) return
+    const loadProviders = useCallback(() => {
       let cancelled = false
       setProvidersLoading(true)
       void getProviders(directory)
@@ -605,7 +604,12 @@ export const ModelSelector = memo(
       return () => {
         cancelled = true
       }
-    }, [directory, isOpen])
+    }, [directory])
+
+    useEffect(() => {
+      if (!isOpen) return
+      return loadProviders()
+    }, [directory, isOpen, loadProviders])
 
     useEffect(() => {
       if (!isOpen) return
@@ -954,6 +958,7 @@ export const ModelSelector = memo(
           initialProviderID={null}
           directory={directory}
           onClose={() => setProviderDialogOpen(false)}
+          onProvidersChanged={loadProviders}
           onConnected={provider => {
             setProviderCatalog(current =>
               current

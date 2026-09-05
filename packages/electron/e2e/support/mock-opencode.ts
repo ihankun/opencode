@@ -109,6 +109,10 @@ export async function startMockOpenCode(options?: {
       const model = modelResponse()
       return json(response, { all: model.providers, connected: [], default: model.default })
     }
+    if (url.pathname === '/provider/refresh' && method === 'POST') {
+      const model = modelResponse()
+      return json(response, { all: model.providers, connected: [], default: model.default })
+    }
     if (url.pathname === '/provider/auth') return json(response, {})
     if (url.pathname === '/agent') {
       return json(response, [{

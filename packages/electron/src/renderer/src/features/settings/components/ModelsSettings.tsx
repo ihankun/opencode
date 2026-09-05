@@ -9,6 +9,7 @@ import {
   useHiddenModelKeys,
 } from '../../../store'
 import { groupModelsByProvider, getModelKey } from '../../../utils/modelUtils'
+import { refreshProviders } from '../../../api/provider'
 import { settingsSearchInputClass, SettingsSection, Toggle } from './SettingsUI'
 
 function formatContext(limit: number): string {
@@ -20,12 +21,27 @@ function formatContext(limit: number): string {
 
 export function ModelsSettings() {
   const { t } = useTranslation('settings')
-  const { models, isLoading } = useModels()
+  const { models, isLoading, refetch } = useModels()
   const hiddenModelKeys = useHiddenModelKeys()
   const defaultModelKey = useDefaultModelKey()
   const [query, setQuery] = useState('')
   const [enabledOnly, setEnabledOnly] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const hiddenModelKeySet = useMemo(() => new Set(hiddenModelKeys), [hiddenModelKeys])
+
+  const refreshCatalog = async () => {
+    setRefreshing(true)
+    setRefreshError(null)
+    try {
+      await refreshProviders()
+    } catch (error) {
+      setRefreshError(t('models.refreshFailed', { error: error instanceof Error ? error.message : String(error) }))
+    } finally {
+      await refetch()
+      setRefreshing(false)
+    }
+  }
 
   const visibleCount = useMemo(
     () => models.reduce((count, model) => (hiddenModelKeySet.has(getModelKey(model)) ? count : count + 1), 0),
@@ -80,7 +96,19 @@ export function ModelsSettings() {
           )}
         </div>
 
-        <p className="text-[length:var(--fs-xs)] text-text-400">{t('models.keepOneEnabled')}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[length:var(--fs-xs)] text-text-400">
+            {refreshError ?? t('models.keepOneEnabled')}
+          </p>
+          <button
+            type="button"
+            onClick={() => void refreshCatalog()}
+            disabled={refreshing}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-200/60 px-3 py-2 text-[length:var(--fs-xs)] text-text-300 hover:bg-bg-100 disabled:opacity-40"
+          >
+            {refreshing ? t('models.refreshing') : t('models.refreshCatalog')}
+          </button>
+        </div>
 
         <div className="flex items-center justify-between gap-3 rounded-xl border border-border-200/45 bg-bg-100/35 px-3 py-2">
           <div className="min-w-0">

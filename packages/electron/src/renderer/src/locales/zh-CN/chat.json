@@ -142,7 +142,10 @@
     "codeRequired": "请输入授权码",
     "finish": "完成接入",
     "waiting": "正在等待授权完成...",
-    "connectFailed": "接入供应商失败"
+    "connectFailed": "接入供应商失败",
+    "refreshCatalog": "刷新模型目录",
+    "refreshingCatalog": "正在刷新模型目录…",
+    "refreshCatalogFailed": "刷新模型目录失败"
   },
   "retryStatus": {
     "retrying": "重试中（第 {{attempt}} 次）",

@@ -18,6 +18,7 @@ import {
 import { ProviderIcon } from '../../components/ProviderIcon'
 import { Button, Dialog } from '../../components/ui'
 import { refreshModels } from '../../hooks/useModels'
+import { refreshProviders } from '../../api'
 import { openUrl } from '../../utils/browserOpen'
 
 type AuthPrompt = NonNullable<ProviderAuthMethod['prompts']>[number]
@@ -30,6 +31,8 @@ type QuickProviderConnectDialogProps = {
   directory?: string
   onClose: () => void
   onConnected: (provider: Provider) => void
+  /** 目录刷新成功后由父级重新拉取供应商列表 */
+  onProvidersChanged?: () => void
 }
 
 export function ProviderMark({ provider, className = 'size-5' }: { provider: Provider; className?: string }) {
@@ -51,6 +54,7 @@ export function QuickProviderConnectDialog({
   directory,
   onClose,
   onConnected,
+  onProvidersChanged,
 }: QuickProviderConnectDialogProps) {
   const { t } = useTranslation(['chat', 'common'])
   const [selectedProviderID, setSelectedProviderID] = useState<string | null>(initialProviderID)
@@ -63,6 +67,7 @@ export function QuickProviderConnectDialog({
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const provider = useMemo(
@@ -135,6 +140,19 @@ export function QuickProviderConnectDialog({
     setSelectedProviderID(providerID)
     setMethodIndex(null)
     setError(null)
+  }
+
+  const refreshCatalog = async () => {
+    setRefreshing(true)
+    setError(null)
+    try {
+      await refreshProviders(directory)
+      onProvidersChanged?.()
+    } catch (cause) {
+      setError(formatError(cause, t('providerConnect.refreshCatalogFailed')))
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const finish = async () => {
@@ -315,6 +333,14 @@ export function QuickProviderConnectDialog({
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => void refreshCatalog()}
+              disabled={refreshing}
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-lg text-[length:var(--fs-sm)] text-text-400 transition-colors hover:bg-bg-200/70 hover:text-text-100 disabled:cursor-wait disabled:opacity-60"
+            >
+              {refreshing ? t('providerConnect.refreshingCatalog') : t('providerConnect.refreshCatalog')}
+            </button>
           </div>
         ) : loading ? (
           <div className="py-10 text-center text-[length:var(--fs-sm)] text-text-400">

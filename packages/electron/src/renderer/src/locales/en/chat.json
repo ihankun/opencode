@@ -144,7 +144,10 @@
     "codeRequired": "Enter the authorization code",
     "finish": "Finish connection",
     "waiting": "Waiting for authorization to complete...",
-    "connectFailed": "Failed to connect provider"
+    "connectFailed": "Failed to connect provider",
+    "refreshCatalog": "Refresh model catalog",
+    "refreshingCatalog": "Refreshing model catalog…",
+    "refreshCatalogFailed": "Failed to refresh model catalog"
   },
   "retryStatus": {
     "retrying": "Retrying (attempt {{attempt}})",
