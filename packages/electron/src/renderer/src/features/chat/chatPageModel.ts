@@ -100,7 +100,19 @@ export function computeAnchorRestoreScrollDelta(previousTopOffset: number, nextT
   return nextTopOffset - previousTopOffset
 }
 
+// 估算结果按消息对象引用缓存：流式期间未变化的消息对象引用保持不变，
+// 视图模型每帧重建时无需对全部历史文本重新做行数估算
+const estimateCache = new WeakMap<Message, number>()
+
 function estimateMessageHeight(message: Message): number {
+  const cached = estimateCache.get(message)
+  if (cached !== undefined) return cached
+  const height = computeEstimateMessageHeight(message)
+  estimateCache.set(message, height)
+  return height
+}
+
+function computeEstimateMessageHeight(message: Message): number {
   if (message.info.role === 'user') {
     const textHeight = message.parts.reduce((height, part) => {
       if (part.type !== 'text' || part.synthetic) return height

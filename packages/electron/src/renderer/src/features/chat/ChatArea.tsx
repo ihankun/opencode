@@ -510,11 +510,15 @@ export const ChatArea = memo(
           // 滚动中临时扩大展开半径，让展开窗口覆盖滚动缓冲，滚动经过区域大多已渲染。
           isScrollingRef.current = true
           setIsScrolling(true)
+          // 滚动中禁用全局毛玻璃：内容在模糊层下方滚动时 backdrop-filter 每帧
+          // 重采样是滚动掉帧的主因（实测 175ms 停顿 → 移除后 0），停止后恢复
+          document.documentElement.dataset.chatScrolling = 'true'
           if (scrollSnapshotSettleTimerRef.current !== null) window.clearTimeout(scrollSnapshotSettleTimerRef.current)
           scrollSnapshotSettleTimerRef.current = window.setTimeout(() => {
             scrollSnapshotSettleTimerRef.current = null
             isScrollingRef.current = false
             setIsScrolling(false)
+            delete document.documentElement.dataset.chatScrolling
             // 兜底结算：保证滚动停止后展开区落在最终位置
             updateScrollOffsetSnapshot()
             if (pendingMeasuredHeightsRef.current) {
@@ -560,6 +564,7 @@ export const ChatArea = memo(
         root.addEventListener('touchmove', onTouchMove, { passive: true })
         updateScrollOffsetSnapshot()
         return () => {
+          delete document.documentElement.dataset.chatScrolling
           root.removeEventListener('scroll', onScroll)
           root.removeEventListener('wheel', onWheel)
           root.removeEventListener('keydown', onKeyDown)

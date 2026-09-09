@@ -1837,6 +1837,14 @@ input[data-provider-search-input]:focus-visible {
   backdrop-filter: blur(22px) saturate(200%);
 }
 
+/* 滚动中临时禁用毛玻璃：内容在模糊层下方滚动时 backdrop-filter 每帧重采样，
+   导致滚动掉帧/卡顿；ChatArea 滚动期间在根节点打 data-chat-scrolling 标记，
+   滚动停止约 160ms 后移除并恢复模糊。 */
+:root[data-chat-scrolling] * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 :root[data-glass] .glass-alt {
   background-color: hsl(var(--bg-100) / 0.78);
   -webkit-backdrop-filter: blur(22px) saturate(200%);

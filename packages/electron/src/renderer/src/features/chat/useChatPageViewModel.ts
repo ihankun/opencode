@@ -34,6 +34,34 @@ interface StableOutlineModel {
 const OUTLINE_MODEL_CACHE_LIMIT = 16
 const outlineModelCache = new Map<string, StableOutlineModel>()
 
+// outline 只依赖用户消息。流式/滚动期间用户消息对象引用保持不变（仅正在
+// 生成的 assistant 消息每帧换新对象），用引用比对直接复用上次结果，
+// 避免每帧全量拼接签名与重建 entries
+let cachedOutlineUserMessages: Message[] | undefined
+let cachedOutlineModel: StableOutlineModel | undefined
+let cachedOutlineOwnerMessages: Message[] | undefined
+let cachedOutlineOwners: Map<string, string> | undefined
+
+function sameUserMessages(a: Message[], b: Message[]): boolean {
+  if (!b || a.length !== b.length) return false
+  let indexA = 0
+  let indexB = 0
+  while (indexA < a.length && indexB < b.length) {
+    if (a[indexA].info.role !== 'user') {
+      indexA++
+      continue
+    }
+    if (b[indexB].info.role !== 'user') {
+      indexB++
+      continue
+    }
+    if (a[indexA] !== b[indexB]) return false
+    indexA++
+    indexB++
+  }
+  return true
+}
+
 function buildOutlineSignature(messages: Message[]): string {
   let signature = ''
   for (const message of messages) {
@@ -46,6 +74,9 @@ function buildOutlineSignature(messages: Message[]): string {
 }
 
 function buildOutlineOwnerByMessageId(messages: Message[]): Map<string, string> {
+  if (cachedOutlineOwnerMessages && sameUserMessages(cachedOutlineOwnerMessages, messages)) {
+    return cachedOutlineOwners!
+  }
   const ownerByMessageId = new Map<string, string>()
   let lastUserMessageId: string | null = null
 
@@ -54,15 +85,22 @@ function buildOutlineOwnerByMessageId(messages: Message[]): Map<string, string> 
     if (lastUserMessageId) ownerByMessageId.set(message.info.id, lastUserMessageId)
   }
 
+  cachedOutlineOwnerMessages = messages
+  cachedOutlineOwners = ownerByMessageId
   return ownerByMessageId
 }
 
 function getStableOutlineModel(messages: Message[]): StableOutlineModel {
+  if (cachedOutlineUserMessages && sameUserMessages(cachedOutlineUserMessages, messages)) {
+    return cachedOutlineModel!
+  }
   const signature = buildOutlineSignature(messages)
   const cached = outlineModelCache.get(signature)
   if (cached) {
     outlineModelCache.delete(signature)
     outlineModelCache.set(signature, cached)
+    cachedOutlineUserMessages = messages
+    cachedOutlineModel = cached
     return cached
   }
 
@@ -76,6 +114,8 @@ function getStableOutlineModel(messages: Message[]): StableOutlineModel {
     const oldestKey = outlineModelCache.keys().next().value
     if (oldestKey) outlineModelCache.delete(oldestKey)
   }
+  cachedOutlineUserMessages = messages
+  cachedOutlineModel = next
   return next
 }
 
