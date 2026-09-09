@@ -146,6 +146,15 @@ function buildQuestionNotificationBody(request: ApiQuestionRequest) {
   return request.questions?.[0]?.header || i18n.t('chat:notification.questionWaiting')
 }
 
+// 「提问自动继续」超时后的自动回复：每个问题取第一个选项（模型通常把首选放第一），
+// 无选项的问题回一个中性的 continue，让助手继续而非中断
+function buildAutoContinueAnswers(request: ApiQuestionRequest): string[][] {
+  return request.questions.map(question => {
+    const first = question.options[0]?.label
+    return first ? [first] : ['continue']
+  })
+}
+
 function buildErrorNotificationBody(error: SessionErrorPayload) {
   if (typeof error.data === 'string' && error.data.trim()) return error.data.trim()
   if (error.name && error.name !== 'UnknownError') return i18n.t('chat:notification.errorType', { name: error.name })
@@ -336,11 +345,14 @@ export function useChatSession({
       if (questionAutoContinueTimers.current.has(request.id)) continue
       const timer = setTimeout(() => {
         questionAutoContinueTimers.current.delete(request.id)
-        void handleQuestionReject(request.id, effectiveDirectory)
+        // 超时自动回复（而非 reject）：reject 在服务端会被当作“用户拒绝并中断”，
+        // 助手回合直接停止；回复则让回合继续。默认取每个问题的第一个选项——
+        // 模型通常把首选放在第一，无选项的问题回一个中性的 continue
+        void handleQuestionReply(request.id, buildAutoContinueAnswers(request), effectiveDirectory)
       }, QUESTION_AUTO_CONTINUE_TIMEOUT_MS)
       questionAutoContinueTimers.current.set(request.id, timer)
     }
-  }, [pendingQuestionRequests, effectiveDirectory, handleQuestionReject])
+  }, [pendingQuestionRequests, effectiveDirectory, handleQuestionReply])
 
   const fullAutoMode = useSyncExternalStore(
     cb => autoApproveStore.onFullAutoChange(cb),
@@ -537,7 +549,6 @@ export function useChatSession({
       loadSession,
       refreshPendingRequests,
       refetchModels,
-      handleQuestionReject,
       clearQuestionAutoContinueTimer,
     ],
   )
