@@ -1958,6 +1958,25 @@ input[data-provider-search-input]:focus-visible {
   }
 }
 
+/* 深色模式下设置页左侧导航提亮：未选中/悬停为近白灰（text-200，75%），
+   选中项为纯白（text-000）并配底色描边；导航表面是 8%/0.32 的半透明灰，
+   默认中灰字（text-400）在其上对比不足 */
+:root[data-theme-preset='codex'][data-mode='dark'] .settings-sidebar-surface [role='tab'] {
+  color: hsl(var(--text-200));
+}
+:root[data-theme-preset='codex'][data-mode='dark'] .settings-sidebar-surface [role='tab'][aria-selected='true'] {
+  color: hsl(var(--text-000));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset='codex']:not([data-mode]) .settings-sidebar-surface [role='tab'] {
+    color: hsl(var(--text-200));
+  }
+  :root[data-theme-preset='codex']:not([data-mode]) .settings-sidebar-surface [role='tab'][aria-selected='true'] {
+    color: hsl(var(--text-000));
+  }
+}
+
 /* Windows/Linux: no vibrancy support, use opaque sidebar background with glass.
  * Mirrors the .sidebar-surface rule above; without it the translucent settings
  * nav blends the dark window backdrop (#0f1115) and becomes unreadable in light mode. */
