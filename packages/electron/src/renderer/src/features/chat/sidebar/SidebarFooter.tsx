@@ -8,16 +8,15 @@ import {
   SunIcon,
   MoonIcon,
   SystemIcon,
-  QuestionIcon,
   SmartphoneIcon,
+  GlobeIcon,
 } from '../../../components/Icons'
 import { getProviders } from '../../../api'
 import { useServerStore, useTheme } from '../../../hooks'
 import { useDesktopPreferences } from '../../../store/desktopPreferencesStore'
 import { serverStore } from '../../../store/serverStore'
-import { hasUpdateAvailable, updaterHasNewVersion, updaterReadyToInstall, useUpdateStore } from '../../../store/updateStore'
-import { UpdatePanel } from './UpdatePanel'
 import { ImBridgeDialog } from './ImBridgeDialog'
+import { ServerSwitchDialog } from './ServerSwitchDialog'
 import { useImBridgeData } from '../../settings/components/imBotShared'
 import type { QuotaProviderResult } from '../../../../../shared/quota'
 
@@ -53,7 +52,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const { mode: themeMode, setThemeWithAnimation: onThemeChange } = useTheme()
   const { activeServer } = useServerStore()
   const preferences = useDesktopPreferences()
-  const updateState = useUpdateStore()
   const [isOpen, setIsOpen] = useState(false)
   const [quotaExpanded, setQuotaExpanded] = useState(false)
   const [quotaLoading, setQuotaLoading] = useState(false)
@@ -61,28 +59,14 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
   const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set())
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 260, fromBottom: false })
   const [isVisible, setIsVisible] = useState(false)
-  const [updatePanelOpen, setUpdatePanelOpen] = useState(false)
-  const [updatePanelVisible, setUpdatePanelVisible] = useState(false)
-  const [updatePanelPos, setUpdatePanelPos] = useState({ top: 0, left: 0, width: 260 })
   const [imDialogOpen, setImDialogOpen] = useState(false)
+  const [serverSwitchOpen, setServerSwitchOpen] = useState(false)
   const imBridge = useImBridgeData({ refreshConfigOnEvent: true })
   const prevShowLabelsRef = useRef(showLabels)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const updateButtonRef = useRef<HTMLButtonElement>(null)
-  const updatePanelRef = useRef<HTMLDivElement>(null)
   const closeTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const updater = updateState.updater
-  const newVersionFound = updaterHasNewVersion(updateState) || hasUpdateAvailable(updateState)
-  const readyToInstall = updaterReadyToInstall(updateState)
-  const updateVersion = updater.version ?? updateState.latestRelease?.version ?? null
-  const updateTooltip = readyToInstall
-    ? t('sidebar.update.downloaded')
-    : newVersionFound
-      ? `${t('sidebar.update.available')}${updateVersion ? ` v${updateVersion}` : ''}`
-      : t('sidebar.update.title')
 
   // 菜单中连接状态显示用
   const connectionLabel = activeServer?.name || t(`sidebar.connection.${connectionState}`, {
@@ -129,22 +113,6 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     closeTimeoutIdRef.current = closeTimeoutId
   }, [])
 
-  // 打开更新面板
-  const openUpdatePanel = useCallback(() => {
-    if (!updateButtonRef.current || !containerRef.current) return
-    const buttonRect = updateButtonRef.current.getBoundingClientRect()
-    const containerRect = containerRef.current.getBoundingClientRect()
-    setUpdatePanelPos({ top: buttonRect.top, left: containerRect.left, width: containerRect.width })
-    setUpdatePanelOpen(true)
-    requestAnimationFrame(() => setUpdatePanelVisible(true))
-  }, [])
-
-  // 关闭更新面板
-  const closeUpdatePanel = useCallback(() => {
-    setUpdatePanelVisible(false)
-    closeTimeoutIdRef.current = setTimeout(() => setUpdatePanelOpen(false), 150)
-  }, [])
-
   useEffect(() => {
     void getProviders()
       .then(value => setConnectedProviders(new Set(value.connected)))
@@ -181,55 +149,40 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
 
   // 切换菜单
   const toggleMenu = useCallback(() => {
-    if (updatePanelOpen) closeUpdatePanel()
     if (isOpen) closeMenu()
     else openMenu()
-  }, [isOpen, openMenu, closeMenu, updatePanelOpen, closeUpdatePanel])
+  }, [isOpen, openMenu, closeMenu])
 
-  // 切换更新面板
-  const toggleUpdatePanel = useCallback(() => {
-    if (isOpen) closeMenu()
-    if (updatePanelOpen) closeUpdatePanel()
-    else openUpdatePanel()
-  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, openUpdatePanel])
-
-  // 打开设置：顺带收起已展开的菜单/面板
+  // 打开设置：顺带收起已展开的菜单
   const handleOpenSettings = useCallback(() => {
     if (isOpen) closeMenu()
-    if (updatePanelOpen) closeUpdatePanel()
     onOpenSettings?.()
-  }, [isOpen, closeMenu, updatePanelOpen, closeUpdatePanel, onOpenSettings])
+  }, [isOpen, closeMenu, onOpenSettings])
 
   // 点击外部关闭
   useEffect(() => {
-    if (!isOpen && !updatePanelOpen) return
+    if (!isOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node
       if (buttonRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
-      if (updateButtonRef.current?.contains(target)) return
-      if (updatePanelRef.current?.contains(target)) return
       closeMenu()
-      closeUpdatePanel()
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [isOpen, closeMenu])
 
   // ESC 关闭
   useEffect(() => {
-    if (!isOpen && !updatePanelOpen) return
+    if (!isOpen) return
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeMenu()
-        closeUpdatePanel()
-      }
+      if (e.key === 'Escape') closeMenu()
     }
     document.addEventListener('keydown', handleEsc)
     return () => document.removeEventListener('keydown', handleEsc)
-  }, [isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [isOpen, closeMenu])
 
   // 侧边栏状态变化时关闭
   useEffect(() => {
@@ -241,14 +194,11 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
     if (showLabelsChanged && isOpen) {
       frameId = requestAnimationFrame(() => closeMenu())
     }
-    if (showLabelsChanged && updatePanelOpen) {
-      frameId = requestAnimationFrame(() => closeUpdatePanel())
-    }
 
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId)
     }
-  }, [showLabels, isOpen, updatePanelOpen, closeMenu, closeUpdatePanel])
+  }, [showLabels, isOpen, closeMenu])
 
   // 清理 closeTimeout 防止内存泄漏
   useEffect(() => {
@@ -310,6 +260,19 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
 
           {/* Menu Items */}
           <div className="p-1">
+            {/* 切换服务器：弹出服务器列表快速切换 */}
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu()
+                setServerSwitchOpen(true)
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-text-300 transition-colors hover:bg-bg-200/50 hover:text-text-100"
+            >
+              <GlobeIcon size={14} />
+              <span>{t('sidebar.switchServer')}</span>
+            </button>
+            <div className="my-1 h-px bg-border-200/30" />
             {/* 登录入口先隐藏；供应商 API Key 暂时统一走 设置 -> 供应商 配置。 */}
 
             {enabledQuotaProviders.length > 0 && (
@@ -478,42 +441,13 @@ export function SidebarFooter({ showLabels, connectionState, onOpenSettings }: S
               <CogIcon size={16} />
             </button>
           )}
-
-          {/* 更新状态入口 */}
-          {showLabels && (
-            <button
-              ref={updateButtonRef}
-              type="button"
-              onClick={toggleUpdatePanel}
-              aria-label={updateTooltip}
-              title={updateTooltip}
-              className={`
-                relative h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-all duration-300
-                ${updatePanelOpen ? 'bg-bg-200 text-text-100 shadow-sm' : 'sidebar-hover-row hover:text-text-100'}
-                ${readyToInstall ? 'text-success-100' : 'text-text-400'}
-              `}
-            >
-              <QuestionIcon size={16} />
-              {!readyToInstall && newVersionFound && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-danger-100 ring-2 ring-bg-100" />
-              )}
-            </button>
-          )}
         </div>
       </div>
 
       {floatingMenu}
 
-      {updatePanelOpen && (
-        <UpdatePanel
-          ref={updatePanelRef}
-          position={updatePanelPos}
-          visible={updatePanelVisible}
-          onClose={closeUpdatePanel}
-        />
-      )}
-
       <ImBridgeDialog isOpen={imDialogOpen} onClose={() => setImDialogOpen(false)} />
+      <ServerSwitchDialog isOpen={serverSwitchOpen} onClose={() => setServerSwitchOpen(false)} />
     </div>
   )
 }

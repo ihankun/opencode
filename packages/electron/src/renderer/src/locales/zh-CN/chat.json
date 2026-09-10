@@ -440,7 +440,8 @@
     "deleteSessions": "归档 {{count}} 个会话",
     "batchDeleteSessions": "归档 {{count}} 个会话",
     "batchDeleteSessionsConfirm": "确定要归档 {{count}} 个会话？归档后可在设置中恢复。",
-    "batchDeleteIncludesCurrent": "包含当前打开的会话，归档后将切换到新会话。"
+    "batchDeleteIncludesCurrent": "包含当前打开的会话，归档后将切换到新会话。",
+    "switchServer": "切换服务器"
   },
   "accountLogin": {
     "title": "登录账号",

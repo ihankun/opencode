@@ -442,7 +442,8 @@
     "deleteSessions": "Archive {{count}} session(s)",
     "batchDeleteSessions": "Archive {{count}} Session(s)",
     "batchDeleteSessionsConfirm": "Archive {{count}} session(s)? They can be restored from Settings.",
-    "batchDeleteIncludesCurrent": "The currently open session is included. It will switch to a new session after archiving."
+    "batchDeleteIncludesCurrent": "The currently open session is included. It will switch to a new session after archiving.",
+    "switchServer": "Switch server"
   },
   "accountLogin": {
     "title": "Log in",
