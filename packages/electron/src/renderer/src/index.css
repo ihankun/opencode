@@ -410,6 +410,47 @@ html.electron-app[data-theme-preset='codex'][data-glass] #root {
   color: hsl(var(--always-white));
 }
 
+/* 顶部条带的更新入口：跟在历史导航（后退/前进）之后 */
+.electron-update-toggle {
+  position: fixed;
+  left: 268px;
+  top: 10px;
+  z-index: 10001;
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--text-400));
+  cursor: pointer;
+  pointer-events: auto;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.electron-update-toggle:hover {
+  background: hsl(var(--sidebar-selected-bg, var(--bg-200)) / 0.58);
+  color: hsl(var(--text-100));
+}
+
+.electron-update-toggle:focus-visible {
+  outline: 2px solid hsl(var(--accent-main-100) / 0.55);
+  outline-offset: 2px;
+}
+
+.electron-update-toggle:active {
+  transform: scale(0.98);
+}
+
 .electron-history-navigation {
   position: fixed;
   top: 10px;

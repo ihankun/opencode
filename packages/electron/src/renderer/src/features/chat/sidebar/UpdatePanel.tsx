@@ -17,11 +17,14 @@ export function UpdatePanel({
   visible,
   onClose,
   ref,
+  placement = 'up',
 }: {
   position: UpdatePanelPosition
   visible: boolean
   onClose: () => void
   ref?: Ref<HTMLDivElement>
+  /** up：面板在锚点上方（底部栏按钮）；down：面板在锚点下方（顶部条带按钮） */
+  placement?: 'up' | 'down'
 }) {
   const { t } = useTranslation(['chat', 'common'])
   const updateState = useUpdateStore()
@@ -40,12 +43,21 @@ export function UpdatePanel({
         transition-all duration-150 ease-out
         ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
       `}
-      style={{
-        bottom: window.innerHeight - position.top,
-        left: position.left,
-        width: position.width,
-        transformOrigin: 'bottom left',
-      }}
+      style={
+        placement === 'down'
+          ? {
+              top: position.top,
+              left: position.left,
+              width: position.width,
+              transformOrigin: 'top left',
+            }
+          : {
+              bottom: window.innerHeight - position.top,
+              left: position.left,
+              width: position.width,
+              transformOrigin: 'bottom left',
+            }
+      }
     >
       <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
         <div className="flex items-center gap-2">
